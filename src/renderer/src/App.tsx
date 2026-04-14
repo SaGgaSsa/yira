@@ -78,7 +78,7 @@ export default function App(): React.ReactElement {
             viewport: { tx: 0, ty: 0, zoom: 1 },
             nextZIndex: 1,
             focusedTileId: null,
-            viewMode: 'canvas',
+            viewMode: 'fullview',
             fullviewActiveTileId: null,
           })
         }
@@ -335,7 +335,6 @@ export default function App(): React.ReactElement {
   useEffect(() => {
     if (tiles.length === 0) {
       setFullviewActiveTileId(null)
-      if (viewMode === 'fullview') setViewMode('canvas')
       return
     }
 
@@ -431,161 +430,189 @@ export default function App(): React.ReactElement {
   }, [tiles.length, sortedTiles, setTiles, centerViewportForTiles])
 
   return (
-    <div className="w-screen h-screen flex relative overflow-hidden">
+    <div className="flex h-screen w-screen overflow-hidden bg-bg-primary text-text-primary">
       {/* Sidebar — goes to the very top */}
       <Sidebar
         collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed(c => !c)}
         footer={
-          <div ref={footerRef} className="relative grid grid-cols-4 gap-px bg-border">
+          <div ref={footerRef} className="relative border-t border-border bg-bg-secondary px-4 py-4">
             {showProfilePicker && (
               <div
-                className="absolute bottom-full left-0 mb-1 w-[240px] overflow-hidden rounded-lg shadow-xl z-[9999]"
+                className="nd-panel-raised absolute bottom-full left-4 z-[9999] mb-3 w-[260px] overflow-hidden rounded-2xl"
                 style={{
-                  background: 'var(--bg-tertiary)',
-                  border: '1px solid var(--border-color)',
+                  backdropFilter: 'none',
                 }}
               >
-                {availableProfiles.map((p) => (
-                  <button
-                    key={p.id}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-hover-bg"
-                    style={{
-                      color: p.available ? 'var(--text-primary)' : 'var(--text-muted)',
-                      cursor: p.available ? 'pointer' : 'not-allowed',
-                    }}
-                    disabled={!p.available}
-                    onClick={() => {
-                      if (!p.available) return
-                      addTerminal(p.id)
-                      setShowProfilePicker(false)
-                    }}
-                  >
-                    <Terminal size={14} />
-                    <span>{p.label}</span>
-                    {!p.available && (
-                      <span className="ml-auto text-xs" style={{ color: 'var(--text-muted)' }}>
-                        not found
+                <div className="border-b border-border px-4 py-3">
+                  <div className="nd-label text-text-secondary">Shell Profiles</div>
+                </div>
+                <div className="py-2">
+                  {availableProfiles.map((p) => (
+                    <button
+                      key={p.id}
+                      className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-hover-bg"
+                      style={{
+                        color: p.available ? 'var(--text-primary)' : 'var(--text-disabled)',
+                        cursor: p.available ? 'pointer' : 'not-allowed',
+                      }}
+                      disabled={!p.available}
+                      onClick={() => {
+                        if (!p.available) return
+                        addTerminal(p.id)
+                        setShowProfilePicker(false)
+                      }}
+                    >
+                      <Terminal size={15} />
+                      <span className="flex-1 text-sm">{p.label}</span>
+                      <span className="nd-caption text-text-secondary">
+                        {p.available ? '[ READY ]' : '[ MISSING ]'}
                       </span>
-                    )}
-                  </button>
-                ))}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
-            <button
-              className="flex h-16 items-center justify-center bg-bg-secondary text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-primary"
-              onClick={createTerminalFromSidebar}
-              title="New terminal"
-            >
-              <Terminal size={20} />
-            </button>
-            <button
-              className="flex h-16 items-center justify-center bg-bg-secondary text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-primary"
-              onClick={() => {
-                setShowProfilePicker(false)
-                addNote()
-              }}
-              title="New note"
-            >
-              <StickyNote size={20} />
-            </button>
-            <button
-              className="flex h-16 items-center justify-center bg-bg-secondary text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-primary"
-              onClick={() => {
-                setShowProfilePicker(false)
-                addBrowser()
-              }}
-              title="New browser"
-            >
-              <Globe size={20} />
-            </button>
-            <button
-              className="flex h-16 items-center justify-center bg-bg-secondary text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-primary"
-              onClick={() => {
-                setShowProfilePicker(false)
-                addBoard()
-              }}
-              title="New board"
-            >
-              <LayoutGrid size={20} />
-            </button>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                className="nd-panel-raised flex h-14 items-center justify-center gap-2 rounded-full text-text-secondary transition-colors hover:text-text-display"
+                onClick={createTerminalFromSidebar}
+                title="New terminal"
+              >
+                <Terminal size={16} />
+                <span className="nd-label">Terminal</span>
+              </button>
+              <button
+                className="nd-panel-raised flex h-14 items-center justify-center gap-2 rounded-full text-text-secondary transition-colors hover:text-text-display"
+                onClick={() => {
+                  setShowProfilePicker(false)
+                  addNote()
+                }}
+                title="New note"
+              >
+                <StickyNote size={16} />
+                <span className="nd-label">Note</span>
+              </button>
+              <button
+                className="nd-panel-raised flex h-14 items-center justify-center gap-2 rounded-full text-text-secondary transition-colors hover:text-text-display"
+                onClick={() => {
+                  setShowProfilePicker(false)
+                  addBrowser()
+                }}
+                title="New browser"
+              >
+                <Globe size={16} />
+                <span className="nd-label">Browser</span>
+              </button>
+              <button
+                className="nd-panel-raised flex h-14 items-center justify-center gap-2 rounded-full text-text-secondary transition-colors hover:text-text-display"
+                onClick={() => {
+                  setShowProfilePicker(false)
+                  addBoard()
+                }}
+                title="New board"
+              >
+                <LayoutGrid size={16} />
+                <span className="nd-label">Board</span>
+              </button>
+            </div>
           </div>
         }
       >
-        <div className="flex h-full flex-col">
-          <div ref={workspaceMenuRef} className="relative border-b border-border px-3 py-3">
+        <div className="flex h-full flex-col bg-bg-secondary">
+          <div className="border-b border-border px-5 py-6">
+            <div className="nd-label text-text-secondary">Workspace Console</div>
+            <div className="mt-2 flex items-end justify-between gap-4">
+              <div>
+                <div className="nd-display text-[44px] text-text-display">
+                  {tiles.length.toString().padStart(2, '0')}
+                </div>
+                <div className="nd-caption mt-1 text-text-secondary">OPEN SURFACES</div>
+              </div>
+              <div className="nd-caption text-right text-text-secondary">
+                {viewMode === 'fullview' ? '[ FOCUS MODE ]' : '[ CANVAS MODE ]'}
+              </div>
+            </div>
+          </div>
+
+          <div ref={workspaceMenuRef} className="relative border-b border-border px-5 py-4">
             <button
-              className="flex w-full items-center justify-between rounded-md px-2 py-2 text-left transition-colors hover:bg-hover-bg"
+              className="flex w-full items-center justify-between rounded-2xl border border-border-visible bg-bg-tertiary px-4 py-4 text-left transition-colors hover:border-text-secondary"
               onClick={() => setShowWorkspacePicker((v) => !v)}
               title="Workspace actions"
             >
               <span className="min-w-0">
-                <span className="block text-[11px] uppercase tracking-wide text-text-muted">Workspace</span>
-                <span className="block truncate text-sm text-text-primary">
+                <span className="nd-label block text-text-secondary">Workspace</span>
+                <span className="mt-1 block truncate text-lg text-text-display">
                   {activeWorkspaceName || 'None'}
                 </span>
               </span>
-              <ChevronDown size={16} className="shrink-0 text-text-muted" />
+              <ChevronDown size={16} className="shrink-0 text-text-secondary" />
             </button>
 
             {showWorkspacePicker && (
               <div
-                className="absolute left-3 right-3 top-full z-[9998] mt-2 overflow-hidden rounded-lg shadow-xl"
+                className="nd-panel-raised absolute left-5 right-5 top-full z-[9998] mt-3 overflow-hidden rounded-2xl"
                 style={{
-                  background: 'var(--bg-tertiary)',
-                  border: '1px solid var(--border-color)',
+                  backdropFilter: 'none',
                 }}
               >
-                <div className="max-h-56 overflow-y-auto py-1">
+                <div className="max-h-56 overflow-y-auto py-2">
                   {workspaces.map((workspace) => (
                     <button
                       key={workspace.id}
-                      className="flex w-full items-center justify-between px-3 py-2 text-left text-sm transition-colors hover:bg-hover-bg"
+                      className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-hover-bg"
                       style={{
                         color: workspace.id === activeWorkspaceId ? 'var(--text-primary)' : 'var(--text-secondary)',
                       }}
                       onClick={() => switchWorkspace(workspace.id)}
                     >
-                      <span className="truncate">{workspace.name}</span>
+                      <span className="truncate text-sm">{workspace.name}</span>
                       {workspace.id === activeWorkspaceId && (
-                        <span className="ml-3 text-xs text-text-muted">active</span>
+                        <span className="nd-caption ml-3 text-text-secondary">[ ACTIVE ]</span>
                       )}
                     </button>
                   ))}
                 </div>
 
-                <div className="border-t border-border p-1">
+                <div className="border-t border-border p-2">
                   <button
-                    className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-text-primary transition-colors hover:bg-hover-bg"
+                    className="flex w-full items-center gap-2 rounded-2xl px-4 py-3 text-left text-sm text-text-primary transition-colors hover:bg-hover-bg"
                     onClick={() => void createWorkspace()}
                   >
                     <FolderPlus size={14} />
-                    <span>New workspace</span>
+                    <span className="nd-label">New Workspace</span>
                   </button>
                   <button
-                    className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-danger transition-colors hover:bg-hover-bg"
+                    className="flex w-full items-center gap-2 rounded-2xl px-4 py-3 text-left text-sm text-danger transition-colors hover:bg-hover-bg"
                     onClick={() => void deleteCurrentWorkspace()}
                   >
                     <Trash2 size={14} />
-                    <span>Delete current workspace</span>
+                    <span className="nd-label">Delete Workspace</span>
                   </button>
                 </div>
               </div>
             )}
 
-            <p className="mt-2 px-2 text-xs text-text-muted">
-              Items: {tiles.length}
-            </p>
+            <div className="mt-3 flex items-center justify-between">
+              <span className="nd-caption text-text-secondary">FOCUSED APP</span>
+              <span className="font-mono text-sm text-text-display">{focusedTileId ? focusedTileId.slice(-4) : '--'}</span>
+            </div>
           </div>
 
-          <div className="flex-1 p-2">
+          <div className="flex-1 px-3 py-4">
+            <div className="mb-3 flex items-center justify-between px-2">
+              <span className="nd-label text-text-secondary">Active Surfaces</span>
+              <span className="nd-caption text-text-secondary">{sortedTiles.length} TRACKED</span>
+            </div>
             {tiles.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border-subtle px-3 py-4 text-sm text-text-muted">
-                No items yet.
+              <div className="nd-panel-raised rounded-[20px] px-5 py-8 text-center text-text-secondary">
+                <div className="nd-label">[ EMPTY ]</div>
+                <div className="mt-3 text-sm text-text-disabled">Create a terminal, note, browser, or board.</div>
               </div>
             ) : (
-              <div className="space-y-1">
+              <div className="space-y-2">
                 {tiles
                   .slice()
                   .sort((a, b) => b.zIndex - a.zIndex)
@@ -597,9 +624,10 @@ export default function App(): React.ReactElement {
                     return (
                       <button
                         key={tile.id}
-                        className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors"
+                        className="w-full rounded-[20px] border px-4 py-4 text-left transition-colors"
                         style={{
-                          background: isActive ? 'var(--active-bg)' : 'transparent',
+                          background: isActive ? 'var(--surface-raised)' : 'var(--surface)',
+                          borderColor: isActive ? 'var(--text-display)' : 'var(--border)',
                           color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
                         }}
                         onClick={() => handleFocusTile(tile.id)}
@@ -609,31 +637,41 @@ export default function App(): React.ReactElement {
                         }}
                         title={meta.label}
                       >
-                        <Icon size={16} className="shrink-0" />
-                        {renamingTileId === tile.id ? (
-                          <input
-                            autoFocus
-                            className="min-w-0 flex-1 rounded-sm border border-border-subtle bg-bg-primary px-2 py-1 text-sm text-text-primary outline-none"
-                            value={renamingValue}
-                            onChange={(event) => setRenamingValue(event.target.value)}
-                            onBlur={() => commitRenameTile(tile.id)}
-                            onClick={(event) => event.stopPropagation()}
-                            onKeyDown={(event) => {
-                              if (event.key === 'Enter') {
-                                event.preventDefault()
-                                commitRenameTile(tile.id)
-                              }
-                              if (event.key === 'Escape') {
-                                event.preventDefault()
-                                cancelRenameTile()
-                              }
-                            }}
-                          />
-                        ) : (
-                          <span className="min-w-0 flex-1 truncate text-sm">
-                            {tile.label ?? `${meta.label} ${tile.id.slice(-4)}`}
-                          </span>
-                        )}
+                        <div className="flex items-start gap-3">
+                          <div className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border-visible">
+                            <Icon size={15} className="shrink-0" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="nd-label text-text-secondary">
+                              {tile.id === fullviewActiveTileId ? '[ PRIMARY ]' : '[ OPEN ]'}
+                            </div>
+                            {renamingTileId === tile.id ? (
+                              <input
+                                autoFocus
+                                className="mt-2 min-w-0 w-full border-b border-border-visible bg-transparent px-0 py-1 text-sm text-text-primary outline-none"
+                                value={renamingValue}
+                                onChange={(event) => setRenamingValue(event.target.value)}
+                                onBlur={() => commitRenameTile(tile.id)}
+                                onClick={(event) => event.stopPropagation()}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Enter') {
+                                    event.preventDefault()
+                                    commitRenameTile(tile.id)
+                                  }
+                                  if (event.key === 'Escape') {
+                                    event.preventDefault()
+                                    cancelRenameTile()
+                                  }
+                                }}
+                              />
+                            ) : (
+                              <div className="mt-2 truncate text-sm text-text-display">
+                                {tile.label ?? `${meta.label} ${tile.id.slice(-4)}`}
+                              </div>
+                            )}
+                            <div className="nd-caption mt-2 text-text-secondary">{meta.label.toUpperCase()}</div>
+                          </div>
+                        </div>
                       </button>
                     )
                   })}
@@ -644,8 +682,7 @@ export default function App(): React.ReactElement {
       </Sidebar>
 
       {/* Right side: content + bars */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Top Bar */}
+      <div className="flex min-w-0 flex-1 flex-col">
         <TopBar
           zoom={viewport.zoom}
           viewMode={viewMode}
@@ -659,19 +696,7 @@ export default function App(): React.ReactElement {
           onOpenSettings={() => setShowSettings(true)}
         />
 
-        {/* Canvas area */}
-        <div className="flex-1 relative overflow-hidden">
-          <Canvas
-            profiles={availableProfiles}
-            onCreateTerminal={(profileId) => addTerminal(profileId)}
-            onCreateNote={() => addNote()}
-            onCreateBrowser={() => addBrowser()}
-            onCreateBoard={() => addBoard()}
-            viewMode={viewMode}
-            fullviewActiveTileId={fullviewActiveTileId}
-            fullviewTopInset={viewMode === 'fullview' ? 41 : 0}
-          />
-
+        <div className="relative flex-1 overflow-hidden">
           {viewMode === 'fullview' && (
             <div className="absolute inset-x-0 top-0 z-10">
               <FullviewPanel
@@ -687,6 +712,17 @@ export default function App(): React.ReactElement {
               />
             </div>
           )}
+
+          <Canvas
+            profiles={availableProfiles}
+            onCreateTerminal={(profileId) => addTerminal(profileId)}
+            onCreateNote={() => addNote()}
+            onCreateBrowser={() => addBrowser()}
+            onCreateBoard={() => addBoard()}
+            viewMode={viewMode}
+            fullviewActiveTileId={fullviewActiveTileId}
+            fullviewTopInset={viewMode === 'fullview' ? 128 : 0}
+          />
         </div>
       </div>
 

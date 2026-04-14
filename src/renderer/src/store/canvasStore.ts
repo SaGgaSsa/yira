@@ -38,7 +38,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   viewport: { tx: 0, ty: 0, zoom: 1 },
   nextZIndex: 1,
   focusedTileId: null,
-  viewMode: 'canvas',
+  viewMode: 'fullview',
   fullviewActiveTileId: null,
   selectedTileIds: [],
   activeWorkspaceId: '',
@@ -53,7 +53,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     viewport: state.viewport,
     nextZIndex: state.nextZIndex,
     focusedTileId: state.focusedTileId ?? null,
-    viewMode: state.viewMode ?? 'canvas',
+    viewMode: state.viewMode ?? 'fullview',
     fullviewActiveTileId:
       state.fullviewActiveTileId ??
       state.focusedTileId ??

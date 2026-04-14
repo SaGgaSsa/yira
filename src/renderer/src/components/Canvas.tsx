@@ -222,7 +222,7 @@ export function Canvas({
         ref={containerRef}
         className="canvas-root absolute inset-0 overflow-hidden"
         style={{
-          background: isFullview ? 'var(--bg-primary)' : '#15171a',
+          background: isFullview ? 'var(--bg-primary)' : 'var(--surface-panel)',
           cursor: isFullview ? 'default' : isPanning ? 'grabbing' : spaceHeldRef.current ? 'grab' : 'default',
         }}
         onWheel={handleWheel}
@@ -329,7 +329,7 @@ function GridBackground({ tx, ty, zoom, gridSize }: { tx: number; ty: number; zo
             <path
               d={`M ${gridSmall} 0 L 0 0 0 ${gridSmall}`}
               fill="none"
-              stroke="#1e2128"
+              stroke="var(--border-visible)"
               strokeWidth={0.5}
             />
             {/* Sub-grid lines */}
@@ -338,7 +338,7 @@ function GridBackground({ tx, ty, zoom, gridSize }: { tx: number; ty: number; zo
                 key={`sg-${i}`}
                 d={`M ${(i + 1) * gridSmall} 0 L ${(i + 1) * gridSmall} ${gridLarge}`}
                 fill="none"
-                stroke="#1a1d23"
+                stroke="var(--border)"
                 strokeWidth={0.3}
               />
             ))}
@@ -347,7 +347,7 @@ function GridBackground({ tx, ty, zoom, gridSize }: { tx: number; ty: number; zo
                 key={`sg-h-${i}`}
                 d={`M 0 ${(i + 1) * gridSmall} L ${gridLarge} ${(i + 1) * gridSmall}`}
                 fill="none"
-                stroke="#1a1d23"
+                stroke="var(--border)"
                 strokeWidth={0.3}
               />
             ))}

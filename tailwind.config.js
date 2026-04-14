@@ -22,8 +22,7 @@ export default {
         },
         accent: {
           DEFAULT: 'var(--accent)',
-          hover: 'var(--accent-hover)',
-          text: 'var(--accent-text)',
+          subtle: 'var(--accent-subtle)',
         },
         statusbar: {
           bg: 'var(--statusbar-bg)',
@@ -40,6 +39,11 @@ export default {
           hover: 'var(--danger-hover)',
         },
         shadow: 'var(--shadow)',
+      },
+      fontFamily: {
+        display: 'var(--font-display)',
+        body: 'var(--font-body)',
+        mono: 'var(--font-mono)',
       },
     },
   },

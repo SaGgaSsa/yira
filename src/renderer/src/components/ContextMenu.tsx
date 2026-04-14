@@ -64,10 +64,10 @@ function MenuItems({ items, onClose }: { items: MenuItem[]; onClose: () => void 
           <div key={i} className="relative">
             <button
               ref={(el) => { buttonRefs.current[i] = el }}
-              className="w-full text-left flex items-center justify-between gap-2.5 px-3 py-2 text-sm transition-colors hover:bg-hover-bg"
+              className="w-full text-left flex items-center justify-between gap-2.5 px-4 py-3 text-sm transition-colors hover:bg-hover-bg"
               style={{
                 color: item.disabled
-                  ? 'var(--text-muted)'
+                  ? 'var(--text-disabled)'
                   : item.danger
                     ? 'var(--danger)'
                     : 'var(--text-primary)',
@@ -94,7 +94,7 @@ function MenuItems({ items, onClose }: { items: MenuItem[]; onClose: () => void 
             >
               <span className="flex items-center gap-2.5">
                 {Icon && <Icon size={ICON_SIZE} style={{ flexShrink: 0 }} />}
-                <span className="truncate">{item.label}</span>
+                <span className="nd-label truncate">{item.label}</span>
               </span>
               {hasSubmenu && <ChevronRight size={12} className="text-text-muted shrink-0" />}
             </button>
@@ -105,14 +105,14 @@ function MenuItems({ items, onClose }: { items: MenuItem[]; onClose: () => void 
       {/* Submenu portal — rendered outside the backdrop to avoid click-through */}
       {activeSubmenu !== null && submenuPos && createPortal(
         <div
-          className="fixed rounded-lg shadow-xl overflow-hidden py-1 z-[10002]"
+          className="fixed overflow-hidden rounded-2xl py-1 z-[10002]"
           style={{
             left: submenuPos.x,
             top: submenuPos.y,
             minWidth: 180,
             maxWidth: 240,
-            background: 'var(--bg-tertiary)',
-            border: '1px solid var(--border-color)',
+            background: 'var(--surface-raised)',
+            border: '1px solid var(--border-visible)',
           }}
         >
           {submenuItems.map((sub, j) => {
@@ -120,10 +120,10 @@ function MenuItems({ items, onClose }: { items: MenuItem[]; onClose: () => void 
             return (
               <button
                 key={j}
-                className="w-full text-left flex items-center gap-2.5 px-3 py-2 text-sm transition-colors hover:bg-hover-bg"
+                className="w-full text-left flex items-center gap-2.5 px-4 py-3 text-sm transition-colors hover:bg-hover-bg"
                 style={{
                   color: sub.disabled
-                    ? 'var(--text-muted)'
+                    ? 'var(--text-disabled)'
                     : sub.danger
                       ? 'var(--danger)'
                       : 'var(--text-primary)',
@@ -137,7 +137,7 @@ function MenuItems({ items, onClose }: { items: MenuItem[]; onClose: () => void 
                 }}
               >
                 {SubIcon && <SubIcon size={ICON_SIZE} style={{ flexShrink: 0 }} />}
-                <span className="flex-1 truncate">{sub.label}</span>
+                <span className="nd-label flex-1 truncate">{sub.label}</span>
               </button>
             )
           })}
@@ -185,14 +185,14 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps): React.R
     >
       <div
         ref={menuRef}
-        className="absolute rounded-lg shadow-xl overflow-hidden py-1"
+        className="absolute overflow-hidden rounded-2xl py-1"
         style={{
           left: clamped.x,
           top: clamped.y,
           minWidth: 200,
           maxWidth: 280,
-          background: 'var(--bg-tertiary)',
-          border: '1px solid var(--border-color)',
+          background: 'var(--surface-raised)',
+          border: '1px solid var(--border-visible)',
         }}
       >
         <MenuItems items={items} onClose={onClose} />

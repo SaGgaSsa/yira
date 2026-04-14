@@ -50,9 +50,9 @@ export function TileContent({ tile, isFocused, onFocus, onUpdate }: TileContentP
   const label = meta.label
 
   return (
-    <div className="flex h-full w-full items-center justify-center text-sm text-text-muted">
+    <div className="flex h-full w-full items-center justify-center gap-2 text-sm text-text-secondary">
       <Icon size={24} className="mr-2" />
-      <span>{label} (coming soon)</span>
+      <span className="nd-label">{label} coming soon</span>
     </div>
   )
 }

@@ -21,10 +21,7 @@ export function FullviewPanel({
   onCloseTile,
   onRenameTile,
 }: FullviewPanelProps): React.ReactElement {
-  const orderedTiles = useMemo(
-    () => tiles.slice().sort((a, b) => b.zIndex - a.zIndex),
-    [tiles],
-  )
+  const orderedTiles = useMemo(() => tiles.slice().sort((a, b) => b.zIndex - a.zIndex), [tiles])
   const activeTile = orderedTiles.find((tile) => tile.id === activeTileId) ?? orderedTiles[0] ?? null
   const [renamingTileId, setRenamingTileId] = useState<string | null>(null)
   const [renamingValue, setRenamingValue] = useState('')
@@ -38,13 +35,6 @@ export function FullviewPanel({
     }
   }, [renamingTileId])
 
-  useEffect(() => {
-    if (!activeTile && renamingTileId) {
-      setRenamingTileId(null)
-      setRenamingValue('')
-    }
-  }, [activeTile, renamingTileId])
-
   const beginRename = (tile: TileState) => {
     setTabMenu(null)
     setRenamingTileId(tile.id)
@@ -57,108 +47,114 @@ export function FullviewPanel({
     setRenamingValue('')
   }
 
-  const cancelRename = () => {
-    setRenamingTileId(null)
-    setRenamingValue('')
-  }
-
-  const activeMenuTile = tabMenu
-    ? orderedTiles.find((tile) => tile.id === tabMenu.tileId) ?? null
-    : null
-
+  const activeMenuTile = tabMenu ? orderedTiles.find((tile) => tile.id === tabMenu.tileId) ?? null : null
   const menuItems: MenuItem[] = activeMenuTile
     ? [
-        {
-          label: 'Rename',
-          icon: Pencil,
-          action: () => beginRename(activeMenuTile),
-        },
-        {
-          label: 'Close',
-          icon: Trash2,
-          danger: true,
-          action: () => onCloseTile(activeMenuTile.id),
-        },
+        { label: 'Rename', icon: Pencil, action: () => beginRename(activeMenuTile) },
+        { label: 'Close', icon: Trash2, danger: true, action: () => onCloseTile(activeMenuTile.id) },
       ]
     : []
 
   return (
-    <div className="flex items-stretch overflow-x-auto border-b border-border bg-bg-secondary px-2">
-      {orderedTiles.length === 0 ? (
-        <div className="flex h-10 items-center px-3 text-sm text-text-muted">
-          No items open.
+    <div className="nd-panel border-x-0 border-t-0 px-4 py-3">
+      <div className="mb-3 flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="nd-label text-text-secondary">Focus Deck</div>
+          <div className="mt-1 flex items-center gap-3">
+            <span className="nd-display text-[28px] text-text-display">
+              {activeTile ? TILE_META[activeTile.type].label.toUpperCase() : 'EMPTY'}
+            </span>
+            <span className="nd-caption text-text-secondary">
+              {orderedTiles.length} OPEN
+            </span>
+          </div>
         </div>
-      ) : (
-        orderedTiles.map((tile) => {
-          const meta = TILE_META[tile.type]
-          const Icon = meta.icon
-          const isActive = tile.id === activeTile?.id
-          const isFocused = tile.id === focusedTileId
+        {activeTile && (
+          <div className="nd-caption text-text-secondary">
+            {activeTile.label ?? `${TILE_META[activeTile.type].label} ${activeTile.id.slice(-4)}`}
+          </div>
+        )}
+      </div>
 
-          return (
-            <div
-              key={tile.id}
-              className="group flex min-w-0 max-w-[260px] items-center border-r border-border-subtle"
-            >
-              <button
-                className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left text-sm transition-colors"
-                style={{
-                  background: isActive ? 'var(--bg-primary)' : 'transparent',
-                  color: isActive || isFocused ? 'var(--text-primary)' : 'var(--text-secondary)',
-                }}
-                onClick={() => onActivateTile(tile.id)}
-                onContextMenu={(event) => {
-                  event.preventDefault()
-                  setTabMenu({ tileId: tile.id, x: event.clientX, y: event.clientY })
-                }}
-                title={meta.label}
-              >
-                <Icon size={14} className="shrink-0" />
-                {renamingTileId === tile.id ? (
-                  <input
-                    ref={inputRef}
-                    className="min-w-0 flex-1 rounded-sm border border-border-subtle bg-bg-primary px-2 py-1 text-sm text-text-primary outline-none"
-                    value={renamingValue}
-                    onChange={(event) => setRenamingValue(event.target.value)}
-                    onBlur={() => commitRename(tile.id)}
-                    onClick={(event) => event.stopPropagation()}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        event.preventDefault()
-                        commitRename(tile.id)
-                      }
-                      if (event.key === 'Escape') {
-                        event.preventDefault()
-                        cancelRename()
-                      }
-                    }}
-                  />
-                ) : (
-                  <span className="min-w-0 flex-1 truncate">
-                    {tile.label ?? `${meta.label} ${tile.id.slice(-4)}`}
-                  </span>
-                )}
-              </button>
+      <div className="flex items-stretch gap-2 overflow-x-auto pb-1">
+        {orderedTiles.length === 0 ? (
+          <div className="nd-panel-raised flex h-[72px] min-w-[240px] items-center rounded-2xl px-5 text-text-secondary">
+            <span className="nd-label">No items open</span>
+          </div>
+        ) : (
+          orderedTiles.map((tile, index) => {
+            const meta = TILE_META[tile.type]
+            const Icon = meta.icon
+            const isActive = tile.id === activeTile?.id
+            const isFocused = tile.id === focusedTileId
 
-              <button
-                className="mx-1 flex h-7 w-7 items-center justify-center rounded text-text-muted transition-colors hover:bg-hover-bg hover:text-text-primary"
-                onClick={() => onCloseTile(tile.id)}
-                title="Close tab"
+            return (
+              <div
+                key={tile.id}
+                className={`relative min-w-[220px] max-w-[280px] rounded-2xl border ${
+                  isActive ? 'border-text-display bg-bg-secondary' : 'border-border bg-bg-secondary'
+                }`}
               >
-                <X size={13} />
-              </button>
-            </div>
-          )
-        })
-      )}
+                <button
+                  className="flex w-full items-start gap-3 px-4 py-4 text-left"
+                  onClick={() => onActivateTile(tile.id)}
+                  onContextMenu={(event) => {
+                    event.preventDefault()
+                    setTabMenu({ tileId: tile.id, x: event.clientX, y: event.clientY })
+                  }}
+                  title={meta.label}
+                >
+                  <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border-visible text-text-secondary">
+                    <Icon size={14} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="nd-label text-text-secondary">
+                      {index === 0 ? '[ ACTIVE ]' : isFocused ? '[ SELECTED ]' : '[ OPEN ]'}
+                    </div>
+                    {renamingTileId === tile.id ? (
+                      <input
+                        ref={inputRef}
+                        className="mt-2 w-full border-b border-border-visible bg-transparent pb-1 font-mono text-sm text-text-primary outline-none"
+                        value={renamingValue}
+                        onChange={(event) => setRenamingValue(event.target.value)}
+                        onBlur={() => commitRename(tile.id)}
+                        onClick={(event) => event.stopPropagation()}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault()
+                            commitRename(tile.id)
+                          }
+                          if (event.key === 'Escape') {
+                            event.preventDefault()
+                            setRenamingTileId(null)
+                            setRenamingValue('')
+                          }
+                        }}
+                      />
+                    ) : (
+                      <div className="mt-2 truncate text-base text-text-display">
+                        {tile.label ?? `${meta.label} ${tile.id.slice(-4)}`}
+                      </div>
+                    )}
+                    <div className="nd-caption mt-2 text-text-secondary">{meta.label.toUpperCase()}</div>
+                  </div>
+                </button>
+
+                <button
+                  className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
+                  onClick={() => onCloseTile(tile.id)}
+                  title="Close tab"
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            )
+          })
+        )}
+      </div>
 
       {tabMenu && activeMenuTile && (
-        <ContextMenu
-          x={tabMenu.x}
-          y={tabMenu.y}
-          items={menuItems}
-          onClose={() => setTabMenu(null)}
-        />
+        <ContextMenu x={tabMenu.x} y={tabMenu.y} items={menuItems} onClose={() => setTabMenu(null)} />
       )}
     </div>
   )

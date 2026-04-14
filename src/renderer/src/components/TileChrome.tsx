@@ -190,56 +190,52 @@ export function TileChrome({
         className="w-full h-full flex flex-col overflow-hidden"
         style={{
           background: tile.type === 'note' && tile.noteColor
-            ? NOTE_COLORS[tile.noteColor]?.bg || '#fef3c7'
-            : '#1e1e1e',
+            ? NOTE_COLORS[tile.noteColor]?.bg || 'var(--surface)'
+            : 'var(--surface)',
           color: tile.type === 'note' && tile.noteColor
             ? NOTE_COLORS[tile.noteColor]?.text || '#78350f'
-            : undefined,
+            : 'var(--text-primary)',
           border: isFullview
             ? 'none'
             : isFocused
-              ? '1px solid #3b8eea'
+              ? '1px solid var(--text-display)'
               : tile.type === 'note'
-                ? '1px solid rgba(255,255,255,0.1)'
-                : '1px solid #2a2e35',
+                ? '1px solid var(--border-visible)'
+                : '1px solid var(--border)',
           borderRadius: isFullview ? 0 : radius,
-          boxShadow: isFullview
-            ? 'none'
-            : isFocused
-              ? '0 0 20px rgba(59, 142, 234, 0.15), 0 4px 12px rgba(0,0,0,0.4)'
-              : '0 2px 8px rgba(0,0,0,0.3)',
-          transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
+          boxShadow: 'none',
+          transition: 'border-color 0.15s ease, background 0.15s ease',
         }}
       >
         {/* Title bar */}
         {!isFullview && (
           <div
-            className="flex items-center gap-1.5 px-2 py-1 select-none shrink-0"
+            className="flex items-center gap-2 px-3 py-2 select-none shrink-0"
             style={{
-              background: isFocused ? '#252526' : '#2d2d30',
-              borderBottom: '1px solid #3c3c3c',
+              background: 'var(--surface-raised)',
+              borderBottom: '1px solid var(--border)',
               cursor: 'grab',
               display: tile.hideTitlebar ? 'none' : 'flex',
             }}
             onMouseDown={handleDragStart}
           >
-            <GripVertical size={12} className="text-gray-500 shrink-0" />
+            <GripVertical size={12} className="text-text-secondary shrink-0" />
 
             {/* Type icon */}
             {(() => {
               const Icon = TYPE_ICONS[tile.type]
-              return Icon ? <Icon size={12} className="text-gray-500 shrink-0" /> : null
+              return Icon ? <Icon size={12} className="text-text-secondary shrink-0" /> : null
             })()}
 
-            <span className="text-xs text-gray-400 truncate flex-1">
+            <span className="nd-label truncate flex-1 text-text-secondary">
               {tile.label ?? TYPE_LABELS[tile.type] ?? 'Tile'}
             </span>
 
             {/* Terminal: shell profile badge */}
             {tile.type === 'terminal' && tile.shellProfileId && (
               <span
-                className="text-[10px] px-1.5 py-0.5 rounded shrink-0"
-                style={{ background: '#3c3c3c', color: '#888' }}
+                className="nd-caption rounded-full border border-border-visible px-2 py-1 shrink-0"
+                style={{ background: 'var(--surface)', color: 'var(--text-secondary)' }}
               >
                 {tile.shellProfileId}
               </span>
@@ -251,14 +247,14 @@ export function TileChrome({
                 className="w-4 h-4 rounded-full shrink-0 border"
                 style={{
                   background: NOTE_COLORS[tile.noteColor]?.bg || '#fef3c7',
-                  borderColor: '#3c3c3c',
+                  borderColor: 'var(--border-visible)',
                 }}
               />
             )}
 
             {/* Delete button */}
             <button
-              className="p-0.5 rounded hover:bg-red-600/30 text-gray-500 hover:text-red-400 transition-colors shrink-0"
+              className="p-1 rounded-full hover:bg-hover-bg text-text-secondary hover:text-danger transition-colors shrink-0"
               onClick={(e) => {
                 e.stopPropagation()
                 onDelete()

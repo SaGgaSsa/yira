@@ -1,5 +1,5 @@
 import React from 'react'
-import { Settings, ZoomIn, LayoutGrid, Columns, Rows, Table, PanelLeft } from 'lucide-react'
+import { Settings, Crosshair, LayoutGrid, Columns, Rows, Table, PanelLeft, PanelsTopLeft } from 'lucide-react'
 
 interface TopBarProps {
   zoom: number
@@ -12,6 +12,36 @@ interface TopBarProps {
   onArrangeRows: () => void
   onZoomToggle: () => void
   onOpenSettings: () => void
+}
+
+function SegmentedButton({
+  active,
+  label,
+  icon: Icon,
+  onClick,
+  disabled = false,
+}: {
+  active?: boolean
+  label: string
+  icon: typeof LayoutGrid
+  onClick: () => void
+  disabled?: boolean
+}) {
+  return (
+    <button
+      className={`nd-label inline-flex h-9 items-center gap-2 rounded-full px-4 transition-colors ${
+        active
+          ? 'bg-text-primary text-bg-primary'
+          : 'text-text-secondary hover:bg-hover-bg hover:text-text-primary'
+      } disabled:cursor-not-allowed disabled:opacity-40`}
+      onClick={onClick}
+      disabled={disabled}
+      title={label}
+    >
+      <Icon size={14} />
+      <span>{label}</span>
+    </button>
+  )
 }
 
 export function TopBar({
@@ -29,100 +59,89 @@ export function TopBar({
   const zoomPercent = Math.round(zoom * 100)
 
   return (
-    <header className="relative w-full flex items-center px-3 py-1.5 border-b border-border bg-bg-secondary shrink-0 h-9">
-      {/* Left: sidebar toggle */}
-      <div className="flex items-center justify-start">
+    <header className="nd-panel flex h-[84px] shrink-0 items-center justify-between border-x-0 border-t-0 px-6">
+      <div className="flex min-w-0 items-center gap-5">
         <button
-          className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-text-secondary hover:text-text-primary hover:bg-hover-bg transition-colors"
+          className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border-visible bg-bg-secondary text-text-secondary transition-colors hover:text-text-display"
           onClick={onToggleSidebar}
           title={sidebarCollapsed ? 'Open sidebar' : 'Collapse sidebar'}
         >
-          <PanelLeft size={14} />
+          <PanelLeft size={18} />
         </button>
+
+        <div className="min-w-0">
+          <div className="nd-label text-text-secondary">Mode</div>
+          <div className="mt-1 flex items-center gap-2">
+            <PanelsTopLeft size={16} className="text-text-secondary" />
+            <span className="nd-display text-[34px] text-text-display">
+              {viewMode === 'fullview' ? 'FULLVIEW' : 'CANVAS'}
+            </span>
+          </div>
+        </div>
       </div>
 
-      {/* Center: view modes */}
-      <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1 px-2 py-0.5 rounded bg-bg-primary border border-border-subtle">
-        <button
-          className={`flex items-center gap-1 px-1.5 py-1 rounded text-xs transition-colors hover:bg-hover-bg ${
-            viewMode === 'canvas' ? 'text-accent' : 'text-text-muted hover:text-text-primary'
-          }`}
-          onClick={() => onSetViewMode('canvas')}
-          title="Canvas view"
-        >
-          <LayoutGrid size={13} />
-        </button>
-        <button
-          className={`flex items-center gap-1 px-1.5 py-1 rounded text-xs transition-colors hover:bg-hover-bg ${
-            viewMode === 'fullview' ? 'text-accent' : 'text-text-muted hover:text-text-primary'
-          }`}
+      <div className="flex items-center gap-3 rounded-full border border-border-visible bg-bg-secondary px-2 py-2">
+        <SegmentedButton
+          active={viewMode === 'fullview'}
+          label="Focus"
+          icon={Columns}
           onClick={() => onSetViewMode('fullview')}
-          title="Tabbed fullview"
-        >
-          <Columns size={13} />
-        </button>
-        <button
-          className="flex items-center gap-1 px-1.5 py-1 rounded text-xs text-text-muted hover:text-text-primary hover:bg-hover-bg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          disabled
-          title="Split view — coming soon"
-        >
-          <Table size={13} />
-        </button>
-        <button
-          className="flex items-center gap-1 px-1.5 py-1 rounded text-xs text-text-muted hover:text-text-primary hover:bg-hover-bg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          disabled
-          title="Stack view — coming soon"
-        >
-          <Rows size={13} />
-        </button>
+        />
+        <SegmentedButton
+          active={viewMode === 'canvas'}
+          label="Canvas"
+          icon={LayoutGrid}
+          onClick={() => onSetViewMode('canvas')}
+        />
       </div>
 
-      {/* Right: zoom + settings */}
-      <div className="ml-auto flex items-center justify-end gap-3">
-        <div className="flex items-center gap-1 rounded border border-border-subtle bg-bg-primary px-1 py-0.5">
+      <div className="flex items-center gap-3">
+        <div className="nd-panel-raised flex items-center gap-1 rounded-full px-2 py-2">
           <button
-            className="flex items-center gap-1 rounded px-1.5 py-1 text-xs text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-primary disabled:opacity-40"
+            className="nd-label inline-flex h-9 items-center gap-2 rounded-full px-3 text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
             onClick={onArrangeGrid}
             disabled={viewMode !== 'canvas'}
-            title="Arrange in grid"
+            title="Arrange grid"
           >
             <Table size={13} />
+            <span>Grid</span>
           </button>
           <button
-            className="flex items-center gap-1 rounded px-1.5 py-1 text-xs text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-primary disabled:opacity-40"
+            className="nd-label inline-flex h-9 items-center gap-2 rounded-full px-3 text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
             onClick={onArrangeColumns}
             disabled={viewMode !== 'canvas'}
-            title="Arrange in columns"
+            title="Arrange columns"
           >
             <Columns size={13} />
+            <span>Cols</span>
           </button>
           <button
-            className="flex items-center gap-1 rounded px-1.5 py-1 text-xs text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-primary disabled:opacity-40"
+            className="nd-label inline-flex h-9 items-center gap-2 rounded-full px-3 text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
             onClick={onArrangeRows}
             disabled={viewMode !== 'canvas'}
-            title="Arrange in rows"
+            title="Arrange rows"
           >
             <Rows size={13} />
+            <span>Rows</span>
           </button>
         </div>
 
         <button
-          className="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium tabular-nums hover:bg-hover-bg transition-colors"
+          className="nd-panel-raised inline-flex h-11 items-center gap-3 rounded-full px-4 text-text-secondary transition-colors hover:text-text-primary"
           onClick={onZoomToggle}
           title="Toggle zoom 100%"
         >
-          <ZoomIn size={13} />
-          <span className={zoomPercent === 100 ? 'text-accent' : 'text-text-secondary'}>
-            {zoomPercent}%
-          </span>
+          <Crosshair size={16} />
+          <span className="nd-label text-text-secondary">Zoom</span>
+          <span className="font-mono text-sm text-text-display">{zoomPercent}%</span>
         </button>
 
         <button
-          className="flex items-center gap-1.5 px-2 py-1 rounded text-text-secondary hover:text-text-primary hover:bg-hover-bg transition-colors"
+          className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border-visible bg-bg-secondary text-text-secondary transition-colors hover:text-text-display"
           onClick={onOpenSettings}
           title="Settings"
         >
-          <Settings size={14} />
+          <Settings size={18} />
         </button>
       </div>
     </header>

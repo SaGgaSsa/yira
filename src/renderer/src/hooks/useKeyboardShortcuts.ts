@@ -56,9 +56,6 @@ export function useKeyboardShortcuts(deps: UseKeyboardShortcutsDeps) {
       // Escape clears focus or closes pickers
       if (e.key === 'Escape') {
         onClosePicker?.()
-        if (viewMode === 'fullview') {
-          setViewMode('canvas')
-        }
         if (focusedTileId) {
           focusTile(null)
         }

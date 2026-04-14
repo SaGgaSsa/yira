@@ -2,59 +2,117 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ─── Theme Variables ──────────────────────────────────────────────── */
+@font-face {
+  font-family: 'Doto';
+  src: url('./assets/fonts/Doto-VariableFont_ROND,wght.ttf') format('truetype');
+  font-weight: 400 700;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Saira';
+  src: url('./assets/fonts/Saira-VariableFont_wdth,wght.ttf') format('truetype');
+  font-weight: 300 700;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'IBM Plex Mono';
+  src: url('./assets/fonts/IBMPlexMono-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+}
+
 :root {
-  /* Dark theme (default) */
-  --bg-primary: #15171a;
-  --bg-secondary: #1e2128;
-  --bg-tertiary: #252526;
-  --bg-elevated: #2d2d30;
-  --text-primary: #cccccc;
-  --text-secondary: #888888;
-  --text-muted: #555555;
-  --border-color: #3c3c3c;
-  --border-subtle: #2a2a2a;
-  --accent: #007acc;
-  --accent-hover: #1a8ad4;
-  --accent-text: #ffffff;
-  --statusbar-bg: #007acc;
-  --statusbar-text: #ffffff;
-  --hover-bg: #37373d;
-  --active-bg: #094771;
-  --danger: #f44747;
-  --danger-hover: #e83e3e;
-  --shadow: rgba(0, 0, 0, 0.4);
-  --scrollbar-thumb: #424242;
-  --scrollbar-hover: #555555;
-  --selection: rgba(59, 142, 234, 0.3);
+  --black: #000000;
+  --surface: #111111;
+  --surface-raised: #1a1a1a;
+  --surface-panel: #151515;
+  --surface-accent: #1f1f1f;
+  --border: #222222;
+  --border-visible: #333333;
+  --text-disabled: #666666;
+  --text-secondary: #999999;
+  --text-primary: #e8e8e8;
+  --text-display: #ffffff;
+  --accent: #d71921;
+  --accent-subtle: rgba(215, 25, 33, 0.16);
+  --success: #4a9e5c;
+  --warning: #d4a843;
+  --interactive: #5b9bf6;
+  --bg-primary: var(--black);
+  --bg-secondary: var(--surface);
+  --bg-tertiary: var(--surface-raised);
+  --bg-elevated: var(--surface-panel);
+  --text-muted: var(--text-disabled);
+  --border-color: var(--border);
+  --border-subtle: var(--border-visible);
+  --accent-hover: #ef3f47;
+  --accent-text: var(--black);
+  --statusbar-bg: var(--surface);
+  --statusbar-text: var(--text-primary);
+  --hover-bg: rgba(255, 255, 255, 0.04);
+  --active-bg: rgba(255, 255, 255, 0.08);
+  --danger: var(--accent);
+  --danger-hover: #ef3f47;
+  --shadow: rgba(0, 0, 0, 0);
+  --scrollbar-thumb: #2c2c2c;
+  --scrollbar-hover: #414141;
+  --selection: rgba(255, 255, 255, 0.12);
+  --space-2xs: 2px;
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+  --space-3xl: 64px;
+  --space-4xl: 96px;
+  --display-xl: 72px;
+  --display-lg: 48px;
+  --display-md: 36px;
+  --heading: 24px;
+  --subheading: 18px;
+  --body: 16px;
+  --body-sm: 14px;
+  --caption: 12px;
+  --label: 11px;
+  --font-display: 'Doto', 'IBM Plex Mono', monospace;
+  --font-body: 'Saira', 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', 'Consolas', monospace;
 }
 
 :root.light {
-  --bg-primary: #ffffff;
-  --bg-secondary: #f3f3f3;
-  --bg-tertiary: #e8e8e8;
-  --bg-elevated: #f8f8f8;
-  --text-primary: #333333;
+  --black: #f5f5f5;
+  --surface: #ffffff;
+  --surface-raised: #f0f0f0;
+  --surface-panel: #fafafa;
+  --surface-accent: #efefef;
+  --border: #e8e8e8;
+  --border-visible: #cccccc;
+  --text-disabled: #999999;
   --text-secondary: #666666;
-  --text-muted: #999999;
-  --border-color: #e0e0e0;
-  --border-subtle: #eeeeee;
-  --accent: #007acc;
-  --accent-hover: #1a8ad4;
-  --accent-text: #ffffff;
-  --statusbar-bg: #007acc;
-  --statusbar-text: #ffffff;
-  --hover-bg: #e8e8e8;
-  --active-bg: #d4e5f7;
-  --danger: #d32f2f;
-  --danger-hover: #c62828;
-  --shadow: rgba(0, 0, 0, 0.15);
-  --scrollbar-thumb: #c1c1c1;
+  --text-primary: #1a1a1a;
+  --text-display: #000000;
+  --interactive: #007aff;
+  --bg-primary: var(--black);
+  --bg-secondary: var(--surface);
+  --bg-tertiary: var(--surface-raised);
+  --bg-elevated: var(--surface-panel);
+  --text-muted: var(--text-disabled);
+  --border-color: var(--border);
+  --border-subtle: var(--border-visible);
+  --accent-hover: #ef3f47;
+  --accent-text: var(--surface);
+  --statusbar-bg: var(--surface);
+  --statusbar-text: var(--text-primary);
+  --hover-bg: rgba(0, 0, 0, 0.04);
+  --active-bg: rgba(0, 0, 0, 0.08);
+  --scrollbar-thumb: #c8c8c8;
   --scrollbar-hover: #a8a8a8;
-  --selection: rgba(59, 142, 234, 0.2);
+  --selection: rgba(0, 0, 0, 0.08);
 }
 
-/* ─── Reset & Base ─────────────────────────────────────────────────── */
 *,
 *::before,
 *::after {
@@ -63,19 +121,48 @@
   padding: 0;
 }
 
-html, body, #root {
+html,
+body,
+#root {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  font-size: 16px;
+  font-family: var(--font-body);
+  font-size: var(--body);
   color: var(--text-primary);
   background: var(--bg-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ─── Scrollbar (Windows) ──────────────────────────────────────────── */
+body {
+  background-image:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.045) 0, transparent 22%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.015), transparent 22%);
+}
+
+:root.light body {
+  background-image:
+    radial-gradient(circle at top right, rgba(0, 0, 0, 0.04) 0, transparent 20%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.015), transparent 20%);
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  color: inherit;
+}
+
+input,
+textarea {
+  caret-color: var(--text-display);
+}
+
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -87,19 +174,17 @@ html, body, #root {
 
 ::-webkit-scrollbar-thumb {
   background: var(--scrollbar-thumb);
-  border-radius: 5px;
+  border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--scrollbar-hover);
 }
 
-/* ─── Selection ────────────────────────────────────────────────────── */
 ::selection {
   background: var(--selection);
 }
 
-/* ─── xterm overrides ──────────────────────────────────────────────── */
 .xterm {
   padding: 0 !important;
 }
@@ -109,20 +194,50 @@ html, body, #root {
   overflow-x: hidden !important;
 }
 
-/* ─── Prevent text selection during drag ───────────────────────────── */
 .dragging,
 .dragging * {
   user-select: none !important;
   -webkit-user-select: none !important;
 }
 
-/* ─── Canvas viewport transitions ──────────────────────────────────── */
-/* Smooth transitions for zoom/pan, disabled during active drag */
 .no-transition {
   transition: none !important;
 }
 
-/* Smooth transition class for canvas tiles container */
 .canvas-viewport {
-  transition: transform 0.2s ease-out;
+  transition: transform 0.24s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.nd-label {
+  font-family: var(--font-mono);
+  font-size: var(--label);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.nd-caption {
+  font-family: var(--font-mono);
+  font-size: var(--caption);
+  letter-spacing: 0.04em;
+}
+
+.nd-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.nd-dot-grid {
+  background-image: radial-gradient(circle, var(--border-visible) 0.75px, transparent 0.75px);
+  background-size: 14px 14px;
+}
+
+.nd-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.nd-panel-raised {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-visible);
 }

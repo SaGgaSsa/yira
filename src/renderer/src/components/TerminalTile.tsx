@@ -38,31 +38,31 @@ export function TerminalTileWrapper({ tile, isFocused, onFocus, onUpdate, onDele
     // Create xterm instance
     const term = new Terminal({
       theme: {
-        background: '#1e1e1e',
-        foreground: '#cccccc',
-        cursor: '#cccccc',
-        cursorAccent: '#1e1e1e',
-        selectionBackground: 'rgba(255,255,255,0.15)',
+        background: '#111111',
+        foreground: '#e8e8e8',
+        cursor: '#ffffff',
+        cursorAccent: '#111111',
+        selectionBackground: 'rgba(255,255,255,0.14)',
         black: '#000000',
-        red: '#cd3131',
-        green: '#0dbc79',
-        yellow: '#e5e510',
-        blue: '#2472c8',
-        magenta: '#bc3fbc',
-        cyan: '#11a8cd',
+        red: '#d71921',
+        green: '#4a9e5c',
+        yellow: '#d4a843',
+        blue: '#5b9bf6',
+        magenta: '#c88cff',
+        cyan: '#7ed9d1',
         white: '#e5e5e5',
         brightBlack: '#666666',
-        brightRed: '#f14c4c',
-        brightGreen: '#23d18b',
-        brightYellow: '#f5f543',
-        brightBlue: '#3b8eea',
-        brightMagenta: '#d670d6',
-        brightCyan: '#29b8db',
-        brightWhite: '#e5e5e5',
+        brightRed: '#ef3f47',
+        brightGreen: '#77c989',
+        brightYellow: '#f0c461',
+        brightBlue: '#9bc0ff',
+        brightMagenta: '#e0aaff',
+        brightCyan: '#a3eee8',
+        brightWhite: '#ffffff',
       },
-      fontFamily: '"Cascadia Code", "JetBrains Mono", "Fira Code", "Consolas", "Menlo", monospace',
+      fontFamily: '"IBM Plex Mono", "JetBrains Mono", "Consolas", monospace',
       fontSize: 13,
-      lineHeight: 1.1,
+      lineHeight: 1.15,
       cursorBlink: true,
       allowProposedApi: true,
       scrollback: 5000,
@@ -151,12 +151,12 @@ export function TerminalTileWrapper({ tile, isFocused, onFocus, onUpdate, onDele
     doFit()
   }, [tile.width, tile.height, doFit])
 
-  return (
-    <div
-      ref={containerRef}
-      className="w-full h-full"
-      style={{ background: '#1e1e1e', overflow: 'hidden' }}
-      onMouseDown={onFocus}
-    />
-  )
+    return (
+      <div
+        ref={containerRef}
+        className="w-full h-full"
+      style={{ background: 'var(--surface)', overflow: 'hidden' }}
+        onMouseDown={onFocus}
+      />
+    )
 }

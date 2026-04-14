@@ -7,11 +7,11 @@ interface SidebarProps {
   footer?: React.ReactNode
 }
 
-const SIDEBAR_MIN = 240
-const SIDEBAR_MAX = 520
-const SIDEBAR_DEFAULT = 280
+const SIDEBAR_MIN = 300
+const SIDEBAR_MAX = 560
+const SIDEBAR_DEFAULT = 344
 
-export function Sidebar({ collapsed, onToggle, children, footer }: SidebarProps): React.ReactElement {
+export function Sidebar({ collapsed, children, footer }: SidebarProps): React.ReactElement {
   const [width, setWidth] = useState(SIDEBAR_DEFAULT)
   const [resizing, setResizing] = useState(false)
   const resizeStartRef = useRef<{ x: number; w: number } | null>(null)
@@ -56,28 +56,24 @@ export function Sidebar({ collapsed, onToggle, children, footer }: SidebarProps)
 
   return (
     <aside
-      className={`flex flex-col border-r border-border bg-bg-secondary overflow-hidden shrink-0 ${
-        collapsed ? 'w-0 border-r-0' : ''
-      }`}
-      style={{ width: collapsed ? 0 : width }}
+      className={`relative flex shrink-0 flex-col overflow-hidden border-r border-border ${collapsed ? 'w-0 border-r-0' : ''}`}
+      style={{
+        width: collapsed ? 0 : width,
+        background: 'var(--surface)',
+      }}
     >
-      {/* Resize handle */}
       {!collapsed && (
         <div
-          className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-accent/30 transition-colors z-10"
+          className="absolute right-0 top-0 bottom-0 z-10 w-2 cursor-col-resize"
           onMouseDown={handleResizeStart}
-        />
+        >
+          <div className="absolute right-0 top-8 bottom-8 w-px bg-border-visible" />
+        </div>
       )}
 
       <div className="flex min-h-0 flex-1 flex-col" style={{ minWidth: collapsed ? 0 : SIDEBAR_MIN }}>
-        <div className="flex-1 overflow-y-auto overflow-x-hidden">
-          {children}
-        </div>
-        {footer && (
-          <div className="shrink-0 border-t border-border">
-            {footer}
-          </div>
-        )}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden">{children}</div>
+        {footer && <div className="shrink-0 border-t border-border">{footer}</div>}
       </div>
     </aside>
   )

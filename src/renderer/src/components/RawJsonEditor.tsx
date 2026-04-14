@@ -13,7 +13,7 @@ interface RawJsonEditorProps {
 function normalizeCanvasState(state: CanvasState): CanvasState {
   return {
     ...state,
-    viewMode: state.viewMode ?? 'canvas',
+    viewMode: state.viewMode ?? 'fullview',
     fullviewActiveTileId: state.fullviewActiveTileId ?? state.focusedTileId ?? state.tiles[0]?.id ?? null,
   }
 }
@@ -30,7 +30,7 @@ export function RawJsonEditor({ open, workspaceId, onClose, onApply }: RawJsonEd
         viewport: { tx: 0, ty: 0, zoom: 1 },
         nextZIndex: 1,
         focusedTileId: null,
-        viewMode: 'canvas',
+        viewMode: 'fullview',
         fullviewActiveTileId: null,
       })
       setValue(JSON.stringify(nextState, null, 2))
@@ -52,44 +52,42 @@ export function RawJsonEditor({ open, workspaceId, onClose, onApply }: RawJsonEd
   if (!open) return null
 
   return createPortal(
-    <div className="fixed inset-0 z-[10020] flex items-center justify-center bg-black/60">
-      <div
-        className="flex h-[80vh] w-[760px] max-w-[92vw] flex-col overflow-hidden rounded-xl border border-border shadow-2xl"
-        style={{ background: 'var(--bg-tertiary)' }}
-      >
-        <div className="flex items-center justify-between border-b border-border px-5 py-3">
+    <div className="fixed inset-0 z-[10020] flex items-center justify-center bg-black/80">
+      <div className="flex h-[84vh] w-[860px] max-w-[94vw] flex-col overflow-hidden rounded-[24px] border border-border-visible bg-bg-secondary">
+        <div className="flex items-center justify-between border-b border-border px-6 py-5">
           <div>
-            <h2 className="text-sm font-semibold text-text-primary">Raw Canvas JSON</h2>
-            <p className="text-xs text-text-muted">{workspaceId}</p>
+            <div className="nd-label text-text-secondary">Raw State</div>
+            <h2 className="mt-2 text-xl text-text-display">Canvas JSON</h2>
+            <p className="nd-caption mt-2 text-text-secondary">{workspaceId}</p>
           </div>
           <button
-            className="rounded p-1 text-text-muted transition-colors hover:bg-hover-bg hover:text-text-primary"
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-border-visible text-text-secondary transition-colors hover:text-text-display"
             onClick={onClose}
           >
             <X size={16} />
           </button>
         </div>
 
-        <div className="flex-1 p-4">
+        <div className="flex-1 p-5">
           <textarea
-            className="h-full w-full resize-none rounded-lg border border-border bg-bg-primary p-3 font-mono text-xs leading-5 text-text-primary outline-none"
+            className="h-full w-full resize-none rounded-[20px] border border-border-visible bg-bg-primary p-4 font-mono text-xs leading-6 text-text-primary outline-none"
             value={value}
             onChange={(event) => setValue(event.target.value)}
             spellCheck={false}
           />
         </div>
 
-        <div className="flex items-center justify-between border-t border-border px-5 py-3">
+        <div className="flex items-center justify-between border-t border-border px-6 py-4">
           <div className="flex items-center gap-2 text-xs text-danger">
             {error && (
               <>
                 <AlertCircle size={14} />
-                <span>{error}</span>
+                <span className="nd-caption">[ ERROR ] {error}</span>
               </>
             )}
           </div>
           <button
-            className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm text-white transition-colors hover:opacity-90"
+            className="inline-flex items-center gap-2 rounded-full border border-text-display bg-text-display px-5 py-3 text-sm text-bg-primary transition-colors hover:opacity-90"
             onClick={() => {
               try {
                 const parsed = JSON.parse(value) as CanvasState
@@ -103,7 +101,7 @@ export function RawJsonEditor({ open, workspaceId, onClose, onApply }: RawJsonEd
             }}
           >
             <Save size={14} />
-            <span>Apply JSON</span>
+            <span className="nd-label">Apply JSON</span>
           </button>
         </div>
       </div>
