@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Morph</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 0;
+      background: var(--ct-bg);
+      color: var(--ct-text);
+      font-family: var(--ct-font-primary, var(--ct-font-sans, inherit));
+      font-size: var(--ct-font-primary-size, var(--ct-font-size, 13px));
+    }
+    .app { display: flex; flex-direction: column; min-height: 100vh; }
+    .stack { display: flex; flex-direction: column; gap: 12px; padding: 12px; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+    .field.wide { grid-column: 1 / -1; }
+    .field label { color: var(--ct-dim); }
+    .field input, .field select, .field textarea { width: 100%; }
+    .field textarea { min-height: 74px; resize: vertical; }
+    .toolbar-right { margin-left: auto; display: flex; gap: 8px; }
+    .muted { color: var(--ct-dim); }
+    .status-line { white-space: pre-wrap; }
+    .instances { display: flex; flex-direction: column; gap: 8px; }
+    .instance-row { display: flex; flex-direction: column; gap: 8px; }
+    .instance-top { display: flex; align-items: flex-start; gap: 8px; }
+    .instance-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+    .instance-title { font-family: var(--ct-font-primary, var(--ct-font-sans, inherit)); font-size: var(--ct-font-primary-size, var(--ct-font-size, 13px)); font-weight: var(--ct-font-primary-weight, 700); color: var(--ct-text); }
+    .instance-meta { color: var(--ct-dim); font-size: var(--ct-font-secondary-size, var(--ct-font-subtle-size, 11px)); word-break: break-word; }
+    .instance-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .mono { font-family: var(--ct-font-mono, monospace); font-size: var(--ct-font-mono-size, 13px); }
+    .pill-ok { color: var(--ct-success); }
+    .pill-pending { color: var(--ct-warning); }
+    .pill-error { color: var(--ct-danger); }
+    .help { color: var(--ct-dim); font-size: var(--ct-font-secondary-size, var(--ct-font-subtle-size, 11px)); }
+    @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="ct-toolbar">
+      <div class="ct-toolbar-title">Morph</div>
+      <div class="toolbar-right">
+        <button id="refresh-btn">Refresh</button>
+      </div>
+    </div>
+
+    <div class="stack">
+      <div class="ct-card">
+        <div class="ct-toolbar-title" style="margin-bottom: 6px;">New devbox</div>
+        <div class="help" style="margin-bottom: 12px;">Uses a Morph devbox template or image, ensures web VNC is available, then opens the preview in a browser webview.</div>
+        <div class="grid">
+          <div class="field wide">
+            <label for="apiKey">Morph API key</label>
+            <input id="apiKey" type="password" placeholder="morph_..." />
+          </div>
+          <div class="field wide">
+            <label for="baseUrl">Base URL</label>
+            <input id="baseUrl" type="text" placeholder="https://cloud.morph.so/api" />
+          </div>
+          <div class="field wide">
+            <label for="label">Label</label>
+            <input id="label" type="text" placeholder="Morph Devbox" />
+          </div>
+          <div class="field wide">
+            <label for="sharedTemplateUrl">Shared template URL</label>
+            <input id="sharedTemplateUrl" type="text" placeholder="https://cloud.morph.so/web/templates/shared/fullstack-devbox" />
+          </div>
+          <div class="field">
+            <label for="templateType">Template source</label>
+            <select id="templateType">
+              <option value="shared">Shared template page</option>
+              <option value="snapshot">Snapshot template</option>
+              <option value="image">Base image</option>
+              <option value="manual">Manual IDs</option>
+            </select>
+          </div>
+          <div class="field wide">
+            <label for="templateSelect">Template</label>
+            <select id="templateSelect">
+              <option value="">Loading templates…</option>
+            </select>
+          </div>
+          <div class="field wide">
+            <label for="snapshotId">Snapshot ID (optional)</label>
+            <input id="snapshotId" type="text" placeholder="Use an existing snapshot instead of creating one" />
+          </div>
+          <div class="field wide">
+            <label for="imageId">Image ID</label>
+            <input id="imageId" type="text" placeholder="morphvm-minimal" />
+          </div>
+          <div class="field">
+            <label for="vcpus">vCPUs</label>
+            <input id="vcpus" type="number" min="1" step="1" />
+          </div>
+          <div class="field">
+            <label for="memory">Memory (MB)</label>
+            <input id="memory" type="number" min="512" step="512" />
+          </div>
+          <div class="field">
+            <label for="diskSize">Disk size (MB)</label>
+            <input id="diskSize" type="number" min="1024" step="1024" />
+          </div>
+          <div class="field">
+            <label for="ttlSeconds">TTL seconds</label>
+            <input id="ttlSeconds" type="number" min="60" step="60" />
+          </div>
+          <div class="field">
+            <label for="ttlAction">TTL action</label>
+            <select id="ttlAction">
+              <option value="stop">stop</option>
+              <option value="pause">pause</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="desktopPassword">Desktop password</label>
+            <input id="desktopPassword" type="text" />
+          </div>
+          <div class="field wide">
+            <label for="startupCommand">Startup command (optional)</label>
+            <textarea id="startupCommand" placeholder="Example: firefox https://example.com"></textarea>
+          </div>
+          <div class="field wide">
+            <label style="display:flex;align-items:center;gap:8px;">
+              <input id="autoOpenPreview" type="checkbox" />
+              Open preview automatically in a browser tile
+            </label>
+          </div>
+        </div>
+        <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;">
+          <button id="create-btn" data-primary>Create devbox</button>
+          <button id="open-shared-template-btn">Open shared template page</button>
+        </div>
+      </div>
+
+      <div class="ct-card-2">
+        <div class="ct-toolbar-title" style="margin-bottom: 6px;">Status</div>
+        <div id="status" class="status-line muted">Idle.</div>
+      </div>
+
+      <div class="ct-card">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <div class="ct-toolbar-title">Devboxes</div>
+          <div id="instances-count" class="ct-pill">0</div>
+        </div>
+        <div id="instances" class="instances">
+          <div class="ct-empty">No Morph devboxes yet.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var fields = ['apiKey', 'baseUrl', 'label', 'sharedTemplateUrl', 'templateType', 'snapshotId', 'imageId', 'vcpus', 'memory', 'diskSize', 'ttlSeconds', 'ttlAction', 'desktopPassword', 'startupCommand', 'autoOpenPreview']
+    var state = { busy: false, instances: [], requestId: null, currentStatus: 'Idle.', templates: { snapshots: [], images: [] } }
+
+    function $(id) { return document.getElementById(id) }
+
+    function setStatus(text, tone) {
+      state.currentStatus = text
+      var el = $('status')
+      el.textContent = text
+      el.className = 'status-line ' + (tone || 'muted')
+    }
+
+    function readForm() {
+      return {
+        apiKey: $('apiKey').value.trim(),
+        baseUrl: $('baseUrl').value.trim(),
+        label: $('label').value.trim(),
+        sharedTemplateUrl: $('sharedTemplateUrl').value.trim(),
+        templateType: $('templateType').value,
+        snapshotId: $('snapshotId').value.trim(),
+        imageId: $('imageId').value.trim(),
+        vcpus: Number($('vcpus').value || 0),
+        memory: Number($('memory').value || 0),
+        diskSize: Number($('diskSize').value || 0),
+        ttlSeconds: Number($('ttlSeconds').value || 0),
+        ttlAction: $('ttlAction').value,
+        desktopPassword: $('desktopPassword').value,
+        startupCommand: $('startupCommand').value,
+        autoOpenPreview: $('autoOpenPreview').checked,
+      }
+    }
+
+    async function saveForm() {
+      if (!window.contex || !window.contex.settings) return
+      var payload = readForm()
+      await window.contex.settings.set(payload)
+    }
+
+    async function loadForm() {
+      if (!window.contex || !window.contex.settings) return
+      for (var i = 0; i < fields.length; i++) {
+        var key = fields[i]
+        var value = await window.contex.settings.get(key)
+        if (key === 'autoOpenPreview') $('autoOpenPreview').checked = !!value
+        else if (value !== undefined && value !== null) $(key).value = String(value)
+      }
+    }
+
+    function shortDate(ts) {
+      if (!ts) return ''
+      try { return new Date(ts * 1000).toLocaleString() } catch { return '' }
+    }
+
+    function syncTemplateFieldsFromSelection() {
+      var type = $('templateType').value
+      var value = $('templateSelect').value
+      if (!value) return
+      if (type === 'snapshot') {
+        $('snapshotId').value = value
+      } else if (type === 'image') {
+        $('snapshotId').value = ''
+        $('imageId').value = value
+      }
+    }
+
+    function renderTemplates() {
+      var type = $('templateType').value
+      var select = $('templateSelect')
+      while (select.firstChild) select.removeChild(select.firstChild)
+
+      var list = type === 'image' ? state.templates.images : state.templates.snapshots
+      if (type === 'shared') {
+        var sharedOpt = document.createElement('option')
+        sharedOpt.value = ''
+        sharedOpt.textContent = 'Uses the shared Morph template URL'
+        select.appendChild(sharedOpt)
+        select.disabled = true
+        return
+      }
+      if (type === 'manual') {
+        var manualOpt = document.createElement('option')
+        manualOpt.value = ''
+        manualOpt.textContent = 'Manual entry mode'
+        select.appendChild(manualOpt)
+        select.disabled = true
+        return
+      }
+
+      select.disabled = false
+      if (!list.length) {
+        var emptyOpt = document.createElement('option')
+        emptyOpt.value = ''
+        emptyOpt.textContent = type === 'image' ? 'No images found' : 'No snapshots found'
+        select.appendChild(emptyOpt)
+        return
+      }
+
+      var placeholder = document.createElement('option')
+      placeholder.value = ''
+      placeholder.textContent = type === 'image' ? 'Select an image…' : 'Select a snapshot…'
+      select.appendChild(placeholder)
+
+      list.forEach(function(item) {
+        var opt = document.createElement('option')
+        opt.value = item.id
+        var when = item.created ? ' · ' + shortDate(item.created) : ''
+        opt.textContent = item.label + ' (' + item.id + ')' + when
+        select.appendChild(opt)
+      })
+
+      var current = type === 'image' ? $('imageId').value.trim() : $('snapshotId').value.trim()
+      if (current && list.some(function(item) { return item.id === current })) {
+        select.value = current
+      }
+    }
+
+    async function refreshTemplates() {
+      try {
+        var result = await window.contex.ext.invoke('listTemplates', {
+          apiKey: $('apiKey').value.trim(),
+          baseUrl: $('baseUrl').value.trim(),
+        })
+        state.templates = {
+          snapshots: (result && result.snapshots) || [],
+          images: (result && result.images) || [],
+        }
+      } catch (err) {
+        state.templates = { snapshots: [], images: [] }
+      }
+      renderTemplates()
+    }
+
+    function renderInstances() {
+      var wrap = $('instances')
+      $('instances-count').textContent = String(state.instances.length)
+      while (wrap.firstChild) wrap.removeChild(wrap.firstChild)
+      if (!state.instances.length) {
+        var empty = document.createElement('div')
+        empty.className = 'ct-empty'
+        empty.textContent = 'No Morph devboxes yet.'
+        wrap.appendChild(empty)
+        return
+      }
+
+      state.instances.forEach(function(instance) {
+        var row = document.createElement('div')
+        row.className = 'ct-list-row instance-row'
+
+        var top = document.createElement('div')
+        top.className = 'instance-top'
+
+        var badge = document.createElement('div')
+        badge.className = 'ct-pill ' + (instance.status === 'ready' ? 'pill-ok' : instance.status === 'pending' ? 'pill-pending' : '')
+        badge.textContent = instance.status || 'unknown'
+
+        var main = document.createElement('div')
+        main.className = 'instance-main'
+
+        var title = document.createElement('div')
+        title.className = 'instance-title'
+        title.textContent = (instance.metadata && instance.metadata.label) || instance.id
+
+        var meta1 = document.createElement('div')
+        meta1.className = 'instance-meta mono'
+        meta1.textContent = instance.id
+
+        var meta2 = document.createElement('div')
+        meta2.className = 'instance-meta'
+        meta2.textContent = 'Created: ' + shortDate(instance.created) + (instance.previewBaseUrl ? ' · preview ready' : '')
+
+        main.appendChild(title)
+        main.appendChild(meta1)
+        main.appendChild(meta2)
+        top.appendChild(badge)
+        top.appendChild(main)
+
+        var actions = document.createElement('div')
+        actions.className = 'instance-actions'
+
+        var openBtn = document.createElement('button')
+        openBtn.textContent = 'Open preview'
+        openBtn.disabled = !instance.previewBaseUrl
+        openBtn.addEventListener('click', function() { openPreview(instance) })
+
+        var stopBtn = document.createElement('button')
+        stopBtn.textContent = 'Stop'
+        stopBtn.setAttribute('data-danger', 'true')
+        stopBtn.addEventListener('click', function() { stopInstance(instance.id) })
+
+        actions.appendChild(openBtn)
+        actions.appendChild(stopBtn)
+        row.appendChild(top)
+        row.appendChild(actions)
+        wrap.appendChild(row)
+      })
+    }
+
+    async function refreshInstances() {
+      if (!window.contex) return
+      try {
+        var result = await window.contex.ext.invoke('listInstances', readForm())
+        state.instances = (result && result.instances) || []
+        renderInstances()
+        setStatus('Loaded ' + state.instances.length + ' devbox' + (state.instances.length === 1 ? '' : 'es') + '.', 'muted')
+      } catch (err) {
+        setStatus('Failed to load devboxes: ' + (err.message || String(err)), 'pill-error')
+      }
+    }
+
+    function buildPreviewUrl(baseUrl) {
+      var base = String(baseUrl || '').replace(/\/$/, '')
+      if (!base) return ''
+      return base + '/vnc_lite.html?scale=true&scaleViewport=true&autoconnect=true'
+    }
+
+    async function openPreview(instance) {
+      try {
+        var url = ''
+
+        if (instance && instance.previewUrl && instance.previewUrl.indexOf('/vnc_lite.html?') !== -1) {
+          url = instance.previewUrl
+        } else if (instance && instance.previewBaseUrl) {
+          url = buildPreviewUrl(instance.previewBaseUrl)
+        }
+
+        if (!url) {
+          var result = await window.contex.ext.invoke('getPreviewUrl', {
+            instanceId: instance.id,
+            apiKey: $('apiKey').value.trim(),
+            baseUrl: $('baseUrl').value.trim(),
+          })
+          url = result.previewUrl
+            || (result.instance && result.instance.previewUrl)
+            || buildPreviewUrl(result.instance && result.instance.previewBaseUrl)
+            || ''
+        }
+
+        if (!url) throw new Error('No preview URL returned')
+        setStatus('Opening preview: ' + url, 'muted')
+        await window.contex.canvas.createTile('browser', { filePath: url, hideTitlebar: true, hideNavbar: true })
+        await window.contex.context.set('ctx:morph:selected', { instanceId: instance.id, previewUrl: url })
+      } catch (err) {
+        setStatus('Failed to open preview: ' + (err.message || String(err)), 'pill-error')
+      }
+    }
+
+    async function stopInstance(instanceId) {
+      try {
+        setStatus('Stopping ' + instanceId + '…', 'pill-pending')
+        await window.contex.ext.invoke('stopInstance', {
+          instanceId: instanceId,
+          apiKey: $('apiKey').value.trim(),
+          baseUrl: $('baseUrl').value.trim(),
+        })
+        await refreshInstances()
+        setStatus('Stopped ' + instanceId + '.', 'muted')
+      } catch (err) {
+        setStatus('Failed to stop instance: ' + (err.message || String(err)), 'pill-error')
+      }
+    }
+
+    async function openSharedTemplatePage() {
+      var url = $('sharedTemplateUrl').value.trim()
+      if (!url) {
+        setStatus('Shared template URL is empty.', 'pill-error')
+        return
+      }
+      await window.contex.canvas.createTile('browser', { filePath: url, hideTitlebar: true, hideNavbar: true })
+      setStatus('Opened Morph shared template page.', 'muted')
+    }
+
+    async function createInstance() {
+      if (state.busy) return
+      var form = readForm()
+      if (!form.apiKey) {
+        setStatus('Morph API key is required.', 'pill-error')
+        return
+      }
+      if (form.templateType === 'shared') {
+        await openSharedTemplatePage()
+        return
+      }
+      state.busy = true
+      $('create-btn').disabled = true
+      state.requestId = 'morph-' + Date.now()
+      form.requestId = state.requestId
+      try {
+        await saveForm()
+        setStatus('Creating Morph devbox…', 'pill-pending')
+        var result = await window.contex.ext.invoke('createInstance', form)
+        var instance = result && result.instance
+        if (!instance) throw new Error('No instance returned')
+        await window.contex.context.set('ctx:morph:last-created', instance)
+        await refreshInstances()
+        setStatus('Created ' + instance.id + (instance.previewUrl ? ' · ' + instance.previewUrl : '') + '.', 'pill-ok')
+        if (form.autoOpenPreview && instance.previewUrl) await openPreview(instance)
+      } catch (err) {
+        setStatus('Devbox create failed: ' + (err.message || String(err)), 'pill-error')
+      } finally {
+        state.busy = false
+        $('create-btn').disabled = false
+      }
+    }
+
+    function onBusEvent(evt) {
+      var payload = evt && evt.payload ? evt.payload : evt
+      if (!payload || !payload.action) return
+      if (payload.action === 'progress' && payload.requestId === state.requestId) {
+        setStatus(payload.message || payload.stage || 'Working…', 'pill-pending')
+      }
+      if (payload.action === 'instanceCreated') {
+        refreshInstances()
+      }
+      if (payload.action === 'instanceStopped') {
+        refreshInstances()
+      }
+    }
+
+    async function init() {
+      await loadForm()
+      renderInstances()
+      await refreshInstances()
+
+      $('refresh-btn').addEventListener('click', refreshInstances)
+      $('create-btn').addEventListener('click', createInstance)
+      $('open-shared-template-btn').addEventListener('click', openSharedTemplatePage)
+      fields.forEach(function(key) {
+        var el = $(key)
+        if (!el) return
+        el.addEventListener('change', saveForm)
+      })
+
+      $('templateType').addEventListener('change', function() {
+        renderTemplates()
+        syncTemplateFieldsFromSelection()
+        saveForm()
+      })
+      $('templateSelect').addEventListener('change', function() {
+        syncTemplateFieldsFromSelection()
+        saveForm()
+      })
+      $('apiKey').addEventListener('change', refreshTemplates)
+      $('baseUrl').addEventListener('change', refreshTemplates)
+
+      await refreshTemplates()
+
+      if (window.contex && window.contex.bus) {
+        await window.contex.bus.subscribe('morph')
+        window.addEventListener('message', function(e) {
+          if (!e.data || e.data.type !== 'contex-event') return
+          if (e.data.event !== 'bus.event.morph') return
+          onBusEvent(e.data.data)
+        })
+      }
+
+      if (window.contex && window.contex.actions) {
+        await window.contex.actions.register('openPreview', 'Open the preview URL for the latest Morph instance', function(params) {
+          if (params && params.url) {
+            return window.contex.canvas.createTile('browser', { filePath: params.url, hideTitlebar: true, hideNavbar: true })
+          }
+          var first = state.instances[0]
+          if (first) return openPreview(first)
+          throw new Error('No Morph instance available')
+        })
+      }
+    }
+
+    window.addEventListener('message', function(e) {
+      if (e.data && e.data.type === 'contex-bridge-ready') init()
+    })
+    if (window.contex) init()
+  </script>
+</body>
+</html>

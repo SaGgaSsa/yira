@@ -1,0 +1,53 @@
+{
+  "id": "morph",
+  "name": "Morph",
+  "version": "0.1.0",
+  "description": "Launch Morph Cloud instances, install a desktop preview, and open them in a browser webview.",
+  "author": "contex",
+  "tier": "power",
+  "ui": { "mode": "native" },
+  "main": "main.js",
+  "contributes": {
+    "tiles": [
+      {
+        "type": "morph",
+        "label": "Morph",
+        "icon": "",
+        "entry": "tiles/main/index.html",
+        "defaultSize": { "w": 520, "h": 700 },
+        "minSize": { "w": 380, "h": 420 }
+      }
+    ],
+    "contextMenu": [
+      {
+        "label": "New Morph",
+        "action": "createTile",
+        "tileType": "ext:morph"
+      }
+    ],
+    "settings": [
+      { "key": "apiKey", "label": "Morph API Key", "type": "string", "default": "" },
+      { "key": "baseUrl", "label": "Morph Base URL", "type": "string", "default": "https://cloud.morph.so/api" },
+      { "key": "label", "label": "Default Label", "type": "string", "default": "Morph Devbox" },
+      { "key": "sharedTemplateUrl", "label": "Shared Template URL", "type": "string", "default": "https://cloud.morph.so/web/templates/shared/fullstack-devbox" },
+      { "key": "snapshotId", "label": "Snapshot ID", "type": "string", "default": "" },
+      { "key": "imageId", "label": "Image ID", "type": "string", "default": "morphvm-minimal" },
+      { "key": "vcpus", "label": "vCPUs", "type": "number", "default": 2 },
+      { "key": "memory", "label": "Memory (MB)", "type": "number", "default": 4096 },
+      { "key": "diskSize", "label": "Disk Size (MB)", "type": "number", "default": 12288 },
+      { "key": "ttlSeconds", "label": "TTL Seconds", "type": "number", "default": 3600 },
+      { "key": "ttlAction", "label": "TTL Action", "type": "string", "default": "stop" },
+      { "key": "desktopPassword", "label": "Desktop Password", "type": "string", "default": "morph" },
+      { "key": "startupCommand", "label": "Startup Command", "type": "string", "default": "" },
+      { "key": "autoOpenPreview", "label": "Auto Open Preview", "type": "boolean", "default": true }
+    ],
+    "context": {
+      "produces": ["ctx:morph:selected", "ctx:morph:last-created"],
+      "consumes": []
+    },
+    "actions": [
+      { "name": "openPreview", "description": "Open a Morph preview. Params: { instanceId?: string, url?: string }" }
+    ]
+  },
+  "permissions": ["network"]
+}

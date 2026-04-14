@@ -1,0 +1,14 @@
+{
+  "name": "contex-extension-harness",
+  "version": "1.0.0",
+  "description": "Dev harness for Contex extension tiles — simulates the full bridge API in a browser, no Electron required.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node server.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

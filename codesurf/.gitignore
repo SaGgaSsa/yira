@@ -1,0 +1,10 @@
+node_modules
+dist-electron
+node_modules
+autoresearch.sh
+autoresearch.md
+autoresearch.ideas.md
+out/
+release
+/.contex
+opensrc/morph-labs--morph-typescript-sdk/

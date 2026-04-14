@@ -1,0 +1,1162 @@
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ContextMenu, MenuItem } from './ContextMenu'
+import { useAppFonts } from '../FontContext'
+import { useTheme } from '../ThemeContext'
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+interface FsEntry {
+  name: string
+  path: string
+  isDir: boolean
+  ext: string
+  mtime?: number
+}
+
+interface TreeEntry extends FsEntry {
+  children: TreeEntry[]
+}
+
+type GitStatus = 'modified' | 'untracked' | 'added' | 'deleted' | 'renamed' | 'conflict'
+type SortMode = 'name' | 'ext' | 'type'
+type ViewMode = 'tree' | 'list'
+
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+const GIT_COLORS: Record<GitStatus, string> = {
+  modified: '#e2c08d',
+  untracked: '#73c991',
+  added: '#73c991',
+  deleted: '#f44747',
+  renamed: '#e2c08d',
+  conflict: '#f44747',
+}
+
+const GIT_LABELS: Record<GitStatus, string> = {
+  modified: 'M',
+  untracked: 'U',
+  added: 'A',
+  deleted: 'D',
+  renamed: 'R',
+  conflict: '!',
+}
+
+const SORT_MODES: SortMode[] = ['name', 'type', 'ext']
+const SORT_LABELS: Record<SortMode, string> = { name: 'Name', type: 'Type', ext: 'Ext' }
+const IGNORED = new Set(['.git', 'node_modules', '.next', 'dist', 'dist-electron', '.DS_Store', '__pycache__', '.cache', 'out'])
+
+// ─── Special file / extension metadata ───────────────────────────────────────
+
+const SPECIAL_FILES: Record<string, { label: string; color: string; bg: string }> = {
+  'package.json': { label: 'PKG', color: '#fff', bg: '#cb3837' },
+  'package-lock.json': { label: 'PKG', color: '#fff', bg: '#8a2627' },
+  'yarn.lock': { label: 'YRN', color: '#fff', bg: '#2c8ebb' },
+  'pnpm-lock.yaml': { label: 'PNP', color: '#fff', bg: '#f69220' },
+  'tsconfig.json': { label: 'TSC', color: '#fff', bg: '#3178c6' },
+  '.gitignore': { label: 'GIT', color: '#fff', bg: '#f34f29' },
+  '.gitattributes': { label: 'GIT', color: '#fff', bg: '#f34f29' },
+  '.env': { label: 'ENV', color: '#fff', bg: '#3a4a1a' },
+  '.env.local': { label: 'ENV', color: '#fff', bg: '#3a4a1a' },
+  '.env.example': { label: 'ENV', color: '#888', bg: '#2a2a2a' },
+  dockerfile: { label: 'DOC', color: '#fff', bg: '#2496ed' },
+  Dockerfile: { label: 'DOC', color: '#fff', bg: '#2496ed' },
+  makefile: { label: 'MK', color: '#fff', bg: '#6d4c41' },
+  Makefile: { label: 'MK', color: '#fff', bg: '#6d4c41' },
+  'readme.md': { label: 'MD', color: '#fff', bg: '#1565c0' },
+  'README.md': { label: 'MD', color: '#fff', bg: '#1565c0' },
+  license: { label: 'LIC', color: '#fff', bg: '#4a4a1a' },
+  LICENSE: { label: 'LIC', color: '#fff', bg: '#4a4a1a' },
+}
+
+const EXT_META: Record<string, { label: string; color: string; bg: string }> = {
+  '.ts': { label: 'TS', color: '#fff', bg: '#3178c6' },
+  '.tsx': { label: 'TX', color: '#fff', bg: '#3178c6' },
+  '.mts': { label: 'TS', color: '#fff', bg: '#3178c6' },
+  '.cts': { label: 'TS', color: '#fff', bg: '#3178c6' },
+  '.js': { label: 'JS', color: '#000', bg: '#f7df1e' },
+  '.jsx': { label: 'JX', color: '#000', bg: '#f7df1e' },
+  '.mjs': { label: 'JS', color: '#000', bg: '#f7df1e' },
+  '.cjs': { label: 'JS', color: '#000', bg: '#f7df1e' },
+  '.json': { label: '{ }', color: '#f7df1e', bg: '#2a2a1a' },
+  '.jsonc': { label: '{ }', color: '#f7df1e', bg: '#2a2a1a' },
+  '.md': { label: 'MD', color: '#fff', bg: '#4a7a3a' },
+  '.mdx': { label: 'MX', color: '#fff', bg: '#4a7a3a' },
+  '.txt': { label: 'TXT', color: '#888', bg: '#252525' },
+  '.css': { label: 'CSS', color: '#fff', bg: '#563d7c' },
+  '.scss': { label: 'SCS', color: '#fff', bg: '#cd669a' },
+  '.sass': { label: 'SAS', color: '#fff', bg: '#cd669a' },
+  '.less': { label: 'LES', color: '#fff', bg: '#1d365d' },
+  '.html': { label: 'HTM', color: '#fff', bg: '#e34c26' },
+  '.htm': { label: 'HTM', color: '#fff', bg: '#e34c26' },
+  '.xml': { label: 'XML', color: '#fff', bg: '#f34f29' },
+  '.svg': { label: 'SVG', color: '#fff', bg: '#e67e22' },
+  '.vue': { label: 'VUE', color: '#fff', bg: '#42b883' },
+  '.svelte': { label: 'SV', color: '#fff', bg: '#ff3e00' },
+  '.astro': { label: 'AST', color: '#fff', bg: '#ff5d01' },
+  '.py': { label: 'PY', color: '#fff', bg: '#3572a5' },
+  '.pyi': { label: 'PY', color: '#fff', bg: '#3572a5' },
+  '.rb': { label: 'RB', color: '#fff', bg: '#cc342d' },
+  '.rs': { label: 'RS', color: '#fff', bg: '#a95028' },
+  '.go': { label: 'GO', color: '#fff', bg: '#00acd7' },
+  '.java': { label: 'JV', color: '#fff', bg: '#b07219' },
+  '.kt': { label: 'KT', color: '#fff', bg: '#7f52ff' },
+  '.swift': { label: 'SW', color: '#fff', bg: '#fa7343' },
+  '.c': { label: 'C', color: '#fff', bg: '#555599' },
+  '.cpp': { label: 'C++', color: '#fff', bg: '#f34b7d' },
+  '.cs': { label: 'C#', color: '#fff', bg: '#178600' },
+  '.php': { label: 'PHP', color: '#fff', bg: '#4f5d95' },
+  '.sh': { label: 'SH', color: '#fff', bg: '#4a6a1a' },
+  '.bash': { label: 'SH', color: '#fff', bg: '#4a6a1a' },
+  '.zsh': { label: 'ZSH', color: '#fff', bg: '#4a6a1a' },
+  '.fish': { label: 'FSH', color: '#fff', bg: '#4a6a1a' },
+  '.yaml': { label: 'YML', color: '#fff', bg: '#7a1a1a' },
+  '.yml': { label: 'YML', color: '#fff', bg: '#7a1a1a' },
+  '.toml': { label: 'TOM', color: '#fff', bg: '#9c4121' },
+  '.ini': { label: 'INI', color: '#fff', bg: '#5a4a3a' },
+  '.env': { label: 'ENV', color: '#fff', bg: '#3a4a1a' },
+  '.lock': { label: 'LCK', color: '#888', bg: '#252525' },
+  '.log': { label: 'LOG', color: '#888', bg: '#252525' },
+  '.png': { label: 'IMG', color: '#fff', bg: '#7a2a6a' },
+  '.jpg': { label: 'IMG', color: '#fff', bg: '#7a2a6a' },
+  '.jpeg': { label: 'IMG', color: '#fff', bg: '#7a2a6a' },
+  '.gif': { label: 'GIF', color: '#fff', bg: '#7a3a6a' },
+  '.webp': { label: 'WBP', color: '#fff', bg: '#7a3a6a' },
+  '.ico': { label: 'ICO', color: '#fff', bg: '#7a3a6a' },
+  '.woff': { label: 'FON', color: '#fff', bg: '#4a3a6a' },
+  '.woff2': { label: 'FON', color: '#fff', bg: '#4a3a6a' },
+  '.ttf': { label: 'FON', color: '#fff', bg: '#4a3a6a' },
+  '.pdf': { label: 'PDF', color: '#fff', bg: '#b31b1b' },
+  '.zip': { label: 'ZIP', color: '#fff', bg: '#5a5a1a' },
+  '.tar': { label: 'TAR', color: '#fff', bg: '#5a5a1a' },
+  '.gz': { label: 'GZ', color: '#fff', bg: '#5a5a1a' },
+  '.sql': { label: 'SQL', color: '#fff', bg: '#1a6a8a' },
+  '.prisma': { label: 'PRI', color: '#fff', bg: '#2d3748' },
+  '.graphql': { label: 'GQL', color: '#fff', bg: '#e10098' },
+}
+
+// ─── Utility functions ───────────────────────────────────────────────────────
+
+function sortEntries(entries: FsEntry[], mode: SortMode): FsEntry[] {
+  const dirs = [...entries.filter(e => e.isDir)].sort((a, b) => a.name.localeCompare(b.name))
+  const files = [...entries.filter(e => !e.isDir)]
+
+  if (mode === 'ext') {
+    files.sort((a, b) => {
+      const byExt = a.ext.localeCompare(b.ext)
+      return byExt !== 0 ? byExt : a.name.localeCompare(b.name)
+    })
+  } else {
+    files.sort((a, b) => a.name.localeCompare(b.name))
+  }
+
+  return [...dirs, ...files]
+}
+
+function isIgnored(name: string): boolean {
+  return IGNORED.has(name)
+}
+
+function relativePath(rootPath: string, fullPath: string): string {
+  if (!fullPath.startsWith(rootPath)) return fullPath
+  return fullPath.slice(rootPath.length).replace(/^\//, '') || '.'
+}
+
+function mapPathPrefixes(paths: Set<string>, oldPrefix: string, newPrefix: string): Set<string> {
+  const next = new Set<string>()
+  for (const path of paths) {
+    if (path === oldPrefix || path.startsWith(`${oldPrefix}/`)) {
+      next.add(`${newPrefix}${path.slice(oldPrefix.length)}`)
+    } else {
+      next.add(path)
+    }
+  }
+  return next
+}
+
+function removePathPrefixes(paths: Set<string>, prefix: string): Set<string> {
+  const next = new Set<string>()
+  for (const path of paths) {
+    if (path === prefix || path.startsWith(`${prefix}/`)) continue
+    next.add(path)
+  }
+  return next
+}
+
+async function loadOneLevel(dir: string, sortMode: SortMode): Promise<TreeEntry[]> {
+  const items: FsEntry[] = await window.electron.fs.readDir(dir).catch(() => [])
+  const filtered = sortEntries(items.filter(item => !isIgnored(item.name)), sortMode)
+  return filtered.map((item) => ({ ...item, children: [] }))
+}
+
+function flattenFiles(entries: TreeEntry[], acc: TreeEntry[] = []): TreeEntry[] {
+  for (const entry of entries) {
+    if (entry.isDir) flattenFiles(entry.children, acc)
+    else acc.push(entry)
+  }
+  return acc
+}
+
+function filterTree(entries: TreeEntry[], query: string): TreeEntry[] {
+  const q = query.trim().toLowerCase()
+  if (!q) return entries
+  const result: TreeEntry[] = []
+  for (const entry of entries) {
+    if (entry.isDir) {
+      const children = filterTree(entry.children, q)
+      const matchesSelf = entry.name.toLowerCase().includes(q)
+      if (matchesSelf || children.length > 0) result.push({ ...entry, children })
+    } else if (entry.name.toLowerCase().includes(q)) {
+      result.push(entry)
+    }
+  }
+  return result
+}
+
+// ─── Sub-components ──────────────────────────────────────────────────────────
+
+function FileIcon({ name, ext }: { name: string; ext: string }): JSX.Element {
+  const meta = SPECIAL_FILES[name] ?? EXT_META[ext] ?? {
+    label: ext.replace('.', '').slice(0, 3).toUpperCase() || 'TXT',
+    color: '#888',
+    bg: '#252525'
+  }
+  return (
+    <div style={{
+      width: 18, height: 18, flexShrink: 0, marginRight: 6,
+      background: meta.bg, borderRadius: 3,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>
+      <span style={{
+        fontSize: 7, fontWeight: 700, color: meta.color,
+        fontFamily: 'inherit', letterSpacing: '-0.02em', lineHeight: 1
+      }}>
+        {meta.label}
+      </span>
+    </div>
+  )
+}
+
+function FolderIcon({ expanded }: { expanded: boolean }): JSX.Element {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', marginRight: 5, flexShrink: 0, gap: 3 }}>
+      <svg
+        width="8" height="8" viewBox="0 0 8 8"
+        style={{
+          transition: 'transform 0.15s ease',
+          transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
+          opacity: expanded ? 0.9 : 0.45,
+        }}
+      >
+        <path d="M2 1l4 3-4 3" stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <svg width="14" height="12" viewBox="0 0 14 12" fill="none">
+        <path
+          d="M0 2.5C0 1.67 0.67 1 1.5 1H4.5L6 2.5H12.5C13.33 2.5 14 3.17 14 4V10C14 10.83 13.33 11.5 12.5 11.5H1.5C0.67 11.5 0 10.83 0 10V2.5Z"
+          fill={expanded ? '#dcb67a' : '#c09a5c'}
+        />
+      </svg>
+    </div>
+  )
+}
+
+function Badge({ count }: { count: number }): JSX.Element {
+  return (
+    <span style={{
+      fontSize: 10, color: '#aaa',
+      background: '#2a2a2a', borderRadius: 8,
+      padding: '1px 6px', marginLeft: 6,
+      fontFamily: 'inherit', flexShrink: 0
+    }}>
+      {count}
+    </span>
+  )
+}
+
+function SortIcon({ mode }: { mode: SortMode }): JSX.Element {
+  if (mode === 'name') {
+    return (
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M2 3h4M2 7h3M2 11h2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+        <path d="M10 3v8M8 9l2 2 2-2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    )
+  }
+  if (mode === 'type') {
+    return (
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M1.5 3.5h4l1 1.5h6v6.5h-11z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+        <path d="M10 3v-1M8 0l2 2 2-2" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" opacity="0.5" />
+      </svg>
+    )
+  }
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <path d="M3 4h5v8H3z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+      <path d="M8 6h2v-4H5v2" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+      <circle cx="5.5" cy="9" r="1" fill="currentColor" />
+    </svg>
+  )
+}
+
+function CreateInline({
+  depth, type, value, onChange, onSubmit, onCancel,
+}: {
+  depth: number
+  type: 'file' | 'folder'
+  value: string
+  onChange: (value: string) => void
+  onSubmit: () => void
+  onCancel: () => void
+}): JSX.Element {
+  const fonts = useAppFonts()
+  const theme = useTheme()
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 6,
+      height: 28, paddingLeft: 8 + depth * 16, paddingRight: 12
+    }}>
+      {type === 'folder' ? <FolderIcon expanded={false} /> : <FileIcon name="new.txt" ext=".txt" />}
+      <input
+        autoFocus
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        onKeyDown={e => {
+          e.stopPropagation()
+          if (e.key === 'Enter') onSubmit()
+          if (e.key === 'Escape') onCancel()
+        }}
+        onBlur={onSubmit}
+        placeholder={type === 'file' ? 'filename.ts' : 'folder-name'}
+        style={{
+          flex: 1, padding: '4px 8px', fontSize: fonts.size, borderRadius: 4,
+          background: theme.surface.input, color: theme.text.secondary,
+          border: `1px solid ${theme.accent.base}`, outline: 'none',
+          boxSizing: 'border-box', fontFamily: 'inherit'
+        }}
+      />
+    </div>
+  )
+}
+
+function RenameInput({
+  value, onChange, onSubmit, onCancel,
+}: {
+  value: string
+  onChange: (value: string) => void
+  onSubmit: () => void
+  onCancel: () => void
+}): JSX.Element {
+  const fonts = useAppFonts()
+  const theme = useTheme()
+  return (
+    <input
+      autoFocus
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      onKeyDown={e => {
+        e.stopPropagation()
+        if (e.key === 'Enter') onSubmit()
+        if (e.key === 'Escape') onCancel()
+      }}
+      onBlur={onSubmit}
+      onClick={e => e.stopPropagation()}
+      style={{
+        flex: 1, padding: '1px 4px', fontSize: fonts.size, borderRadius: 3,
+        background: theme.surface.input, color: theme.text.primary,
+        border: `1px solid ${theme.accent.base}`, outline: 'none',
+        fontFamily: 'inherit'
+      }}
+    />
+  )
+}
+
+function GitBadge({ status }: { status: GitStatus }): JSX.Element {
+  return (
+    <span style={{
+      fontSize: 10, fontWeight: 700, color: GIT_COLORS[status],
+      marginLeft: 6, flexShrink: 0, fontFamily: 'inherit', lineHeight: 1
+    }} title={status}>
+      {GIT_LABELS[status]}
+    </span>
+  )
+}
+
+interface TreeNodeProps {
+  entry: TreeEntry
+  depth: number
+  rootPath: string
+  expandedPaths: Set<string>
+  gitStatus: Record<string, GitStatus>
+  creatingIn: { dir: string; type: 'file' | 'folder' } | null
+  createName: string
+  setCreateName: (value: string) => void
+  onToggle: (path: string) => void
+  onOpenFile: (path: string) => void
+  onCtxMenu: (e: React.MouseEvent, entry: FsEntry) => void
+  onSubmitCreate: () => void
+  onCancelCreate: () => void
+  renamingPath: string | null
+  selectedPath?: string | null
+  onSelectPath?: (path: string | null) => void
+  onRenameSubmit: (oldPath: string, newName: string) => void
+  onRenameCancel: () => void
+}
+
+function TreeNode({
+  entry, depth, rootPath, expandedPaths, gitStatus, creatingIn, createName, setCreateName,
+  onToggle, onOpenFile, onCtxMenu, onSubmitCreate, onCancelCreate,
+  renamingPath, selectedPath, onSelectPath, onRenameSubmit, onRenameCancel,
+}: TreeNodeProps): JSX.Element {
+  const fonts = useAppFonts()
+  const theme = useTheme()
+  const expanded = entry.isDir && expandedPaths.has(entry.path)
+  const [hovered, setHovered] = useState(false)
+  const [renameVal, setRenameVal] = useState(entry.name)
+  const isRenaming = renamingPath === entry.path
+  const isCreateTarget = creatingIn?.dir === entry.path && entry.isDir
+  const isSelected = selectedPath === entry.path
+
+  useEffect(() => {
+    if (isRenaming) setRenameVal(entry.name)
+  }, [isRenaming, entry.name])
+
+  return (
+    <div>
+      <div
+        style={{
+          display: 'flex', alignItems: 'center',
+          height: 26, paddingLeft: 8 + depth * 16, paddingRight: 12,
+          cursor: 'pointer', userSelect: 'none',
+          background: isSelected
+            ? theme.surface.selection
+            : hovered ? theme.surface.hover : 'transparent',
+          border: `1px solid ${isSelected ? theme.surface.selectionBorder : 'transparent'}`,
+          boxShadow: 'none',
+          backdropFilter: 'none',
+          WebkitBackdropFilter: 'none',
+          position: 'relative',
+          borderRadius: 8,
+          margin: '0 6px'
+        }}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        onClick={isRenaming ? undefined : () => {
+          onSelectPath?.(entry.path)
+          if (entry.isDir) onToggle(entry.path)
+          else onOpenFile(entry.path)
+        }}
+        onContextMenu={e => { e.preventDefault(); e.stopPropagation(); onCtxMenu(e, entry) }}
+        draggable={!entry.isDir && !isRenaming}
+        onDragStart={e => {
+          e.dataTransfer.setData('text/plain', entry.path)
+          e.dataTransfer.effectAllowed = 'copy'
+        }}
+      >
+        {Array.from({ length: depth }).map((_, i) => (
+          <div key={i} style={{
+            position: 'absolute', left: 8 + i * 16 + 5,
+            width: 1, top: 0, bottom: 0,
+            background: theme.border.subtle, pointerEvents: 'none'
+          }} />
+        ))}
+
+        {entry.isDir ? <FolderIcon expanded={expanded} /> : <FileIcon name={entry.name} ext={entry.ext} />}
+
+        {isRenaming ? (
+          <RenameInput
+            value={renameVal}
+            onChange={setRenameVal}
+            onSubmit={() => onRenameSubmit(entry.path, renameVal.trim())}
+            onCancel={onRenameCancel}
+          />
+        ) : (
+          <span style={{
+            fontSize: fonts.size,
+            color: isSelected ? theme.accent.hover : entry.isDir ? theme.text.primary : theme.text.secondary,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            flex: 1
+          }}>
+            {entry.isDir ? (
+              <>
+                <span style={{ fontWeight: 500 }}>{entry.name}</span>
+                {entry.children.length > 0 && <Badge count={entry.children.length} />}
+              </>
+            ) : (
+              <>
+                <span style={{ fontWeight: 400 }}>{entry.name.replace(entry.ext, '')}</span>
+                <span style={{ color: theme.text.disabled }}>{entry.ext}</span>
+              </>
+            )}
+          </span>
+        )}
+
+        {!isRenaming && gitStatus[entry.path] && (
+          <GitBadge status={gitStatus[entry.path]} />
+        )}
+      </div>
+
+      {entry.isDir && expanded && (
+        <div style={{ position: 'relative' }}>
+          {isCreateTarget && (
+            <CreateInline
+              depth={depth + 1}
+              type={creatingIn.type}
+              value={createName}
+              onChange={setCreateName}
+              onSubmit={onSubmitCreate}
+              onCancel={onCancelCreate}
+            />
+          )}
+
+          {entry.children.length === 0 && !isCreateTarget ? (
+            <div style={{
+              paddingLeft: 8 + (depth + 1) * 16 + 22,
+              height: 24, fontSize: fonts.size, color: theme.text.disabled,
+              display: 'flex', alignItems: 'center', fontFamily: 'inherit'
+            }}>
+              empty
+            </div>
+          ) : (
+            entry.children.map(child => (
+              <TreeNode
+                key={child.path}
+                entry={child}
+                depth={depth + 1}
+                rootPath={rootPath}
+                expandedPaths={expandedPaths}
+                gitStatus={gitStatus}
+                creatingIn={creatingIn}
+                createName={createName}
+                setCreateName={setCreateName}
+                onToggle={onToggle}
+                onOpenFile={onOpenFile}
+                onCtxMenu={onCtxMenu}
+                selectedPath={selectedPath}
+                onSelectPath={onSelectPath}
+                onSubmitCreate={onSubmitCreate}
+                onCancelCreate={onCancelCreate}
+                renamingPath={renamingPath}
+                onRenameSubmit={onRenameSubmit}
+                onRenameCancel={onRenameCancel}
+              />
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function FlatEntry({
+  entry, rootPath, gitStatus, onOpenFile, onCtxMenu,
+  renamingPath, selectedPath, onSelectPath, onRenameSubmit, onRenameCancel,
+}: {
+  entry: TreeEntry
+  rootPath: string
+  gitStatus: Record<string, GitStatus>
+  onOpenFile: (path: string) => void
+  onCtxMenu: (e: React.MouseEvent, entry: FsEntry) => void
+  renamingPath: string | null
+  selectedPath?: string | null
+  onSelectPath?: (path: string | null) => void
+  onRenameSubmit: (oldPath: string, newName: string) => void
+  onRenameCancel: () => void
+}): JSX.Element {
+  const fonts = useAppFonts()
+  const theme = useTheme()
+  const [hovered, setHovered] = useState(false)
+  const [renameVal, setRenameVal] = useState(entry.name)
+  const isRenaming = renamingPath === entry.path
+  const isSelected = selectedPath === entry.path
+
+  useEffect(() => {
+    if (isRenaming) setRenameVal(entry.name)
+  }, [isRenaming, entry.name])
+
+  return (
+    <div
+      style={{
+        display: 'flex', alignItems: 'center',
+        height: 26, paddingLeft: 10, paddingRight: 12,
+        cursor: 'pointer', userSelect: 'none',
+        background: isSelected
+          ? theme.surface.selection
+          : hovered ? theme.surface.hover : 'transparent',
+        border: `1px solid ${isSelected ? theme.surface.selectionBorder : 'transparent'}`,
+        boxShadow: 'none',
+        backdropFilter: 'none',
+        WebkitBackdropFilter: 'none',
+        borderRadius: 8,
+        margin: '0 6px',
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onClick={isRenaming ? undefined : () => {
+        onSelectPath?.(entry.path)
+        onOpenFile(entry.path)
+      }}
+      onContextMenu={e => { e.preventDefault(); e.stopPropagation(); onCtxMenu(e, entry) }}
+    >
+      <FileIcon name={entry.name} ext={entry.ext} />
+
+      {isRenaming ? (
+        <RenameInput
+          value={renameVal}
+          onChange={setRenameVal}
+          onSubmit={() => onRenameSubmit(entry.path, renameVal.trim())}
+          onCancel={onRenameCancel}
+        />
+      ) : (
+        <>
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <span style={{
+              fontSize: fonts.size, fontFamily: 'inherit', color: isSelected ? theme.accent.hover : theme.text.secondary,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+            }}>
+              <span style={{ fontWeight: 400 }}>{entry.name.replace(entry.ext, '')}</span>
+              <span style={{ color: '#4a4a4a' }}>{entry.ext}</span>
+            </span>
+            <span style={{
+              fontSize: fonts.size - 1, fontFamily: 'inherit', color: theme.text.disabled,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+            }}>
+              {relativePath(rootPath, entry.path)}
+            </span>
+          </div>
+          {gitStatus[entry.path] && (
+            <GitBadge status={gitStatus[entry.path]} />
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+// ─── Main FileExplorerTile component ─────────────────────────────────────────
+
+interface FileExplorerTileProps {
+  tileId: string
+  workspacePath: string
+  width: number
+  height: number
+  onOpenFile: (filePath: string) => void
+  selectedFilePath?: string | null
+  connectedTerminalIds?: string[]
+}
+
+interface CtxState { x: number; y: number; entry: FsEntry }
+interface CreateState { dir: string; type: 'file' | 'folder' }
+
+export default function FileExplorerTile({
+  tileId: _tileId,
+  workspacePath,
+  width: _width,
+  height: _height,
+  onOpenFile,
+  selectedFilePath,
+  connectedTerminalIds = [],
+}: FileExplorerTileProps): JSX.Element {
+  const fonts = useAppFonts()
+  const theme = useTheme()
+
+  // Root folder — defaults to workspace, user can scope to a subfolder
+  const [rootPath, setRootPath] = useState(workspacePath)
+  useEffect(() => { setRootPath(workspacePath) }, [workspacePath])
+
+  const [treeEntries, setTreeEntries] = useState<TreeEntry[]>([])
+  const [sortMode, setSortMode] = useState<SortMode>('name')
+  const [viewMode, setViewMode] = useState<ViewMode>('tree')
+  const [search, setSearch] = useState('')
+  const [gitStatus, setGitStatus] = useState<Record<string, GitStatus>>({})
+  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set())
+  const [ctx, setCtx] = useState<CtxState | null>(null)
+  const [creatingIn, setCreatingIn] = useState<CreateState | null>(null)
+  const [createName, setCreateName] = useState('')
+  const [renamingPath, setRenamingPath] = useState<string | null>(null)
+  const [loadingTree, setLoadingTree] = useState(false)
+  const [showFileMenu, setShowFileMenu] = useState(false)
+  const [selectedPath, setSelectedPath] = useState<string | null>(null)
+  const fileMenuRef = useRef<HTMLDivElement>(null)
+  const expandedPathsRef = useRef(expandedPaths)
+  expandedPathsRef.current = expandedPaths
+
+  // Sync external selection into local state
+  useEffect(() => {
+    if (selectedFilePath) setSelectedPath(selectedFilePath)
+  }, [selectedFilePath])
+
+  const loadGit = useCallback(() => {
+    if (!workspacePath) return
+    window.electron.git?.status(workspacePath).then((result: { isRepo: boolean; root: string; files: { path: string; status: string }[] }) => {
+      if (!result.isRepo) {
+        setGitStatus({})
+        return
+      }
+      const map: Record<string, GitStatus> = {}
+      for (const file of result.files) {
+        map[`${result.root}/${file.path}`] = file.status as GitStatus
+      }
+      setGitStatus(map)
+    }).catch(() => setGitStatus({}))
+  }, [workspacePath])
+
+  const loadDirChildren = useCallback(async (dirPath: string): Promise<TreeEntry[]> => {
+    return await loadOneLevel(dirPath, sortMode).catch(() => [])
+  }, [sortMode])
+
+  const updateChildrenInTree = useCallback((
+    entries: TreeEntry[],
+    dirPath: string,
+    children: TreeEntry[],
+  ): TreeEntry[] => {
+    return entries.map(entry => {
+      if (entry.path === dirPath) return { ...entry, children }
+      if (entry.isDir && entry.children.length > 0) {
+        return { ...entry, children: updateChildrenInTree(entry.children, dirPath, children) }
+      }
+      return entry
+    })
+  }, [])
+
+  const loadTree = useCallback(async () => {
+    if (!rootPath) {
+      setTreeEntries([])
+      return
+    }
+    setLoadingTree(true)
+    const rootChildren = await loadOneLevel(rootPath, sortMode).catch(() => [])
+    setTreeEntries(rootChildren)
+    setLoadingTree(false)
+  }, [rootPath, sortMode])
+
+  const reloadAll = useCallback(async () => {
+    if (!rootPath) {
+      loadGit()
+      return
+    }
+    setLoadingTree(true)
+    const expanded = expandedPathsRef.current
+    const rootChildren = await loadOneLevel(rootPath, sortMode).catch(() => [])
+
+    const reloadExpanded = async (entries: TreeEntry[]): Promise<TreeEntry[]> => {
+      return await Promise.all(entries.map(async (entry) => {
+        if (entry.isDir && expanded.has(entry.path)) {
+          const children = await loadOneLevel(entry.path, sortMode).catch(() => [])
+          const reloadedChildren = await reloadExpanded(children)
+          return { ...entry, children: reloadedChildren }
+        }
+        return entry
+      }))
+    }
+
+    const reloaded = await reloadExpanded(rootChildren)
+    setTreeEntries(reloaded)
+    setLoadingTree(false)
+    loadGit()
+  }, [rootPath, sortMode, loadGit])
+
+  // Load tree on mount or root change
+  useEffect(() => {
+    if (!rootPath) {
+      setExpandedPaths(new Set())
+      setCreatingIn(null)
+      setCreateName('')
+      return
+    }
+    setExpandedPaths(new Set([rootPath]))
+    void reloadAll()
+  }, [rootPath, reloadAll])
+
+  useEffect(() => {
+    if (!rootPath) return
+    void loadTree()
+  }, [sortMode, rootPath, loadTree])
+
+  useEffect(() => { loadGit() }, [loadGit])
+
+  // Watch filesystem for changes
+  useEffect(() => {
+    if (!rootPath) return
+    const unsub = window.electron.fs.watch(rootPath, () => { void reloadAll() })
+    return () => unsub?.()
+  }, [rootPath, reloadAll])
+
+  // Auto-expand to selected path
+  useEffect(() => {
+    if (!rootPath || !selectedPath || !selectedPath.startsWith(rootPath)) return
+
+    const relative = selectedPath.slice(rootPath.length).replace(/^\/+/, '')
+    const segments = relative.split('/').filter(Boolean)
+    const parentDirs: string[] = []
+    let current = rootPath
+
+    for (const segment of segments.slice(0, -1)) {
+      current = `${current}/${segment}`
+      parentDirs.push(current)
+    }
+
+    if (parentDirs.length === 0) return
+
+    setExpandedPaths(prev => {
+      const next = new Set(prev)
+      next.add(rootPath)
+      parentDirs.forEach(dir => next.add(dir))
+      return next
+    })
+
+    void (async () => {
+      const dirsToLoad = [rootPath, ...parentDirs]
+      for (const dir of dirsToLoad) {
+        const children = await loadDirChildren(dir)
+        setTreeEntries(prev => dir === rootPath ? children : updateChildrenInTree(prev, dir, children))
+      }
+    })()
+  }, [rootPath, selectedPath, loadDirChildren, updateChildrenInTree])
+
+  // Close file menu on outside click
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (fileMenuRef.current && !fileMenuRef.current.contains(e.target as Node)) setShowFileMenu(false)
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [])
+
+  const flatFiles = useMemo(() => flattenFiles(treeEntries), [treeEntries])
+  const filteredTree = useMemo(() => filterTree(treeEntries, search), [treeEntries, search])
+  const filteredFlat = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return q ? flatFiles.filter(entry => relativePath(rootPath ?? '', entry.path).toLowerCase().includes(q)) : flatFiles
+  }, [flatFiles, search, rootPath])
+
+  const cycleSortMode = useCallback(() => {
+    setSortMode(prev => SORT_MODES[(SORT_MODES.indexOf(prev) + 1) % SORT_MODES.length])
+  }, [])
+
+  const handleCtxMenu = useCallback((e: React.MouseEvent, entry: FsEntry) => {
+    setCtx({ x: e.clientX, y: e.clientY, entry })
+  }, [])
+
+  const handleBgCtxMenu = useCallback((e: React.MouseEvent) => {
+    if (!rootPath) return
+    e.preventDefault()
+    const name = rootPath.split('/').pop() ?? rootPath
+    setCtx({ x: e.clientX, y: e.clientY, entry: { name, path: rootPath, isDir: true, ext: '' } })
+  }, [rootPath])
+
+  const startCreate = useCallback(async (dir: string, type: 'file' | 'folder') => {
+    const wasExpanded = expandedPathsRef.current.has(dir)
+    setExpandedPaths(prev => new Set(prev).add(dir))
+    if (!wasExpanded) {
+      const children = await loadDirChildren(dir)
+      setTreeEntries(prev => updateChildrenInTree(prev, dir, children))
+    }
+    setCreatingIn({ dir, type })
+    setCreateName('')
+    setCtx(null)
+  }, [loadDirChildren, updateChildrenInTree])
+
+  const submitCreate = useCallback(async () => {
+    if (!creatingIn || !rootPath) {
+      setCreatingIn(null)
+      return
+    }
+    const name = createName.trim()
+    if (!name) {
+      setCreatingIn(null)
+      setCreateName('')
+      return
+    }
+    const fullPath = `${creatingIn.dir}/${name}`
+    try {
+      if (creatingIn.type === 'file') await window.electron.fs.createFile(fullPath)
+      else await window.electron.fs.createDir(fullPath)
+      if (creatingIn.type === 'folder') {
+        setExpandedPaths(prev => new Set(prev).add(creatingIn.dir).add(fullPath))
+      }
+    } catch (err) {
+      console.error(`Failed to create ${creatingIn.type}:`, err)
+    }
+    setCreatingIn(null)
+    setCreateName('')
+    await reloadAll()
+  }, [creatingIn, createName, rootPath, reloadAll])
+
+  const cancelCreate = useCallback(() => {
+    setCreatingIn(null)
+    setCreateName('')
+  }, [])
+
+  const handleRenameSubmit = useCallback(async (oldPath: string, newName: string) => {
+    setRenamingPath(null)
+    const trimmed = newName.trim()
+    const oldBase = oldPath.split('/').pop() ?? ''
+    if (!trimmed || trimmed === oldBase) return
+    const dir = oldPath.split('/').slice(0, -1).join('/')
+    const newPath = `${dir}/${trimmed}`
+    try {
+      await window.electron.fs.renameFile(oldPath, newPath)
+      setExpandedPaths(prev => mapPathPrefixes(prev, oldPath, newPath))
+    } catch (err) {
+      console.error('Rename failed:', err)
+    }
+    await reloadAll()
+  }, [reloadAll])
+
+  const handleDelete = useCallback(async (entry: FsEntry) => {
+    try {
+      await window.electron.fs.deleteFile(entry.path)
+      setExpandedPaths(prev => removePathPrefixes(prev, entry.path))
+      if (renamingPath && (renamingPath === entry.path || renamingPath.startsWith(`${entry.path}/`))) setRenamingPath(null)
+      if (creatingIn && (creatingIn.dir === entry.path || creatingIn.dir.startsWith(`${entry.path}/`))) cancelCreate()
+    } catch (err) {
+      console.error('Delete failed:', err)
+    }
+    await reloadAll()
+  }, [renamingPath, creatingIn, cancelCreate, reloadAll])
+
+  // cd a specific connected terminal to a directory
+  const cdTerminal = useCallback((dirPath: string, terminalId?: string) => {
+    if (terminalId) {
+      window.electron.terminal.cd(terminalId, dirPath)
+    } else if (connectedTerminalIds.length === 1) {
+      window.electron.terminal.cd(connectedTerminalIds[0], dirPath)
+    }
+  }, [connectedTerminalIds])
+
+  const handleOpenFile = useCallback((filePath: string) => {
+    onOpenFile(filePath)
+  }, [onOpenFile])
+
+  const ctxItems = useCallback((): MenuItem[] => {
+    if (!ctx) return []
+    const { entry } = ctx
+    const dir = entry.isDir ? entry.path : entry.path.split('/').slice(0, -1).join('/')
+    const items: MenuItem[] = []
+    if (!entry.isDir) items.push({ label: 'Open', action: () => handleOpenFile(entry.path) })
+    items.push({ label: 'New File', action: () => startCreate(dir, 'file') })
+    items.push({ label: 'New Folder', action: () => startCreate(dir, 'folder') })
+    items.push({ label: '', action: () => {}, divider: true })
+    // "Open in Terminal" — only shown when connected to terminal(s)
+    if (connectedTerminalIds.length === 1) {
+      items.push({ label: 'Open in Terminal', action: () => cdTerminal(dir) })
+    } else if (connectedTerminalIds.length > 1) {
+      for (let i = 0; i < connectedTerminalIds.length; i++) {
+        items.push({ label: `Open in Terminal ${i + 1}`, action: () => cdTerminal(dir, connectedTerminalIds[i]) })
+      }
+    }
+    if (connectedTerminalIds.length > 0) {
+      items.push({ label: '', action: () => {}, divider: true })
+    }
+    // Root folder scoping
+    if (entry.isDir && entry.path !== rootPath) {
+      items.push({ label: 'Set as Root', action: () => setRootPath(entry.path) })
+    }
+    if (rootPath !== workspacePath) {
+      items.push({ label: 'Reset Root', action: () => setRootPath(workspacePath) })
+    }
+    items.push({ label: '', action: () => {}, divider: true })
+    items.push({ label: 'Rename', action: () => setRenamingPath(entry.path) })
+    items.push({ label: 'Copy Path', action: () => navigator.clipboard.writeText(entry.path) })
+    items.push({ label: 'Reveal in Finder', action: () => window.electron.fs.revealInFinder?.(entry.path) })
+    items.push({ label: '', action: () => {}, divider: true })
+    items.push({ label: `Delete ${entry.isDir ? 'Folder' : 'File'}`, danger: true, action: () => { void handleDelete(entry) } })
+    return items
+  }, [ctx, handleOpenFile, startCreate, handleDelete, connectedTerminalIds, cdTerminal, rootPath, workspacePath])
+
+  const toggleExpanded = useCallback(async (path: string) => {
+    const wasExpanded = expandedPathsRef.current.has(path)
+    setExpandedPaths(prev => {
+      const next = new Set(prev)
+      if (next.has(path)) {
+        next.delete(path)
+        return next
+      }
+      next.add(path)
+      return next
+    })
+    if (!wasExpanded) {
+      const children = await loadDirChildren(path)
+      setTreeEntries(prev => updateChildrenInTree(prev, path, children))
+    }
+  }, [loadDirChildren, updateChildrenInTree])
+
+  return (
+    <div style={{
+      width: '100%',
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      overflow: 'hidden',
+      fontFamily: fonts.primary, lineHeight: fonts.lineHeight, fontWeight: fonts.weight,
+    }}>
+      {/* Toolbar: [ Search ] [Sort] [Menu] */}
+      <div style={{ padding: '8px 10px 6px', borderBottom: `1px solid ${theme.border.subtle}`, display: 'flex', gap: 4, alignItems: 'center' }}>
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search files"
+          style={{
+            flex: 1, padding: '4px 10px', fontSize: fonts.size,
+            background: theme.surface.input, color: theme.text.secondary,
+            border: `1px solid ${theme.border.default}`, borderRadius: 6,
+            outline: 'none', fontFamily: 'inherit', minWidth: 0
+          }}
+        />
+        <button
+          onClick={cycleSortMode}
+          title={`Sort: ${SORT_LABELS[sortMode]}`}
+          style={{
+            background: 'transparent', border: 'none',
+            cursor: 'pointer', padding: '4px 5px', borderRadius: 4,
+            color: theme.text.muted, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            flexShrink: 0
+          }}
+          onMouseEnter={e => { e.currentTarget.style.color = theme.text.primary }}
+          onMouseLeave={e => { e.currentTarget.style.color = theme.text.muted }}
+        >
+          <SortIcon mode={sortMode} />
+        </button>
+        <div ref={fileMenuRef} style={{ position: 'relative', flexShrink: 0 }}>
+          <button
+            onClick={() => setShowFileMenu(p => !p)}
+            title="File actions"
+            style={{
+              background: showFileMenu ? theme.surface.panelMuted : 'transparent', border: 'none',
+              cursor: 'pointer', padding: '4px 5px', borderRadius: 4,
+              color: showFileMenu ? theme.text.primary : theme.text.muted, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+            onMouseEnter={e => { if (!showFileMenu) e.currentTarget.style.color = theme.text.primary }}
+            onMouseLeave={e => { if (!showFileMenu) e.currentTarget.style.color = theme.text.muted }}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M2 3.5h10M2 7h10M2 10.5h10" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+            </svg>
+          </button>
+          {showFileMenu && (
+            <div style={{
+              position: 'absolute', top: '100%', right: 0,
+              marginTop: 4, minWidth: 150,
+              background: theme.surface.panelElevated, border: `1px solid ${theme.border.default}`,
+              borderRadius: 8, padding: 4,
+              boxShadow: theme.shadow.panel,
+              zIndex: 9999,
+            }}>
+              {([
+                { label: 'New File', action: () => { rootPath && startCreate(rootPath, 'file'); setShowFileMenu(false) } },
+                { label: 'New Folder', action: () => { rootPath && startCreate(rootPath, 'folder'); setShowFileMenu(false) } },
+                { label: 'Refresh', action: () => { void reloadAll(); setShowFileMenu(false) } },
+                { label: 'Show in Finder', action: () => { rootPath && window.electron.fs.revealInFinder?.(rootPath); setShowFileMenu(false) } },
+                ...(rootPath !== workspacePath ? [{ label: 'Reset Root', action: () => { setRootPath(workspacePath); setShowFileMenu(false) } }] : []),
+              ]).map(item => (
+                <div
+                  key={item.label}
+                  onClick={item.action}
+                  style={{
+                    padding: '6px 10px', borderRadius: 6, cursor: 'pointer',
+                    fontSize: fonts.size, color: theme.text.secondary, fontFamily: 'inherit',
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.background = theme.surface.hover)}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                >
+                  {item.label}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* File tree */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '10px 0 4px', position: 'relative' }} onContextMenu={handleBgCtxMenu}>
+        {!rootPath ? (
+          <div style={{ padding: '16px', fontSize: fonts.size, color: theme.text.disabled, fontFamily: 'inherit' }}>No workspace open</div>
+        ) : loadingTree && treeEntries.length === 0 ? (
+          <div style={{ padding: '16px', fontSize: fonts.size, color: theme.text.muted, fontFamily: 'inherit' }}>Loading files...</div>
+        ) : viewMode === 'list' ? (
+          filteredFlat.length === 0 ? (
+            <div style={{ padding: '16px', fontSize: fonts.size, color: theme.text.disabled, fontFamily: 'inherit' }}>{search ? 'No matches' : 'Empty'}</div>
+          ) : (
+            filteredFlat.map(entry => (
+              <FlatEntry
+                key={entry.path}
+                entry={entry}
+                rootPath={rootPath}
+                gitStatus={gitStatus}
+                onOpenFile={handleOpenFile}
+                onCtxMenu={handleCtxMenu}
+                renamingPath={renamingPath}
+                selectedPath={selectedPath}
+                onSelectPath={setSelectedPath}
+                onRenameSubmit={handleRenameSubmit}
+                onRenameCancel={() => setRenamingPath(null)}
+              />
+            ))
+          )
+        ) : (
+          <>
+            {creatingIn?.dir === rootPath && (
+              <CreateInline
+                depth={0}
+                type={creatingIn.type}
+                value={createName}
+                onChange={setCreateName}
+                onSubmit={submitCreate}
+                onCancel={cancelCreate}
+              />
+            )}
+
+            {filteredTree.length === 0 ? (
+              <div style={{ padding: '16px', fontSize: fonts.size, color: theme.text.disabled, fontFamily: 'inherit' }}>{search ? 'No matches' : 'Empty'}</div>
+            ) : (
+              filteredTree.map(entry => (
+                <TreeNode
+                  key={entry.path}
+                  entry={entry}
+                  depth={0}
+                  rootPath={rootPath}
+                  expandedPaths={expandedPaths}
+                  gitStatus={gitStatus}
+                  creatingIn={creatingIn?.dir === rootPath ? null : creatingIn}
+                  createName={createName}
+                  setCreateName={setCreateName}
+                  onToggle={toggleExpanded}
+                  onOpenFile={handleOpenFile}
+                  onCtxMenu={handleCtxMenu}
+                  selectedPath={selectedPath}
+                  onSelectPath={setSelectedPath}
+                  onSubmitCreate={submitCreate}
+                  onCancelCreate={cancelCreate}
+                  renamingPath={renamingPath}
+                  onRenameSubmit={handleRenameSubmit}
+                  onRenameCancel={() => setRenamingPath(null)}
+                />
+              ))
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Path breadcrumb — click to reset root */}
+      <div
+        style={{
+          padding: '4px 10px',
+          borderTop: `1px solid ${theme.border.subtle}`,
+          fontSize: fonts.size - 1,
+          color: rootPath !== workspacePath ? theme.accent.base : theme.text.disabled,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          flexShrink: 0,
+          cursor: rootPath !== workspacePath ? 'pointer' : 'default',
+        }}
+        title={rootPath !== workspacePath ? `Click to reset to ${workspacePath}` : rootPath}
+        onClick={rootPath !== workspacePath ? () => setRootPath(workspacePath) : undefined}
+      >
+        {rootPath || 'No workspace'}
+      </div>
+
+      {ctx && <ContextMenu x={ctx.x} y={ctx.y} items={ctxItems()} onClose={() => setCtx(null)} />}
+    </div>
+  )
+}

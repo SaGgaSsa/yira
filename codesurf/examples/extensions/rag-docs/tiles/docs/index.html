@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>RAG Docs</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: var(--ct-bg, transparent); --surface: var(--ct-panel, rgba(0,0,0,.04)); --surface2: var(--ct-panel-2, rgba(0,0,0,.06));
+      --border: var(--ct-border, rgba(0,0,0,.1)); --text: var(--ct-text, #111); --muted: var(--ct-dim, #64748b);
+      --accent: var(--ct-accent, #4f46e5); --accent-bg: var(--ct-accent-s, rgba(79,70,229,.12));
+      --green: var(--ct-success, #1f8f5f); --green-bg: color-mix(in srgb, var(--ct-success, #1f8f5f) 14%, transparent);
+      --amber: var(--ct-warning, #c07b12); --amber-bg: color-mix(in srgb, var(--ct-warning, #c07b12) 14%, transparent);
+      --red: var(--ct-danger, #dc2626);
+    }
+    html, body { height:100%; background:var(--bg); color:var(--text);
+      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+      font-size:13px; overflow:hidden; display:flex; flex-direction:column; }
+    .toolbar { display:flex; align-items:center; gap:8px; padding:8px 12px;
+      border-bottom:1px solid var(--border); flex-shrink:0; height:44px; }
+    .toolbar-title { font-weight:600; font-size:13px; }
+    .spacer { flex:1; }
+    .badge { font-size:10px; padding:2px 6px; border-radius:10px;
+      background:var(--accent-bg); color:var(--accent); font-weight:600; }
+    .mode-badge { font-size:10px; padding:2px 7px; border-radius:4px;
+      background:var(--amber-bg); color:var(--amber); }
+    .mode-badge.semantic { background:var(--green-bg); color:var(--green); }
+    .search-bar { display:flex; align-items:center; gap:8px; padding:8px 12px;
+      border-bottom:1px solid var(--border); flex-shrink:0; }
+    .search-wrap { position:relative; display:flex; align-items:center; flex:1; }
+    .s-icon { position:absolute; left:8px; color:var(--muted); pointer-events:none; }
+    .search-input { width:100%; background:var(--surface2); border:1px solid var(--border);
+      border-radius:6px; color:var(--text); font-size:12px; font-family:inherit;
+      padding:6px 10px 6px 30px; outline:none; transition:border-color .15s; }
+    .search-input::placeholder { color:var(--muted); }
+    .search-input:focus { border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-bg); }
+    .btn-go { background:var(--accent); color:#fff; border:none; border-radius:6px;
+      padding:6px 14px; font-size:12px; font-family:inherit; cursor:pointer; transition:opacity .15s; }
+    .btn-go:hover { opacity:.85; } .btn-go:disabled { opacity:.4; cursor:default; }
+    .body { display:flex; flex:1; overflow:hidden; }
+    .sidebar { width:180px; flex-shrink:0; border-right:1px solid var(--border);
+      display:flex; flex-direction:column; overflow:hidden; }
+    .sidebar-head { display:flex; align-items:center; justify-content:space-between;
+      padding:8px 10px; border-bottom:1px solid var(--border); flex-shrink:0; }
+    .sidebar-label { font-size:11px; color:var(--muted); font-weight:600;
+      text-transform:uppercase; letter-spacing:.04em; }
+    .btn-add { background:none; border:1px solid var(--border); border-radius:4px;
+      color:var(--accent); font-size:16px; line-height:1; padding:1px 6px;
+      cursor:pointer; font-family:inherit; transition:background .15s; }
+    .btn-add:hover { background:var(--accent-bg); }
+    .doc-list { flex:1; overflow-y:auto; padding:4px; }
+    .doc-list::-webkit-scrollbar { width:3px; }
+    .doc-list::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+    .doc-item { display:flex; align-items:center; gap:6px; padding:6px 8px; border-radius:5px;
+      cursor:pointer; transition:background .1s; margin-bottom:2px; }
+    .doc-item:hover { background:var(--surface2); }
+    .doc-item.active { background:var(--accent-bg); }
+    .doc-icon { flex-shrink:0; color:var(--muted); font-size:10px; font-family:monospace; }
+    .doc-item.active .doc-icon { color:var(--accent); }
+    .doc-info { flex:1; min-width:0; }
+    .doc-name { font-size:11px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .doc-meta { font-size:10px; color:var(--muted); }
+    .doc-del { background:none; border:none; color:var(--muted); cursor:pointer;
+      padding:2px 4px; border-radius:3px; font-size:11px; opacity:0; transition:opacity .15s; }
+    .doc-item:hover .doc-del { opacity:1; } .doc-del:hover { color:var(--red); }
+    .drop-zone { margin:8px; padding:14px 8px; border:1px dashed var(--border);
+      border-radius:6px; text-align:center; color:var(--muted); font-size:11px;
+      cursor:pointer; transition:border-color .15s,background .15s; flex-shrink:0; line-height:1.8; }
+    .drop-zone:hover, .drop-zone.over { border-color:var(--accent); background:var(--accent-bg); color:var(--accent); }
+    .main { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+    .tabs { display:flex; border-bottom:1px solid var(--border); padding:0 12px; flex-shrink:0; }
+    .tab { padding:8px 14px; font-size:12px; color:var(--muted); cursor:pointer;
+      border-bottom:2px solid transparent; margin-bottom:-1px; transition:color .15s; }
+    .tab:hover { color:var(--text); }
+    .tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+    .chunk-ctrl { display:flex; align-items:center; gap:10px; padding:7px 12px;
+      border-bottom:1px solid var(--border); flex-shrink:0; flex-wrap:wrap; }
+    .chunk-ctrl label { font-size:11px; color:var(--muted); display:flex; align-items:center; gap:5px; }
+    .chunk-ctrl input[type=range] { width:80px; accent-color:var(--accent); }
+    .chunk-ctrl .val { font-size:11px; color:var(--text); min-width:28px; }
+    .rechunk { background:var(--surface2); border:1px solid var(--border); border-radius:5px;
+      color:var(--text); font-size:11px; font-family:inherit; padding:3px 10px;
+      cursor:pointer; margin-left:auto; }
+    .rechunk:hover { border-color:var(--accent); }
+    .panel { flex:1; overflow-y:auto; padding:10px; display:none; flex-direction:column; gap:8px; }
+    .panel.active { display:flex; }
+    .panel::-webkit-scrollbar { width:4px; }
+    .panel::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+    .chunk-card { background:var(--surface); border:1px solid var(--border); border-radius:7px;
+      padding:10px 12px; display:flex; flex-direction:column; gap:6px; }
+    .chunk-head { display:flex; align-items:center; gap:8px; }
+    .chunk-num { font-size:10px; color:var(--muted); font-weight:600; }
+    .chunk-stat { font-size:10px; padding:1px 5px; border-radius:3px; background:var(--surface2); color:var(--muted); }
+    .chunk-body { font-size:12px; line-height:1.6; color:var(--text);
+      white-space:pre-wrap; word-break:break-word; max-height:120px; overflow:hidden; transition:max-height .2s; }
+    .chunk-body.exp { max-height:none; }
+    .chunk-ov { background:rgba(129,140,248,.18); border-radius:2px; }
+    .chunk-more { font-size:10px; color:var(--accent); cursor:pointer; background:none; border:none;
+      padding:0; font-family:inherit; align-self:flex-start; }
+    .chunk-more:hover { text-decoration:underline; }
+    .res-card { background:var(--surface); border:1px solid var(--border); border-radius:7px;
+      padding:10px 12px; display:flex; flex-direction:column; gap:6px;
+      cursor:pointer; transition:border-color .15s; }
+    .res-card:hover { border-color:color-mix(in srgb, var(--accent) 35%, transparent); }
+    .res-head { display:flex; align-items:center; gap:8px; }
+    .res-doc { font-size:11px; font-weight:600; color:var(--accent); }
+    .res-chunk { font-size:10px; color:var(--muted); }
+    .res-score { margin-left:auto; font-size:10px; padding:1px 6px; border-radius:3px;
+      background:var(--green-bg); color:var(--green); font-weight:600; }
+    .res-text { font-size:12px; line-height:1.6; color:var(--text); word-break:break-word; }
+    .res-text mark { background:rgba(129,140,248,.25); color:inherit; border-radius:2px; padding:0 1px; }
+    .empty { flex:1; display:flex; flex-direction:column; align-items:center;
+      justify-content:center; gap:8px; color:var(--muted); font-size:12px; padding:24px; text-align:center; }
+    .empty-t { font-size:13px; color:var(--text); font-weight:500; }
+    #fi { display:none; }
+  </style>
+</head>
+<body>
+<input type="file" id="fi" multiple accept=".txt,.md,.csv,.json,.ts,.js,.py,.html,.css,.xml,.yaml,.yml,.rst" />
+
+<div class="toolbar">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="color:var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+    <polyline points="14 2 14 8 20 8"/>
+    <line x1="16" y1="13" x2="8" y2="13"/>
+    <line x1="16" y1="17" x2="8" y2="17"/>
+  </svg>
+  <span class="toolbar-title">RAG Docs</span>
+  <span id="badge" class="badge" style="display:none"></span>
+  <div class="spacer"></div>
+  <span id="mode" class="mode-badge">keyword</span>
+</div>
+
+<div class="search-bar">
+  <div class="search-wrap">
+    <svg class="s-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+    </svg>
+    <input id="qi" class="search-input" placeholder="Search across all documents..." />
+  </div>
+  <button id="qbtn" class="btn-go" disabled>Search</button>
+</div>
+
+<div class="body">
+  <div class="sidebar">
+    <div class="sidebar-head">
+      <span class="sidebar-label">Documents</span>
+      <button class="btn-add" id="addBtn">+</button>
+    </div>
+    <div id="docList" class="doc-list"></div>
+    <div class="drop-zone" id="dz">
+      <div>Drop files here</div>
+      <div>or click +</div>
+    </div>
+  </div>
+  <div class="main">
+    <div class="tabs">
+      <div class="tab active" data-tab="chunks">Chunks</div>
+      <div class="tab" data-tab="results">Results</div>
+    </div>
+    <div class="chunk-ctrl" id="cc" style="display:none">
+      <label>Size <input type="range" id="csz" min="100" max="1500" step="50" value="500" /><span class="val" id="csvl">500</span></label>
+      <label>Overlap <input type="range" id="cov" min="0" max="300" step="10" value="50" /><span class="val" id="covl">50</span></label>
+      <button class="rechunk" id="rcbtn">Re-chunk</button>
+    </div>
+    <div id="panelChunks" class="panel active"></div>
+    <div id="panelResults" class="panel"></div>
+  </div>
+</div>
+
+<script>
+(function() {
+'use strict'
+const TID = (new URLSearchParams(location.search)).get('tileId') || 'rag-docs'
+let bridge = null, docs = [], activeId = null, csz = 500, cov = 50
+
+function initBridge(b) {
+  bridge = b
+  b.tile.getState('rdocs').then(s => {
+    if (Array.isArray(s) && s.length) { docs = s; renderList(); updateBadge(); selectDoc(docs[0].id) }
+  }).catch(() => {})
+  b.ext.invoke('ping').then(() => setMode('semantic')).catch(() => setMode('keyword'))
+}
+window.addEventListener('message', e => {
+  if (e.data && e.data.type === 'contex-bridge-ready') initBridge(e.data.bridge || window.contex)
+  if (e.data && e.data.type === 'contex-action-invoke') onAction(e.data)
+})
+if (window.contex) initBridge(window.contex)
+
+function setMode(m) {
+  const el = document.getElementById('mode')
+  el.textContent = m
+  el.className = 'mode-badge' + (m === 'semantic' ? ' semantic' : '')
+}
+
+function onAction(msg) {
+  if (msg.action === 'addDocument') { const {name='doc', text=''} = msg.params||{}; if (text) addDoc(name,text) }
+  if (msg.action === 'search') {
+    const {query=''} = msg.params||{}
+    document.getElementById('qi').value = query
+    doSearch(query); switchTab('results')
+  }
+  if (msg.requestId) window.parent.postMessage({type:'contex-action-result',tileId:TID,requestId:msg.requestId,result:'ok'},'*')
+}
+
+/* chunking */
+function chunkText(text, sz, ov) {
+  const segs = text.split(/(?<=[.!?])\s+|\n{2,}/).filter(s => s.trim())
+  const out = []; let cur = '', tail = ''
+  for (const seg of segs) {
+    const cand = tail ? tail + ' ' + cur + (cur ? ' ' : '') + seg : cur + (cur ? ' ' : '') + seg
+    if (cand.length > sz && cur) {
+      out.push(cur.trim())
+      tail = cur.length > ov ? cur.slice(-ov).trim() : cur.trim()
+      cur = seg
+    } else { cur = cand }
+  }
+  if (cur.trim()) out.push(cur.trim())
+  return out.length ? out : [text.trim()]
+}
+
+function findOverlap(a, b, maxLen) {
+  for (let n = Math.min(a.length, b.length, maxLen + 20); n > 20; n--) {
+    if (a.endsWith(b.slice(0, n))) return a.slice(-n)
+  }
+  return ''
+}
+
+/* docs */
+function uid() { return Math.random().toString(36).slice(2,10) }
+
+function addDoc(name, text) {
+  const id = uid()
+  docs.push({ id, name, text, chunks: chunkText(text, csz, cov) })
+  updateBadge(); renderList(); selectDoc(id); persist()
+  document.getElementById('qbtn').disabled = false
+}
+
+function removeDoc(id) {
+  docs = docs.filter(d => d.id !== id)
+  if (activeId === id) { activeId = null; renderChunks(null) }
+  updateBadge(); renderList(); persist()
+  document.getElementById('qbtn').disabled = !docs.length
+}
+
+function selectDoc(id) {
+  activeId = id; renderList()
+  renderChunks(docs.find(d => d.id === id) || null)
+  switchTab('chunks')
+}
+
+function rechunk() {
+  docs = docs.map(d => ({ ...d, chunks: chunkText(d.text, csz, cov) }))
+  renderChunks(docs.find(d => d.id === activeId) || null); persist()
+}
+
+function persist() {
+  if (bridge) bridge.tile.setState('rdocs', docs).catch(() => {})
+}
+
+/* render list */
+function renderList() {
+  const el = document.getElementById('docList')
+  while (el.firstChild) el.removeChild(el.firstChild)
+  if (!docs.length) {
+    const m = document.createElement('div')
+    m.style.cssText = 'padding:12px 8px;color:var(--muted);font-size:11px;text-align:center'
+    m.textContent = 'No documents yet'; el.appendChild(m); return
+  }
+  docs.forEach(doc => {
+    const row = document.createElement('div')
+    row.className = 'doc-item' + (doc.id === activeId ? ' active' : '')
+    row.addEventListener('click', () => selectDoc(doc.id))
+    const icon = document.createElement('span')
+    icon.className = 'doc-icon'; icon.textContent = '[f]'
+    const info = document.createElement('div'); info.className = 'doc-info'
+    const nm = document.createElement('div'); nm.className = 'doc-name'; nm.textContent = doc.name
+    const mt = document.createElement('div'); mt.className = 'doc-meta'
+    mt.textContent = doc.chunks.length + ' chunk' + (doc.chunks.length !== 1 ? 's' : '')
+    info.appendChild(nm); info.appendChild(mt)
+    const del = document.createElement('button'); del.className = 'doc-del'
+    del.textContent = 'x'; del.title = 'Remove'
+    del.addEventListener('click', ev => { ev.stopPropagation(); removeDoc(doc.id) })
+    row.appendChild(icon); row.appendChild(info); row.appendChild(del)
+    el.appendChild(row)
+  })
+}
+
+function updateBadge() {
+  const b = document.getElementById('badge'), c = document.getElementById('cc')
+  if (!docs.length) { b.style.display = 'none'; c.style.display = 'none' }
+  else {
+    b.style.display = ''; b.textContent = docs.length + (docs.length === 1 ? ' doc' : ' docs')
+    c.style.display = ''
+  }
+}
+
+/* render chunks */
+function renderChunks(doc) {
+  const panel = document.getElementById('panelChunks')
+  while (panel.firstChild) panel.removeChild(panel.firstChild)
+  if (!doc) { panel.appendChild(mkEmpty('No document selected', 'Pick a document from the sidebar')); return }
+  if (!doc.chunks.length) { panel.appendChild(mkEmpty('Empty document', 'No readable text found')); return }
+  doc.chunks.forEach((ch, i) => {
+    const card = document.createElement('div'); card.className = 'chunk-card'
+    const head = document.createElement('div'); head.className = 'chunk-head'
+    const num = document.createElement('span'); num.className = 'chunk-num'
+    num.textContent = 'Chunk ' + (i+1) + ' / ' + doc.chunks.length
+    const cs = document.createElement('span'); cs.className = 'chunk-stat'; cs.textContent = ch.length + ' chars'
+    const ws = document.createElement('span'); ws.className = 'chunk-stat'
+    ws.textContent = ch.split(/\s+/).filter(Boolean).length + ' words'
+    head.appendChild(num); head.appendChild(cs); head.appendChild(ws)
+    const body = document.createElement('div'); body.className = 'chunk-body'
+    if (i < doc.chunks.length - 1) {
+      const ov = findOverlap(ch, doc.chunks[i+1], cov)
+      if (ov) {
+        body.appendChild(document.createTextNode(ch.slice(0, ch.length - ov.length)))
+        const span = document.createElement('span'); span.className = 'chunk-ov'
+        span.title = 'Overlaps with next chunk'; span.textContent = ov
+        body.appendChild(span)
+      } else { body.textContent = ch }
+    } else { body.textContent = ch }
+    card.appendChild(head); card.appendChild(body)
+    if (ch.length > 300) {
+      const btn = document.createElement('button'); btn.className = 'chunk-more'; btn.textContent = 'Show more'
+      let exp = false
+      btn.addEventListener('click', () => {
+        exp = !exp; body.className = 'chunk-body' + (exp ? ' exp' : ''); btn.textContent = exp ? 'Show less' : 'Show more'
+      })
+      card.appendChild(btn)
+    }
+    panel.appendChild(card)
+  })
+}
+
+/* search */
+async function doSearch(q) {
+  if (!q || !docs.length) return
+  switchTab('results')
+  let res = null
+  if (bridge) {
+    try {
+      res = await bridge.ext.invoke('search', { query: q, docs: docs.map(d => ({id:d.id,name:d.name,chunks:d.chunks})) })
+    } catch(e) { res = null }
+  }
+  if (!res) { res = kwSearch(q); setMode('keyword') } else { setMode('semantic') }
+  renderResults(res, q)
+}
+
+function kwSearch(q) {
+  const terms = q.toLowerCase().split(/\s+/).filter(Boolean)
+  const hits = []
+  docs.forEach(doc => {
+    doc.chunks.forEach((ch, i) => {
+      const lower = ch.toLowerCase()
+      const score = terms.reduce((n, t) => n + (lower.split(t).length - 1), 0)
+      if (score > 0) hits.push({ docId: doc.id, docName: doc.name, chunkIdx: i, text: ch, score })
+    })
+  })
+  return hits.sort((a,b) => b.score - a.score).slice(0, 20)
+}
+
+/* render results */
+function renderResults(res, q) {
+  const panel = document.getElementById('panelResults')
+  while (panel.firstChild) panel.removeChild(panel.firstChild)
+  if (!res.length) { panel.appendChild(mkEmpty('No results', 'Try different search terms')); return }
+  const terms = q.toLowerCase().split(/\s+/).filter(Boolean)
+  res.forEach(r => {
+    const card = document.createElement('div'); card.className = 'res-card'
+    card.addEventListener('click', () => {
+      if (bridge) bridge.context.set('ctx:rag:selected-chunk',
+        {docId:r.docId, docName:r.docName, chunkIdx:r.chunkIdx, text:r.text}).catch(() => {})
+      selectDoc(r.docId)
+    })
+    const head = document.createElement('div'); head.className = 'res-head'
+    const dl = document.createElement('span'); dl.className = 'res-doc'; dl.textContent = r.docName
+    const cl = document.createElement('span'); cl.className = 'res-chunk'; cl.textContent = 'chunk ' + (r.chunkIdx+1)
+    const sc = document.createElement('span'); sc.className = 'res-score'
+    sc.textContent = (typeof r.score === 'number' && r.score < 2)
+      ? (r.score * 100).toFixed(0) + '%'
+      : r.score + (r.score === 1 ? ' match' : ' matches')
+    head.appendChild(dl); head.appendChild(cl); head.appendChild(sc)
+    const txt = document.createElement('div'); txt.className = 'res-text'
+    addHighlighted(txt, r.text, terms)
+    card.appendChild(head); card.appendChild(txt)
+    panel.appendChild(card)
+  })
+}
+
+function addHighlighted(el, text, terms) {
+  if (!terms.length) { el.textContent = text; return }
+  const escaped = terms.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+  const re = new RegExp('(' + escaped.join('|') + ')', 'gi')
+  let last = 0, m
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) el.appendChild(document.createTextNode(text.slice(last, m.index)))
+    const mark = document.createElement('mark'); mark.textContent = m[0]; el.appendChild(mark)
+    last = m.index + m[0].length
+  }
+  if (last < text.length) el.appendChild(document.createTextNode(text.slice(last)))
+}
+
+/* helpers */
+function mkEmpty(title, sub) {
+  const w = document.createElement('div'); w.className = 'empty'
+  const t = document.createElement('div'); t.className = 'empty-t'; t.textContent = title
+  const s = document.createElement('div'); s.textContent = sub
+  w.appendChild(t); w.appendChild(s); return w
+}
+
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name))
+  const pid = 'panel' + name.charAt(0).toUpperCase() + name.slice(1)
+  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === pid))
+}
+
+/* tabs */
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => switchTab(t.dataset.tab)))
+
+/* file upload */
+function readTxt(file) {
+  return new Promise((ok, fail) => {
+    const r = new FileReader()
+    r.onload = e => ok(e.target.result)
+    r.onerror = () => fail(new Error('read failed'))
+    r.readAsText(file)
+  })
+}
+async function handleFiles(files) {
+  for (const f of files) { try { addDoc(f.name, await readTxt(f)) } catch(e) { /* skip */ } }
+}
+
+document.getElementById('addBtn').addEventListener('click', () => document.getElementById('fi').click())
+document.getElementById('fi').addEventListener('change', e => {
+  if (e.target.files && e.target.files.length) handleFiles(Array.from(e.target.files))
+  e.target.value = ''
+})
+const dz = document.getElementById('dz')
+dz.addEventListener('click', () => document.getElementById('fi').click())
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over') })
+dz.addEventListener('dragleave', () => dz.classList.remove('over'))
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('over')
+  if (e.dataTransfer.files && e.dataTransfer.files.length) handleFiles(Array.from(e.dataTransfer.files))
+})
+
+/* chunk controls */
+document.getElementById('csz').addEventListener('input', e => {
+  csz = parseInt(e.target.value); document.getElementById('csvl').textContent = csz
+})
+document.getElementById('cov').addEventListener('input', e => {
+  cov = parseInt(e.target.value); document.getElementById('covl').textContent = cov
+})
+document.getElementById('rcbtn').addEventListener('click', rechunk)
+
+/* search wiring */
+document.getElementById('qbtn').addEventListener('click', () => {
+  const q = document.getElementById('qi').value.trim(); if (q) doSearch(q)
+})
+document.getElementById('qi').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { const q = e.target.value.trim(); if (q) doSearch(q) }
+})
+
+/* init */
+renderList(); updateBadge(); renderChunks(null)
+})()
+</script>
+</body>
+</html>

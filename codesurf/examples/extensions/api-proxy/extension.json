@@ -1,0 +1,27 @@
+{
+  "id": "api-proxy",
+  "name": "API Proxy",
+  "version": "1.0.0",
+  "description": "Configure and monitor the OpenAI-compatible local proxy. Set port, API key, and host allowlist. Actual proxy server requires core IPC support.",
+  "author": "contex",
+  "tier": "power",
+  "main": "main.js",
+  "contributes": {
+    "tiles": [{
+      "type": "api-proxy-config",
+      "label": "API Proxy",
+      "entry": "tiles/proxy/index.html",
+      "defaultSize": { "w": 480, "h": 560 },
+      "minSize": { "w": 380, "h": 440 }
+    }],
+    "contextMenu": [{ "label": "New API Proxy", "action": "createTile", "tileType": "ext:api-proxy-config" }],
+    "context": {
+      "produces": ["ctx:api-proxy:config", "ctx:chat:providers"],
+      "consumes": ["ctx:models:active-model", "ctx:models:inference-models", "ctx:model-hub:selected", "ctx:model-hub:inference-models"]
+    },
+    "actions": [
+      { "name": "configure", "description": "Update proxy config. Params: { port?: number, apiKey?: string, enabled?: boolean }" },
+      { "name": "getUrl", "description": "Returns the proxy base URL as { url: string }" }
+    ]
+  }
+}

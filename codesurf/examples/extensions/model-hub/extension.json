@@ -1,0 +1,26 @@
+{
+  "id": "model-hub",
+  "name": "Model Hub",
+  "version": "1.0.0",
+  "description": "Browse HuggingFace Hub — search models by task, sort by downloads or likes, send to local-models tile.",
+  "author": "contex",
+  "tier": "safe",
+  "contributes": {
+    "tiles": [{
+      "type": "model-hub-browser",
+      "label": "Model Hub",
+      "entry": "tiles/hub/index.html",
+      "defaultSize": { "w": 540, "h": 600 },
+      "minSize": { "w": 400, "h": 400 }
+    }],
+    "contextMenu": [{ "label": "New Model Hub", "action": "createTile", "tileType": "ext:model-hub-browser" }],
+    "context": {
+      "produces": ["ctx:model-hub:selected", "ctx:model-hub:inference-models"],
+      "consumes": []
+    },
+    "actions": [
+      { "name": "search", "description": "Search for models. Params: { query: string, task?: string }" }
+    ]
+  },
+  "permissions": ["network"]
+}

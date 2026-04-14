@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Email List</title>
+  <style>
+    /* Theme vars injected by host via contex-theme-vars message — light/dark auto */
+    :root {
+      --ct-bg:       transparent;
+      --ct-panel:    rgba(0,0,0,0.04);
+      --ct-border:   rgba(0,0,0,0.09);
+      --ct-text:     #111111;
+      --ct-muted:    #444444;
+      --ct-dim:      #666666;
+      --ct-hover:    rgba(0,0,0,0.04);
+      --ct-accent:   #4f46e5;
+      --ct-accent-s: rgba(79,70,229,0.1);
+      --ct-select-b: rgba(79,70,229,0.07);
+    }
+    :root {
+      --mail-row-primary: #1f2937;
+      --mail-row-secondary: #334155;
+      --mail-row-tertiary: #64748b;
+      --mail-tab-active-bg: rgba(79,70,229,0.12);
+      --mail-tab-active-fg: #4f46e5;
+    }
+    html[data-ct-mode="dark"] {
+      --mail-row-primary: #e7eaf0;
+      --mail-row-secondary: #c3cad6;
+      --mail-row-tertiary: #88909c;
+      --mail-tab-active-bg: rgba(122,162,255,0.16);
+      --mail-tab-active-fg: #7aa2ff;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: var(--ct-bg); color: var(--ct-text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+    .tabs { display: flex; align-items: center; gap: 4px; padding: 8px 12px; border-bottom: 1px solid var(--ct-border); flex-shrink: 0; }
+    .tab { padding: 4px 10px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; font-weight: 500; font-family: inherit; background: transparent; color: var(--ct-muted); transition: all 0.1s; }
+    .tab.active { background: var(--mail-tab-active-bg); color: var(--mail-tab-active-fg); font-weight: 600; }
+    .spacer { flex: 1; }
+    .icon-btn { padding: 4px; border: none; background: none; cursor: pointer; color: var(--ct-muted); border-radius: 4px; display: flex; align-items: center; }
+    .icon-btn:hover { color: var(--ct-text); }
+    .icon-btn.active { color: var(--ct-accent); }
+    .error-bar { padding: 10px 16px; font-size: 12px; color: #f87171; background: rgba(248,113,113,0.1); border-bottom: 1px solid rgba(248,113,113,0.2); flex-shrink: 0; }
+    .settings-panel { padding: 12px 16px; border-bottom: 1px solid var(--ct-border); background: var(--ct-panel); flex-shrink: 0; }
+    .settings-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .settings-row:last-child { margin-bottom: 0; }
+    .settings-label { font-size: 11px; color: var(--ct-muted); width: 60px; flex-shrink: 0; }
+    .settings-select { flex: 1; background: var(--ct-panel); border: 1px solid var(--ct-border); border-radius: 6px; color: var(--ct-text); font-size: 12px; font-family: inherit; padding: 5px 8px; outline: none; cursor: pointer; }
+    .settings-select:focus { border-color: var(--ct-accent); }
+    .list { flex: 1; overflow-y: auto; }
+    .empty { display: flex; align-items: center; justify-content: center; height: 100%; font-size: 13px; color: var(--ct-dim); }
+    .email-row { width: 100%; text-align: left; padding: 12px 16px; border: none; background: transparent; cursor: pointer; border-bottom: 1px solid var(--ct-border); border-left: 2px solid transparent; transition: background 0.1s; }
+    .email-row:hover { background: var(--ct-hover); }
+    .email-row.selected { background: var(--ct-select-b); border-left-color: var(--ct-accent); }
+    .row1 { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+    .unread-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ct-accent); flex-shrink: 0; }
+    .sender { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+    .sender.unread { font-weight: 600; color: var(--mail-row-primary) !important; }
+    .sender.read { color: var(--mail-row-secondary) !important; }
+    .date { font-size: 11px; color: var(--mail-row-tertiary) !important; flex-shrink: 0; }
+    .subject { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .subject.unread { color: var(--mail-row-primary) !important; }
+    .subject.read { color: var(--mail-row-secondary) !important; }
+    .badges { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+    .badge-important { font-size: 10px; font-weight: 700; color: #b45309; background: rgba(180,83,9,0.12); padding: 1px 5px; border-radius: 4px; }
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-thumb { background: var(--ct-border); border-radius: 3px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinning { animation: spin 0.8s linear infinite; }
+  </style>
+</head>
+<body>
+<div class="tabs" id="tabs">
+  <button class="tab active" data-folder="inbox">Inbox</button>
+  <button class="tab" data-folder="unread">Unread</button>
+  <button class="tab" data-folder="sent">Sent</button>
+  <button class="tab" data-folder="starred">Starred</button>
+  <button class="tab" data-folder="drafts">Drafts</button>
+  <div class="spacer"></div>
+  <button class="icon-btn" id="settings-btn" title="Settings">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    </svg>
+  </button>
+  <button class="icon-btn" id="refresh-btn" title="Refresh">
+    <svg id="refresh-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="23 4 23 10 17 10"/>
+      <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+    </svg>
+  </button>
+</div>
+<div id="settings-panel" class="settings-panel" style="display:none">
+  <div class="settings-row">
+    <span class="settings-label">Account</span>
+    <select id="account-select" class="settings-select">
+      <option value="">Default</option>
+    </select>
+  </div>
+</div>
+<div id="error-bar" class="error-bar" style="display:none"></div>
+<div class="list" id="list">
+  <div class="empty">Loading...</div>
+</div>
+
+<script>
+  var FOLDERS = {
+    inbox: 'fetchInbox', unread: 'fetchUnread', sent: 'fetchSent',
+    starred: 'fetchStarred', drafts: 'fetchDrafts'
+  }
+
+  var currentFolder = 'inbox'
+  var currentAccount = ''
+  var emails = []
+  var selectedId = null
+  var loading = false
+  var showSettings = false
+
+  var listEl = document.getElementById('list')
+  var errorBar = document.getElementById('error-bar')
+  var refreshIcon = document.getElementById('refresh-icon')
+  var settingsBtn = document.getElementById('settings-btn')
+  var settingsPanel = document.getElementById('settings-panel')
+  var accountSelect = document.getElementById('account-select')
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  function timeAgo(dateStr) {
+    var d = new Date(dateStr)
+    if (isNaN(d.getTime())) return dateStr || ''
+    var diff = Date.now() - d.getTime()
+    var mins = Math.floor(diff / 60000)
+    if (mins < 1) return 'now'
+    if (mins < 60) return mins + 'm'
+    var hrs = Math.floor(mins / 60)
+    if (hrs < 24) return hrs + 'h'
+    var days = Math.floor(hrs / 24)
+    if (days < 7) return days + 'd'
+    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+  }
+
+  function parseFrom(raw) {
+    var m = raw.match(/^(.+?)\s*<(.+?)>$/)
+    return m ? m[1].trim() : raw
+  }
+
+  function setError(msg) {
+    if (msg) { errorBar.textContent = msg; errorBar.style.display = 'block' }
+    else errorBar.style.display = 'none'
+  }
+
+  function render() {
+    while (listEl.firstChild) listEl.removeChild(listEl.firstChild)
+
+    if (loading && emails.length === 0) {
+      var ld = document.createElement('div')
+      ld.className = 'empty'
+      ld.textContent = 'Loading...'
+      listEl.appendChild(ld)
+      return
+    }
+    if (emails.length === 0) {
+      var em = document.createElement('div')
+      em.className = 'empty'
+      em.textContent = 'No emails'
+      listEl.appendChild(em)
+      return
+    }
+
+    var frag = document.createDocumentFragment()
+    emails.forEach(function(email) {
+      var btn = document.createElement('button')
+      btn.className = 'email-row' + (selectedId === email.id ? ' selected' : '')
+      btn.dataset.id = email.id
+
+      var row1 = document.createElement('div')
+      row1.className = 'row1'
+
+      if (email.isUnread) {
+        var dot = document.createElement('div')
+        dot.className = 'unread-dot'
+        row1.appendChild(dot)
+      }
+
+      var sender = document.createElement('span')
+      sender.className = 'sender ' + (email.isUnread ? 'unread' : 'read')
+      sender.textContent = parseFrom(email.from || '')
+      row1.appendChild(sender)
+
+      var dateEl = document.createElement('span')
+      dateEl.className = 'date'
+      dateEl.textContent = timeAgo(email.date || '')
+      row1.appendChild(dateEl)
+
+      var subj = document.createElement('div')
+      subj.className = 'subject ' + (email.isUnread ? 'unread' : 'read')
+      subj.textContent = email.subject || '(No Subject)'
+
+      btn.appendChild(row1)
+      btn.appendChild(subj)
+
+      var labels = email.labels || []
+      if (labels.includes('IMPORTANT') || labels.includes('STARRED')) {
+        var badges = document.createElement('div')
+        badges.className = 'badges'
+        if (labels.includes('IMPORTANT')) {
+          var imp = document.createElement('span')
+          imp.className = 'badge-important'
+          imp.textContent = 'Important'
+          badges.appendChild(imp)
+        }
+        if (labels.includes('STARRED')) {
+          var star = document.createElement('span')
+          star.style.cssText = 'font-size:11px;color:#ca8a04'
+          star.textContent = '★'
+          badges.appendChild(star)
+        }
+        btn.appendChild(badges)
+      }
+
+      btn.addEventListener('click', function() { selectEmail(email.id, email) })
+      frag.appendChild(btn)
+    })
+    listEl.appendChild(frag)
+  }
+
+  function selectEmail(id, emailData) {
+    selectedId = id
+    document.querySelectorAll('.email-row').forEach(function(el) {
+      el.classList.toggle('selected', el.dataset.id === id)
+    })
+    if (window.contex) {
+      window.contex.context.set('ctx:email:selected', id)
+      if (emailData) window.contex.context.set('ctx:email:selectedData', emailData)
+    }
+  }
+
+  function load() {
+    if (loading) return
+    loading = true
+    setError(null)
+    refreshIcon.classList.add('spinning')
+    var handler = FOLDERS[currentFolder] || 'fetchInbox'
+    if (!window.contex || !window.contex.ext) {
+      loading = false
+      refreshIcon.classList.remove('spinning')
+      setError('Bridge not ready')
+      return
+    }
+    window.contex.ext.invoke(handler, JSON.stringify({ max: 100, account: currentAccount || undefined }))
+      .then(function(raw) {
+        var data = typeof raw === 'string' ? JSON.parse(raw) : raw
+        emails = data.emails || []
+        setError(null)
+      })
+      .catch(function(e) { setError(e.message || 'Failed to load') })
+      .finally(function() {
+        loading = false
+        refreshIcon.classList.remove('spinning')
+        render()
+      })
+    render()
+  }
+
+  function populateAccounts() {
+    if (!window.contex || !window.contex.ext) return
+    window.contex.ext.invoke('listAccounts', '{}')
+      .then(function(raw) {
+        var data = typeof raw === 'string' ? JSON.parse(raw) : raw
+        var accounts = data.accounts || []
+        while (accountSelect.options.length > 1) accountSelect.remove(1)
+        accounts.forEach(function(a) {
+          var opt = document.createElement('option')
+          opt.value = a
+          opt.textContent = a
+          accountSelect.appendChild(opt)
+        })
+        accountSelect.value = currentAccount || ''
+      })
+      .catch(function() {})
+  }
+
+  function toggleSettings() {
+    showSettings = !showSettings
+    settingsPanel.style.display = showSettings ? 'block' : 'none'
+    settingsBtn.classList.toggle('active', showSettings)
+    if (showSettings) populateAccounts()
+  }
+
+  accountSelect.addEventListener('change', function() {
+    currentAccount = accountSelect.value
+    if (window.contex) {
+      window.contex.settings.set({ account: currentAccount })
+      window.contex.context.set('ctx:email:account', currentAccount)
+    }
+    emails = []
+    load()
+  })
+
+  settingsBtn.addEventListener('click', toggleSettings)
+
+  document.getElementById('tabs').addEventListener('click', function(e) {
+    var btn = e.target.closest('[data-folder]')
+    if (!btn) return
+    currentFolder = btn.dataset.folder
+    document.querySelectorAll('.tab').forEach(function(t) {
+      t.classList.toggle('active', t.dataset.folder === currentFolder)
+    })
+    emails = []
+    if (window.contex) window.contex.context.set('ctx:email:folder', currentFolder)
+    load()
+  })
+
+  document.getElementById('refresh-btn').addEventListener('click', function() { load() })
+
+  // Map folder name → query string (mirrors main.js)
+  var QUERIES = {
+    inbox: 'in:inbox', unread: 'is:unread', sent: 'in:sent',
+    starred: 'is:starred', drafts: 'in:drafts'
+  }
+
+  function setupContextListeners() {
+    if (!window.contex || !window.contex.context) return
+    window.contex.context.get('ctx:email:selected').then(function(v) {
+      if (v) { selectedId = v; render() }
+    }).catch(function() {})
+    window.contex.context.onPeerContextChanged(function(data) {
+      if (data.key === 'ctx:email:selected' && data.value !== selectedId) {
+        selectedId = data.value
+        render()
+      }
+    })
+    if (window.contex.actions) {
+      window.contex.actions.register('selectEmail', 'Select an email by ID', function(params) {
+        if (params && params.id) selectEmail(params.id, null)
+      })
+      window.contex.actions.register('refresh', 'Refresh the email list', function() { load() })
+    }
+    // Listen for background cache revalidation updates from main.js
+    if (window.contex.bus) {
+      window.contex.bus.subscribe('hq-email')
+      window.addEventListener('message', function(e) {
+        if (!e.data || e.data.type !== 'contex-event') return
+        if (e.data.event !== 'bus.event.hq-email') return
+        var d = e.data.data || {}
+        if (d.action === 'listUpdate' && d.query === QUERIES[currentFolder] && d.emails) {
+          emails = d.emails
+          render()
+        }
+      })
+    }
+  }
+
+  function publishAccount() {
+    if (window.contex) window.contex.context.set('ctx:email:account', currentAccount)
+  }
+
+  function init() {
+    if (window.contex && window.contex.settings) {
+      window.contex.settings.get('account').then(function(saved) {
+        currentAccount = saved || ''
+        accountSelect.value = currentAccount
+        publishAccount()
+        setupContextListeners()
+        load()
+      }).catch(function() {
+        publishAccount()
+        setupContextListeners()
+        load()
+      })
+    } else {
+      publishAccount()
+      setupContextListeners()
+      load()
+    }
+  }
+
+  window.addEventListener('message', function(e) {
+    if (e.data && e.data.type === 'contex-bridge-ready') init()
+  })
+  if (window.contex) init()
+</script>
+</body>
+</html>

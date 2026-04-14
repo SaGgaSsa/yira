@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Brain Dump</title>
+  <style>
+    :root {
+      --ct-bg: transparent;
+      --ct-border: rgba(0,0,0,0.10);
+      --ct-text: #111111;
+      --ct-muted: #555555;
+      --ct-dim: #888888;
+      --ct-accent: #4f46e5;
+      --ct-accent-s: rgba(79,70,229,0.12);
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: var(--ct-bg); color: var(--ct-text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; height: 100vh; overflow: hidden; }
+    #root { display: flex; flex-direction: column; height: 100vh; padding: 12px; }
+    .header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .header span { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ct-dim); }
+    textarea {
+      flex: 1; width: 100%; background: transparent; border: none; outline: none; resize: none;
+      font-size: 13px; line-height: 1.625; color: var(--ct-text); font-family: inherit;
+      caret-color: var(--ct-accent); min-height: 60px;
+    }
+    textarea::placeholder { color: var(--ct-dim); }
+    .footer { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--ct-border); }
+    .hint { font-size: 10px; color: var(--ct-dim); }
+    .capture-btn {
+      padding: 6px 12px; border-radius: 8px; border: none; cursor: pointer;
+      font-size: 11px; font-weight: 600; transition: all 0.1s; font-family: inherit;
+    }
+    .capture-btn.active { background: var(--ct-accent); color: #fff; }
+    .capture-btn.inactive { background: var(--ct-panel-2, rgba(0,0,0,0.06)); color: var(--ct-dim); cursor: not-allowed; }
+    .captured { display: none; flex-direction: column; align-items: center; justify-content: center; height: 100vh; gap: 8px; }
+    .captured.show { display: flex; }
+    .captured p { font-size: 12px; font-weight: 600; color: var(--ct-text); }
+    .captured .tag { display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 8px; font-size: 11px; }
+    .history { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--ct-border); max-height: 100px; overflow-y: auto; }
+    .history-item { display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: 11px; color: var(--ct-muted); overflow: hidden; }
+    .history-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .history-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    ::selection { background: var(--ct-accent-s); }
+  </style>
+</head>
+<body>
+<div id="captured-view" class="captured">
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+  </svg>
+  <p>Captured!</p>
+  <div id="captured-tag" class="tag"></div>
+</div>
+<div id="main-view">
+  <div id="root">
+    <div class="header">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ct-dim)" stroke-width="2">
+        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+      </svg>
+      <span>Brain Dump</span>
+    </div>
+    <textarea id="input" placeholder="Just type. Don't think about where it goes..."></textarea>
+    <div class="footer">
+      <span class="hint">Enter to capture</span>
+      <button id="capture-btn" class="capture-btn inactive" disabled>Capture</button>
+    </div>
+    <div id="history" class="history" style="display:none"></div>
+  </div>
+</div>
+<script>
+  const COLORS = { yellow: '#fcd34d', blue: '#a5b4fc', green: '#6ee7b7', purple: '#c4b5fd' }
+  const BCOLORS = { yellow: 'rgba(251,191,36,0.15)', blue: 'rgba(99,102,241,0.15)', green: 'rgba(52,211,153,0.15)', purple: 'rgba(167,139,250,0.15)' }
+
+  const input = document.getElementById('input')
+  const btn = document.getElementById('capture-btn')
+  const historyEl = document.getElementById('history')
+  const mainView = document.getElementById('main-view')
+  const capturedView = document.getElementById('captured-view')
+  const capturedTag = document.getElementById('captured-tag')
+
+  let captures = []
+
+  function init() {
+    if (!window.contex) return
+    window.contex.tile.getState().then(function(state) {
+      if (state && state.captures) {
+        captures = state.captures
+        renderHistory()
+      }
+    }).catch(function() {})
+  }
+
+  function renderHistory() {
+    // Clear existing items using safe DOM methods (no innerHTML)
+    while (historyEl.firstChild) historyEl.removeChild(historyEl.firstChild)
+    if (captures.length === 0) { historyEl.style.display = 'none'; return }
+    historyEl.style.display = 'block'
+    var slice = captures.slice(0, 5)
+    for (var i = 0; i < slice.length; i++) {
+      var c = slice[i]
+      var row = document.createElement('div')
+      row.className = 'history-item'
+      var dot = document.createElement('div')
+      dot.className = 'history-dot'
+      dot.style.background = COLORS[c.color] || '#a5b4fc'
+      var label = document.createElement('span')
+      label.className = 'history-label'
+      label.textContent = c.title  // safe: textContent, not innerHTML
+      row.appendChild(dot)
+      row.appendChild(label)
+      historyEl.appendChild(row)
+    }
+  }
+
+  function capture() {
+    var text = input.value.trim()
+    if (!text) return
+    var title = text.split(' ').slice(0, 5).join(' ')
+    var color = text.length > 100 ? 'blue' : 'yellow'
+    var entry = { text: text, title: title, color: color, ts: Date.now() }
+    captures = [entry].concat(captures).slice(0, 50)
+    input.value = ''
+    btn.disabled = true
+    btn.className = 'capture-btn inactive'
+
+    capturedTag.style.background = BCOLORS[color] || BCOLORS.blue
+    capturedTag.style.color = COLORS[color] || COLORS.blue
+    capturedTag.textContent = title  // safe: textContent
+    mainView.style.display = 'none'
+    capturedView.classList.add('show')
+    setTimeout(function() {
+      capturedView.classList.remove('show')
+      mainView.style.display = 'block'
+      renderHistory()
+    }, 1500)
+
+    if (window.contex) {
+      window.contex.tile.setState({ captures: captures })
+      window.contex.context.set('ctx:capture:latest', entry)
+    }
+  }
+
+  input.addEventListener('input', function() {
+    var has = input.value.trim().length > 0
+    btn.disabled = !has
+    btn.className = has ? 'capture-btn active' : 'capture-btn inactive'
+  })
+
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); capture() }
+  })
+
+  btn.addEventListener('click', capture)
+
+  window.addEventListener('message', function(e) {
+    if (e.data && e.data.type === 'contex-bridge-ready') init()
+  })
+  if (window.contex) init()
+</script>
+</body>
+</html>

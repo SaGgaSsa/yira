@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Contex Extension Harness</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:     #1a1a1a;
+      --panel:  #242424;
+      --border: #333;
+      --text:   #d4d4d4;
+      --muted:  #666;
+      --accent: #818cf8;
+      --danger: #f87171;
+      --ok:     #4ade80;
+      --warn:   #fbbf24;
+    }
+    body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+    .toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .logo { font-weight: 700; color: var(--accent); font-size: 13px; letter-spacing: 0.5px; margin-right: 4px; }
+    select, input[type=text], input[type=number] { background: var(--panel); border: 1px solid var(--border); color: var(--text); border-radius: 4px; padding: 4px 8px; font-size: 12px; font-family: inherit; }
+    select:focus, input:focus { outline: 1px solid var(--accent); }
+    button { background: var(--panel); border: 1px solid var(--border); color: var(--text); border-radius: 4px; padding: 4px 10px; font-size: 12px; cursor: pointer; font-family: inherit; }
+    button:hover { background: #2e2e2e; }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    button.primary:hover { opacity: 0.9; }
+    button.danger { color: var(--danger); border-color: var(--danger); }
+    .sep { width: 1px; height: 20px; background: var(--border); flex-shrink: 0; }
+    label { color: var(--muted); font-size: 11px; }
+    .spacer { flex: 1; }
+    .main { display: flex; flex: 1; min-height: 0; }
+    .preview { flex: 1; display: flex; flex-direction: column; min-width: 0; border-right: 1px solid var(--border); }
+    .preview-header { padding: 8px 12px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; flex-shrink: 0; font-size: 11px; color: var(--muted); }
+    .preview-body { flex: 1; display: flex; align-items: center; justify-content: center; overflow: auto; padding: 16px; }
+    .tile-frame-wrapper { position: relative; box-shadow: 0 0 0 1px var(--border), 0 4px 20px rgba(0,0,0,0.4); border-radius: 4px; overflow: hidden; }
+    .tile-frame-wrapper iframe { display: block; border: none; background: #1e1e1e; }
+    #empty-preview { color: var(--muted); text-align: center; }
+    #empty-preview p { margin-top: 8px; font-size: 12px; }
+    .sidebar { width: 340px; display: flex; flex-direction: column; flex-shrink: 0; }
+    .tabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .tab { padding: 8px 14px; font-size: 12px; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; }
+    .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+    .tab-count { font-size: 10px; background: #333; border-radius: 8px; padding: 1px 5px; margin-left: 4px; }
+    .tab-panel { flex: 1; overflow-y: auto; padding: 10px; display: none; flex-direction: column; gap: 8px; }
+    .tab-panel.active { display: flex; }
+    .log-entry { font-size: 11px; font-family: 'SF Mono', 'Fira Code', monospace; line-height: 1.5; border-left: 2px solid var(--border); padding-left: 8px; }
+    .log-entry.rpc { border-color: var(--accent); }
+    .log-entry.event { border-color: var(--ok); }
+    .log-entry.error { border-color: var(--danger); color: var(--danger); }
+    .log-entry.info { border-color: var(--muted); color: var(--muted); }
+    .log-header { display: flex; gap: 6px; align-items: center; }
+    .log-ts { color: var(--muted); font-size: 10px; }
+    .log-method { color: var(--accent); }
+    .log-data { color: #94a3b8; white-space: pre-wrap; word-break: break-all; font-size: 10px; }
+    .section-label { font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-top: 4px; }
+    .kv-row { display: flex; gap: 6px; align-items: flex-start; }
+    .kv-row .kv-key { font-family: monospace; font-size: 11px; color: var(--accent); flex: 0 0 auto; }
+    .kv-row .kv-val { font-family: monospace; font-size: 11px; color: #94a3b8; flex: 1; word-break: break-all; }
+    .input-row { display: flex; gap: 6px; }
+    .input-row input { flex: 1; min-width: 0; }
+    textarea { background: var(--panel); border: 1px solid var(--border); color: var(--text); border-radius: 4px; padding: 6px 8px; font-size: 12px; font-family: 'SF Mono', monospace; resize: vertical; width: 100%; }
+    .action-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: var(--panel); border-radius: 4px; border: 1px solid var(--border); }
+    .action-row .act-name { font-family: monospace; font-size: 11px; color: var(--accent); flex: 1; }
+    .action-row .act-desc { font-size: 10px; color: var(--muted); flex: 2; }
+    .action-row button { padding: 2px 8px; font-size: 11px; }
+    .empty-state { color: var(--muted); font-size: 11px; text-align: center; padding: 20px; }
+    .mono-small { font-family: monospace; font-size: 11px; color: var(--accent); }
+  </style>
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="logo">contex harness</span>
+  <span class="sep"></span>
+  <label>Extension</label>
+  <select id="ext-select"><option value="">-- select --</option></select>
+  <label>Tile</label>
+  <select id="tile-select" disabled><option value="">-- select --</option></select>
+  <span class="sep"></span>
+  <label>W</label>
+  <input id="tile-w" type="number" value="480" style="width:64px" />
+  <label>H</label>
+  <input id="tile-h" type="number" value="380" style="width:64px" />
+  <button id="btn-load" class="primary">Load</button>
+  <span class="sep"></span>
+  <button id="btn-refresh">Refresh</button>
+  <button id="btn-clear-log" class="danger">Clear Log</button>
+  <div class="spacer"></div>
+  <span id="status-badge" style="font-size:11px;color:var(--muted)">No tile loaded</span>
+</div>
+
+<div class="main">
+  <div class="preview">
+    <div class="preview-header">
+      <span id="preview-label">Preview</span>
+      <div class="spacer"></div>
+      <span id="preview-meta" style="font-family:monospace;font-size:10px"></span>
+    </div>
+    <div class="preview-body">
+      <div id="empty-preview">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+        <p>Select an extension and tile, then click Load</p>
+      </div>
+      <div id="tile-container" style="display:none">
+        <div class="tile-frame-wrapper" id="frame-wrapper">
+          <iframe id="tile-iframe" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="tabs">
+      <div class="tab active" data-tab="log">RPC Log <span class="tab-count" id="log-count">0</span></div>
+      <div class="tab" data-tab="context">Context</div>
+      <div class="tab" data-tab="bus">Bus</div>
+      <div class="tab" data-tab="actions">Actions <span class="tab-count" id="action-count">0</span></div>
+    </div>
+    <div class="tab-panel active" id="tab-log">
+      <div id="log-list"></div>
+    </div>
+    <div class="tab-panel" id="tab-context">
+      <div class="section-label">Current Context</div>
+      <div id="ctx-list"></div>
+      <div class="section-label" style="margin-top:8px">Set Value</div>
+      <input id="ctx-key" type="text" placeholder="ctx:my-ext:key" />
+      <textarea id="ctx-val" rows="3" placeholder='Value (JSON or plain string)'></textarea>
+      <div class="input-row">
+        <button id="btn-ctx-set" class="primary" style="flex:1">Set Context</button>
+        <button id="btn-ctx-peer" style="flex:1">Simulate Peer Change</button>
+      </div>
+    </div>
+    <div class="tab-panel" id="tab-bus">
+      <div class="section-label">Send Bus Event</div>
+      <input id="bus-channel" type="text" placeholder="Channel (e.g. sysmon)" />
+      <input id="bus-type" type="text" placeholder="Type (default: data)" value="data" />
+      <textarea id="bus-payload" rows="4" placeholder='Payload JSON&#10;{"cpu": 42}'></textarea>
+      <button id="btn-bus-send" class="primary">Send to Tile</button>
+      <div class="section-label" style="margin-top:8px">Subscribed Channels</div>
+      <div id="bus-subs-list"></div>
+    </div>
+    <div class="tab-panel" id="tab-actions">
+      <div class="section-label">Registered Actions</div>
+      <div id="actions-list"></div>
+      <div class="section-label" style="margin-top:8px">Invoke Action</div>
+      <input id="action-name-input" type="text" placeholder="Action name" />
+      <textarea id="action-params" rows="3" placeholder='Params JSON&#10;{"id":"123"}'></textarea>
+      <button id="btn-action-invoke" class="primary">Invoke Action</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────────────
+const TILE_ID = 'harness-tile-' + Math.random().toString(36).slice(2, 8)
+let currentExtId = null
+let currentExtManifest = null
+let logCount = 0
+const contextStore = {}
+const busSubscriptions = new Set()
+const registeredActions = new Map()  // name → description
+let tileReady = false
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'))
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'))
+    tab.classList.add('active')
+    document.getElementById('tab-' + tab.dataset.tab).classList.add('active')
+  })
+})
+
+// ── Extension discovery ───────────────────────────────────────────────────────
+async function loadExtensionList() {
+  try {
+    const res = await fetch('/api/extensions')
+    const exts = await res.json()
+    const sel = document.getElementById('ext-select')
+    sel.innerHTML = ''
+    appendOption(sel, '', '-- select --')
+    for (const ext of exts) {
+      const opt = appendOption(sel, ext.id, ext.name || ext.id)
+      opt.dataset.manifest = JSON.stringify(ext)
+    }
+  } catch (err) {
+    logEntry('error', 'Failed to load extensions: ' + err.message)
+  }
+}
+
+function appendOption(select, value, text) {
+  const opt = document.createElement('option')
+  opt.value = value
+  opt.textContent = text
+  select.appendChild(opt)
+  return opt
+}
+
+document.getElementById('ext-select').addEventListener('change', function() {
+  const tileSel = document.getElementById('tile-select')
+  tileSel.innerHTML = ''
+  appendOption(tileSel, '', '-- select --')
+  tileSel.disabled = true
+  currentExtManifest = null
+
+  const opt = this.options[this.selectedIndex]
+  if (!opt || !opt.dataset.manifest) return
+
+  try {
+    const manifest = JSON.parse(opt.dataset.manifest)
+    currentExtManifest = manifest
+    const tiles = manifest.contributes?.tiles ?? []
+    for (const tile of tiles) {
+      const o = appendOption(tileSel, tile.entry, tile.label || tile.type)
+      o.dataset.type = tile.type
+      o.dataset.entry = tile.entry
+    }
+    tileSel.disabled = tiles.length === 0
+    if (tiles.length === 1) tileSel.selectedIndex = 1
+  } catch {}
+})
+
+// ── Load tile ─────────────────────────────────────────────────────────────────
+document.getElementById('btn-load').addEventListener('click', loadTile)
+
+function loadTile() {
+  const extSel = document.getElementById('ext-select')
+  const tileSel = document.getElementById('tile-select')
+  const w = parseInt(document.getElementById('tile-w').value, 10) || 480
+  const h = parseInt(document.getElementById('tile-h').value, 10) || 380
+
+  if (!extSel.value || !tileSel.value) return
+  const extDir = currentExtManifest?.dir ?? extSel.value
+  const entry = tileSel.value
+  const tileTypeOpt = tileSel.options[tileSel.selectedIndex]
+  const tileType = tileTypeOpt ? tileTypeOpt.dataset.type : entry
+  currentExtId = extSel.value
+
+  tileReady = false
+  busSubscriptions.clear()
+  registeredActions.clear()
+  renderActionsList()
+  renderBusSubsList()
+  clearLog()
+
+  const url = '/' + extDir + '/' + entry
+  const iframe = document.getElementById('tile-iframe')
+  iframe.style.width = w + 'px'
+  iframe.style.height = h + 'px'
+  iframe.src = url
+
+  document.getElementById('empty-preview').style.display = 'none'
+  document.getElementById('tile-container').style.display = 'block'
+
+  const previewLabel = document.getElementById('preview-label')
+  previewLabel.textContent = (currentExtManifest?.name ?? extSel.value) + ' / ' + (tileType ?? entry)
+  const previewMeta = document.getElementById('preview-meta')
+  previewMeta.textContent = w + 'x' + h + ' · ' + TILE_ID
+
+  const badge = document.getElementById('status-badge')
+  badge.textContent = 'Loading...'
+  badge.style.color = 'var(--warn)'
+
+  logEntry('info', 'Loading tile: ' + url)
+}
+
+document.getElementById('btn-refresh').addEventListener('click', () => {
+  const iframe = document.getElementById('tile-iframe')
+  if (iframe.src && iframe.src !== window.location.href) {
+    tileReady = false
+    iframe.src = iframe.src
+    logEntry('info', 'Tile refreshed')
+  }
+})
+
+// ── RPC Bridge ────────────────────────────────────────────────────────────────
+window.addEventListener('message', async (event) => {
+  const msg = event.data
+  if (!msg || typeof msg !== 'object') return
+
+  if (msg.type === 'contex-bridge-ready') {
+    tileReady = true
+    const badge = document.getElementById('status-badge')
+    badge.textContent = 'Ready'
+    badge.style.color = 'var(--ok)'
+    logEntry('event', 'contex-bridge-ready')
+    postToTile({ type: 'contex-event', event: 'tile.resize', data: getSize() })
+    return
+  }
+
+  if (msg.type === 'contex-action-result') {
+    const suffix = msg.error ? '(error: ' + msg.error + ')' : JSON.stringify(msg.result ?? null)
+    logEntry('event', 'action-result ' + msg.requestId + ' ' + suffix)
+    return
+  }
+
+  if (msg.type !== 'contex-rpc') return
+
+  const { id, method, params } = msg
+  const paramsStr = params != null ? JSON.stringify(params) : ''
+  logEntry('rpc', method, paramsStr)
+
+  let result, error
+  try {
+    result = await handleRpc(method, params ?? {})
+  } catch (err) {
+    error = err.message
+    logEntry('error', 'RPC error in ' + method + ': ' + err.message)
+  }
+
+  postToTile({ type: 'contex-rpc-response', id, ...(error ? { error } : { result: result ?? null }) })
+})
+
+function postToTile(msg) {
+  const iframe = document.getElementById('tile-iframe')
+  iframe.contentWindow?.postMessage(msg, '*')
+}
+
+function getSize() {
+  return {
+    width:  parseInt(document.getElementById('tile-w').value, 10) || 480,
+    height: parseInt(document.getElementById('tile-h').value, 10) || 380,
+  }
+}
+
+async function handleRpc(method, params) {
+  switch (method) {
+    case 'tile.getMeta':
+      return {
+        tileId: TILE_ID,
+        extId: currentExtId,
+        extType: currentExtManifest?.contributes?.tiles?.[0]?.type ?? 'unknown',
+        ...getSize(),
+        workspaceId: 'harness-workspace',
+        workspacePath: '/tmp/harness',
+        connectedPeers: [],
+      }
+    case 'tile.getSize':    return getSize()
+    case 'tile.getState':   return null
+    case 'tile.setState':   logEntry('info', 'state saved: ' + JSON.stringify(params)); return true
+    case 'discovery.getPeers': return []
+
+    case 'bus.publish': {
+      const { channel, type = 'data', payload = {} } = params
+      logEntry('event', 'bus.publish "' + channel + '" type=' + type + ' ' + JSON.stringify(payload))
+      return true
+    }
+    case 'bus.subscribe': {
+      const ch = String(params?.channel ?? '')
+      if (ch) { busSubscriptions.add(ch); renderBusSubsList() }
+      return true
+    }
+
+    case 'canvas.listTiles':  return []
+    case 'canvas.createTile': logEntry('info', 'create tile: ' + params.type); return 'harness-tile-new'
+
+    case 'settings.get': {
+      const stored = JSON.parse(localStorage.getItem('harness:settings:' + currentExtId) ?? '{}')
+      return params?.key ? (stored[params.key] ?? null) : stored
+    }
+    case 'settings.set': {
+      const existing = JSON.parse(localStorage.getItem('harness:settings:' + currentExtId) ?? '{}')
+      localStorage.setItem('harness:settings:' + currentExtId, JSON.stringify({ ...existing, ...params }))
+      return true
+    }
+
+    case 'ext.invoke':
+      logEntry('info', 'ext.invoke: ' + params.method + '(' + JSON.stringify(params.args) + ')')
+      return null
+
+    case 'workspace.getPath': return '/tmp/harness'
+
+    case 'theme.getColors':
+      return { background: '#1e1e1e', panel: '#252525', border: '#333', text: '#e5e5e5', muted: '#666', accent: '#818cf8' }
+
+    case 'context.get':
+      return contextStore[params.key] !== undefined ? contextStore[params.key] : null
+    case 'context.set':
+      contextStore[params.key] = params.value
+      renderContextList()
+      return true
+    case 'context.getAll': {
+      const prefix = params?.tagPrefix
+      return Object.entries(contextStore)
+        .filter(([k]) => !prefix || k.startsWith(prefix))
+        .map(([key, value]) => ({ key, value }))
+    }
+    case 'context.delete':
+      delete contextStore[params.key]
+      renderContextList()
+      return true
+    case 'context.getPeerContext':    return []
+    case 'context.getAllPeerContext':  return {}
+
+    case 'actions.register':
+      registeredActions.set(params.name, params.description ?? '')
+      renderActionsList()
+      document.getElementById('action-count').textContent = registeredActions.size
+      return true
+    case 'actions.invoke':
+      logEntry('info', 'action invoke on peer ' + params.peerId + ': ' + params.action)
+      return true
+
+    // Relay stubs
+    case 'relay.init':
+    case 'relay.waitForReady':
+    case 'relay.waitForAny':
+    case 'relay.stopAgent':
+      return false
+    case 'relay.listParticipants':
+    case 'relay.listChannels':
+    case 'relay.listCentralFeed':
+    case 'relay.listMessages':
+    case 'relay.analyzeRelationships':
+      return []
+    case 'relay.readMessage':
+    case 'relay.sendDirectMessage':
+    case 'relay.sendChannelMessage':
+    case 'relay.setWorkContext':
+    case 'relay.spawnAgent':
+      return null
+
+    default:
+      throw new Error('Unsupported RPC method: ' + method)
+  }
+}
+
+// ── Context panel ─────────────────────────────────────────────────────────────
+document.getElementById('btn-ctx-set').addEventListener('click', () => {
+  const key = document.getElementById('ctx-key').value.trim()
+  const rawVal = document.getElementById('ctx-val').value.trim()
+  if (!key) return
+  let val
+  try { val = JSON.parse(rawVal) } catch { val = rawVal }
+  contextStore[key] = val
+  renderContextList()
+  logEntry('info', 'Context set: ' + key + ' = ' + JSON.stringify(val))
+})
+
+document.getElementById('btn-ctx-peer').addEventListener('click', () => {
+  const key = document.getElementById('ctx-key').value.trim()
+  const rawVal = document.getElementById('ctx-val').value.trim()
+  if (!key) return
+  let val
+  try { val = JSON.parse(rawVal) } catch { val = rawVal }
+  postToTile({ type: 'contex-event', event: 'context.peerChanged', data: { peerId: 'peer-sim', key, value: val } })
+  logEntry('event', 'context.peerChanged: ' + key + ' = ' + JSON.stringify(val))
+})
+
+function renderContextList() {
+  const container = document.getElementById('ctx-list')
+  container.textContent = ''
+  const entries = Object.entries(contextStore)
+  if (entries.length === 0) {
+    const em = document.createElement('div')
+    em.className = 'empty-state'
+    em.textContent = 'No context values set'
+    container.appendChild(em)
+    return
+  }
+  for (const [k, v] of entries) {
+    const row = document.createElement('div')
+    row.className = 'kv-row'
+    const keySpan = document.createElement('span')
+    keySpan.className = 'kv-key'
+    keySpan.textContent = k
+    const valSpan = document.createElement('span')
+    valSpan.className = 'kv-val'
+    valSpan.textContent = JSON.stringify(v)
+    row.appendChild(keySpan)
+    row.appendChild(valSpan)
+    container.appendChild(row)
+  }
+}
+
+// ── Bus panel ─────────────────────────────────────────────────────────────────
+document.getElementById('btn-bus-send').addEventListener('click', () => {
+  const channel = document.getElementById('bus-channel').value.trim()
+  const type = document.getElementById('bus-type').value.trim() || 'data'
+  const rawPayload = document.getElementById('bus-payload').value.trim()
+  if (!channel) return
+  let payload
+  try { payload = JSON.parse(rawPayload) } catch { payload = rawPayload || {} }
+  postToTile({ type: 'contex-event', event: 'bus.event.' + channel, data: { type, payload } })
+  logEntry('event', 'bus send "' + channel + '" ' + JSON.stringify(payload))
+})
+
+function renderBusSubsList() {
+  const container = document.getElementById('bus-subs-list')
+  container.textContent = ''
+  if (busSubscriptions.size === 0) {
+    const em = document.createElement('div')
+    em.className = 'empty-state'
+    em.textContent = 'No subscriptions yet'
+    container.appendChild(em)
+    return
+  }
+  for (const ch of busSubscriptions) {
+    const row = document.createElement('div')
+    row.className = 'mono-small'
+    row.style.padding = '4px 0'
+    row.textContent = ch
+    container.appendChild(row)
+  }
+}
+
+// ── Actions panel ─────────────────────────────────────────────────────────────
+document.getElementById('btn-action-invoke').addEventListener('click', () => {
+  const name = document.getElementById('action-name-input').value.trim()
+  const rawParams = document.getElementById('action-params').value.trim()
+  if (!name) return
+  let params
+  try { params = JSON.parse(rawParams) } catch { params = {} }
+  const requestId = 'harness-' + Date.now()
+  postToTile({ type: 'contex-action-invoke', action: name, params, requestId })
+  logEntry('event', 'action "' + name + '" ' + JSON.stringify(params))
+})
+
+// Event delegation for "Run" buttons in actions list
+document.getElementById('actions-list').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-action]')
+  if (!btn) return
+  const name = btn.dataset.action
+  if (!name) return
+  document.getElementById('action-name-input').value = name
+  document.querySelector('.tab[data-tab="actions"]').click()
+})
+
+function renderActionsList() {
+  const container = document.getElementById('actions-list')
+  container.textContent = ''
+  if (registeredActions.size === 0) {
+    const em = document.createElement('div')
+    em.className = 'empty-state'
+    em.textContent = 'No actions registered yet'
+    container.appendChild(em)
+    return
+  }
+  for (const [name, desc] of registeredActions.entries()) {
+    const row = document.createElement('div')
+    row.className = 'action-row'
+
+    const nameSpan = document.createElement('span')
+    nameSpan.className = 'act-name'
+    nameSpan.textContent = name
+
+    const descSpan = document.createElement('span')
+    descSpan.className = 'act-desc'
+    descSpan.textContent = desc
+
+    const btn = document.createElement('button')
+    btn.textContent = 'Run'
+    btn.dataset.action = name  // used by event delegation above
+
+    row.appendChild(nameSpan)
+    row.appendChild(descSpan)
+    row.appendChild(btn)
+    container.appendChild(row)
+  }
+}
+
+// ── Log ───────────────────────────────────────────────────────────────────────
+function logEntry(cls, label, data) {
+  logCount++
+  document.getElementById('log-count').textContent = logCount
+  const list = document.getElementById('log-list')
+
+  const entry = document.createElement('div')
+  entry.className = 'log-entry ' + cls
+
+  const ts = new Date().toLocaleTimeString('en', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
+
+  const header = document.createElement('div')
+  header.className = 'log-header'
+
+  const tsSpan = document.createElement('span')
+  tsSpan.className = 'log-ts'
+  tsSpan.textContent = ts
+
+  const methodSpan = document.createElement('span')
+  methodSpan.className = 'log-method'
+  methodSpan.textContent = label
+
+  header.appendChild(tsSpan)
+  header.appendChild(methodSpan)
+  entry.appendChild(header)
+
+  if (data) {
+    const dataDiv = document.createElement('div')
+    dataDiv.className = 'log-data'
+    dataDiv.textContent = data
+    entry.appendChild(dataDiv)
+  }
+
+  list.insertBefore(entry, list.firstChild)
+  while (list.children.length > 200) list.removeChild(list.lastChild)
+}
+
+function clearLog() {
+  logCount = 0
+  document.getElementById('log-count').textContent = '0'
+  document.getElementById('log-list').textContent = ''
+}
+
+document.getElementById('btn-clear-log').addEventListener('click', clearLog)
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+renderContextList()
+renderBusSubsList()
+renderActionsList()
+loadExtensionList()
+</script>
+</body>
+</html>

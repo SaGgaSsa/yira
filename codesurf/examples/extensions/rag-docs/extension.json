@@ -1,0 +1,27 @@
+{
+  "id": "rag-docs",
+  "name": "RAG Docs",
+  "version": "1.0.0",
+  "description": "Upload documents, preview chunking, and run semantic search. Pairs with an embedding backend via ext.invoke.",
+  "author": "contex",
+  "tier": "safe",
+  "ui": { "mode": "native" },
+  "contributes": {
+    "tiles": [{
+      "type": "rag-docs-browser",
+      "label": "RAG Docs",
+      "entry": "tiles/docs/index.html",
+      "defaultSize": { "w": 600, "h": 640 },
+      "minSize": { "w": 480, "h": 460 }
+    }],
+    "contextMenu": [{ "label": "New RAG Docs", "action": "createTile", "tileType": "ext:rag-docs-browser" }],
+    "context": {
+      "produces": ["ctx:rag:selected-chunk"],
+      "consumes": ["ctx:chat:message"]
+    },
+    "actions": [
+      { "name": "addDocument", "description": "Add a document by text content. Params: { name: string, text: string }" },
+      { "name": "search", "description": "Run a search query. Params: { query: string }" }
+    ]
+  }
+}

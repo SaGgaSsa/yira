@@ -1,0 +1,22 @@
+{
+  "id": "token-counter",
+  "name": "Token Counter",
+  "version": "1.0.0",
+  "description": "Real-time token counting and cost estimation for Claude, GPT-4, and open models. Paste text or link to a chat tile.",
+  "author": "contex",
+  "tier": "safe",
+  "contributes": {
+    "tiles": [{
+      "type": "token-counter-main",
+      "label": "Token Counter",
+      "entry": "tiles/counter/index.html",
+      "defaultSize": { "w": 340, "h": 480 },
+      "minSize": { "w": 280, "h": 360 }
+    }],
+    "contextMenu": [{ "label": "New Token Counter", "action": "createTile", "tileType": "ext:token-counter-main" }],
+    "context": { "produces": [], "consumes": ["ctx:chat:message"] },
+    "actions": [
+      { "name": "countText", "description": "Count tokens in text. Params: { text: string }" }
+    ]
+  }
+}

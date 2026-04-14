@@ -1,0 +1,46 @@
+{
+  "id": "artifact-builder",
+  "name": "Artifact Builder",
+  "version": "1.0.0",
+  "description": "AI-powered HTML component generator with live preview. Describe a component, chart, or UI element and watch it stream into existence.",
+  "author": "contex",
+  "tier": "safe",
+  "ui": { "mode": "custom" },
+  "contributes": {
+    "tiles": [
+      {
+        "type": "artifact-builder",
+        "label": "Artifact Builder",
+        "icon": "",
+        "entry": "dist/index.html",
+        "defaultSize": { "w": 700, "h": 480 },
+        "minSize": { "w": 500, "h": 350 }
+      }
+    ],
+    "contextMenu": [
+      {
+        "label": "New Artifact",
+        "action": "createTile",
+        "tileType": "ext:artifact-builder"
+      }
+    ],
+    "settings": [
+      { "key": "apiKey", "label": "API Key (OpenRouter/OpenAI)", "type": "string", "default": "" },
+      { "key": "model", "label": "Model", "type": "string", "default": "anthropic/claude-sonnet-4" },
+      { "key": "baseUrl", "label": "API Base URL", "type": "string", "default": "https://openrouter.ai/api/v1" }
+    ],
+    "context": {
+      "produces": ["ctx:artifact"],
+      "consumes": ["ctx:design", "ctx:code", "ctx:research", "ctx:web"]
+    },
+    "actions": [
+      { "name": "generate", "description": "PREFERRED: Send a prompt to the artifact builder's AI which streams HTML in real-time with live preview. Use this for all content creation requests. Params: { prompt: string }" },
+      { "name": "setHtml", "description": "Set artifact HTML directly (no streaming). Only use for small edits or injecting pre-built HTML. Params: { html: string }" },
+      { "name": "getHtml", "description": "Get the current artifact HTML" },
+      { "name": "getStatus", "description": "Get current generation status (generating | ready | empty)" },
+      { "name": "setPrompt", "description": "Set the prompt text without triggering generation. Params: { prompt: string }" },
+      { "name": "setSettings", "description": "Update API settings. Params: { model?: string, baseUrl?: string, apiKey?: string }" }
+    ]
+  },
+  "permissions": ["network"]
+}

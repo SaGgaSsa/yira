@@ -1,0 +1,25 @@
+{
+  "id": "theme-builder",
+  "name": "Theme Builder",
+  "version": "1.0.0",
+  "description": "Create and manage custom themes. Changes take effect immediately across the whole app.",
+  "author": "contex",
+  "tier": "power",
+  "main": "main.js",
+  "contributes": {
+    "tiles": [
+      {
+        "type": "theme-builder",
+        "label": "Theme Builder",
+        "icon": "",
+        "entry": "tiles/builder/index.html",
+        "defaultSize": { "w": 560, "h": 620 },
+        "minSize": { "w": 400, "h": 400 }
+      }
+    ],
+    "contextMenu": [
+      { "label": "Theme Builder", "action": "createTile", "tileType": "ext:theme-builder" }
+    ]
+  },
+  "permissions": ["fs"]
+}

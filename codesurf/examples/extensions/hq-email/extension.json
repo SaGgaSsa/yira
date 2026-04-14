@@ -1,0 +1,77 @@
+{
+  "id": "hq-email",
+  "name": "HQ Email",
+  "version": "1.0.0",
+  "description": "Email productivity suite — inbox, detail, contacts, labels, brain dump. Powered by gog CLI for Gmail access.",
+  "author": "contex",
+  "tier": "power",
+  "main": "main.js",
+  "contributes": {
+    "tiles": [
+      {
+        "type": "hq-email-list",
+        "label": "Email List",
+        "icon": "",
+        "entry": "tiles/email-list/index.html",
+        "defaultSize": { "w": 400, "h": 600 },
+        "minSize": { "w": 300, "h": 400 }
+      },
+      {
+        "type": "hq-email-detail",
+        "label": "Email Detail",
+        "icon": "",
+        "entry": "tiles/email-detail/index.html",
+        "defaultSize": { "w": 600, "h": 600 },
+        "minSize": { "w": 400, "h": 300 }
+      },
+      {
+        "type": "hq-contacts",
+        "label": "Contacts",
+        "icon": "",
+        "entry": "tiles/contacts/index.html",
+        "defaultSize": { "w": 300, "h": 400 },
+        "minSize": { "w": 250, "h": 200 }
+      },
+      {
+        "type": "hq-labels",
+        "label": "Labels",
+        "icon": "",
+        "entry": "tiles/labels/index.html",
+        "defaultSize": { "w": 300, "h": 300 },
+        "minSize": { "w": 200, "h": 150 }
+      },
+      {
+        "type": "hq-brain-dump",
+        "label": "Brain Dump",
+        "icon": "",
+        "entry": "tiles/brain-dump/index.html",
+        "defaultSize": { "w": 360, "h": 280 },
+        "minSize": { "w": 280, "h": 200 }
+      }
+    ],
+    "contextMenu": [
+      { "label": "New Email List", "action": "createTile", "tileType": "ext:hq-email-list" },
+      { "label": "New Email Detail", "action": "createTile", "tileType": "ext:hq-email-detail" },
+      { "label": "New Contacts", "action": "createTile", "tileType": "ext:hq-contacts" },
+      { "label": "New Labels", "action": "createTile", "tileType": "ext:hq-labels" },
+      { "label": "New Brain Dump", "action": "createTile", "tileType": "ext:hq-brain-dump" }
+    ],
+    "settings": [
+      { "key": "account", "label": "Gmail Account", "type": "string", "default": "" }
+    ],
+    "context": {
+      "produces": ["ctx:email", "ctx:capture"],
+      "consumes": ["ctx:email", "ctx:task"]
+    },
+    "actions": [
+      { "name": "selectEmail", "description": "Select an email by ID. Params: { id: string }" },
+      { "name": "fetchInbox", "description": "Fetch inbox emails. Params: { max?: number }" },
+      { "name": "fetchEmail", "description": "Fetch a single email by ID. Params: { id: string }" },
+      { "name": "searchEmails", "description": "Search emails. Params: { query: string, max?: number }" },
+      { "name": "archiveEmail", "description": "Archive an email. Params: { id: string }" },
+      { "name": "trashEmail", "description": "Trash an email. Params: { id: string }" },
+      { "name": "listAccounts", "description": "List Gmail accounts" }
+    ]
+  },
+  "permissions": ["network"]
+}

@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Labels</title>
+  <style>
+    :root {
+      --ct-bg: transparent;
+      --ct-panel: rgba(0,0,0,0.04);
+      --ct-border: rgba(0,0,0,0.10);
+      --ct-text: #111111;
+      --ct-dim: #777777;
+      --ct-accent: #4f46e5;
+      --ct-accent-s: rgba(79,70,229,0.10);
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: var(--ct-bg); color: var(--ct-text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; height: 100vh; padding: 12px; overflow: hidden; }
+    .card { border-radius: 12px; border: 1px solid var(--ct-border); background: var(--ct-panel); padding: 14px; }
+    .card-header { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--ct-dim); margin-bottom: 12px; }
+    .empty-text { font-size: 13px; color: var(--ct-dim); }
+    .labels { display: flex; flex-wrap: wrap; gap: 6px; }
+    .label { display: inline-flex; align-items: center; border-radius: 6px; padding: 2px 8px; font-size: 11px; font-weight: 500; background: var(--ct-accent-s); color: var(--ct-accent); }
+  </style>
+</head>
+<body>
+<div class="card">
+  <div class="card-header">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+      <line x1="7" y1="7" x2="7.01" y2="7"/>
+    </svg>
+    Labels
+  </div>
+  <div id="content">
+    <span class="empty-text">Select an email to see labels</span>
+  </div>
+</div>
+
+<script>
+  var SKIP = new Set(['INBOX','UNREAD','CATEGORY_UPDATES','CATEGORY_PROMOTIONS','CATEGORY_SOCIAL','CATEGORY_FORUMS','CATEGORY_PERSONAL'])
+
+  function renderLabels(emailData) {
+    var content = document.getElementById('content')
+    while (content.firstChild) content.removeChild(content.firstChild)
+
+    if (!emailData) {
+      var empty = document.createElement('span')
+      empty.className = 'empty-text'
+      empty.textContent = 'Select an email to see labels'
+      content.appendChild(empty)
+      return
+    }
+
+    var labels = (emailData.labels || []).filter(function(l) { return !SKIP.has(l) })
+    if (labels.length === 0) {
+      var noLabels = document.createElement('span')
+      noLabels.className = 'empty-text'
+      noLabels.textContent = 'No labels'
+      content.appendChild(noLabels)
+      return
+    }
+
+    var wrap = document.createElement('div')
+    wrap.className = 'labels'
+    labels.forEach(function(l) {
+      var badge = document.createElement('span')
+      badge.className = 'label'
+      badge.textContent = l.replace(/_/g, ' ').toLowerCase()
+      wrap.appendChild(badge)
+    })
+    content.appendChild(wrap)
+  }
+
+  var currentAccount = ''
+  var currentEmail = null
+  var currentSelectedId = null
+
+  function onEmailSelected(id) {
+    currentSelectedId = id || null
+    if (!id) {
+      currentEmail = null
+      renderLabels(null)
+      return
+    }
+    if (currentEmail && currentEmail.id === id) {
+      renderLabels(currentEmail)
+      return
+    }
+    if (!window.contex || !window.contex.ext) return
+    window.contex.ext.invoke('fetchEmail', JSON.stringify({ id: id, account: currentAccount || undefined }))
+      .then(function(raw) {
+        var data = typeof raw === 'string' ? JSON.parse(raw) : raw
+        currentEmail = data.email || null
+        if (currentSelectedId === id) renderLabels(currentEmail)
+      })
+      .catch(function() {
+        if (currentSelectedId === id && !currentEmail) renderLabels(null)
+      })
+  }
+
+  function setupListeners() {
+    if (!window.contex) return
+    window.contex.context.get('ctx:email:account').then(function(v) {
+      if (v) currentAccount = v
+    }).catch(function() {})
+
+    window.contex.context.onPeerContextChanged(function(data) {
+      if (data.key === 'ctx:email:account') {
+        currentAccount = data.value || ''
+      } else if (data.key === 'ctx:email:selectedData') {
+        currentEmail = data.value || null
+        currentSelectedId = data.value && data.value.id ? data.value.id : currentSelectedId
+        renderLabels(currentEmail)
+      } else if (data.key === 'ctx:email:selected') {
+        onEmailSelected(data.value)
+      }
+    })
+    window.contex.context.get('ctx:email:selectedData').then(function(v) {
+      if (v) {
+        currentEmail = v
+        currentSelectedId = v.id || null
+        renderLabels(v)
+        return
+      }
+      window.contex.context.get('ctx:email:selected').then(function(id) {
+        if (id) onEmailSelected(id)
+      }).catch(function() {})
+    }).catch(function() {
+      window.contex.context.get('ctx:email:selected').then(function(id) {
+        if (id) onEmailSelected(id)
+      }).catch(function() {})
+    })
+  }
+
+  window.addEventListener('message', function(e) {
+    if (e.data && e.data.type === 'contex-bridge-ready') setupListeners()
+  })
+  if (window.contex) setupListeners()
+</script>
+</body>
+</html>

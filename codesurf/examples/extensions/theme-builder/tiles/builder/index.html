@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Theme Builder</title>
+  <style>
+    :root {
+      --ct-bg: transparent;
+      --ct-panel: rgba(0,0,0,0.04);
+      --ct-panel-2: rgba(0,0,0,0.06);
+      --ct-border: rgba(0,0,0,0.10);
+      --ct-text: #111111;
+      --ct-muted: #334155;
+      --ct-dim: #64748b;
+      --ct-hover: rgba(0,0,0,0.05);
+      --ct-accent: #4f46e5;
+      --ct-accent-s: rgba(79,70,229,0.12);
+      --ct-danger: #dc2626;
+      --bg: var(--ct-bg);
+      --panel: var(--ct-panel);
+      --border: var(--ct-border);
+      --text: var(--ct-text);
+      --muted: var(--ct-muted);
+      --dim: var(--ct-dim);
+      --hover: var(--ct-hover);
+      --accent: var(--ct-accent);
+      --accent-s: var(--ct-accent-s);
+      --danger: var(--ct-danger);
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-size:13px; height:100vh; overflow:hidden; display:flex; flex-direction:column; }
+
+    .header { display:flex; align-items:center; gap:8px; padding:11px 14px; border-bottom:1px solid var(--border); flex-shrink:0; }
+    .header-title { font-size:13px; font-weight:700; }
+    .header-sub { font-size:11px; color:var(--dim); flex:1; }
+    .btn { padding:5px 12px; border-radius:6px; border:none; cursor:pointer; font-size:12px; font-weight:600; font-family:inherit; }
+    .btn-primary { background:var(--accent); color:#fff; }
+    .btn-ghost { background:transparent; color:var(--muted); border:1px solid var(--border); }
+    .btn-danger { background:var(--danger); color:#fff; }
+
+    .body { display:flex; flex:1; overflow:hidden; }
+
+    /* Sidebar */
+    .sidebar { width:155px; border-right:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0; }
+    .sidebar-hd { padding:10px 12px 4px; font-size:10px; font-weight:700; color:var(--dim); letter-spacing:.9px; text-transform:uppercase; }
+    .theme-list { flex:1; overflow-y:auto; }
+    .theme-item { display:flex; align-items:center; gap:7px; padding:8px 12px; cursor:pointer; border-left:2px solid transparent; }
+    .theme-item:hover { background:var(--hover); }
+    .theme-item.active { background:var(--accent-s); border-left-color:var(--accent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 16%, transparent); }
+    .theme-item-name { font-size:12px; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .theme-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; border:1px solid rgba(0,0,0,0.15); }
+    .new-btn { margin:10px; display:flex; align-items:center; justify-content:center; gap:5px; padding:7px; border:1px dashed var(--border); border-radius:7px; cursor:pointer; font-size:12px; color:var(--dim); }
+    .new-btn:hover { border-color:var(--accent); color:var(--accent); background:var(--accent-s); }
+
+    /* Editor */
+    .editor { flex:1; overflow-y:auto; padding:16px 18px; display:flex; flex-direction:column; gap:14px; }
+    .empty { display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; gap:8px; color:var(--dim); }
+    .section-label { font-size:10px; font-weight:700; color:var(--dim); letter-spacing:.9px; text-transform:uppercase; margin-bottom:6px; }
+    .field-row { display:flex; align-items:center; gap:10px; margin-bottom:7px; }
+    .field-label { font-size:12px; color:var(--muted); width:115px; flex-shrink:0; }
+    .field-input { flex:1; background:var(--panel); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px; font-family:inherit; padding:5px 8px; outline:none; }
+    .field-input:focus { border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-s); }
+
+    .color-row { display:flex; align-items:center; gap:10px; margin-bottom:7px; }
+    .color-swatch { width:32px; height:28px; border-radius:6px; border:1px solid var(--border); cursor:pointer; flex-shrink:0; overflow:hidden; position:relative; }
+    .color-swatch input[type=color] { position:absolute; inset:-4px; width:calc(100% + 8px); height:calc(100% + 8px); border:none; cursor:pointer; padding:0; }
+    .hex-input { flex:1; background:var(--panel); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px; font-family:'SF Mono','Fira Code',monospace; padding:5px 8px; outline:none; }
+    .hex-input:focus { border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-s); }
+
+    .mode-toggle { display:flex; border:1px solid var(--border); border-radius:7px; overflow:hidden; }
+    .mode-btn { flex:1; padding:5px 10px; border:none; background:transparent; cursor:pointer; font-size:12px; font-weight:500; font-family:inherit; color:var(--muted); }
+    .mode-btn.active { background:var(--accent); color:#fff; }
+
+    /* Preview */
+    .preview-box { border:1px solid var(--border); border-radius:7px; overflow:hidden; }
+    .preview-hd { padding:7px 10px; font-size:10px; font-weight:700; color:var(--dim); letter-spacing:.9px; text-transform:uppercase; border-bottom:1px solid var(--border); background:var(--panel); }
+    .preview-inner { padding:12px; display:flex; flex-direction:column; gap:8px; }
+    .preview-chips { display:flex; gap:6px; flex-wrap:wrap; }
+    .preview-chip { height:24px; border-radius:5px; display:flex; align-items:center; padding:0 10px; font-size:11px; font-weight:500; }
+    .preview-texts { display:flex; gap:12px; align-items:baseline; }
+    .preview-bars { display:flex; flex-direction:column; gap:4px; }
+    .preview-bar { height:5px; border-radius:3px; }
+
+    .footer { display:flex; align-items:center; gap:8px; padding:10px 18px; border-top:1px solid var(--border); flex-shrink:0; }
+    .footer-spacer { flex:1; }
+    .status { font-size:11px; color:var(--dim); }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-title">Theme Builder</div>
+  <div class="header-sub">Changes apply instantly</div>
+</div>
+
+<div class="body">
+  <div class="sidebar">
+    <div class="sidebar-hd">Saved</div>
+    <div class="theme-list" id="theme-list"></div>
+    <div class="new-btn" id="new-btn">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      New theme
+    </div>
+  </div>
+
+  <div class="editor" id="editor">
+    <div class="empty" id="empty-state">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.3"><circle cx="12" cy="12" r="4"/><path d="M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+      <span>Select or create a theme</span>
+    </div>
+
+    <div id="edit-form" style="display:none">
+
+      <div>
+        <div class="section-label">Identity</div>
+        <div class="field-row">
+          <span class="field-label">Name</span>
+          <input class="field-input" id="f-name" type="text" placeholder="My Theme" maxlength="40" />
+        </div>
+        <div class="field-row">
+          <span class="field-label">Mode</span>
+          <div class="mode-toggle">
+            <button class="mode-btn active" id="mode-dark" type="button">Dark</button>
+            <button class="mode-btn" id="mode-light" type="button">Light</button>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="section-label">Colours</div>
+        <div id="color-fields"></div>
+      </div>
+
+      <div class="preview-box">
+        <div class="preview-hd">Preview</div>
+        <div class="preview-inner" id="preview-inner"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  <span class="status" id="status"></span>
+  <div class="footer-spacer"></div>
+  <button class="btn btn-danger" id="delete-btn" style="display:none">Delete</button>
+  <button class="btn btn-ghost" id="apply-btn" style="display:none">Apply</button>
+  <button class="btn btn-primary" id="save-btn" style="display:none">Save</button>
+</div>
+
+<script>
+;(function() {
+
+  // ── Colour utils ──────────────────────────────────────────────────────────
+  function h2r(hex) {
+    var h = hex.replace('#','')
+    if (h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2]
+    if (h.length !== 6) return [128,128,128]
+    return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)]
+  }
+  function r2h(r,g,b) {
+    return '#'+[r,g,b].map(function(v){ return Math.min(255,Math.max(0,Math.round(v))).toString(16).padStart(2,'0') }).join('')
+  }
+  function mix(a,b,t) {
+    var x=h2r(a), y=h2r(b)
+    return r2h(x[0]+(y[0]-x[0])*t, x[1]+(y[1]-x[1])*t, x[2]+(y[2]-x[2])*t)
+  }
+  function alpha(hex,a) {
+    var c=h2r(hex); return 'rgba('+c[0]+','+c[1]+','+c[2]+','+a+')'
+  }
+  function lighten(hex,pct) { return mix(hex,'#ffffff',pct/100) }
+  function darken(hex,pct)  { return mix(hex,'#000000',pct/100) }
+
+  // ── Theme derivation ──────────────────────────────────────────────────────
+  function derive(seed) {
+    var id=seed.id, label=seed.label, mode=seed.mode
+    var cv=seed.canvas, pn=seed.panel, ac=seed.accent, tx=seed.text
+    var dk=mode==='dark'
+    var tb = tx || (dk?'#e0ddd6':'#1a2332')
+    var pe = dk?lighten(pn,4):darken(pn,4)
+    var pm = dk?darken(pn,2):lighten(pn,2)
+    var app= dk?darken(cv,3):darken(cv,2)
+    var bd = dk?alpha('#ffffff',0.08):alpha('#0f172a',0.12)
+    return {
+      id:id, label:label, mode:mode, description:'Custom theme',
+      canvas:{ background:cv, backgroundEffect:'',
+        gridSmall: dk?lighten(cv,8):darken(cv,7),
+        gridLarge: dk?lighten(cv,14):darken(cv,14),
+        gridGlowSmall: dk?'rgba(255,255,255,0.55)':'rgba(40,49,66,0.18)',
+        gridGlowLarge: dk?'rgba(255,255,255,0.70)':'rgba(40,49,66,0.24)' },
+      surface:{ app:app, sidebarOverlay:alpha(app,dk?0.90:0.92),
+        sidebar: dk?lighten(app,2):lighten(pn,1), panel:pn,
+        panelMuted:pm, panelElevated:pe, titlebar:pe,
+        input: dk?darken(pn,2):'#ffffff',
+        hover: dk?alpha('#ffffff',0.05):alpha('#000000',0.05),
+        selection:alpha(ac,dk?0.12:0.10), selectionBorder:alpha(ac,dk?0.24:0.22), accentSoft:alpha(ac,dk?0.16:0.12) },
+      border:{ subtle:dk?alpha('#ffffff',0.05):alpha('#0f172a',0.06), default:bd,
+        strong:dk?alpha('#ffffff',0.14):alpha('#0f172a',0.18), accent:alpha(ac,0.30) },
+      text:{ primary:tb, secondary:mix(tb,dk?pn:'#ffffff',0.15),
+        muted:mix(tb,dk?pn:'#ffffff',0.38), disabled:mix(tb,dk?pn:'#ffffff',0.60),
+        inverse:dk?'#0f1012':'#ffffff' },
+      accent:{ base:ac, hover:lighten(ac,8), soft:alpha(ac,dk?0.16:0.12) },
+      status:{ success:dk?'#56c288':'#1f8f5f', warning:dk?'#ffbf5f':'#c07b12', danger:dk?'#ff7b72':'#d14a4a' },
+      chat:{ background:dk?darken(pn,4):'#ffffff', placeholder:mix(tb,dk?pn:'#ffffff',0.55),
+        input:dk?lighten(pn,2):'#ffffff', inputBorder:bd,
+        text:tb, textSecondary:mix(tb,dk?pn:'#ffffff',0.18),
+        muted:mix(tb,dk?pn:'#ffffff',0.42), subtle:mix(tb,dk?pn:'#ffffff',0.62),
+        divider:dk?alpha('#ffffff',0.08):alpha('#0f172a',0.12),
+        assistantBubble:dk?lighten(pn,2):alpha('#0f172a',0.04),
+        assistantBubbleBorder:dk?alpha('#ffffff',0.07):alpha('#0f172a',0.08),
+        userBubble:alpha(ac,dk?0.15:0.10), userBubbleBorder:alpha(ac,dk?0.28:0.22),
+        dropdownBackground:dk?lighten(pn,1):'#ffffff', dropdownBorder:bd,
+        dropdownActiveBackground:dk?lighten(pn,4):alpha('#0f172a',0.06),
+        dropdownHoverBackground:dk?alpha('#ffffff',0.04):alpha('#0f172a',0.04) },
+      terminal:{ background:dk?darken(pn,5):'#f9fafb', foreground:mix(tb,dk?pn:'#ffffff',0.08),
+        cursor:tb, cursorAccent:dk?darken(pn,5):'#f9fafb', selection:alpha(ac,0.20),
+        black:dk?darken(pn,5):'#1f232a',
+        red:dk?'#ff7b72':'#cf222e', green:dk?'#56c288':'#1f883d',
+        yellow:dk?'#d8b66a':'#9a6700', blue:ac,
+        magenta:dk?'#c792ea':'#8250df', cyan:dk?'#64d2ff':'#0969da',
+        white:mix(tb,dk?pn:'#ffffff',0.05),
+        brightBlack:mix(tb,dk?pn:'#ffffff',0.50),
+        brightRed:dk?'#ff9b95':'#e5534b', brightGreen:dk?'#79d8a0':'#3fb950',
+        brightYellow:dk?'#e5c47f':'#d4a72c', brightBlue:lighten(ac,12),
+        brightMagenta:dk?'#d8abff':'#a475f9', brightCyan:dk?'#8adfff':'#39c5cf',
+        brightWhite:'#ffffff' },
+      editor:{ monacoBase:dk?'vs-dark':'vs', background:pn },
+      extension:{ background:pn, panel:pe, border:bd, text:tb,
+        muted:mix(tb,dk?pn:'#ffffff',0.42), accent:ac },
+      shadow:{ panel:dk?'0 10px 36px rgba(0,0,0,0.42)':'0 10px 26px rgba(15,23,42,0.12)',
+        modal:dk?'0 32px 80px rgba(0,0,0,0.62)':'0 28px 64px rgba(15,23,42,0.16)' },
+    }
+  }
+
+  // ── Seed field definitions ────────────────────────────────────────────────
+  var FIELDS = [
+    { id:'canvas', label:'Canvas background' },
+    { id:'panel',  label:'Panel background'  },
+    { id:'accent', label:'Accent colour'     },
+    { id:'text',   label:'Text colour'       },
+  ]
+  var DFLT_DARK  = { canvas:'#15171a', panel:'#111317', accent:'#7aa2ff', text:'#e7eaf0' }
+  var DFLT_LIGHT = { canvas:'#f3f5f8', panel:'#ffffff', accent:'#3568ff', text:'#1b2430' }
+
+  // ── State ─────────────────────────────────────────────────────────────────
+  var themes = []
+  var currentId = null
+  var currentSeed = null
+
+  // ── Build static UI ───────────────────────────────────────────────────────
+  var colorFieldsEl = document.getElementById('color-fields')
+  FIELDS.forEach(function(f) {
+    var row = document.createElement('div')
+    row.className = 'color-row'
+
+    var lbl = document.createElement('span')
+    lbl.className = 'field-label'
+    lbl.textContent = f.label
+
+    var swatch = document.createElement('div')
+    swatch.className = 'color-swatch'
+    swatch.id = 'sw-'+f.id
+    var cp = document.createElement('input')
+    cp.type = 'color'
+    cp.id = 'cp-'+f.id
+    swatch.appendChild(cp)
+
+    var hex = document.createElement('input')
+    hex.className = 'hex-input'
+    hex.id = 'hx-'+f.id
+    hex.maxLength = 7
+    hex.placeholder = '#000000'
+
+    row.appendChild(lbl)
+    row.appendChild(swatch)
+    row.appendChild(hex)
+    colorFieldsEl.appendChild(row)
+
+    cp.addEventListener('input', function() {
+      hex.value = cp.value
+      if (currentSeed) { currentSeed[f.id] = cp.value; refreshPreview() }
+    })
+    hex.addEventListener('input', function() {
+      var v = hex.value.trim()
+      if (/^#[0-9a-fA-F]{6}$/.test(v)) {
+        cp.value = v
+        if (currentSeed) { currentSeed[f.id] = v; refreshPreview() }
+      }
+    })
+  })
+
+  // ── Mode toggle ───────────────────────────────────────────────────────────
+  document.getElementById('mode-dark').addEventListener('click', function() { setMode('dark') })
+  document.getElementById('mode-light').addEventListener('click', function() { setMode('light') })
+  function setMode(mode) {
+    if (!currentSeed || currentSeed.mode === mode) return
+    currentSeed.mode = mode
+    var defaults = mode==='dark' ? DFLT_DARK : DFLT_LIGHT
+    Object.keys(defaults).forEach(function(k){ currentSeed[k]=defaults[k] })
+    document.getElementById('mode-dark').classList.toggle('active', mode==='dark')
+    document.getElementById('mode-light').classList.toggle('active', mode!=='dark')
+    syncColorFields()
+    refreshPreview()
+  }
+
+  // ── Sync colour fields from seed ──────────────────────────────────────────
+  function syncColorFields() {
+    FIELDS.forEach(function(f) {
+      var v = currentSeed[f.id] || '#888888'
+      document.getElementById('cp-'+f.id).value = v
+      document.getElementById('hx-'+f.id).value = v
+    })
+  }
+
+  // ── Preview refresh ───────────────────────────────────────────────────────
+  function refreshPreview() {
+    var inner = document.getElementById('preview-inner')
+    inner.innerHTML = ''  // safe — no user content, only derived hex colours
+    if (!currentSeed) return
+    var t = derive(currentSeed)
+    inner.style.background = t.surface.panel
+
+    // Chips row
+    var chips = document.createElement('div')
+    chips.className = 'preview-chips'
+    ;[['Canvas',t.canvas.background,t.text.muted],
+      ['Panel',t.surface.panelElevated,t.text.muted],
+      ['Accent',t.accent.base,'#fff']].forEach(function(d) {
+      var c = document.createElement('div')
+      c.className = 'preview-chip'
+      c.textContent = d[0]
+      c.style.background = d[1]
+      c.style.color = d[2]
+      chips.appendChild(c)
+    })
+    inner.appendChild(chips)
+
+    // Text row
+    var texts = document.createElement('div')
+    texts.className = 'preview-texts'
+    ;[[t.text.primary,'13px','600','Primary'],
+      [t.text.secondary,'12px','400','Secondary'],
+      [t.text.muted,'11px','400','Muted'],
+      [t.text.disabled,'11px','400','Dim']].forEach(function(d) {
+      var s = document.createElement('span')
+      s.textContent = d[3]
+      s.style.color = d[0]
+      s.style.fontSize = d[1]
+      s.style.fontWeight = d[2]
+      texts.appendChild(s)
+    })
+    inner.appendChild(texts)
+
+    // Status chips
+    var status = document.createElement('div')
+    status.className = 'preview-chips'
+    ;[['Success',t.status.success],['Warning',t.status.warning],['Danger',t.status.danger]].forEach(function(d) {
+      var c = document.createElement('div')
+      c.className = 'preview-chip'
+      c.textContent = d[0]
+      c.style.background = alpha(d[1], 0.15)
+      c.style.color = d[1]
+      status.appendChild(c)
+    })
+    inner.appendChild(status)
+
+    // Border bars
+    var bars = document.createElement('div')
+    bars.className = 'preview-bars'
+    ;[t.border.default, t.accent.soft, t.surface.selection].forEach(function(col) {
+      var b = document.createElement('div')
+      b.className = 'preview-bar'
+      b.style.background = col
+      bars.appendChild(b)
+    })
+    inner.appendChild(bars)
+  }
+
+  // ── Sidebar ───────────────────────────────────────────────────────────────
+  function renderSidebar() {
+    var list = document.getElementById('theme-list')
+    list.innerHTML = ''
+    themes.forEach(function(t) {
+      var item = document.createElement('div')
+      item.className = 'theme-item' + (t.id===currentId?' active':'')
+      var dot = document.createElement('div')
+      dot.className = 'theme-dot'
+      dot.style.background = t.accent || '#888'
+      var name = document.createElement('span')
+      name.className = 'theme-item-name'
+      name.textContent = t.label || t.id
+      item.appendChild(dot)
+      item.appendChild(name)
+      item.addEventListener('click', function(){ selectTheme(t.id) })
+      list.appendChild(item)
+    })
+  }
+
+  // ── Select / New ──────────────────────────────────────────────────────────
+  function selectTheme(id) {
+    var t = themes.find(function(x){ return x.id===id })
+    if (!t) return
+    currentId = id
+    currentSeed = Object.assign({}, t)
+    document.getElementById('f-name').value = t.label || ''
+    document.getElementById('mode-dark').classList.toggle('active', t.mode==='dark')
+    document.getElementById('mode-light').classList.toggle('active', t.mode!=='dark')
+    syncColorFields()
+    refreshPreview()
+    document.getElementById('empty-state').style.display = 'none'
+    document.getElementById('edit-form').style.display = 'block'
+    document.getElementById('save-btn').style.display = ''
+    document.getElementById('apply-btn').style.display = ''
+    document.getElementById('delete-btn').style.display = ''
+    renderSidebar()
+  }
+
+  function newTheme() {
+    var id = 'custom-' + Date.now()
+    var seed = Object.assign({ id:id, label:'New Theme', mode:'dark' }, DFLT_DARK)
+    themes.push(seed)
+    renderSidebar()
+    selectTheme(id)
+    var nameEl = document.getElementById('f-name')
+    nameEl.focus()
+    nameEl.select()
+  }
+
+  document.getElementById('new-btn').addEventListener('click', newTheme)
+
+  // ── Save / Apply / Delete ─────────────────────────────────────────────────
+  document.getElementById('save-btn').addEventListener('click', function() {
+    if (!currentSeed || !window.contex) return
+    currentSeed.label = document.getElementById('f-name').value.trim() || 'Custom Theme'
+    currentSeed.id = currentId
+    var full = derive(currentSeed)
+    full._seed = currentSeed
+    window.contex.ext.invoke('saveTheme', full).then(function() {
+      var idx = themes.findIndex(function(t){ return t.id===currentId })
+      if (idx>=0) themes[idx]=Object.assign({},currentSeed)
+      else themes.push(Object.assign({},currentSeed))
+      renderSidebar()
+      setStatus('Saved')
+    }).catch(function(e){ setStatus('Error: '+e.message) })
+  })
+
+  document.getElementById('apply-btn').addEventListener('click', function() {
+    if (!currentSeed || !window.contex) return
+    var full = derive(currentSeed)
+    window.contex.bus.publish('themes', 'data', { action:'apply', themeId:currentSeed.id, theme:full })
+    setStatus('Applied')
+  })
+
+  document.getElementById('delete-btn').addEventListener('click', function() {
+    if (!currentId || !window.contex) return
+    var label = (currentSeed && currentSeed.label) || currentId
+    if (!window.confirm('Delete "' + label + '"?')) return
+    var id = currentId
+    window.contex.ext.invoke('deleteTheme', id).then(function() {
+      themes = themes.filter(function(t){ return t.id!==id })
+      currentId=null; currentSeed=null
+      document.getElementById('empty-state').style.display = ''
+      document.getElementById('edit-form').style.display = 'none'
+      document.getElementById('save-btn').style.display = 'none'
+      document.getElementById('apply-btn').style.display = 'none'
+      document.getElementById('delete-btn').style.display = 'none'
+      renderSidebar()
+    })
+  })
+
+  function setStatus(msg) {
+    var el = document.getElementById('status')
+    el.textContent = msg
+    setTimeout(function(){ el.textContent = '' }, 2500)
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+  function init() {
+    if (!window.contex) return
+    window.contex.ext.invoke('listThemes').then(function(list) {
+      themes = (list||[]).map(function(t) {
+        return t._seed || { id:t.id, label:t.label, mode:t.mode,
+          canvas:t.canvas.background, panel:t.surface.panel,
+          accent:t.accent.base, text:t.text.primary }
+      })
+      renderSidebar()
+    }).catch(function(){ renderSidebar() })
+  }
+
+  window.addEventListener('message', function(e) {
+    if (e.data && e.data.type==='contex-bridge-ready') init()
+  })
+  if (window.contex) init()
+
+})()
+</script>
+</body>
+</html>

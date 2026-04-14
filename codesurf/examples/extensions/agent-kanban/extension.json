@@ -1,0 +1,30 @@
+{
+  "id": "agent-kanban",
+  "name": "Agent Kanban",
+  "version": "2.0.0",
+  "description": "Multi-agent task board. Creates git worktrees per task, launches claude/codex/gemini/cline with live output streaming and task dependency chains.",
+  "author": "contex",
+  "tier": "power",
+  "ui": { "mode": "custom" },
+  "main": "main.js",
+  "contributes": {
+    "tiles": [{
+      "type": "agent-kanban-board",
+      "label": "Agent Kanban",
+      "entry": "tiles/board/index.html",
+      "defaultSize": { "w": 960, "h": 680 },
+      "minSize": { "w": 680, "h": 480 }
+    }],
+    "contextMenu": [{ "label": "New Agent Kanban", "action": "createTile", "tileType": "ext:agent-kanban-board" }],
+    "context": {
+      "produces": ["ctx:kanban:task-started", "ctx:kanban:task-completed"],
+      "consumes": []
+    },
+    "actions": [
+      { "name": "createTask",  "description": "Create a new task. Params: { prompt, agentId?, baseRef?, columnId? }" },
+      { "name": "startTask",   "description": "Start an agent on a task. Params: { taskId }" },
+      { "name": "completeTask","description": "Mark a task done (move to trash). Params: { taskId }" },
+      { "name": "getBoard",    "description": "Return the current board state as JSON." }
+    ]
+  }
+}

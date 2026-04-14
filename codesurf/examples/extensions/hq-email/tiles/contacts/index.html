@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Contacts</title>
+  <style>
+    :root {
+      --ct-bg: transparent;
+      --ct-panel: rgba(0,0,0,0.04);
+      --ct-border: rgba(0,0,0,0.10);
+      --ct-text: #111111;
+      --ct-muted: #444444;
+      --ct-dim: #777777;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: var(--ct-bg); color: var(--ct-text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; height: 100vh; padding: 12px; overflow: hidden; }
+    .card { border-radius: 12px; border: 1px solid var(--ct-border); background: var(--ct-panel); padding: 14px; }
+    .card-header { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--ct-dim); margin-bottom: 12px; }
+    .empty-text { font-size: 13px; color: var(--ct-dim); }
+    .contact { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px; }
+    .contact:last-child { margin-bottom: 0; }
+    .avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fff; flex-shrink: 0; }
+    .contact-name { font-size: 13px; font-weight: 500; color: var(--ct-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .contact-email { font-size: 11px; color: var(--ct-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <div class="card-header">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    Contacts
+  </div>
+  <div id="content">
+    <span class="empty-text">Select an email to see contacts</span>
+  </div>
+</div>
+
+<script>
+  var GRADIENTS = [
+    'linear-gradient(135deg,#6366f1,#8b5cf6)',
+    'linear-gradient(135deg,#ec4899,#f43f5e)',
+    'linear-gradient(135deg,#10b981,#14b8a6)',
+    'linear-gradient(135deg,#f59e0b,#f97316)',
+    'linear-gradient(135deg,#3b82f6,#6366f1)',
+  ]
+
+  function avatarGradient(name) {
+    var hash = 0
+    for (var i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash)
+    return GRADIENTS[Math.abs(hash) % GRADIENTS.length]
+  }
+
+  function initials(name) {
+    var parts = name.trim().split(/\s+/)
+    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    return name.slice(0, 2).toUpperCase()
+  }
+
+  function parseFrom(raw) {
+    var m = (raw || '').match(/^(.+?)\s*<(.+?)>$/)
+    if (m) return { name: m[1].trim(), email: m[2].trim() }
+    return { name: raw || '', email: raw || '' }
+  }
+
+  function renderContacts(email) {
+    var content = document.getElementById('content')
+    // Clear using safe DOM methods
+    while (content.firstChild) content.removeChild(content.firstChild)
+
+    if (!email) {
+      var empty = document.createElement('span')
+      empty.className = 'empty-text'
+      empty.textContent = 'Select an email to see contacts'
+      content.appendChild(empty)
+      return
+    }
+
+    var from = parseFrom(email.from || '')
+    var to = email.to ? parseFrom(email.to) : null
+    var contacts = [from]
+    if (to && to.email !== from.email) contacts.push(to)
+
+    contacts.forEach(function(c) {
+      var row = document.createElement('div')
+      row.className = 'contact'
+
+      var av = document.createElement('div')
+      av.className = 'avatar'
+      av.style.background = avatarGradient(c.name || '?')
+      av.textContent = initials(c.name || '?')
+
+      var info = document.createElement('div')
+      info.style.minWidth = '0'
+
+      var name = document.createElement('div')
+      name.className = 'contact-name'
+      name.textContent = c.name
+
+      var email = document.createElement('div')
+      email.className = 'contact-email'
+      email.textContent = c.email
+
+      info.appendChild(name)
+      info.appendChild(email)
+      row.appendChild(av)
+      row.appendChild(info)
+      content.appendChild(row)
+    })
+  }
+
+  var currentAccount = ''
+  var currentEmail = null
+  var currentSelectedId = null
+
+  function onEmailSelected(id) {
+    currentSelectedId = id || null
+    if (!id) {
+      currentEmail = null
+      renderContacts(null)
+      return
+    }
+    if (currentEmail && currentEmail.id === id) {
+      renderContacts(currentEmail)
+      return
+    }
+    if (!window.contex || !window.contex.ext) return
+    window.contex.ext.invoke('fetchEmail', JSON.stringify({ id: id, account: currentAccount || undefined }))
+      .then(function(raw) {
+        var data = typeof raw === 'string' ? JSON.parse(raw) : raw
+        currentEmail = data.email || null
+        if (currentSelectedId === id) renderContacts(currentEmail)
+      })
+      .catch(function() {
+        if (currentSelectedId === id && !currentEmail) renderContacts(null)
+      })
+  }
+
+  function setupListeners() {
+    if (!window.contex) return
+    window.contex.context.get('ctx:email:account').then(function(v) {
+      if (v) currentAccount = v
+    }).catch(function() {})
+
+    window.contex.context.onPeerContextChanged(function(data) {
+      if (data.key === 'ctx:email:account') {
+        currentAccount = data.value || ''
+      } else if (data.key === 'ctx:email:selectedData') {
+        currentEmail = data.value || null
+        currentSelectedId = data.value && data.value.id ? data.value.id : currentSelectedId
+        renderContacts(currentEmail)
+      } else if (data.key === 'ctx:email:selected') {
+        onEmailSelected(data.value)
+      }
+    })
+
+    window.contex.context.get('ctx:email:selectedData').then(function(v) {
+      if (v) {
+        currentEmail = v
+        currentSelectedId = v.id || null
+        renderContacts(v)
+        return
+      }
+      window.contex.context.get('ctx:email:selected').then(function(id) {
+        if (id) onEmailSelected(id)
+      }).catch(function() {})
+    }).catch(function() {
+      window.contex.context.get('ctx:email:selected').then(function(id) {
+        if (id) onEmailSelected(id)
+      }).catch(function() {})
+    })
+  }
+
+  window.addEventListener('message', function(e) {
+    if (e.data && e.data.type === 'contex-bridge-ready') setupListeners()
+  })
+  if (window.contex) setupListeners()
+</script>
+</body>
+</html>

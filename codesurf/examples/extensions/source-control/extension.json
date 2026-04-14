@@ -1,0 +1,43 @@
+{
+  "id": "source-control",
+  "name": "Source Control",
+  "version": "1.0.0",
+  "description": "Git source control panel — branches, staging, commits, stash, and history with graph visualization.",
+  "author": "contex",
+  "tier": "power",
+  "main": "main.js",
+  "contributes": {
+    "tiles": [
+      {
+        "type": "source-control-panel",
+        "label": "Source Control",
+        "entry": "tiles/source-control/index.html",
+        "defaultSize": { "w": 420, "h": 700 },
+        "minSize": { "w": 320, "h": 500 }
+      }
+    ],
+    "contextMenu": [
+      { "label": "New Source Control", "action": "createTile", "tileType": "ext:source-control-panel" }
+    ],
+    "context": {
+      "produces": ["ctx:git:branch", "ctx:git:selectedCommit"],
+      "consumes": ["ctx:workspace"]
+    },
+    "actions": [
+      { "name": "refresh", "description": "Refresh git status, branches, and history" },
+      { "name": "commit", "description": "Create a commit. Params: { message: string }" },
+      { "name": "stageFile", "description": "Stage a file. Params: { path: string }" },
+      { "name": "unstageFile", "description": "Unstage a file. Params: { path: string }" },
+      { "name": "stageAll", "description": "Stage all changed files" },
+      { "name": "checkoutBranch", "description": "Switch branch. Params: { branch: string }" },
+      { "name": "createBranch", "description": "Create new branch. Params: { name: string }" },
+      { "name": "pull", "description": "Git pull from remote" },
+      { "name": "push", "description": "Git push to remote" },
+      { "name": "stash", "description": "Stash current changes. Params: { message?: string }" },
+      { "name": "stashPop", "description": "Pop latest stash" },
+      { "name": "getStatus", "description": "Get current git status as JSON" },
+      { "name": "getLog", "description": "Get commit history. Params: { max?: number }" }
+    ]
+  },
+  "permissions": ["os:read"]
+}

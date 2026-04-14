@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Token Counter</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --ct-bg: transparent;
+      --ct-panel: rgba(0,0,0,0.04);
+      --ct-panel-2: rgba(0,0,0,0.06);
+      --ct-border: rgba(0,0,0,0.10);
+      --ct-text: #111111;
+      --ct-muted: #555555;
+      --ct-dim: #888888;
+      --ct-accent: #4f46e5;
+      --ct-success: #1f8f5f;
+      --ct-warning: #c07b12;
+      --ct-danger: #dc2626;
+      --bg:       var(--ct-bg);
+      --surface:  var(--ct-panel);
+      --card:     var(--ct-panel-2);
+      --border:   var(--ct-border);
+      --text:     var(--ct-text);
+      --muted:    var(--ct-dim);
+      --accent:   var(--ct-accent);
+      --green:    var(--ct-success);
+      --amber:    var(--ct-warning);
+      --red:      var(--ct-danger);
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 13px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Toolbar ── */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      height: 40px;
+    }
+    .toolbar-title { font-weight: 600; font-size: 13px; color: var(--text); flex: 1; }
+    .peer-badge {
+      font-size: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 2px 8px;
+      color: var(--muted);
+    }
+    .peer-badge.linked { color: var(--green); border-color: rgba(74,222,128,0.3); }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 5px;
+      padding: 4px 9px;
+      font-size: 11px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.1s;
+      white-space: nowrap;
+    }
+    .btn:hover { background: #303030; }
+    .btn.danger { color: var(--red); border-color: rgba(248,113,113,0.25); }
+    .btn.danger:hover { background: rgba(248,113,113,0.08); }
+
+    /* ── Scroll container ── */
+    .scroll {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 10px 12px;
+    }
+    .scroll::-webkit-scrollbar { width: 4px; }
+    .scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* ── Text input ── */
+    #text-input {
+      width: 100%;
+      min-height: 120px;
+      max-height: 200px;
+      resize: vertical;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 12px;
+      line-height: 1.5;
+      padding: 10px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    #text-input:focus { border-color: rgba(129,140,248,0.5); }
+    #text-input::placeholder { color: var(--muted); }
+
+    /* ── Stats ── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+    .stat-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+    }
+    .stat-label {
+      font-size: 10px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 3px;
+    }
+    .stat-value {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+    .stat-card.accent-card {
+      border-color: rgba(129,140,248,0.3);
+      background: rgba(129,140,248,0.07);
+      grid-column: span 2;
+    }
+    .stat-card.accent-card .stat-value { color: var(--accent); font-size: 28px; }
+
+    /* ── Section header ── */
+    .section-header {
+      font-size: 10px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 2px 0;
+      margin-top: 2px;
+    }
+
+    /* ── Context bars ── */
+    .ctx-bar-wrap {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .ctx-model-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .ctx-model-name {
+      font-size: 10px;
+      color: var(--muted);
+      width: 80px;
+      flex-shrink: 0;
+    }
+    .ctx-bar-track {
+      flex: 1;
+      height: 4px;
+      background: var(--surface);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .ctx-bar-fill {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.2s ease;
+    }
+    .ctx-bar-fill.green { background: var(--green); }
+    .ctx-bar-fill.amber { background: var(--amber); }
+    .ctx-bar-fill.red   { background: var(--red); }
+    .ctx-pct-label {
+      font-size: 10px;
+      font-variant-numeric: tabular-nums;
+      width: 40px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+    .ctx-pct-label.green { color: var(--green); }
+    .ctx-pct-label.amber { color: var(--amber); }
+    .ctx-pct-label.red   { color: var(--red); }
+
+    /* ── Cost table ── */
+    .cost-table-wrap {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .cost-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .cost-table th {
+      font-size: 10px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-weight: 600;
+      padding: 8px 10px 6px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .cost-table th:not(:first-child) { text-align: right; }
+    .cost-table td {
+      padding: 6px 10px;
+      font-size: 11px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    .cost-table tr:last-child td { border-bottom: none; }
+    .cost-table td:not(:first-child) {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      font-family: 'SF Mono', 'Fira Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .cost-table tr:hover td { background: var(--surface); }
+    .model-name { font-weight: 500; color: var(--text); }
+    .model-family-badge {
+      display: inline-block;
+      font-size: 9px;
+      border-radius: 3px;
+      padding: 1px 4px;
+      margin-right: 4px;
+      font-weight: 600;
+      vertical-align: middle;
+    }
+    .family-claude { background: rgba(129,140,248,0.15); color: var(--accent); }
+    .family-gpt    { background: rgba(74,222,128,0.12); color: var(--green); }
+
+    /* ── Actions row ── */
+    .actions-row { display: flex; gap: 6px; }
+    .actions-row .btn { flex: 1; justify-content: center; }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed;
+      bottom: 14px;
+      left: 50%;
+      transform: translateX(-50%) translateY(10px);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 6px;
+      padding: 6px 14px;
+      font-size: 12px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s, transform 0.15s;
+      white-space: nowrap;
+      z-index: 100;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body>
+
+  <div class="toolbar">
+    <span class="toolbar-title">Token Counter</span>
+    <span class="peer-badge" id="peer-badge">no peers</span>
+  </div>
+
+  <div class="scroll">
+
+    <textarea
+      id="text-input"
+      placeholder="Paste text to count tokens, or link a chat tile to auto-populate..."
+      spellcheck="false"
+    ></textarea>
+
+    <div class="stats-grid">
+      <div class="stat-card accent-card">
+        <div class="stat-label">Estimated Tokens</div>
+        <div class="stat-value" id="stat-tokens">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Words</div>
+        <div class="stat-value" id="stat-words">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Characters</div>
+        <div class="stat-value" id="stat-chars">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Lines</div>
+        <div class="stat-value" id="stat-lines">0</div>
+      </div>
+    </div>
+
+    <div class="section-header">Context Window Usage</div>
+    <div class="ctx-bar-wrap" id="ctx-bars"></div>
+
+    <div class="section-header">Estimated Cost</div>
+    <div class="cost-table-wrap">
+      <table class="cost-table">
+        <thead>
+          <tr>
+            <th>Model</th>
+            <th>Input</th>
+            <th>Output</th>
+          </tr>
+        </thead>
+        <tbody id="cost-tbody"></tbody>
+      </table>
+    </div>
+
+    <div class="actions-row">
+      <button class="btn" id="btn-copy">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+          <rect x="5" y="5" width="9" height="9" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5" stroke="currentColor" stroke-width="1.5"/>
+        </svg>
+        Copy Stats
+      </button>
+      <button class="btn danger" id="btn-clear">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+          <path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        Clear
+      </button>
+    </div>
+
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ── Model registry ───────────────────────────────────────────────────────
+    const MODELS = [
+      { id: 'claude-opus',   label: 'Claude Opus 4.6',   family: 'claude', inputPer1M: 15.00,  outputPer1M: 75.00,  ctx: 200_000 },
+      { id: 'claude-sonnet', label: 'Claude Sonnet 4.6', family: 'claude', inputPer1M: 3.00,   outputPer1M: 15.00,  ctx: 200_000 },
+      { id: 'claude-haiku',  label: 'Claude Haiku 4.5',  family: 'claude', inputPer1M: 0.80,   outputPer1M: 4.00,   ctx: 200_000 },
+      { id: 'gpt-4o',        label: 'GPT-4o',            family: 'gpt',    inputPer1M: 2.50,   outputPer1M: 10.00,  ctx: 128_000 },
+      { id: 'gpt-4o-mini',   label: 'GPT-4o mini',       family: 'gpt',    inputPer1M: 0.15,   outputPer1M: 0.60,   ctx: 128_000 },
+    ]
+
+    // ── Token estimation ─────────────────────────────────────────────────────
+    function estimateTokens(text) {
+      if (!text) return 0
+      const words = text.trim().split(/\s+/).filter(Boolean)
+      let tokens = 0
+      for (const word of words) {
+        if (word.length <= 3)       tokens += 1
+        else if (word.length <= 6)  tokens += 1
+        else if (word.length <= 10) tokens += 2
+        else                        tokens += Math.ceil(word.length / 4)
+      }
+      tokens += Math.ceil(text.length / 20)
+      return tokens
+    }
+
+    // ── Format helpers ───────────────────────────────────────────────────────
+    function fmtNum(n) {
+      if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M'
+      if (n >= 1_000)     return (n / 1_000).toFixed(1).replace(/\.0$/, '') + 'k'
+      return String(n)
+    }
+
+    function fmtCost(dollars) {
+      if (dollars === 0)    return '$0.000'
+      if (dollars < 0.001) return '<$0.001'
+      if (dollars < 0.01)  return '$' + dollars.toFixed(4)
+      if (dollars < 1)     return '$' + dollars.toFixed(3)
+      return '$' + dollars.toFixed(2)
+    }
+
+    function pctColor(pct) {
+      if (pct >= 80) return 'red'
+      if (pct >= 50) return 'amber'
+      return 'green'
+    }
+
+    // ── Build static DOM (no innerHTML) ─────────────────────────────────────
+
+    function el(tag, cls, text) {
+      const e = document.createElement(tag)
+      if (cls)  e.className = cls
+      if (text != null) e.textContent = text
+      return e
+    }
+
+    function buildContextBars() {
+      const container = document.getElementById('ctx-bars')
+      for (const m of MODELS) {
+        const row   = el('div', 'ctx-model-row')
+        const name  = el('span', 'ctx-model-name', m.label)
+        const track = el('div', 'ctx-bar-track')
+        const fill  = el('div', 'ctx-bar-fill green')
+        fill.id = 'bar-fill-' + m.id
+        fill.style.width = '0%'
+        const pctEl = el('span', 'ctx-pct-label green', '0%')
+        pctEl.id = 'bar-pct-' + m.id
+        track.appendChild(fill)
+        row.appendChild(name)
+        row.appendChild(track)
+        row.appendChild(pctEl)
+        container.appendChild(row)
+      }
+    }
+
+    function buildCostTable() {
+      const tbody = document.getElementById('cost-tbody')
+      for (const m of MODELS) {
+        const tr  = document.createElement('tr')
+
+        // Name cell — family badge + model name
+        const tdName  = el('td', 'model-name')
+        const badge   = el('span', 'model-family-badge family-' + m.family, m.family === 'claude' ? 'C' : 'G')
+        const nameSpan = el('span', null, m.label)
+        tdName.appendChild(badge)
+        tdName.appendChild(nameSpan)
+
+        // Cost cells (values filled by updateStats)
+        const tdIn  = el('td', null, '$0.000')
+        tdIn.id  = 'cost-in-' + m.id
+        const tdOut = el('td', null, '$0.000')
+        tdOut.id = 'cost-out-' + m.id
+
+        tr.appendChild(tdName)
+        tr.appendChild(tdIn)
+        tr.appendChild(tdOut)
+        tbody.appendChild(tr)
+      }
+    }
+
+    // ── Live stats update ────────────────────────────────────────────────────
+    let debounceTimer = null
+    let currentTokens = 0
+
+    function updateStats() {
+      const text   = document.getElementById('text-input').value
+      const tokens = estimateTokens(text)
+      currentTokens = tokens
+
+      const words = text.trim() ? text.trim().split(/\s+/).filter(Boolean).length : 0
+      const chars = text.length
+      const lines = text ? text.split('\n').length : 0
+
+      document.getElementById('stat-tokens').textContent = fmtNum(tokens)
+      document.getElementById('stat-words').textContent  = fmtNum(words)
+      document.getElementById('stat-chars').textContent  = fmtNum(chars)
+      document.getElementById('stat-lines').textContent  = fmtNum(lines)
+
+      for (const m of MODELS) {
+        // Context bar
+        const rawPct = tokens / m.ctx * 100
+        const clampedPct = Math.min(rawPct, 100)
+        const color  = pctColor(rawPct)
+        const fill   = document.getElementById('bar-fill-' + m.id)
+        const label  = document.getElementById('bar-pct-' + m.id)
+        if (fill) {
+          fill.style.width = clampedPct.toFixed(1) + '%'
+          fill.className = 'ctx-bar-fill ' + color
+        }
+        if (label) {
+          label.textContent = rawPct >= 100 ? '>100%' : clampedPct.toFixed(1) + '%'
+          label.className = 'ctx-pct-label ' + color
+        }
+
+        // Costs
+        const inputCost  = (tokens / 1_000_000) * m.inputPer1M
+        const outputCost = (tokens / 1_000_000) * m.outputPer1M
+        const tdIn  = document.getElementById('cost-in-'  + m.id)
+        const tdOut = document.getElementById('cost-out-' + m.id)
+        if (tdIn)  tdIn.textContent  = fmtCost(inputCost)
+        if (tdOut) tdOut.textContent = fmtCost(outputCost)
+      }
+    }
+
+    function scheduleUpdate() {
+      clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(updateStats, 200)
+    }
+
+    // ── Copy stats ───────────────────────────────────────────────────────────
+    function copyStats() {
+      const text   = document.getElementById('text-input').value
+      const tokens = currentTokens
+      const words  = text.trim() ? text.trim().split(/\s+/).filter(Boolean).length : 0
+      const chars  = text.length
+      const lines  = text ? text.split('\n').length : 0
+
+      const lines_arr = [
+        'Token Count Summary',
+        '===================',
+        'Tokens:     ' + tokens.toLocaleString(),
+        'Words:      ' + words.toLocaleString(),
+        'Characters: ' + chars.toLocaleString(),
+        'Lines:      ' + lines.toLocaleString(),
+        '',
+        'Cost Estimates (input / output)',
+        '-------------------------------',
+      ]
+      for (const m of MODELS) {
+        const inCost  = fmtCost((tokens / 1_000_000) * m.inputPer1M)
+        const outCost = fmtCost((tokens / 1_000_000) * m.outputPer1M)
+        lines_arr.push(m.label.padEnd(22) + inCost.padStart(9) + ' / ' + outCost.padStart(9))
+      }
+
+      navigator.clipboard.writeText(lines_arr.join('\n'))
+        .then(() => showToast('Stats copied'))
+        .catch(() => showToast('Copy failed'))
+    }
+
+    // ── Toast ────────────────────────────────────────────────────────────────
+    let toastTimer = null
+    function showToast(msg) {
+      const el = document.getElementById('toast')
+      el.textContent = msg
+      el.classList.add('show')
+      clearTimeout(toastTimer)
+      toastTimer = setTimeout(() => el.classList.remove('show'), 1800)
+    }
+
+    // ── Button wiring ────────────────────────────────────────────────────────
+    document.getElementById('text-input').addEventListener('input', scheduleUpdate)
+    document.getElementById('btn-clear').addEventListener('click', () => {
+      document.getElementById('text-input').value = ''
+      updateStats()
+    })
+    document.getElementById('btn-copy').addEventListener('click', copyStats)
+
+    // ── Bridge RPC ───────────────────────────────────────────────────────────
+    const pending = {}
+    let seq = 0
+    let tileId = 'unknown'
+
+    function rpc(method, params) {
+      return new Promise((resolve, reject) => {
+        const id = ++seq
+        pending[id] = { resolve, reject }
+        window.parent.postMessage(
+          { type: 'contex-rpc', id, tileId, method, params: params ?? null },
+          '*'
+        )
+      })
+    }
+
+    async function init() {
+      try {
+        const meta = await rpc('tile.getMeta')
+        tileId = meta.tileId
+
+        await rpc('actions.register', { name: 'countText', description: 'Count tokens in text. Params: { text: string }' })
+
+        const peers = meta.connectedPeers ?? []
+        const badge = document.getElementById('peer-badge')
+        if (peers.length > 0) {
+          badge.textContent = peers.length + ' peer' + (peers.length > 1 ? 's' : '')
+          badge.classList.add('linked')
+        }
+      } catch (_) {
+        // Running standalone — all functionality still works
+      }
+    }
+
+    window.addEventListener('message', e => {
+      const msg = e.data
+      if (!msg) return
+
+      if (msg.type === 'contex-bridge-ready') {
+        init()
+        return
+      }
+
+      if (msg.type === 'contex-rpc-response') {
+        const cb = pending[msg.id]
+        if (!cb) return
+        delete pending[msg.id]
+        if (msg.error) cb.reject(new Error(String(msg.error)))
+        else cb.resolve(msg.result)
+        return
+      }
+
+      // Auto-populate textarea when a linked chat tile emits a message
+      if (msg.type === 'contex-event' && msg.event === 'context.peerChanged') {
+        if (msg.data?.key === 'ctx:chat:message' && msg.data?.value) {
+          document.getElementById('text-input').value = String(msg.data.value)
+          updateStats()
+          showToast('Updated from peer')
+        }
+        return
+      }
+
+      // Handle countText action invocations from agents / other tiles
+      if (msg.type === 'contex-action-invoke' && msg.action === 'countText') {
+        const text = String(msg.params?.text ?? '')
+        document.getElementById('text-input').value = text
+        updateStats()
+        window.parent.postMessage(
+          { type: 'contex-action-result', tileId, requestId: msg.requestId, result: { tokens: estimateTokens(text) } },
+          '*'
+        )
+        return
+      }
+
+      // Keep peer badge in sync
+      if (msg.type === 'contex-event' && msg.event === 'tile.peersChanged') {
+        const peers = msg.data?.peers ?? []
+        const badge = document.getElementById('peer-badge')
+        badge.textContent = peers.length > 0
+          ? peers.length + ' peer' + (peers.length > 1 ? 's' : '')
+          : 'no peers'
+        badge.classList.toggle('linked', peers.length > 0)
+        return
+      }
+    })
+
+    if (window.contex) init()
+
+    // ── Boot ─────────────────────────────────────────────────────────────────
+    buildContextBars()
+    buildCostTable()
+    updateStats()
+  </script>
+</body>
+</html>

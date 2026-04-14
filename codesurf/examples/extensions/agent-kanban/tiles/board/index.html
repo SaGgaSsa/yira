@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Agent Kanban</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:       var(--ct-bg, transparent);
+      --surface:  var(--ct-panel, rgba(0,0,0,.04));
+      --card-bg:  var(--ct-panel-2, rgba(0,0,0,.06));
+      --border:   var(--ct-border, rgba(0,0,0,.1));
+      --text:     var(--ct-text, #111);
+      --muted:    var(--ct-dim, #64748b);
+      --accent:   var(--ct-accent, #4f46e5);
+      --green:    var(--ct-success, #1f8f5f);
+      --amber:    var(--ct-warning, #c07b12);
+      --red:      var(--ct-danger, #dc2626);
+      --blue:     var(--ct-accent, #4f46e5);
+      --purple:   var(--ct-accent, #4f46e5);
+      --col-w:    220px;
+    }
+    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px; overflow: hidden; display: flex; flex-direction: column; }
+
+    /* Toolbar */
+    .toolbar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--border); flex-shrink: 0; height: 38px; }
+    .toolbar-title { font-weight: 600; font-size: 13px; }
+    .spacer { flex: 1; }
+    .btn { display: inline-flex; align-items: center; gap: 4px; background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 5px; padding: 3px 9px; font-size: 11px; cursor: pointer; font-family: inherit; white-space: nowrap; }
+    .btn:hover { background: var(--ct-hover, rgba(0,0,0,.06)); }
+    .btn.primary { background: var(--accent); border-color: transparent; color: #fff; }
+    .btn.primary:hover { background: #6d77e8; }
+    .btn.danger { background: #7f1d1d; border-color: transparent; color: #fca5a5; }
+    .btn.danger:hover { background: #991b1b; }
+    .btn.sm { padding: 2px 6px; font-size: 10px; }
+    .btn.link-mode { background: #1e3a5f; border-color: #3b82f6; color: #93c5fd; }
+    input.ws-input { background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 4px; padding: 3px 7px; font-size: 11px; font-family: inherit; width: 200px; }
+    input.ws-input:focus { outline: none; border-color: var(--accent); }
+
+    /* Layout */
+    .main { display: flex; flex: 1; overflow: hidden; }
+    .board-area { display: flex; gap: 8px; padding: 8px; overflow-x: auto; flex: 1; overflow-y: hidden; }
+
+    /* Columns */
+    .col { display: flex; flex-direction: column; min-width: var(--col-w); max-width: var(--col-w); background: var(--surface); border-radius: 7px; overflow: hidden; border: 1px solid var(--border); }
+    .col-header { display: flex; align-items: center; gap: 6px; padding: 7px 10px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); flex-shrink: 0; }
+    .col-header .count { background: var(--card-bg); border-radius: 10px; padding: 1px 7px; font-size: 10px; color: var(--text); }
+    .col-body { flex: 1; overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 5px; }
+    .col-body::-webkit-scrollbar { width: 4px; }
+    .col-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* Cards */
+    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 9px; cursor: pointer; transition: border-color 0.15s, background 0.15s; position: relative; }
+    .card:hover { border-color: color-mix(in srgb, var(--accent) 24%, transparent); background: var(--surface); }
+    .card.selected { border-color: var(--accent); }
+    .card.blocked { opacity: 0.55; }
+    .card.link-target:hover { border-color: var(--blue); background: #1a2a40; }
+    .card-top { display: flex; align-items: flex-start; gap: 6px; margin-bottom: 5px; }
+    .agent-badge { flex-shrink: 0; font-size: 9px; font-weight: 700; padding: 2px 5px; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .badge-claude  { background: #1e3a2a; color: #4ade80; }
+    .badge-codex   { background: #1e2a3a; color: #60a5fa; }
+    .badge-gemini  { background: #2a1e3a; color: #c084fc; }
+    .badge-cline   { background: #3a2a1e; color: #fb923c; }
+    .badge-opencode { background: #2a2a1e; color: #fbbf24; }
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; margin-top: 3px; }
+    .dot-idle     { background: rgba(255,255,255,0.2); }
+    .dot-running  { background: var(--green); box-shadow: 0 0 5px var(--green); animation: pulse 1.5s ease-in-out infinite; }
+    .dot-review   { background: var(--amber); }
+    .dot-blocked  { background: var(--red); }
+    .dot-done     { background: var(--blue); }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+    .card-prompt { font-size: 12px; line-height: 1.4; word-break: break-word; flex: 1; }
+    .card-id { font-size: 9px; color: var(--muted); font-family: monospace; }
+    .card-meta { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+    .meta-tag { font-size: 10px; border-radius: 3px; padding: 1px 6px; }
+    .tag-worktree { background: #1e2a3a; color: #93c5fd; }
+    .tag-blocked  { background: #3a1e1e; color: #fca5a5; }
+    .tag-plan     { background: #2a1e3a; color: #c084fc; }
+    .tag-dep      { background: #1e3a1e; color: #86efac; }
+    .card-actions { display: flex; gap: 4px; margin-top: 6px; }
+
+    /* Detail panel */
+    .detail-panel { width: 300px; min-width: 300px; border-left: 1px solid var(--border); display: flex; flex-direction: column; background: var(--surface); }
+    .detail-panel.hidden { display: none; }
+    .detail-header { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .detail-header h3 { flex: 1; font-size: 12px; font-weight: 600; }
+    .detail-body { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 10px; }
+    .detail-section-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 4px; }
+    .detail-prompt { font-size: 12px; line-height: 1.5; color: var(--text); background: var(--card-bg); border-radius: 5px; padding: 7px; }
+    .detail-deps { display: flex; flex-direction: column; gap: 3px; }
+    .dep-item { display: flex; align-items: center; gap: 6px; font-size: 11px; background: var(--card-bg); border-radius: 4px; padding: 4px 7px; }
+    .dep-item .dep-id { font-family: monospace; font-size: 10px; color: var(--muted); }
+    .dep-remove { margin-left: auto; cursor: pointer; color: var(--red); font-size: 14px; line-height: 1; }
+    .output-log { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 5px; padding: 7px; font-family: 'Courier New', monospace; font-size: 11px; overflow-y: auto; line-height: 1.5; color: var(--text); white-space: pre-wrap; word-break: break-all; min-height: 180px; max-height: 300px; }
+    .output-log::-webkit-scrollbar { width: 4px; }
+    .output-log::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .output-log .line-stdout { color: var(--text); }
+    .output-log .line-stderr { color: var(--red); }
+    .output-log .line-system { color: var(--blue); font-style: italic; }
+    .input-row { display: flex; gap: 5px; }
+    .input-row input { flex: 1; background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 4px; padding: 4px 7px; font-size: 11px; font-family: inherit; }
+    .input-row input:focus { outline: none; border-color: var(--accent); }
+    .worktree-info { font-size: 11px; background: var(--card-bg); border-radius: 4px; padding: 6px 8px; }
+    .worktree-info .wt-path { font-family: monospace; font-size: 10px; color: var(--blue); word-break: break-all; }
+    .wt-badge { display: inline-block; font-size: 9px; padding: 1px 5px; border-radius: 3px; background: #1e2a3a; color: #93c5fd; margin-bottom: 4px; }
+
+    /* Modal */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 100; }
+    .modal-overlay.hidden { display: none; }
+    .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; width: 420px; max-width: 95vw; display: flex; flex-direction: column; overflow: hidden; }
+    .modal-header { display: flex; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+    .modal-header h2 { flex: 1; font-size: 14px; font-weight: 600; }
+    .modal-body { padding: 14px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; max-height: 70vh; }
+    .form-group { display: flex; flex-direction: column; gap: 5px; }
+    .form-label { font-size: 11px; color: var(--muted); font-weight: 500; }
+    .form-input { background: var(--card-bg); border: 1px solid var(--border); color: var(--text); border-radius: 5px; padding: 6px 9px; font-size: 12px; font-family: inherit; }
+    .form-input:focus { outline: none; border-color: var(--accent); }
+    textarea.form-input { resize: vertical; min-height: 80px; }
+    select.form-input { cursor: pointer; }
+    .form-row { display: flex; gap: 10px; }
+    .form-row .form-group { flex: 1; }
+    .form-check { display: flex; align-items: center; gap: 7px; font-size: 12px; cursor: pointer; }
+    .form-check input { cursor: pointer; accent-color: var(--accent); }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 7px; padding: 10px 14px; border-top: 1px solid var(--border); }
+
+    /* Drag-over column highlight */
+    .col.drag-over { background: #2a2a3a; }
+    .card.dragging { opacity: 0.4; }
+
+    /* Empty state */
+    .col-empty { text-align: center; color: var(--muted); font-size: 11px; padding: 20px 10px; }
+
+    /* Link mode banner */
+    .link-banner { position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%); background: #1e3a5f; border: 1px solid #3b82f6; color: #93c5fd; border-radius: 6px; padding: 7px 16px; font-size: 12px; z-index: 50; }
+    .link-banner.hidden { display: none; }
+  </style>
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="toolbar-title">Agent Kanban</span>
+  <input class="ws-input" id="wsInput" placeholder="Workspace path..." title="Git repo path for worktrees" />
+  <div class="spacer"></div>
+  <button class="btn" id="refreshBtn">Refresh</button>
+  <button class="btn primary" id="newTaskBtn">+ New Task</button>
+</div>
+
+<div class="main">
+  <div class="board-area" id="boardArea">
+    <!-- columns injected by JS -->
+  </div>
+  <div class="detail-panel hidden" id="detailPanel">
+    <div class="detail-header">
+      <h3 id="detailTitle">Task Detail</h3>
+      <button class="btn sm" id="detailLinkBtn" title="Link dependency">+ Dep</button>
+      <button class="btn sm danger" id="detailDeleteBtn" title="Delete task">Delete</button>
+      <button class="btn sm" id="detailCloseBtn">x</button>
+    </div>
+    <div class="detail-body" id="detailBody">
+      <!-- injected -->
+    </div>
+  </div>
+</div>
+
+<!-- New Task Modal -->
+<div class="modal-overlay hidden" id="newTaskModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>New Task</h2>
+      <button class="btn sm" id="modalCloseBtn">x</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Task prompt</label>
+        <textarea class="form-input" id="taskPrompt" placeholder="Describe what the agent should do..."></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Agent</label>
+          <select class="form-input" id="taskAgent">
+            <option value="claude">Claude</option>
+            <option value="codex">Codex</option>
+            <option value="gemini">Gemini</option>
+            <option value="cline">Cline</option>
+            <option value="opencode">OpenCode</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Base ref</label>
+          <input class="form-input" id="taskBaseRef" placeholder="main" value="main" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Auto-review on done</label>
+          <select class="form-input" id="taskAutoReview">
+            <option value="">Manual</option>
+            <option value="move_to_review">Move to Review</option>
+            <option value="commit">Auto-commit</option>
+            <option value="pr">Open PR</option>
+          </select>
+        </div>
+        <div class="form-group" style="justify-content:flex-end;padding-top:18px;">
+          <label class="form-check">
+            <input type="checkbox" id="taskPlanMode" />
+            Plan mode first
+          </label>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" id="modalCancelBtn">Cancel</button>
+      <button class="btn primary" id="modalCreateBtn">Create Task</button>
+    </div>
+  </div>
+</div>
+
+<div class="link-banner hidden" id="linkBanner">
+  Click a <strong>backlog</strong> card to set as dependency target. Press Esc to cancel.
+</div>
+
+<script>
+const COLUMNS = [
+  { id: 'backlog',     label: 'Backlog',     color: 'var(--muted)' },
+  { id: 'in_progress', label: 'In Progress', color: 'var(--green)' },
+  { id: 'review',      label: 'Review',      color: 'var(--amber)' },
+  { id: 'trash',       label: 'Trash',       color: 'var(--red)' },
+]
+
+const AGENT_COLORS = {
+  claude:   'badge-claude',
+  codex:    'badge-codex',
+  gemini:   'badge-gemini',
+  cline:    'badge-cline',
+  opencode: 'badge-opencode',
+}
+
+let board = null
+let workspacePath = ''
+let selectedTaskId = null
+let linkModeFromId = null  // detail panel task that initiated "add dep"
+let outputPollers = {}
+let bridge = null
+
+function normalizeBoard(raw) {
+  if (!raw) return null
+  var columnsArray = Array.isArray(raw.columns) ? raw.columns : Object.values(raw.columns || {})
+  var columnsById = {}
+  columnsArray.forEach(function(col) {
+    if (!col || !col.id) return
+    var tasks = Array.isArray(col.tasks) ? col.tasks : (Array.isArray(col.cards) ? col.cards : [])
+    columnsById[col.id] = {
+      id: col.id,
+      label: col.label || col.id,
+      tasks: tasks,
+    }
+  })
+  return {
+    columns: columnsById,
+    dependencies: Array.isArray(raw.dependencies) ? raw.dependencies : [],
+    version: raw.version || 1,
+  }
+}
+
+// ── Bridge init ──────────────────────────────────────────────
+async function initBridge(b) {
+  bridge = b
+  try {
+    if (!document.getElementById('wsInput').value.trim() && bridge.workspace && bridge.workspace.getPath) {
+      const detectedWorkspacePath = await bridge.workspace.getPath()
+      if (detectedWorkspacePath) {
+        workspacePath = detectedWorkspacePath
+        document.getElementById('wsInput').value = detectedWorkspacePath
+      }
+    }
+  } catch {}
+  loadBoard()
+  // Subscribe to bus channels for live output
+  subscribeOutputBus()
+}
+
+window.addEventListener('message', e => {
+  if (e.data && e.data.type === 'contex-bridge-ready') initBridge(window.contex)
+  if (e.data && e.data.type === 'contex-event') handleBusMessage(e.data)
+})
+if (window.contex) initBridge(window.contex)
+
+// ── Board data ───────────────────────────────────────────────
+async function loadBoard() {
+  workspacePath = document.getElementById('wsInput').value.trim() || ''
+  if (!bridge) return
+  try {
+    const b = await bridge.ext.invoke('getBoard', workspacePath)
+    board = normalizeBoard(b)
+    renderBoard()
+    if (selectedTaskId) openDetail(selectedTaskId)
+  } catch(err) {
+    console.error('getBoard error', err)
+  }
+}
+
+function getTask(id) {
+  if (!board) return null
+  for (const col of Object.values(board.columns || {})) {
+    const t = (col.tasks || []).find(t => t.id === id)
+    if (t) return t
+  }
+  return null
+}
+
+function getColumnForTask(id) {
+  if (!board) return null
+  for (const [colId, col] of Object.entries(board.columns)) {
+    if (col.tasks.find(t => t.id === id)) return colId
+  }
+  return null
+}
+
+function isBlocked(taskId) {
+  if (!board) return false
+  const deps = (board.dependencies || []).filter(d => d.fromTaskId === taskId)
+  for (const dep of deps) {
+    const col = getColumnForTask(dep.toTaskId)
+    if (col === 'review') return true
+  }
+  return false
+}
+
+function getDepsBlockingTask(taskId) {
+  if (!board) return []
+  return (board.dependencies || []).filter(d => d.fromTaskId === taskId)
+    .map(d => {
+      const task = getTask(d.toTaskId)
+      return { depId: d.id, targetTaskId: d.toTaskId, targetPrompt: task ? task.prompt.slice(0,40) : d.toTaskId, col: getColumnForTask(d.toTaskId) }
+    })
+}
+
+function getTaskDependencies(taskId) {
+  if (!board) return []
+  return (board.dependencies || []).filter(d => d.fromTaskId === taskId || d.toTaskId === taskId)
+}
+
+// ── Render ───────────────────────────────────────────────────
+function renderBoard() {
+  const area = document.getElementById('boardArea')
+  // Preserve existing column DOM nodes, just update contents
+  COLUMNS.forEach(colDef => {
+    let colEl = document.getElementById('col-' + colDef.id)
+    if (!colEl) {
+      colEl = document.createElement('div')
+      colEl.className = 'col'
+      colEl.id = 'col-' + colDef.id
+      colEl.innerHTML =
+        '<div class="col-header">' +
+        '<span style="width:8px;height:8px;border-radius:50%;background:' + colDef.color + ';flex-shrink:0;display:inline-block;"></span>' +
+        '<span class="col-label">' + colDef.label + '</span>' +
+        '<span class="count" id="cnt-' + colDef.id + '">0</span>' +
+        '</div>' +
+        '<div class="col-body" id="body-' + colDef.id + '"></div>'
+      area.appendChild(colEl)
+      // Drop target
+      const body = colEl.querySelector('.col-body')
+      body.addEventListener('dragover', e => { e.preventDefault(); colEl.classList.add('drag-over') })
+      body.addEventListener('dragleave', () => colEl.classList.remove('drag-over'))
+      body.addEventListener('drop', e => { e.preventDefault(); colEl.classList.remove('drag-over'); handleDrop(colDef.id) })
+    }
+    const colData = board && board.columns[colDef.id]
+    const tasks = colData ? colData.tasks : []
+    document.getElementById('cnt-' + colDef.id).textContent = tasks.length
+    const body = document.getElementById('body-' + colDef.id)
+    body.innerHTML = ''
+    if (tasks.length === 0) {
+      const empty = document.createElement('div')
+      empty.className = 'col-empty'
+      empty.textContent = 'No tasks'
+      body.appendChild(empty)
+    }
+    tasks.forEach(task => {
+      const card = renderCard(task, colDef.id)
+      body.appendChild(card)
+    })
+  })
+}
+
+let draggingTaskId = null
+
+function renderCard(task, colId) {
+  const blocked = isBlocked(task.id) && colId === 'backlog'
+  const deps = getDepsBlockingTask(task.id)
+  const card = document.createElement('div')
+  card.className = 'card' + (task.id === selectedTaskId ? ' selected' : '') + (blocked ? ' blocked' : '')
+  card.setAttribute('draggable', 'true')
+  card.dataset.taskId = task.id
+
+  // Status dot
+  let dotClass = 'dot-idle'
+  if (task.session && task.session.status === 'running') dotClass = 'dot-running'
+  else if (task.session && task.session.status === 'awaiting_review') dotClass = 'dot-review'
+  else if (blocked) dotClass = 'dot-blocked'
+
+  // Header row: agent badge + status dot + id
+  let html = '<div class="card-top">'
+  const agentId = task.agentId || 'claude'
+  html += '<span class="agent-badge ' + (AGENT_COLORS[agentId] || 'badge-claude') + '">' + agentId + '</span>'
+  html += '<span class="status-dot ' + dotClass + '"></span>'
+  html += '<span class="spacer" style="flex:1"></span>'
+  html += '<span class="card-id">' + task.id + '</span>'
+  html += '</div>'
+
+  // Prompt (truncated)
+  const promptShort = task.prompt.length > 80 ? task.prompt.slice(0, 80) + '...' : task.prompt
+  html += '<div class="card-prompt">' + escHtml(promptShort) + '</div>'
+
+  // Meta tags
+  html += '<div class="card-meta">'
+  if (task.worktreeCreated) html += '<span class="meta-tag tag-worktree">worktree</span>'
+  if (task.startInPlanMode) html += '<span class="meta-tag tag-plan">plan</span>'
+  if (blocked && deps.length > 0) html += '<span class="meta-tag tag-blocked">blocked (' + deps.length + ')</span>'
+  if (deps.length > 0 && !blocked) html += '<span class="meta-tag tag-dep">' + deps.length + ' dep' + (deps.length > 1 ? 's' : '') + '</span>'
+  html += '</div>'
+
+  // Action buttons
+  html += '<div class="card-actions">'
+  const sess = task.session
+  if (colId === 'backlog' && !blocked) {
+    html += '<button class="btn sm primary start-btn">Start</button>'
+  }
+  if (sess && sess.status === 'running') {
+    html += '<button class="btn sm danger stop-btn">Stop</button>'
+  }
+  if (sess && (sess.status === 'running' || sess.status === 'awaiting_review') && colId === 'in_progress') {
+    html += '<button class="btn sm move-btn" data-col="review">-&gt; Review</button>'
+  }
+  if (colId === 'review') {
+    html += '<button class="btn sm primary approve-btn" data-col="backlog">Approve</button>'
+    html += '<button class="btn sm move-btn" data-col="in_progress">Re-run</button>'
+  }
+  html += '</div>'
+
+  card.innerHTML = html
+
+  // Events
+  card.addEventListener('click', e => {
+    if (e.target.classList.contains('start-btn')) { e.stopPropagation(); startAgent(task.id); return }
+    if (e.target.classList.contains('stop-btn')) { e.stopPropagation(); stopAgent(task.id); return }
+    if (e.target.classList.contains('move-btn')) { e.stopPropagation(); moveTask(task.id, e.target.dataset.col); return }
+    if (e.target.classList.contains('approve-btn')) { e.stopPropagation(); moveTask(task.id, e.target.dataset.col); return }
+    if (linkModeFromId !== null) {
+      // In link mode, this card is the backlog target
+      if (card.classList.contains('link-target')) {
+        addDependency(linkModeFromId, task.id)
+      }
+      return
+    }
+    openDetail(task.id)
+  })
+
+  card.addEventListener('dragstart', () => {
+    draggingTaskId = task.id
+    card.classList.add('dragging')
+  })
+  card.addEventListener('dragend', () => {
+    card.classList.remove('dragging')
+    draggingTaskId = null
+  })
+
+  // Link mode visual
+  if (linkModeFromId !== null && colId === 'backlog' && task.id !== linkModeFromId) {
+    card.classList.add('link-target')
+  }
+
+  return card
+}
+
+function handleDrop(targetColId) {
+  if (!draggingTaskId) return
+  moveTask(draggingTaskId, targetColId)
+}
+
+// ── Actions ──────────────────────────────────────────────────
+async function startAgent(taskId) {
+  if (!bridge) return
+  await bridge.ext.invoke('startAgent', { workspacePath, taskId })
+  await loadBoard()
+  startOutputPoller(taskId)
+  openDetail(taskId)
+}
+
+async function stopAgent(taskId) {
+  if (!bridge) return
+  await bridge.ext.invoke('stopAgent', { taskId })
+  await loadBoard()
+}
+
+async function moveTask(taskId, colId) {
+  if (!bridge) return
+  await bridge.ext.invoke('moveTask', { workspacePath, taskId, columnId: colId })
+  await loadBoard()
+}
+
+async function addDependency(fromTaskId, toTaskId) {
+  if (!bridge) return
+  cancelLinkMode()
+  await bridge.ext.invoke('addDependency', { workspacePath, fromTaskId, toTaskId })
+  await loadBoard()
+  if (selectedTaskId === fromTaskId) openDetail(fromTaskId)
+}
+
+async function removeDependency(depId) {
+  if (!bridge) return
+  await bridge.ext.invoke('removeDependency', { workspacePath, dependencyId: depId })
+  await loadBoard()
+  if (selectedTaskId) openDetail(selectedTaskId)
+}
+
+async function deleteTask(taskId) {
+  if (!bridge) return
+  if (!confirm('Delete task ' + taskId + '? This will also remove any worktree.')) return
+  await bridge.ext.invoke('deleteTask', { workspacePath, taskId })
+  closeDetail()
+  await loadBoard()
+}
+
+// ── Detail panel ─────────────────────────────────────────────
+function openDetail(taskId) {
+  selectedTaskId = taskId
+  const task = getTask(taskId)
+  if (!task) return
+  const panel = document.getElementById('detailPanel')
+  panel.classList.remove('hidden')
+  document.getElementById('detailTitle').textContent = task.id + ' (' + (task.agentId || 'claude') + ')'
+  document.querySelectorAll('.card').forEach(c => c.classList.toggle('selected', c.dataset.taskId === taskId))
+
+  const body = document.getElementById('detailBody')
+  const colId = getColumnForTask(taskId)
+  const deps = getDepsBlockingTask(taskId)
+  const sess = task.session
+
+  let html = ''
+
+  // Prompt
+  html += '<div><div class="detail-section-label">Prompt</div>'
+  html += '<div class="detail-prompt">' + escHtml(task.prompt) + '</div></div>'
+
+  // Status
+  html += '<div><div class="detail-section-label">Status</div>'
+  html += '<div style="font-size:12px;">'
+  html += '<b>' + (colId || 'unknown') + '</b>'
+  if (sess) html += ' &mdash; session: <span style="color:var(--green)">' + sess.status + '</span>'
+  if (task.baseRef) html += ' &mdash; base: <code style="font-size:11px;color:var(--muted)">' + escHtml(task.baseRef) + '</code>'
+  html += '</div></div>'
+
+  // Worktree info
+  if (task.worktreeCreated) {
+    html += '<div><div class="detail-section-label">Worktree</div>'
+    const wtPath = (workspacePath ? workspacePath + '/.git/worktrees/' : '') + taskId
+    html += '<div class="worktree-info"><span class="wt-badge">worktree</span>'
+    html += '<div class="wt-path">' + escHtml(wtPath) + '</div></div></div>'
+  }
+
+  // Dependencies
+  html += '<div><div class="detail-section-label">Dependencies (' + deps.length + ')</div>'
+  html += '<div class="detail-deps" id="depsContainer">'
+  if (deps.length === 0) {
+    html += '<span style="font-size:11px;color:var(--muted)">None</span>'
+  } else {
+    deps.forEach(d => {
+      html += '<div class="dep-item">'
+      html += '<span class="dep-id">' + d.targetTaskId + '</span>'
+      const colLabel = d.col ? (' [' + d.col + ']') : ''
+      html += '<span style="flex:1;font-size:11px;color:var(--muted)">' + escHtml(d.targetPrompt) + escHtml(colLabel) + '</span>'
+      html += '<span class="dep-remove" data-dep-id="' + d.depId + '" title="Remove dependency">x</span>'
+      html += '</div>'
+    })
+  }
+  html += '</div></div>'
+
+  // Live output
+  html += '<div style="flex:1;display:flex;flex-direction:column;gap:4px;">'
+  html += '<div class="detail-section-label">Output</div>'
+  html += '<div class="output-log" id="outputLog"></div>'
+  if (sess && sess.status === 'running') {
+    html += '<div class="input-row"><input id="agentInput" placeholder="Send input to agent..." /><button class="btn sm" id="sendInputBtn">Send</button></div>'
+  }
+  html += '</div>'
+
+  body.innerHTML = html
+
+  // Wire dep remove buttons
+  body.querySelectorAll('.dep-remove').forEach(btn => {
+    btn.addEventListener('click', () => removeDependency(btn.dataset.depId))
+  })
+
+  // Send input
+  const sendBtn = body.querySelector('#sendInputBtn')
+  if (sendBtn) {
+    sendBtn.addEventListener('click', () => {
+      const input = body.querySelector('#agentInput').value.trim()
+      if (input && bridge) {
+        bridge.ext.invoke('sendInput', { taskId, input })
+        body.querySelector('#agentInput').value = ''
+      }
+    })
+    body.querySelector('#agentInput').addEventListener('keydown', e => {
+      if (e.key === 'Enter') sendBtn.click()
+    })
+  }
+
+  // Load output
+  loadOutput(taskId)
+
+  // Start poller if running
+  if (sess && sess.status === 'running') startOutputPoller(taskId)
+}
+
+function closeDetail() {
+  selectedTaskId = null
+  document.getElementById('detailPanel').classList.add('hidden')
+  document.querySelectorAll('.card').forEach(c => c.classList.remove('selected'))
+  stopAllPollers()
+}
+
+// ── Output polling ───────────────────────────────────────────
+async function loadOutput(taskId) {
+  if (!bridge) return
+  const log = document.getElementById('outputLog')
+  if (!log) return
+  const lines = await bridge.ext.invoke('getOutput', { taskId, since: 0 })
+  renderOutputLines(lines)
+}
+
+function renderOutputLines(lines) {
+  const log = document.getElementById('outputLog')
+  if (!log || !lines) return
+  log.innerHTML = ''
+  ;(Array.isArray(lines) ? lines : []).forEach(l => {
+    const div = document.createElement('div')
+    div.className = 'line-' + (l.type || 'stdout')
+    div.textContent = l.text || ''
+    log.appendChild(div)
+  })
+  log.scrollTop = log.scrollHeight
+}
+
+function startOutputPoller(taskId) {
+  if (outputPollers[taskId]) return
+  let lastLen = 0
+  outputPollers[taskId] = setInterval(async () => {
+    if (!bridge || selectedTaskId !== taskId) { stopPoller(taskId); return }
+    const lines = await bridge.ext.invoke('getOutput', { taskId, since: lastLen })
+    if (!lines || lines.length === 0) return
+    lastLen += lines.length
+    const log = document.getElementById('outputLog')
+    if (!log) return
+    lines.forEach(l => {
+      const div = document.createElement('div')
+      div.className = 'line-' + (l.type || 'stdout')
+      div.textContent = l.text || ''
+      log.appendChild(div)
+    })
+    log.scrollTop = log.scrollHeight
+    // Refresh board state to pick up session status changes
+    await loadBoard()
+  }, 1500)
+}
+
+function stopPoller(taskId) {
+  if (outputPollers[taskId]) { clearInterval(outputPollers[taskId]); delete outputPollers[taskId] }
+}
+
+function stopAllPollers() {
+  Object.keys(outputPollers).forEach(stopPoller)
+}
+
+// ── Bus ──────────────────────────────────────────────────────
+async function subscribeOutputBus() {
+  if (!bridge) return
+  await bridge.bus.subscribe('agent-kanban:board')
+}
+
+function handleBusMessage(msg) {
+  if (!msg.event) return
+  if (msg.event === 'bus.event.agent-kanban:board') {
+    const data = msg.data || {}
+    if (data.action === 'task_update' || data.action === 'session_update') {
+      loadBoard()
+      if (selectedTaskId) openDetail(selectedTaskId)
+    }
+  }
+}
+
+// ── Link mode ─────────────────────────────────────────────────
+function enterLinkMode(fromTaskId) {
+  linkModeFromId = fromTaskId
+  document.getElementById('linkBanner').classList.remove('hidden')
+  renderBoard()
+}
+
+function cancelLinkMode() {
+  linkModeFromId = null
+  document.getElementById('linkBanner').classList.add('hidden')
+  renderBoard()
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && linkModeFromId !== null) cancelLinkMode()
+})
+
+// ── New task modal ────────────────────────────────────────────
+function showNewTaskModal() {
+  document.getElementById('newTaskModal').classList.remove('hidden')
+  document.getElementById('taskPrompt').focus()
+}
+
+function hideNewTaskModal() {
+  document.getElementById('newTaskModal').classList.add('hidden')
+  document.getElementById('taskPrompt').value = ''
+  document.getElementById('taskBaseRef').value = 'main'
+  document.getElementById('taskAutoReview').value = ''
+  document.getElementById('taskPlanMode').checked = false
+}
+
+async function createTask() {
+  const prompt = document.getElementById('taskPrompt').value.trim()
+  if (!prompt) { alert('Enter a task prompt.'); return }
+  const agentId = document.getElementById('taskAgent').value
+  const baseRef = document.getElementById('taskBaseRef').value.trim() || 'main'
+  const autoReviewMode = document.getElementById('taskAutoReview').value
+  const startInPlanMode = document.getElementById('taskPlanMode').checked
+  hideNewTaskModal()
+  if (!bridge) return
+  await bridge.ext.invoke('createTask', {
+    workspacePath,
+    prompt,
+    agentId,
+    baseRef,
+    columnId: 'backlog',
+    startInPlanMode,
+    autoReviewEnabled: !!autoReviewMode,
+    autoReviewMode: autoReviewMode || 'move_to_review',
+  })
+  await loadBoard()
+}
+
+// ── Event wiring ─────────────────────────────────────────────
+document.getElementById('refreshBtn').addEventListener('click', loadBoard)
+document.getElementById('newTaskBtn').addEventListener('click', showNewTaskModal)
+document.getElementById('modalCloseBtn').addEventListener('click', hideNewTaskModal)
+document.getElementById('modalCancelBtn').addEventListener('click', hideNewTaskModal)
+document.getElementById('modalCreateBtn').addEventListener('click', createTask)
+document.getElementById('detailCloseBtn').addEventListener('click', closeDetail)
+document.getElementById('detailLinkBtn').addEventListener('click', () => {
+  if (selectedTaskId) enterLinkMode(selectedTaskId)
+})
+document.getElementById('detailDeleteBtn').addEventListener('click', () => {
+  if (selectedTaskId) deleteTask(selectedTaskId)
+})
+document.getElementById('wsInput').addEventListener('change', loadBoard)
+document.getElementById('wsInput').addEventListener('blur', loadBoard)
+document.getElementById('newTaskModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('newTaskModal')) hideNewTaskModal()
+})
+document.getElementById('taskPrompt').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) createTask()
+})
+
+// ── Util ──────────────────────────────────────────────────────
+function escHtml(str) {
+  if (!str) return ''
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+}
+</script>
+</body>
+</html>

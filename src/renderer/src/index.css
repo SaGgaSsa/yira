@@ -1,0 +1,128 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Theme Variables ──────────────────────────────────────────────── */
+:root {
+  /* Dark theme (default) */
+  --bg-primary: #15171a;
+  --bg-secondary: #1e2128;
+  --bg-tertiary: #252526;
+  --bg-elevated: #2d2d30;
+  --text-primary: #cccccc;
+  --text-secondary: #888888;
+  --text-muted: #555555;
+  --border-color: #3c3c3c;
+  --border-subtle: #2a2a2a;
+  --accent: #007acc;
+  --accent-hover: #1a8ad4;
+  --accent-text: #ffffff;
+  --statusbar-bg: #007acc;
+  --statusbar-text: #ffffff;
+  --hover-bg: #37373d;
+  --active-bg: #094771;
+  --danger: #f44747;
+  --danger-hover: #e83e3e;
+  --shadow: rgba(0, 0, 0, 0.4);
+  --scrollbar-thumb: #424242;
+  --scrollbar-hover: #555555;
+  --selection: rgba(59, 142, 234, 0.3);
+}
+
+:root.light {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f3f3f3;
+  --bg-tertiary: #e8e8e8;
+  --bg-elevated: #f8f8f8;
+  --text-primary: #333333;
+  --text-secondary: #666666;
+  --text-muted: #999999;
+  --border-color: #e0e0e0;
+  --border-subtle: #eeeeee;
+  --accent: #007acc;
+  --accent-hover: #1a8ad4;
+  --accent-text: #ffffff;
+  --statusbar-bg: #007acc;
+  --statusbar-text: #ffffff;
+  --hover-bg: #e8e8e8;
+  --active-bg: #d4e5f7;
+  --danger: #d32f2f;
+  --danger-hover: #c62828;
+  --shadow: rgba(0, 0, 0, 0.15);
+  --scrollbar-thumb: #c1c1c1;
+  --scrollbar-hover: #a8a8a8;
+  --selection: rgba(59, 142, 234, 0.2);
+}
+
+/* ─── Reset & Base ─────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 16px;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Scrollbar (Windows) ──────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-hover);
+}
+
+/* ─── Selection ────────────────────────────────────────────────────── */
+::selection {
+  background: var(--selection);
+}
+
+/* ─── xterm overrides ──────────────────────────────────────────────── */
+.xterm {
+  padding: 0 !important;
+}
+
+.xterm .xterm-viewport {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+
+/* ─── Prevent text selection during drag ───────────────────────────── */
+.dragging,
+.dragging * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+/* ─── Canvas viewport transitions ──────────────────────────────────── */
+/* Smooth transitions for zoom/pan, disabled during active drag */
+.no-transition {
+  transition: none !important;
+}
+
+/* Smooth transition class for canvas tiles container */
+.canvas-viewport {
+  transition: transform 0.2s ease-out;
+}

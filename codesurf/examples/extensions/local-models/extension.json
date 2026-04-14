@@ -1,0 +1,25 @@
+{
+  "id": "local-models",
+  "name": "Local Models",
+  "version": "1.0.0",
+  "description": "Browse HuggingFace models, track downloads, and monitor running local inference. Pairs with the local API server.",
+  "author": "contex",
+  "tier": "safe",
+  "contributes": {
+    "tiles": [{
+      "type": "local-models-browser",
+      "label": "Local Models",
+      "entry": "tiles/models/index.html",
+      "defaultSize": { "w": 520, "h": 580 },
+      "minSize": { "w": 400, "h": 400 }
+    }],
+    "contextMenu": [{ "label": "New Local Models", "action": "createTile", "tileType": "ext:local-models-browser" }],
+    "context": {
+      "produces": ["ctx:models:active-model", "ctx:models:inference-models"],
+      "consumes": ["ctx:model-hub:selected", "ctx:model-hub:inference-models"]
+    },
+    "actions": [
+      { "name": "setModel", "description": "Set the active model. Params: { modelId: string, name: string }" }
+    ]
+  }
+}
