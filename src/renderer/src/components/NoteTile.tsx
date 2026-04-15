@@ -53,7 +53,7 @@ export function NoteTile({ tile, onUpdate }: NoteTileProps): React.ReactElement 
         <span className="nd-caption text-text-secondary">{content.length} CHARS</span>
       </div>
 
-      <div className="flex-1 px-4 py-4">
+      <div className="flex-1 px-5 py-5">
         <textarea
           ref={textareaRef}
           className="h-full w-full resize-none bg-transparent font-body text-[1rem] leading-7 text-text-primary outline-none placeholder:text-text-disabled"

@@ -136,13 +136,15 @@ export function BrowserTile({ tile, onUpdate }: BrowserTileProps): React.ReactEl
           <span className="nd-label text-text-secondary">Web Surface</span>
           <span className="nd-caption max-w-[45%] truncate text-text-secondary">{currentUrl}</span>
         </div>
-        <div className="min-h-0 flex-1">
-          <webview
-            ref={(node) => { webviewRef.current = node as WebviewElement | null }}
-            src={currentUrl}
-            className="h-full w-full"
-            allowpopups={false}
-          />
+        <div className="min-h-0 flex-1 p-3">
+          <div className="h-full overflow-hidden rounded-[18px] border border-border">
+            <webview
+              ref={(node) => { webviewRef.current = node as WebviewElement | null }}
+              src={currentUrl}
+              className="h-full w-full"
+              allowpopups={false}
+            />
+          </div>
         </div>
       </div>
     </div>

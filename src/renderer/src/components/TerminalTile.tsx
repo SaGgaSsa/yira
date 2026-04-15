@@ -78,8 +78,10 @@ export function TerminalTileWrapper({ tile, isFocused, onFocus, onUpdate, onDele
     // Padding
     const xtermEl = containerRef.current.querySelector('.xterm') as HTMLElement | null
     if (xtermEl) {
-      xtermEl.style.paddingLeft = '8px'
-      xtermEl.style.paddingTop = '4px'
+      xtermEl.style.paddingLeft = '14px'
+      xtermEl.style.paddingRight = '14px'
+      xtermEl.style.paddingTop = '12px'
+      xtermEl.style.paddingBottom = '12px'
     }
 
     termRef.current = term
@@ -151,12 +153,12 @@ export function TerminalTileWrapper({ tile, isFocused, onFocus, onUpdate, onDele
     doFit()
   }, [tile.width, tile.height, doFit])
 
-    return (
-      <div
-        ref={containerRef}
-        className="w-full h-full"
+  return (
+    <div
+      ref={containerRef}
+      className="h-full w-full"
       style={{ background: 'var(--surface)', overflow: 'hidden' }}
-        onMouseDown={onFocus}
-      />
-    )
+      onMouseDown={onFocus}
+    />
+  )
 }

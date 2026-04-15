@@ -1,5 +1,5 @@
 import React from 'react'
-import { Settings, Crosshair, LayoutGrid, Columns, Rows, Table, PanelLeft, PanelsTopLeft } from 'lucide-react'
+import { Settings, Crosshair, LayoutGrid, Columns, PanelLeft, PanelsTopLeft } from 'lucide-react'
 
 interface TopBarProps {
   zoom: number
@@ -7,9 +7,7 @@ interface TopBarProps {
   sidebarCollapsed: boolean
   onToggleSidebar: () => void
   onSetViewMode: (mode: 'canvas' | 'fullview') => void
-  onArrangeGrid: () => void
-  onArrangeColumns: () => void
-  onArrangeRows: () => void
+  onFitToContent: () => void
   onZoomToggle: () => void
   onOpenSettings: () => void
 }
@@ -50,9 +48,7 @@ export function TopBar({
   sidebarCollapsed,
   onToggleSidebar,
   onSetViewMode,
-  onArrangeGrid,
-  onArrangeColumns,
-  onArrangeRows,
+  onFitToContent,
   onZoomToggle,
   onOpenSettings,
 }: TopBarProps): React.ReactElement {
@@ -99,30 +95,12 @@ export function TopBar({
         <div className="nd-panel-raised flex items-center gap-1 rounded-full px-2 py-2">
           <button
             className="nd-label inline-flex h-9 items-center gap-2 rounded-full px-3 text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
-            onClick={onArrangeGrid}
+            onClick={onFitToContent}
             disabled={viewMode !== 'canvas'}
-            title="Arrange grid"
-          >
-            <Table size={13} />
-            <span>Grid</span>
-          </button>
-          <button
-            className="nd-label inline-flex h-9 items-center gap-2 rounded-full px-3 text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
-            onClick={onArrangeColumns}
-            disabled={viewMode !== 'canvas'}
-            title="Arrange columns"
+            title="Show all tiles"
           >
             <Columns size={13} />
-            <span>Cols</span>
-          </button>
-          <button
-            className="nd-label inline-flex h-9 items-center gap-2 rounded-full px-3 text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
-            onClick={onArrangeRows}
-            disabled={viewMode !== 'canvas'}
-            title="Arrange rows"
-          >
-            <Rows size={13} />
-            <span>Rows</span>
+            <span>Show All</span>
           </button>
         </div>
 
