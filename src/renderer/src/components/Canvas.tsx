@@ -99,6 +99,7 @@ interface CanvasProps {
   onDeleteTile: (tileId: string) => Promise<boolean>
   onConfirmRemoveFromGroup: (tile: TileState, group: TileGroup) => Promise<boolean>
   profiles: Array<{ id: ShellProfileId; label: string; available: boolean }>
+  tileRefreshKeys?: Record<string, number>
   viewMode?: 'canvas' | 'fullview'
   fullviewActiveTileId?: string | null
   fullviewTopInset?: number
@@ -113,6 +114,7 @@ export function Canvas({
   onDeleteTile,
   onConfirmRemoveFromGroup,
   profiles,
+  tileRefreshKeys = {},
   viewMode = 'canvas',
   fullviewActiveTileId = null,
   fullviewTopInset = 0,
@@ -648,6 +650,7 @@ export function Canvas({
               } : undefined}
             >
               <TileContent
+                key={`${tile.id}:${tileRefreshKeys[tile.id] ?? 0}`}
                 tile={tile}
                 isFocused={tile.id === focusedTileId}
                 onFocus={() => {

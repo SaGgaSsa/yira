@@ -3,7 +3,8 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import type { TileState } from '@shared/types'
-import { consumeTerminalInitialCommand } from '@/utils/terminalLaunch'
+import { useCanvasStore } from '@/store/canvasStore'
+import { buildTerminalStartupCommand } from '@/utils/terminalLaunch'
 import { ContextMenu, type MenuItem } from './ContextMenu'
 
 interface Props {
@@ -164,7 +165,7 @@ export function TerminalTileWrapper({ tile, isFocused, onFocus, onUpdate, onDele
     let cancelled = false
     let ptyUnsub: (() => void) | null = null
     let inputDisposer: { dispose: () => void } | null = null
-    const initialCommand = consumeTerminalInitialCommand(tile.id)
+    const initialCommand = buildTerminalStartupCommand(tile, useCanvasStore.getState().groups)
 
     window.electron.terminal
       .create(tile.id, {

@@ -2,7 +2,6 @@ import { useCallback } from 'react'
 import { useCanvasStore } from '@/store/canvasStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { findSelectedGroup, getGroupAnchorTile } from '@/utils/grouping'
-import { primeTerminalInitialCommand } from '@/utils/terminalLaunch'
 import type { ConfirmDialogOptions } from '@/components/AppDialog'
 import { KANBAN_BOARD_FIXED_WIDTH } from '@shared/types'
 import type { TileState, ShellProfileId, NoteColor } from '@shared/types'
@@ -127,11 +126,6 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
         shellProfileId: profileId,
         groupId: targetGroup?.id,
       }
-
-      primeTerminalInitialCommand(
-        tile.id,
-        profileId === 'wsl' ? targetGroup?.terminal?.wslStartupCommand : undefined,
-      )
 
       finalizeAddedTile(tile, targetGroup?.id)
     },

@@ -8,6 +8,7 @@ import { ContextMenu, type MenuItem } from './components/ContextMenu'
 import { FullviewPanel } from './components/FullviewPanel'
 import { AppDialog, type ConfirmDialogOptions, type PromptDialogOptions } from './components/AppDialog'
 import { GroupEditorDialog, type GroupEditorValue } from './components/GroupEditorDialog'
+import { TileEditorDialog, type TileEditorValue } from './components/TileEditorDialog'
 import { useCanvasStore } from './store/canvasStore'
 import { useSettingsStore } from './store/settingsStore'
 import { useCanvasActions } from './hooks/useCanvasActions'
@@ -17,7 +18,7 @@ import { useFontSize } from './hooks/useFontSize'
 import { findMergeTargetGroup, findSelectedGroup, getGroupingBlockedReason } from './utils/grouping'
 import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type CanvasState, type Workspace, type TileGroup } from '@shared/types'
 import { TILE_META } from './components/TileContent'
-import { Terminal, StickyNote, Globe, LayoutGrid, ChevronDown, FolderPlus, Trash2, Pencil, Lock, Columns } from 'lucide-react'
+import { Terminal, StickyNote, Globe, LayoutGrid, ChevronDown, FolderPlus, Trash2, Pencil, Lock, Columns, RefreshCw } from 'lucide-react'
 
 const GROUP_SHOW_MARGIN = 20
 const GROUP_SHOW_TOP_PADDING = 118
@@ -46,6 +47,11 @@ type GroupEditorState =
       value: GroupEditorValue
     }
   | null
+
+type TileEditorState = {
+  tileId: string
+  value: TileEditorValue
+} | null
 
 function isPromptDialog(dialog: PromptDialogState | ConfirmDialogState): dialog is PromptDialogState {
   return dialog.request.mode === 'prompt'
@@ -122,8 +128,8 @@ export default function App(): React.ReactElement {
   const [showJsonEditor, setShowJsonEditor] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [groupEditor, setGroupEditor] = useState<GroupEditorState>(null)
-  const [renamingTileId, setRenamingTileId] = useState<string | null>(null)
-  const [renamingValue, setRenamingValue] = useState('')
+  const [tileEditor, setTileEditor] = useState<TileEditorState>(null)
+  const [tileRefreshKeys, setTileRefreshKeys] = useState<Record<string, number>>({})
   const [tileMenu, setTileMenu] = useState<{ tileId: string; x: number; y: number } | null>(null)
   const [groupMenu, setGroupMenu] = useState<{ groupId: string; x: number; y: number } | null>(null)
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -295,7 +301,7 @@ export default function App(): React.ReactElement {
       setTileMenu(null)
       setGroupMenu(null)
       setGroupEditor(null)
-      setRenamingTileId(null)
+      setTileEditor(null)
       closeActiveDialog()
     },
   })
@@ -489,26 +495,106 @@ export default function App(): React.ReactElement {
     })
   }, [focusTile, getGroupBounds, selectTiles, setViewMode, viewMode])
 
-  const beginRenameTile = useCallback((tile: TileState) => {
+  const openTileEditor = useCallback((tile: TileState) => {
     setTileMenu(null)
-    setRenamingTileId(tile.id)
-    setRenamingValue(tile.label ?? '')
+    setTileEditor({
+      tileId: tile.id,
+      value: {
+        label: tile.label ?? '',
+        startupCommand: tile.type === 'terminal' ? tile.startupCommand ?? '' : '',
+      },
+    })
   }, [])
 
-  const commitRenameTile = useCallback((tileId: string) => {
-    updateTile(tileId, { label: renamingValue.trim() || undefined })
-    setRenamingTileId(null)
-    setRenamingValue('')
-  }, [renamingValue, updateTile])
+  const handleConfirmTileEditor = useCallback((value: TileEditorValue) => {
+    if (!tileEditor) return
 
-  const cancelRenameTile = useCallback(() => {
-    setRenamingTileId(null)
-    setRenamingValue('')
+    const tile = tiles.find((entry) => entry.id === tileEditor.tileId)
+    if (!tile) {
+      setTileEditor(null)
+      return
+    }
+
+    const patch: Partial<TileState> = {
+      label: value.label.trim() || undefined,
+    }
+
+    if (tile.type === 'terminal') {
+      patch.startupCommand = value.startupCommand.trim() || undefined
+    }
+
+    updateTile(tile.id, patch)
+    setTileEditor(null)
+  }, [tileEditor, tiles, updateTile])
+
+  const focusTileInFullview = useCallback((tile: TileState) => {
+    setTileMenu(null)
+    focusTile(tile.id)
+    selectTiles([tile.id])
+    setFullviewActiveTileId(tile.id)
+    setViewMode('fullview')
+  }, [focusTile, selectTiles, setFullviewActiveTileId, setViewMode])
+
+  const bumpTileRefreshKey = useCallback((tileId: string) => {
+    setTileRefreshKeys((current) => ({
+      ...current,
+      [tileId]: (current[tileId] ?? 0) + 1,
+    }))
   }, [])
 
-  const renameTile = useCallback((tileId: string, label?: string) => {
-    updateTile(tileId, { label })
-  }, [updateTile])
+  const requestRefreshTileConfirmation = useCallback((tile: TileState) => {
+    const label = tile.label ?? TILE_META[tile.type].label
+
+    if (tile.type === 'terminal') {
+      return requestConfirm({
+        title: 'Refresh terminal',
+        message: `Refresh "${label}"? This restarts the terminal and stops any running process in that session.`,
+        confirmLabel: 'Refresh',
+        cancelLabel: 'Keep Running',
+        danger: true,
+      })
+    }
+
+    if (tile.type === 'browser') {
+      return requestConfirm({
+        title: 'Refresh browser tile',
+        message: `Refresh "${label}"? This reloads the current web surface.`,
+        confirmLabel: 'Refresh',
+        cancelLabel: 'Keep Current',
+      })
+    }
+
+    if (tile.type === 'note') {
+      return requestConfirm({
+        title: 'Refresh note tile',
+        message: `Refresh "${label}"? This reloads the note from saved state and may discard recent unsaved changes.`,
+        confirmLabel: 'Refresh',
+        cancelLabel: 'Keep Editing',
+        danger: true,
+      })
+    }
+
+    return requestConfirm({
+      title: 'Refresh board tile',
+      message: `Refresh "${label}"? This reloads the board from saved state and may discard recent unsaved changes.`,
+      confirmLabel: 'Refresh',
+      cancelLabel: 'Keep Editing',
+      danger: true,
+    })
+  }, [requestConfirm])
+
+  const handleRefreshTile = useCallback(async (tile: TileState) => {
+    setTileMenu(null)
+
+    const confirmed = await requestRefreshTileConfirmation(tile)
+    if (!confirmed) return
+
+    if (tile.type === 'terminal') {
+      await window.electron.terminal.destroy(tile.id)
+    }
+
+    bumpTileRefreshKey(tile.id)
+  }, [bumpTileRefreshKey, requestRefreshTileConfirmation])
 
   const createWorkspace = useCallback(async () => {
     const name = await requestPrompt({
@@ -571,9 +657,20 @@ export default function App(): React.ReactElement {
   const activeGroupMenu = groupMenu ? groups.find((group) => group.id === groupMenu.groupId) ?? null : null
   const tileMenuItems: MenuItem[] = activeTileMenu ? [
     {
-      label: 'Rename',
+      label: activeTileMenu.type === 'terminal' ? 'Edit' : 'Rename',
       icon: Pencil,
-      action: () => beginRenameTile(activeTileMenu),
+      action: () => openTileEditor(activeTileMenu),
+    },
+    {
+      label: 'Focus',
+      action: () => focusTileInFullview(activeTileMenu),
+    },
+    {
+      label: 'Refresh',
+      icon: RefreshCw,
+      action: () => {
+        void handleRefreshTile(activeTileMenu)
+      },
     },
     {
       label: activeTileMenu.hideTitlebar ? 'Show Titlebar' : 'Hide Titlebar',
@@ -890,30 +987,9 @@ export default function App(): React.ReactElement {
                             <div className="nd-label text-text-secondary">
                               {isSelected ? '[ SELECTED ]' : tile.id === fullviewActiveTileId ? '[ PRIMARY ]' : '[ OPEN ]'}
                             </div>
-                            {renamingTileId === tile.id ? (
-                              <input
-                                autoFocus
-                                className="mt-2 min-w-0 w-full border-b border-border-visible bg-transparent px-0 py-1 text-sm text-text-primary outline-none"
-                                value={renamingValue}
-                                onChange={(event) => setRenamingValue(event.target.value)}
-                                onBlur={() => commitRenameTile(tile.id)}
-                                onClick={(event) => event.stopPropagation()}
-                                onKeyDown={(event) => {
-                                  if (event.key === 'Enter') {
-                                    event.preventDefault()
-                                    commitRenameTile(tile.id)
-                                  }
-                                  if (event.key === 'Escape') {
-                                    event.preventDefault()
-                                    cancelRenameTile()
-                                  }
-                                }}
-                              />
-                            ) : (
-                              <div className="mt-2 truncate text-sm text-text-display">
-                                {tile.label ?? `${meta.label} ${tile.id.slice(-4)}`}
-                              </div>
-                            )}
+                            <div className="mt-2 truncate text-sm text-text-display">
+                              {tile.label ?? `${meta.label} ${tile.id.slice(-4)}`}
+                            </div>
                             <div className="nd-caption mt-2 text-text-secondary">{meta.label.toUpperCase()}</div>
                           </div>
                         </div>
@@ -1006,7 +1082,9 @@ export default function App(): React.ReactElement {
                 onCloseTile={(tileId) => {
                   void closeTileFromFullview(tileId)
                 }}
-                onRenameTile={renameTile}
+                onEditTile={openTileEditor}
+                onFocusTile={focusTileInFullview}
+                onRefreshTile={handleRefreshTile}
                 onToggleLock={(tileId) => {
                   const tile = tiles.find((entry) => entry.id === tileId)
                   if (!tile) return
@@ -1027,6 +1105,7 @@ export default function App(): React.ReactElement {
             }}
             onDeleteTile={deleteTile}
             onConfirmRemoveFromGroup={confirmRemoveTileFromGroup}
+            tileRefreshKeys={tileRefreshKeys}
             viewMode={viewMode}
             fullviewActiveTileId={fullviewActiveTileId}
             fullviewTopInset={viewMode === 'fullview' ? 118 : 0}
@@ -1083,6 +1162,24 @@ export default function App(): React.ReactElement {
         } : null}
         onCancel={() => setGroupEditor(null)}
         onConfirm={handleConfirmGroupEditor}
+      />
+      <TileEditorDialog
+        request={tileEditor ? (() => {
+          const tile = tiles.find((entry) => entry.id === tileEditor.tileId)
+          if (!tile) return null
+
+          const meta = TILE_META[tile.type]
+
+          return {
+            title: `Edit ${meta.label}`,
+            confirmLabel: `Save ${meta.label}`,
+            tileType: tile.type,
+            shellProfileId: tile.shellProfileId,
+            value: tileEditor.value,
+          }
+        })() : null}
+        onCancel={() => setTileEditor(null)}
+        onConfirm={handleConfirmTileEditor}
       />
     </div>
   )

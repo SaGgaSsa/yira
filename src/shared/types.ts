@@ -202,6 +202,7 @@ export interface TileState {
 
   // Terminal-specific
   shellProfileId?: ShellProfileId
+  startupCommand?: string
 
   // Note-specific
   noteColor?: NoteColor

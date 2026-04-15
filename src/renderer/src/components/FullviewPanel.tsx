@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Pencil, Trash2, X } from 'lucide-react'
+import React, { useMemo, useState } from 'react'
+import { Pencil, RefreshCw, Trash2, X } from 'lucide-react'
 import type { TileState } from '@shared/types'
 import { ContextMenu, type MenuItem } from './ContextMenu'
 import { TILE_META } from './TileContent'
@@ -10,7 +10,9 @@ interface FullviewPanelProps {
   focusedTileId: string | null
   onActivateTile: (tileId: string) => void
   onCloseTile: (tileId: string) => void | Promise<void>
-  onRenameTile: (tileId: string, label?: string) => void
+  onEditTile: (tile: TileState) => void
+  onFocusTile: (tile: TileState) => void
+  onRefreshTile: (tile: TileState) => void | Promise<void>
   onToggleLock: (tileId: string) => void
 }
 
@@ -20,39 +22,41 @@ export function FullviewPanel({
   focusedTileId,
   onActivateTile,
   onCloseTile,
-  onRenameTile,
+  onEditTile,
+  onFocusTile,
+  onRefreshTile,
   onToggleLock,
 }: FullviewPanelProps): React.ReactElement {
   const orderedTiles = useMemo(() => tiles.slice().sort((a, b) => b.zIndex - a.zIndex), [tiles])
   const activeTile = orderedTiles.find((tile) => tile.id === activeTileId) ?? orderedTiles[0] ?? null
-  const [renamingTileId, setRenamingTileId] = useState<string | null>(null)
-  const [renamingValue, setRenamingValue] = useState('')
   const [tabMenu, setTabMenu] = useState<{ tileId: string; x: number; y: number } | null>(null)
-  const inputRef = useRef<HTMLInputElement | null>(null)
-
-  useEffect(() => {
-    if (renamingTileId && inputRef.current) {
-      inputRef.current.focus()
-      inputRef.current.select()
-    }
-  }, [renamingTileId])
-
-  const beginRename = (tile: TileState) => {
-    setTabMenu(null)
-    setRenamingTileId(tile.id)
-    setRenamingValue(tile.label ?? '')
-  }
-
-  const commitRename = (tileId: string) => {
-    onRenameTile(tileId, renamingValue.trim() || undefined)
-    setRenamingTileId(null)
-    setRenamingValue('')
-  }
 
   const activeMenuTile = tabMenu ? orderedTiles.find((tile) => tile.id === tabMenu.tileId) ?? null : null
   const menuItems: MenuItem[] = activeMenuTile
     ? [
-        { label: 'Rename', icon: Pencil, action: () => beginRename(activeMenuTile) },
+        {
+          label: activeMenuTile.type === 'terminal' ? 'Edit' : 'Rename',
+          icon: Pencil,
+          action: () => {
+            setTabMenu(null)
+            onEditTile(activeMenuTile)
+          },
+        },
+        {
+          label: 'Focus',
+          action: () => {
+            setTabMenu(null)
+            onFocusTile(activeMenuTile)
+          },
+        },
+        {
+          label: 'Refresh',
+          icon: RefreshCw,
+          action: () => {
+            setTabMenu(null)
+            void onRefreshTile(activeMenuTile)
+          },
+        },
         {
           label: activeMenuTile.locked ? 'Unlock' : 'Lock',
           action: () => onToggleLock(activeMenuTile.id),
@@ -69,7 +73,7 @@ export function FullviewPanel({
             <span className="nd-label">No items open</span>
           </div>
         ) : (
-          orderedTiles.map((tile, index) => {
+          orderedTiles.map((tile) => {
             const meta = TILE_META[tile.type]
             const Icon = meta.icon
             const isActive = tile.id === activeTile?.id
@@ -98,31 +102,9 @@ export function FullviewPanel({
                     <div className="nd-label text-text-secondary">
                       {isActive ? '[ ACTIVE ]' : isFocused ? '[ SELECTED ]' : '[ OPEN ]'}
                     </div>
-                    {renamingTileId === tile.id ? (
-                      <input
-                        ref={inputRef}
-                        className="mt-2 w-full border-b border-border-visible bg-transparent pb-1 font-mono text-sm text-text-primary outline-none"
-                        value={renamingValue}
-                        onChange={(event) => setRenamingValue(event.target.value)}
-                        onBlur={() => commitRename(tile.id)}
-                        onClick={(event) => event.stopPropagation()}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') {
-                            event.preventDefault()
-                            commitRename(tile.id)
-                          }
-                          if (event.key === 'Escape') {
-                            event.preventDefault()
-                            setRenamingTileId(null)
-                            setRenamingValue('')
-                          }
-                        }}
-                      />
-                    ) : (
-                      <div className="mt-2 truncate text-base text-text-display">
-                        {tile.label ?? `${meta.label} ${tile.id.slice(-4)}`}
-                      </div>
-                    )}
+                    <div className="mt-2 truncate text-base text-text-display">
+                      {tile.label ?? `${meta.label} ${tile.id.slice(-4)}`}
+                    </div>
                   </div>
                 </button>
 
