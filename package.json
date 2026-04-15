@@ -3,15 +3,20 @@
   "version": "0.1.0",
   "productName": "Yira",
   "description": "Infinite canvas terminal workspace for Windows",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SaGgaSsa/yira.git"
+  },
   "type": "module",
   "main": "dist-electron/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
-    "build:main": "EV_BUILD_TARGET=main electron-vite build",
-    "build:preload": "EV_BUILD_TARGET=preload electron-vite build",
-    "build:renderer": "EV_BUILD_TARGET=renderer electron-vite build",
-    "build": "EV_BUILD_TARGET=main electron-vite build && EV_BUILD_TARGET=preload electron-vite build && EV_BUILD_TARGET=renderer electron-vite build",
-    "dist:win": "npm run build && electron-builder --win",
+    "build:main": "node ./scripts/electron-vite-build.mjs main",
+    "build:preload": "node ./scripts/electron-vite-build.mjs preload",
+    "build:renderer": "node ./scripts/electron-vite-build.mjs renderer",
+    "build": "node ./scripts/electron-vite-build.mjs all",
+    "dist:win": "npm run build && electron-builder --win --publish never",
+    "release:win": "npm run build && electron-builder --win --publish always",
     "preview": "electron-vite preview",
     "postinstall": "electron-rebuild -f -w node-pty"
   },
@@ -56,6 +61,14 @@
       "package.json"
     ],
     "asar": true,
+    "artifactName": "${productName}-Setup-${version}-${arch}.${ext}",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "SaGgaSsa",
+        "repo": "yira"
+      }
+    ],
     "win": {
       "target": [
         {
@@ -64,8 +77,7 @@
             "x64"
           ]
         }
-      ],
-      "icon": "resources/icon.png"
+      ]
     },
     "nsis": {
       "oneClick": false,
