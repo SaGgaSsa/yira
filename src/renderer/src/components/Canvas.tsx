@@ -4,12 +4,21 @@ import { useSettingsStore } from '@/store/settingsStore'
 import { TileChrome } from '@/components/TileChrome'
 import { TileContent } from '@/components/TileContent'
 import { ContextMenu } from '@/components/ContextMenu'
-import { findMergeTargetGroup, findSelectedGroup } from '@/utils/grouping'
+import { findMergeTargetGroup, findSelectedGroup, getGroupingBlockedReason } from '@/utils/grouping'
 import { Terminal, StickyNote, Globe, LayoutGrid, Lock } from 'lucide-react'
 import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type ShellProfileId, type TileGroup, type GroupColorId } from '@shared/types'
 
 const GROUP_FRAME_PADDING = 20
 const GROUP_TOOLBAR_GAP = 30
+const FIT_PADDING = 48
+const GROUP_TOOLBAR_EXTRA_TOP_PADDING = 40
+
+interface ViewPadding {
+  top: number
+  right: number
+  bottom: number
+  left: number
+}
 
 interface PanDragState {
   type: 'pan'
@@ -61,12 +70,24 @@ interface CanvasMethods {
   centerViewOnTile: (tileId: string) => void
   centerViewOnCanvas: () => void
   centerViewOnBounds: (bounds: { minX: number; minY: number; maxX: number; maxY: number }) => void
-  fitViewToBounds: (bounds: { minX: number; minY: number; maxX: number; maxY: number }) => void
+  fitViewToBounds: (
+    bounds: { minX: number; minY: number; maxX: number; maxY: number },
+    padding?: Partial<ViewPadding>,
+  ) => void
   fitViewToContent: () => void
 }
 
 export function getCanvasMethods(): CanvasMethods | null {
   return canvasMethodsRef.current
+}
+
+function resolveViewPadding(padding?: Partial<ViewPadding>): ViewPadding {
+  return {
+    top: padding?.top ?? FIT_PADDING,
+    right: padding?.right ?? FIT_PADDING,
+    bottom: padding?.bottom ?? FIT_PADDING,
+    left: padding?.left ?? FIT_PADDING,
+  }
 }
 
 interface CanvasProps {
@@ -158,8 +179,12 @@ export function Canvas({
     return findMergeTargetGroup(tiles, groups, selectedTileIds)
   }, [tiles, groups, selectedTileIds])
 
+  const groupingBlockedReason = useMemo(() => {
+    return getGroupingBlockedReason(tiles, groups, selectedTileIds, mergeTargetGroup?.id)
+  }, [tiles, groups, selectedTileIds, mergeTargetGroup])
+
   const showSelectionBar = !isFullview && selectedTileIds.length > 0 && selectedGroup === null
-  const canCreateGroup = selectedTileIds.length >= 2 && selectedGroup === null
+  const canCreateGroup = selectedTileIds.length >= 2 && selectedGroup === null && !groupingBlockedReason
   const selectionActionLabel = mergeTargetGroup ? `Merge into "${mergeTargetGroup.name}"` : 'Group'
 
   const onContextMenu = useCallback(
@@ -214,22 +239,25 @@ export function Canvas({
   )
 
   const fitViewToBounds = useCallback(
-    ({ minX, minY, maxX, maxY }: { minX: number; minY: number; maxX: number; maxY: number }) => {
+    (
+      { minX, minY, maxX, maxY }: { minX: number; minY: number; maxX: number; maxY: number },
+      padding?: Partial<ViewPadding>,
+    ) => {
       if (!containerRef.current) return
 
       const rect = containerRef.current.getBoundingClientRect()
       const boundsWidth = Math.max(1, maxX - minX)
       const boundsHeight = Math.max(1, maxY - minY)
-      const padding = 48
-      const availableWidth = Math.max(1, rect.width - padding * 2)
-      const availableHeight = Math.max(1, rect.height - padding * 2)
+      const resolvedPadding = resolveViewPadding(padding)
+      const availableWidth = Math.max(1, rect.width - resolvedPadding.left - resolvedPadding.right)
+      const availableHeight = Math.max(1, rect.height - resolvedPadding.top - resolvedPadding.bottom)
       const nextZoom = Math.max(0.1, Math.min(5, Math.min(availableWidth / boundsWidth, availableHeight / boundsHeight)))
-      const boundsCenterX = minX + boundsWidth / 2
-      const boundsCenterY = minY + boundsHeight / 2
+      const targetLeft = resolvedPadding.left + (availableWidth - boundsWidth * nextZoom) / 2
+      const targetTop = resolvedPadding.top + (availableHeight - boundsHeight * nextZoom) / 2
 
       setViewport({
-        tx: rect.width / 2 - boundsCenterX * nextZoom,
-        ty: rect.height / 2 - boundsCenterY * nextZoom,
+        tx: targetLeft - minX * nextZoom,
+        ty: targetTop - minY * nextZoom,
         zoom: nextZoom,
       })
     },
@@ -244,12 +272,34 @@ export function Canvas({
       return
     }
 
-    const minX = Math.min(...tiles.map((tile) => tile.x))
-    const minY = Math.min(...tiles.map((tile) => tile.y))
-    const maxX = Math.max(...tiles.map((tile) => tile.x + tile.width))
-    const maxY = Math.max(...tiles.map((tile) => tile.y + tile.height))
-    fitViewToBounds({ minX, minY, maxX, maxY })
-  }, [tiles, centerViewOnCanvas, fitViewToBounds])
+    const horizontalStarts = [
+      ...tiles.map((tile) => tile.x),
+      ...groupRenderData.map(({ bounds }) => bounds.x),
+    ]
+    const verticalStarts = [
+      ...tiles.map((tile) => tile.y),
+      ...groupRenderData.map(({ bounds }) => bounds.y),
+    ]
+    const horizontalEnds = [
+      ...tiles.map((tile) => tile.x + tile.width),
+      ...groupRenderData.map(({ bounds }) => bounds.x + bounds.width),
+    ]
+    const verticalEnds = [
+      ...tiles.map((tile) => tile.y + tile.height),
+      ...groupRenderData.map(({ bounds }) => bounds.y + bounds.height),
+    ]
+    const minX = Math.min(...horizontalStarts)
+    const minY = Math.min(...verticalStarts)
+    const maxX = Math.max(...horizontalEnds)
+    const maxY = Math.max(...verticalEnds)
+
+    fitViewToBounds(
+      { minX, minY, maxX, maxY },
+      groupRenderData.length > 0
+        ? { top: FIT_PADDING + GROUP_TOOLBAR_GAP + GROUP_TOOLBAR_EXTRA_TOP_PADDING }
+        : undefined,
+    )
+  }, [tiles, groupRenderData, centerViewOnCanvas, fitViewToBounds])
 
   canvasMethodsRef.current = {
     centerViewOnTile,
@@ -708,6 +758,11 @@ export function Canvas({
               <span className="nd-caption px-2 text-text-secondary">
                 {selectedTileIds.length} selected
               </span>
+              {groupingBlockedReason && (
+                <span className="nd-caption px-2 text-danger">
+                  {groupingBlockedReason}
+                </span>
+              )}
               <button
                 className="rounded-full border border-border-visible px-4 py-2 text-sm text-text-primary transition-colors hover:bg-hover-bg disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={() => {

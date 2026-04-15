@@ -14,10 +14,13 @@ import { useCanvasActions } from './hooks/useCanvasActions'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useTheme } from './hooks/useTheme'
 import { useFontSize } from './hooks/useFontSize'
-import { findMergeTargetGroup, findSelectedGroup } from './utils/grouping'
+import { findMergeTargetGroup, findSelectedGroup, getGroupingBlockedReason } from './utils/grouping'
 import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type CanvasState, type Workspace, type TileGroup } from '@shared/types'
 import { TILE_META } from './components/TileContent'
 import { Terminal, StickyNote, Globe, LayoutGrid, ChevronDown, FolderPlus, Trash2, Pencil, Lock, Columns } from 'lucide-react'
+
+const GROUP_SHOW_MARGIN = 20
+const GROUP_SHOW_TOP_PADDING = 118
 
 type PromptDialogState = {
   request: { mode: 'prompt' } & PromptDialogOptions
@@ -355,7 +358,14 @@ export default function App(): React.ReactElement {
     [tiles, groups, selectedTileIds],
   )
 
+  const groupingBlockedReason = useMemo(
+    () => getGroupingBlockedReason(tiles, groups, selectedTileIds, mergeTargetGroup?.id),
+    [tiles, groups, selectedTileIds, mergeTargetGroup],
+  )
+
   const handleCreateGroupFromSelection = useCallback(() => {
+    if (groupingBlockedReason) return
+
     if (mergeTargetGroup) {
       addTilesToGroup(mergeTargetGroup.id, selectedTileIds)
       return
@@ -372,7 +382,7 @@ export default function App(): React.ReactElement {
         wslStartupCommand: '',
       },
     })
-  }, [addTilesToGroup, groups.length, mergeTargetGroup, selectedTileIds])
+  }, [addTilesToGroup, groupingBlockedReason, groups.length, mergeTargetGroup, selectedTileIds])
 
   const openGroupEditor = useCallback((group: TileGroup) => {
     setGroupMenu(null)
@@ -451,11 +461,33 @@ export default function App(): React.ReactElement {
     const bounds = getGroupBounds(group)
     if (!bounds) return
 
+    const paddedBounds = {
+      minX: bounds.minX - GROUP_SHOW_MARGIN,
+      minY: bounds.minY - GROUP_SHOW_MARGIN,
+      maxX: bounds.maxX + GROUP_SHOW_MARGIN,
+      maxY: bounds.maxY + GROUP_SHOW_MARGIN,
+    }
+
+    setGroupMenu(null)
+    selectTiles(bounds.tileIds)
+    focusTile(null)
+
+    const fitGroupBounds = () => {
+      getCanvasMethods()?.fitViewToBounds(paddedBounds, { top: GROUP_SHOW_TOP_PADDING })
+    }
+
+    if (viewMode === 'canvas') {
+      fitGroupBounds()
+      return
+    }
+
     setViewMode('canvas')
     requestAnimationFrame(() => {
-      getCanvasMethods()?.fitViewToBounds(bounds)
+      requestAnimationFrame(() => {
+        fitGroupBounds()
+      })
     })
-  }, [getGroupBounds, setViewMode])
+  }, [focusTile, getGroupBounds, selectTiles, setViewMode, viewMode])
 
   const beginRenameTile = useCallback((tile: TileState) => {
     setTileMenu(null)

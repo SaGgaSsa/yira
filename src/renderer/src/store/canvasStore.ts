@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { GROUP_COLOR_ORDER, type TileState, type CanvasState, type Viewport, type ShellProfileId, type TileGroup, type GroupColorId } from '@shared/types'
+import { getGroupingBlockedReason } from '@/utils/grouping'
 
 const UNTITLED_GROUP_NAME = 'Untitled Group'
 const DEFAULT_GROUP_COLOR: GroupColorId = GROUP_COLOR_ORDER[0]
@@ -217,8 +218,10 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   selectTiles: (tileIds) => set({ selectedTileIds: tileIds }),
 
   createGroup: (groupInput, tileIds) => {
-    const nextIds = Array.from(new Set((tileIds ?? get().selectedTileIds).filter((tileId) => get().tiles.some((tile) => tile.id === tileId))))
+    const state = get()
+    const nextIds = Array.from(new Set((tileIds ?? state.selectedTileIds).filter((tileId) => state.tiles.some((tile) => tile.id === tileId))))
     if (nextIds.length < 2) return null
+    if (getGroupingBlockedReason(state.tiles, state.groups, nextIds)) return null
     const nextColorIndex = get().groups.length % GROUP_COLOR_ORDER.length
 
     const group = normalizeGroup({
@@ -258,6 +261,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
 
     const nextIds = Array.from(new Set(tileIds.filter((tileId) => s.tiles.some((tile) => tile.id === tileId))))
     if (nextIds.length === 0) return {}
+    if (getGroupingBlockedReason(s.tiles, s.groups, nextIds, groupId)) return {}
 
     const selected = new Set(nextIds)
     const nextTiles = s.tiles.map((tile) => (

@@ -1,9 +1,33 @@
 import type { TileGroup, TileState } from '@shared/types'
 
+export const LOCKED_GROUP_REGROUP_MESSAGE = 'Locked group tiles cannot be regrouped'
+
 export function isTileInteractionLocked(tile: TileState, groups: TileGroup[]): boolean {
   if (tile.locked) return true
   if (!tile.groupId) return false
   return Boolean(groups.find((group) => group.id === tile.groupId)?.locked)
+}
+
+export function getGroupingBlockedReason(
+  tiles: TileState[],
+  groups: TileGroup[],
+  selectedTileIds: string[],
+  targetGroupId?: string,
+): string | null {
+  if (selectedTileIds.length < 2) return null
+
+  const groupsById = new Map(groups.map((group) => [group.id, group]))
+  const selectedTileIdSet = new Set(selectedTileIds)
+  const selectedTiles = tiles.filter((tile) => selectedTileIdSet.has(tile.id))
+
+  const hasLockedGroupTile = selectedTiles.some((tile) => (
+    Boolean(tile.groupId && groupsById.get(tile.groupId)?.locked)
+  ))
+
+  if (hasLockedGroupTile) return LOCKED_GROUP_REGROUP_MESSAGE
+  if (targetGroupId && groupsById.get(targetGroupId)?.locked) return LOCKED_GROUP_REGROUP_MESSAGE
+
+  return null
 }
 
 export function findSelectedGroup(groups: TileGroup[], selectedTileIds: string[]): TileGroup | null {
@@ -24,6 +48,7 @@ export function findMergeTargetGroup(
   selectedTileIds: string[],
 ): TileGroup | null {
   if (selectedTileIds.length < 2) return null
+  if (getGroupingBlockedReason(tiles, groups, selectedTileIds)) return null
 
   const selectedTileIdSet = new Set(selectedTileIds)
   const selectedTiles = tiles.filter((tile) => selectedTileIdSet.has(tile.id))
@@ -37,6 +62,7 @@ export function findMergeTargetGroup(
 
   const targetGroup = groups.find((group) => group.id === touchedGroupIds[0])
   if (!targetGroup) return null
+  if (targetGroup.locked) return null
 
   const targetTileIdSet = new Set(targetGroup.tileIds)
   if (!targetGroup.tileIds.every((tileId) => selectedTileIdSet.has(tileId))) return null
