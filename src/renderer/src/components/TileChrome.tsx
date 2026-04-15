@@ -1,15 +1,19 @@
 import React, { useRef, useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCanvasStore } from '@/store/canvasStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import type { TileState, NoteColor } from '@shared/types'
 import { KANBAN_BOARD_FIXED_WIDTH, NOTE_COLORS } from '@shared/types'
-import { X, GripVertical, StickyNote, Globe, LayoutGrid, Terminal } from 'lucide-react'
+import { X, GripVertical, StickyNote, Globe, LayoutGrid, Terminal, Lock } from 'lucide-react'
 
 interface Props {
   tile: TileState
   isFocused: boolean
+  isSelected: boolean
   onFocus: () => void
   onUpdate: (patch: Partial<TileState>) => void
+  onUpdatePositions: (positions: Array<{ id: string; x: number; y: number }>) => void
   onDelete: () => void
+  onRemoveFromGroup?: () => void
   children: ReactNode
   mode?: 'canvas' | 'fullview'
   fullviewTopInset?: number
@@ -37,9 +41,12 @@ const RADIUS_PRESETS = [12, 20, 28, 0]
 export function TileChrome({
   tile,
   isFocused,
+  isSelected,
   onFocus,
   onUpdate,
+  onUpdatePositions,
   onDelete,
+  onRemoveFromGroup,
   children,
   mode = 'canvas',
   fullviewTopInset = 0,
@@ -47,12 +54,16 @@ export function TileChrome({
 }: Props): React.ReactElement {
   const [isDragging, setIsDragging] = useState(false)
   const [isResizing, setIsResizing] = useState<ResizeDirection | null>(null)
-  const dragStartRef = useRef<{ mx: number; my: number; tx: number; ty: number } | null>(null)
+  const dragStartRef = useRef<{ mx: number; my: number; positions: Array<{ id: string; x: number; y: number }>; anchorX: number; anchorY: number } | null>(null)
   const resizeStartRef = useRef<{ mx: number; my: number; w: number; h: number; tx: number; ty: number } | null>(null)
+  const tiles = useCanvasStore((s) => s.tiles)
+  const selectedTileIds = useCanvasStore((s) => s.selectedTileIds)
+  const zoom = useCanvasStore((s) => s.viewport.zoom)
   const gridSize = useSettingsStore((s) => s.gridSize)
   const snapToGrid = useSettingsStore((s) => s.snapToGrid)
   const isFullview = mode === 'fullview'
   const isFixedWidthKanban = tile.type === 'kanban'
+  const isLocked = Boolean(tile.locked)
   const radius = RADIUS_PRESETS[tile.radiusIndex ?? 0] ?? RADIUS_PRESETS[0]
 
   useEffect(() => {
@@ -63,25 +74,33 @@ export function TileChrome({
   // ─── Drag ───────────────────────────────────────────────────────────────
   const handleDragStart = useCallback(
     (e: React.MouseEvent) => {
-      if (isFullview) return
+      if (isFullview || isLocked) return
       e.preventDefault()
       e.stopPropagation()
       onFocus()
+      const movableIds = new Set(isSelected ? selectedTileIds : [tile.id])
+      const positions = tiles
+        .filter((entry) => movableIds.has(entry.id) && !entry.locked)
+        .map((entry) => ({ id: entry.id, x: entry.x, y: entry.y }))
+
+      if (positions.length === 0) return
+
       dragStartRef.current = {
         mx: e.clientX,
         my: e.clientY,
-        tx: tile.x,
-        ty: tile.y,
+        positions,
+        anchorX: tile.x,
+        anchorY: tile.y,
       }
       setIsDragging(true)
     },
-    [tile, onFocus, isFullview],
+    [tile, onFocus, isFullview, isLocked, isSelected, selectedTileIds, tiles],
   )
 
   // ─── Resize ─────────────────────────────────────────────────────────────
   const handleResizeStart = useCallback(
     (dir: ResizeDirection) => (e: React.MouseEvent) => {
-      if (isFullview) return
+      if (isFullview || isLocked) return
       e.preventDefault()
       e.stopPropagation()
       onFocus()
@@ -95,30 +114,37 @@ export function TileChrome({
       }
       setIsResizing(dir)
     },
-    [tile, onFocus, isFullview],
+    [tile, onFocus, isFullview, isLocked],
   )
 
   // ─── Global mouse move/up ──────────────────────────────────────────────
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (isDragging && dragStartRef.current) {
-        const dx = e.clientX - dragStartRef.current.mx
-        const dy = e.clientY - dragStartRef.current.my
-        let newX = dragStartRef.current.tx + dx
-        let newY = dragStartRef.current.ty + dy
+        const dx = (e.clientX - dragStartRef.current.mx) / zoom
+        const dy = (e.clientY - dragStartRef.current.my) / zoom
+        let deltaX = dx
+        let deltaY = dy
 
-        // Snap to grid
         if (snapToGrid) {
-          newX = Math.round(newX / gridSize) * gridSize
-          newY = Math.round(newY / gridSize) * gridSize
+          const snappedX = Math.round((dragStartRef.current.anchorX + dx) / gridSize) * gridSize
+          const snappedY = Math.round((dragStartRef.current.anchorY + dy) / gridSize) * gridSize
+          deltaX = snappedX - dragStartRef.current.anchorX
+          deltaY = snappedY - dragStartRef.current.anchorY
         }
 
-        onUpdate({ x: newX, y: newY })
+        onUpdatePositions(
+          dragStartRef.current.positions.map((position) => ({
+            id: position.id,
+            x: position.x + deltaX,
+            y: position.y + deltaY,
+          })),
+        )
       }
 
       if (isResizing && resizeStartRef.current) {
-        const dx = e.clientX - resizeStartRef.current.mx
-        const dy = e.clientY - resizeStartRef.current.my
+        const dx = (e.clientX - resizeStartRef.current.mx) / zoom
+        const dy = (e.clientY - resizeStartRef.current.my) / zoom
         const dir = isResizing
 
         let newW = resizeStartRef.current.w
@@ -165,7 +191,7 @@ export function TileChrome({
       window.removeEventListener('mousemove', handleMouseMove)
       window.removeEventListener('mouseup', handleMouseUp)
     }
-  }, [gridSize, isDragging, isFixedWidthKanban, isResizing, onUpdate, snapToGrid])
+  }, [gridSize, isDragging, isFixedWidthKanban, isResizing, onUpdate, onUpdatePositions, snapToGrid, zoom])
 
   const cursor = isDragging ? 'grabbing' : isResizing ? `${isResizing}-resize` : 'default'
 
@@ -199,6 +225,8 @@ export function TileChrome({
             ? 'none'
             : isFocused
               ? '1px solid var(--text-display)'
+              : isSelected
+                ? '1px solid var(--border-visible)'
               : tile.type === 'note'
                 ? '1px solid var(--border-visible)'
                 : '1px solid var(--border)',
@@ -214,12 +242,27 @@ export function TileChrome({
             style={{
               background: 'var(--surface-raised)',
               borderBottom: '1px solid var(--border)',
-              cursor: 'grab',
+              cursor: isLocked ? 'default' : 'grab',
               display: tile.hideTitlebar ? 'none' : 'flex',
             }}
             onMouseDown={handleDragStart}
           >
             <GripVertical size={12} className="text-text-secondary shrink-0" />
+
+            <button
+              className={`flex h-6 w-6 items-center justify-center rounded-full transition-colors shrink-0 ${
+                isLocked
+                  ? 'bg-text-primary text-bg-primary'
+                  : 'text-text-secondary hover:bg-hover-bg hover:text-text-display'
+              }`}
+              onClick={(e) => {
+                e.stopPropagation()
+                onUpdate({ locked: !isLocked })
+              }}
+              title={isLocked ? 'Unlock window' : 'Lock window'}
+            >
+              <Lock size={11} />
+            </button>
 
             {/* Type icon */}
             {(() => {
@@ -230,6 +273,19 @@ export function TileChrome({
             <span className="nd-label truncate flex-1 text-text-secondary">
               {tile.label ?? TYPE_LABELS[tile.type] ?? 'Tile'}
             </span>
+
+            {tile.groupId && onRemoveFromGroup && (
+              <button
+                className="rounded-full border border-border-visible px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display shrink-0"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onRemoveFromGroup()
+                }}
+                title="Remove from group"
+              >
+                Out
+              </button>
+            )}
 
             {/* Terminal: shell profile badge */}
             {tile.type === 'terminal' && tile.shellProfileId && (
@@ -270,7 +326,7 @@ export function TileChrome({
             className="shrink-0"
             style={{
               height: 8,
-              cursor: 'grab',
+              cursor: isLocked ? 'default' : 'grab',
               background: 'transparent',
             }}
             onMouseDown={handleDragStart}
@@ -284,7 +340,7 @@ export function TileChrome({
       </div>
 
       {/* Resize handles (8 directions) */}
-      {!isFullview && !isDragging && (
+      {!isFullview && !isDragging && !isLocked && (
         <>
           {!isFixedWidthKanban && (
             <div

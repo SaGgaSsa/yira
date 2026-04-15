@@ -9,8 +9,9 @@ interface FullviewPanelProps {
   activeTileId: string | null
   focusedTileId: string | null
   onActivateTile: (tileId: string) => void
-  onCloseTile: (tileId: string) => void
+  onCloseTile: (tileId: string) => void | Promise<void>
   onRenameTile: (tileId: string, label?: string) => void
+  onToggleLock: (tileId: string) => void
 }
 
 export function FullviewPanel({
@@ -20,6 +21,7 @@ export function FullviewPanel({
   onActivateTile,
   onCloseTile,
   onRenameTile,
+  onToggleLock,
 }: FullviewPanelProps): React.ReactElement {
   const orderedTiles = useMemo(() => tiles.slice().sort((a, b) => b.zIndex - a.zIndex), [tiles])
   const activeTile = orderedTiles.find((tile) => tile.id === activeTileId) ?? orderedTiles[0] ?? null
@@ -51,31 +53,16 @@ export function FullviewPanel({
   const menuItems: MenuItem[] = activeMenuTile
     ? [
         { label: 'Rename', icon: Pencil, action: () => beginRename(activeMenuTile) },
-        { label: 'Close', icon: Trash2, danger: true, action: () => onCloseTile(activeMenuTile.id) },
+        {
+          label: activeMenuTile.locked ? 'Unlock' : 'Lock',
+          action: () => onToggleLock(activeMenuTile.id),
+        },
+        { label: 'Close', icon: Trash2, danger: true, action: () => { void onCloseTile(activeMenuTile.id) } },
       ]
     : []
 
   return (
     <div className="nd-panel border-x-0 border-t-0 px-4 py-3">
-      <div className="mb-3 flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="nd-label text-text-secondary">Focus Deck</div>
-          <div className="mt-1 flex items-center gap-3">
-            <span className="nd-display text-[28px] text-text-display">
-              {activeTile ? TILE_META[activeTile.type].label.toUpperCase() : 'EMPTY'}
-            </span>
-            <span className="nd-caption text-text-secondary">
-              {orderedTiles.length} OPEN
-            </span>
-          </div>
-        </div>
-        {activeTile && (
-          <div className="nd-caption text-text-secondary">
-            {activeTile.label ?? `${TILE_META[activeTile.type].label} ${activeTile.id.slice(-4)}`}
-          </div>
-        )}
-      </div>
-
       <div className="flex items-stretch gap-2 overflow-x-auto pb-1">
         {orderedTiles.length === 0 ? (
           <div className="nd-panel-raised flex h-[72px] min-w-[240px] items-center rounded-2xl px-5 text-text-secondary">
@@ -109,7 +96,7 @@ export function FullviewPanel({
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="nd-label text-text-secondary">
-                      {index === 0 ? '[ ACTIVE ]' : isFocused ? '[ SELECTED ]' : '[ OPEN ]'}
+                      {isActive ? '[ ACTIVE ]' : isFocused ? '[ SELECTED ]' : '[ OPEN ]'}
                     </div>
                     {renamingTileId === tile.id ? (
                       <input
@@ -136,13 +123,12 @@ export function FullviewPanel({
                         {tile.label ?? `${meta.label} ${tile.id.slice(-4)}`}
                       </div>
                     )}
-                    <div className="nd-caption mt-2 text-text-secondary">{meta.label.toUpperCase()}</div>
                   </div>
                 </button>
 
                 <button
                   className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
-                  onClick={() => onCloseTile(tile.id)}
+                  onClick={() => { void onCloseTile(tile.id) }}
                   title="Close tab"
                 >
                   <X size={13} />

@@ -1,6 +1,8 @@
 import { useCallback } from 'react'
 import { useCanvasStore } from '@/store/canvasStore'
 import { useSettingsStore } from '@/store/settingsStore'
+import { findSelectedGroup, getGroupAnchorTile } from '@/utils/grouping'
+import type { ConfirmDialogOptions } from '@/components/AppDialog'
 import { KANBAN_BOARD_FIXED_WIDTH } from '@shared/types'
 import type { TileState, ShellProfileId, NoteColor } from '@shared/types'
 
@@ -8,60 +10,109 @@ function generateId(): string {
   return `tile-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-export function useCanvasActions() {
-  const tiles = useCanvasStore((s) => s.tiles)
-  const viewport = useCanvasStore((s) => s.viewport)
-  const nextZIndex = useCanvasStore((s) => s.nextZIndex)
+interface UseCanvasActionsOptions {
+  requestConfirm: (options: ConfirmDialogOptions) => Promise<boolean>
+}
+
+export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
   const activeWorkspaceId = useCanvasStore((s) => s.activeWorkspaceId)
   const browserHomeUrl = useSettingsStore((s) => s.browser.homeUrl)
   const gridSize = useSettingsStore((s) => s.gridSize)
   const snapToGrid = useSettingsStore((s) => s.snapToGrid)
   const addTile = useCanvasStore((s) => s.addTile)
+  const addTilesToGroup = useCanvasStore((s) => s.addTilesToGroup)
   const removeTile = useCanvasStore((s) => s.removeTile)
   const updateTile = useCanvasStore((s) => s.updateTile)
   const focusTile = useCanvasStore((s) => s.focusTile)
+  const selectTiles = useCanvasStore((s) => s.selectTiles)
   const bringToFront = useCanvasStore((s) => s.bringToFront)
   const setViewport = useCanvasStore((s) => s.setViewport)
+
+  const snapCoordinate = useCallback(
+    (value: number) => (
+      snapToGrid
+        ? Math.round(value / gridSize) * gridSize
+        : value
+    ),
+    [gridSize, snapToGrid],
+  )
 
   // Compute spawn position: near the focused tile, or cascade from the last tile, or viewport center
   const getSpawnPos = useCallback(
     (w: number, h: number, offset: number) => {
-      const focusedTile = tiles.find((t) => t.id === useCanvasStore.getState().focusedTileId)
+      const state = useCanvasStore.getState()
+      const selectedGroup = findSelectedGroup(state.groups, state.selectedTileIds)
+      const groupAnchor = selectedGroup
+        ? getGroupAnchorTile(selectedGroup, state.tiles, state.focusedTileId)
+        : null
+
+      if (groupAnchor) {
+        return {
+          x: snapCoordinate(groupAnchor.x + groupAnchor.width + offset),
+          y: snapCoordinate(groupAnchor.y),
+        }
+      }
+
+      const focusedTile = state.tiles.find((t) => t.id === state.focusedTileId)
       if (focusedTile) {
         // Spawn to the right of the focused tile
         return {
-          x: snapToGrid ? Math.round((focusedTile.x + focusedTile.width + offset) / gridSize) * gridSize : focusedTile.x + focusedTile.width + offset,
-          y: snapToGrid ? Math.round(focusedTile.y / gridSize) * gridSize : focusedTile.y,
+          x: snapCoordinate(focusedTile.x + focusedTile.width + offset),
+          y: snapCoordinate(focusedTile.y),
         }
       }
 
       // Find the rightmost / bottommost tile and cascade
       let maxX = 0, maxY = 0
-      for (const t of tiles) {
+      for (const t of state.tiles) {
         maxX = Math.max(maxX, t.x + t.width)
         maxY = Math.max(maxY, t.y + t.height)
       }
 
-      if (tiles.length > 0) {
+      if (state.tiles.length > 0) {
         return {
-          x: snapToGrid ? Math.round((maxX + offset) / gridSize) * gridSize : maxX + offset,
-          y: snapToGrid ? Math.round(maxY / gridSize) * gridSize : maxY,
+          x: snapCoordinate(maxX + offset),
+          y: snapCoordinate(maxY),
         }
       }
 
       // No tiles — use viewport center
-      const cx = (-viewport.tx + 200) / viewport.zoom
-      const cy = (-viewport.ty + 150) / viewport.zoom
+      const cx = (-state.viewport.tx + 200) / state.viewport.zoom
+      const cy = (-state.viewport.ty + 150) / state.viewport.zoom
       return {
-        x: snapToGrid ? Math.round(cx / gridSize) * gridSize : cx,
-        y: snapToGrid ? Math.round(cy / gridSize) * gridSize : cy,
+        x: snapCoordinate(cx),
+        y: snapCoordinate(cy),
       }
     },
-    [gridSize, snapToGrid, tiles, viewport],
+    [gridSize, snapCoordinate, snapToGrid],
+  )
+
+  const finalizeAddedTile = useCallback(
+    (tile: TileState, targetGroupId?: string) => {
+      addTile(tile)
+
+      if (targetGroupId) {
+        addTilesToGroup(targetGroupId, [tile.id])
+      }
+
+      focusTile(tile.id)
+
+      if (targetGroupId) {
+        const nextGroup = useCanvasStore.getState().groups.find((group) => group.id === targetGroupId)
+        selectTiles(nextGroup?.tileIds ?? [tile.id])
+      } else {
+        selectTiles([tile.id])
+      }
+
+      bringToFront(tile.id)
+    },
+    [addTile, addTilesToGroup, bringToFront, focusTile, selectTiles],
   )
 
   const addTerminal = useCallback(
     (profileId: ShellProfileId) => {
+      const state = useCanvasStore.getState()
+      const targetGroup = findSelectedGroup(state.groups, state.selectedTileIds)
       const pos = getSpawnPos(640, 420, 40)
 
       const tile: TileState = {
@@ -71,17 +122,18 @@ export function useCanvasActions() {
         y: pos.y,
         width: 640,
         height: 420,
-        zIndex: nextZIndex,
+        zIndex: state.nextZIndex,
         shellProfileId: profileId,
+        groupId: targetGroup?.id,
       }
-      addTile(tile)
-      focusTile(tile.id)
-      bringToFront(tile.id)
+      finalizeAddedTile(tile, targetGroup?.id)
     },
-    [getSpawnPos, nextZIndex, addTile, focusTile, bringToFront],
+    [finalizeAddedTile, getSpawnPos],
   )
 
   const addBrowser = useCallback(() => {
+    const state = useCanvasStore.getState()
+    const targetGroup = findSelectedGroup(state.groups, state.selectedTileIds)
     const pos = getSpawnPos(720, 480, 40)
 
     const tile: TileState = {
@@ -91,15 +143,16 @@ export function useCanvasActions() {
       y: pos.y,
       width: 720,
       height: 480,
-      zIndex: nextZIndex,
+      zIndex: state.nextZIndex,
       browserUrl: browserHomeUrl,
+      groupId: targetGroup?.id,
     }
-    addTile(tile)
-    focusTile(tile.id)
-    bringToFront(tile.id)
-  }, [browserHomeUrl, getSpawnPos, nextZIndex, addTile, focusTile, bringToFront])
+    finalizeAddedTile(tile, targetGroup?.id)
+  }, [browserHomeUrl, finalizeAddedTile, getSpawnPos])
 
   const addBoard = useCallback(() => {
+    const state = useCanvasStore.getState()
+    const targetGroup = findSelectedGroup(state.groups, state.selectedTileIds)
     const pos = getSpawnPos(KANBAN_BOARD_FIXED_WIDTH, 520, 40)
 
     const tile: TileState = {
@@ -109,15 +162,16 @@ export function useCanvasActions() {
       y: pos.y,
       width: KANBAN_BOARD_FIXED_WIDTH,
       height: 520,
-      zIndex: nextZIndex,
+      zIndex: state.nextZIndex,
+      groupId: targetGroup?.id,
     }
-    addTile(tile)
-    focusTile(tile.id)
-    bringToFront(tile.id)
-  }, [getSpawnPos, nextZIndex, addTile, focusTile, bringToFront])
+    finalizeAddedTile(tile, targetGroup?.id)
+  }, [finalizeAddedTile, getSpawnPos])
 
   const addNote = useCallback(
     (color?: NoteColor) => {
+      const state = useCanvasStore.getState()
+      const targetGroup = findSelectedGroup(state.groups, state.selectedTileIds)
       const pos = getSpawnPos(320, 280, 40)
 
       const tile: TileState = {
@@ -127,27 +181,37 @@ export function useCanvasActions() {
         y: pos.y,
         width: 320,
         height: 280,
-        zIndex: nextZIndex,
+        zIndex: state.nextZIndex,
         noteColor: color ?? 'yellow',
         noteFont: 'sans',
         noteContent: '',
+        groupId: targetGroup?.id,
       }
-      addTile(tile)
-      focusTile(tile.id)
-      bringToFront(tile.id)
+      finalizeAddedTile(tile, targetGroup?.id)
     },
-    [getSpawnPos, nextZIndex, addTile, focusTile, bringToFront],
+    [finalizeAddedTile, getSpawnPos],
   )
 
   const deleteTile = useCallback(
-    (tileId: string) => {
+    async (tileId: string): Promise<boolean> => {
       const tile = useCanvasStore.getState().tiles.find((t) => t.id === tileId)
+      if (tile?.locked) {
+        const confirmed = await requestConfirm({
+          title: 'Close locked tile',
+          message: `"${tile.label ?? 'This window'}" is locked. Close it anyway?`,
+          confirmLabel: 'Close',
+          cancelLabel: 'Keep Open',
+          danger: true,
+        })
+        if (!confirmed) return false
+      }
       if (tile?.type === 'terminal') window.electron.terminal.destroy(tileId)
       if (tile?.type === 'note') window.electron.note.delete(tileId)
       if (tile?.type === 'kanban' && activeWorkspaceId) window.electron.board.delete(activeWorkspaceId, tileId)
       removeTile(tileId)
+      return true
     },
-    [activeWorkspaceId, removeTile],
+    [activeWorkspaceId, removeTile, requestConfirm],
   )
 
   const resetZoom = useCallback(() => {

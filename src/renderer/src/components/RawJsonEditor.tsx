@@ -13,6 +13,7 @@ interface RawJsonEditorProps {
 function normalizeCanvasState(state: CanvasState): CanvasState {
   return {
     ...state,
+    groups: state.groups ?? [],
     viewMode: state.viewMode ?? 'fullview',
     fullviewActiveTileId: state.fullviewActiveTileId ?? state.focusedTileId ?? state.tiles[0]?.id ?? null,
   }
@@ -27,6 +28,7 @@ export function RawJsonEditor({ open, workspaceId, onClose, onApply }: RawJsonEd
     window.electron.canvas.load(workspaceId).then((state) => {
       const nextState = normalizeCanvasState(state ?? {
         tiles: [],
+        groups: [],
         viewport: { tx: 0, ty: 0, zoom: 1 },
         nextZIndex: 1,
         focusedTileId: null,

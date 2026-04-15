@@ -6,16 +6,33 @@ import { SettingsPanel } from './components/SettingsPanel'
 import { RawJsonEditor } from './components/RawJsonEditor'
 import { ContextMenu, type MenuItem } from './components/ContextMenu'
 import { FullviewPanel } from './components/FullviewPanel'
+import { AppDialog, type ConfirmDialogOptions, type PromptDialogOptions } from './components/AppDialog'
 import { useCanvasStore } from './store/canvasStore'
 import { useSettingsStore } from './store/settingsStore'
 import { useCanvasActions } from './hooks/useCanvasActions'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useTheme } from './hooks/useTheme'
 import { useFontSize } from './hooks/useFontSize'
-import { KANBAN_BOARD_FIXED_WIDTH } from '@shared/types'
-import type { TileState, CanvasState, Workspace } from '@shared/types'
+import { findMergeTargetGroup, findSelectedGroup } from './utils/grouping'
+import { GROUP_COLORS, type TileState, type CanvasState, type Workspace, type TileGroup } from '@shared/types'
 import { TILE_META } from './components/TileContent'
 import { Terminal, StickyNote, Globe, LayoutGrid, ChevronDown, FolderPlus, Trash2, Pencil } from 'lucide-react'
+
+type PromptDialogState = {
+  request: { mode: 'prompt' } & PromptDialogOptions
+  resolve: (value: string | null) => void
+}
+
+type ConfirmDialogState = {
+  request: { mode: 'confirm' } & ConfirmDialogOptions
+  resolve: (value: boolean) => void
+}
+
+type ActiveDialogState = PromptDialogState | ConfirmDialogState | null
+
+function isPromptDialog(dialog: PromptDialogState | ConfirmDialogState): dialog is PromptDialogState {
+  return dialog.request.mode === 'prompt'
+}
 
 export default function App(): React.ReactElement {
   // Settings
@@ -26,26 +43,58 @@ export default function App(): React.ReactElement {
   // Canvas state
   const tiles = useCanvasStore((s) => s.tiles)
   const viewport = useCanvasStore((s) => s.viewport)
+  const groups = useCanvasStore((s) => s.groups)
   const nextZIndex = useCanvasStore((s) => s.nextZIndex)
   const focusedTileId = useCanvasStore((s) => s.focusedTileId)
+  const selectedTileIds = useCanvasStore((s) => s.selectedTileIds)
   const viewMode = useCanvasStore((s) => s.viewMode)
   const fullviewActiveTileId = useCanvasStore((s) => s.fullviewActiveTileId)
   const activeWorkspaceId = useCanvasStore((s) => s.activeWorkspaceId)
   const activeWorkspaceName = useCanvasStore((s) => s.activeWorkspaceName)
   const availableProfiles = useCanvasStore((s) => s.availableProfiles)
   const setViewport = useCanvasStore((s) => s.setViewport)
-  const setTiles = useCanvasStore((s) => s.setTiles)
   const restoreState = useCanvasStore((s) => s.restoreState)
   const updateTile = useCanvasStore((s) => s.updateTile)
   const focusTile = useCanvasStore((s) => s.focusTile)
+  const selectTiles = useCanvasStore((s) => s.selectTiles)
   const bringToFront = useCanvasStore((s) => s.bringToFront)
+  const createGroup = useCanvasStore((s) => s.createGroup)
+  const addTilesToGroup = useCanvasStore((s) => s.addTilesToGroup)
+  const renameGroup = useCanvasStore((s) => s.renameGroup)
+  const ungroup = useCanvasStore((s) => s.ungroup)
   const setWorkspace = useCanvasStore((s) => s.setWorkspace)
   const setProfiles = useCanvasStore((s) => s.setProfiles)
   const setViewMode = useCanvasStore((s) => s.setViewMode)
   const setFullviewActiveTileId = useCanvasStore((s) => s.setFullviewActiveTileId)
 
   // Canvas actions (extracted hook)
-  const { addTerminal, addNote, addBrowser, addBoard, deleteTile, resetZoom } = useCanvasActions()
+  const [activeDialog, setActiveDialog] = useState<ActiveDialogState>(null)
+
+  const requestPrompt = useCallback((request: PromptDialogOptions): Promise<string | null> => {
+    return new Promise((resolve) => {
+      setActiveDialog({
+        request: {
+          mode: 'prompt',
+          ...request,
+        },
+        resolve,
+      })
+    })
+  }, [])
+
+  const requestConfirm = useCallback((request: ConfirmDialogOptions): Promise<boolean> => {
+    return new Promise((resolve) => {
+      setActiveDialog({
+        request: {
+          mode: 'confirm',
+          ...request,
+        },
+        resolve,
+      })
+    })
+  }, [])
+
+  const { addTerminal, addNote, addBrowser, addBoard, deleteTile, resetZoom } = useCanvasActions({ requestConfirm })
 
   // UI state
   const [showProfilePicker, setShowProfilePicker] = useState(false)
@@ -62,6 +111,30 @@ export default function App(): React.ReactElement {
   const footerRef = useRef<HTMLDivElement | null>(null)
   const workspaceMenuRef = useRef<HTMLDivElement | null>(null)
 
+  const closeActiveDialog = useCallback(() => {
+    if (!activeDialog) return
+
+    if (isPromptDialog(activeDialog)) {
+      activeDialog.resolve(null)
+    } else {
+      activeDialog.resolve(false)
+    }
+
+    setActiveDialog(null)
+  }, [activeDialog])
+
+  const confirmActiveDialog = useCallback((value?: string) => {
+    if (!activeDialog) return
+
+    if (isPromptDialog(activeDialog)) {
+      activeDialog.resolve(value ?? null)
+    } else {
+      activeDialog.resolve(true)
+    }
+
+    setActiveDialog(null)
+  }, [activeDialog])
+
   // Load settings on mount
   useEffect(() => {
     loadSettings()
@@ -75,6 +148,7 @@ export default function App(): React.ReactElement {
         } else {
           restoreState({
             tiles: [],
+            groups: [],
             viewport: { tx: 0, ty: 0, zoom: 1 },
             nextZIndex: 1,
             focusedTileId: null,
@@ -130,6 +204,7 @@ export default function App(): React.ReactElement {
     (workspaceId: string) => {
       const state: CanvasState = {
         tiles: tiles.map((t) => ({ ...t })),
+        groups: groups.map((group) => ({ ...group, tileIds: [...group.tileIds] })),
         viewport: { ...viewport },
         nextZIndex,
         focusedTileId,
@@ -138,7 +213,7 @@ export default function App(): React.ReactElement {
       }
       window.electron.canvas.save(workspaceId, state)
     },
-    [tiles, viewport, nextZIndex, focusedTileId, viewMode, fullviewActiveTileId],
+    [tiles, groups, viewport, nextZIndex, focusedTileId, viewMode, fullviewActiveTileId],
   )
 
   const scheduleSave = useCallback(() => {
@@ -150,7 +225,7 @@ export default function App(): React.ReactElement {
 
   useEffect(() => {
     if (activeWorkspaceId) scheduleSave()
-  }, [tiles, viewport, nextZIndex, activeWorkspaceId, scheduleSave])
+  }, [tiles, groups, viewport, nextZIndex, activeWorkspaceId, scheduleSave])
 
   useEffect(() => {
     if (!showProfilePicker) return
@@ -182,10 +257,12 @@ export default function App(): React.ReactElement {
   useKeyboardShortcuts({
     tiles,
     focusedTileId,
+    selectedTileIds,
     viewMode,
     deleteTile,
     resetZoom,
     focusTile,
+    selectTiles,
     setViewMode,
     onClosePicker: () => {
       setShowProfilePicker(false)
@@ -193,6 +270,7 @@ export default function App(): React.ReactElement {
       setShowSettings(false)
       setTileMenu(null)
       setRenamingTileId(null)
+      closeActiveDialog()
     },
   })
 
@@ -217,12 +295,17 @@ export default function App(): React.ReactElement {
     }
   }, [viewport, setViewport])
 
-  const handleFocusTile = useCallback((tileId: string) => {
+  const handleSelectSingleTile = useCallback((tileId: string) => {
     focusTile(tileId)
+    selectTiles([tileId])
     bringToFront(tileId)
     setFullviewActiveTileId(tileId)
+  }, [focusTile, selectTiles, bringToFront, setFullviewActiveTileId])
+
+  const handleFocusTile = useCallback((tileId: string) => {
+    handleSelectSingleTile(tileId)
     getCanvasMethods()?.centerViewOnTile(tileId)
-  }, [focusTile, bringToFront, setFullviewActiveTileId])
+  }, [handleSelectSingleTile])
 
   const handleSetViewMode = useCallback((mode: 'canvas' | 'fullview') => {
     if (mode === 'fullview') {
@@ -238,6 +321,78 @@ export default function App(): React.ReactElement {
 
     setViewMode(mode)
   }, [focusedTileId, fullviewActiveTileId, tiles, setFullviewActiveTileId, setViewMode])
+
+  const selectedGroup = useMemo(
+    () => findSelectedGroup(groups, selectedTileIds),
+    [groups, selectedTileIds],
+  )
+
+  const mergeTargetGroup = useMemo(
+    () => findMergeTargetGroup(tiles, groups, selectedTileIds),
+    [tiles, groups, selectedTileIds],
+  )
+
+  const handleCreateGroupFromSelection = useCallback(async () => {
+    if (mergeTargetGroup) {
+      addTilesToGroup(mergeTargetGroup.id, selectedTileIds)
+      return
+    }
+
+    if (selectedTileIds.length < 2) return
+    const name = await requestPrompt({
+      title: 'Create group',
+      message: 'Choose a name for the new group.',
+      confirmLabel: 'Create Group',
+      cancelLabel: 'Cancel',
+      defaultValue: 'Untitled Group',
+      placeholder: 'Group name',
+    })
+
+    const nextName = name?.trim()
+    if (!nextName) return
+    createGroup(nextName, selectedTileIds)
+  }, [addTilesToGroup, createGroup, mergeTargetGroup, requestPrompt, selectedTileIds])
+
+  const handleRenameGroup = useCallback(async (group: TileGroup) => {
+    const name = await requestPrompt({
+      title: 'Rename group',
+      message: 'Update the saved name for this group.',
+      confirmLabel: 'Save Name',
+      cancelLabel: 'Cancel',
+      defaultValue: group.name,
+      placeholder: 'Group name',
+    })
+
+    const nextName = name?.trim()
+    if (!nextName || nextName === group.name) return
+    renameGroup(group.id, nextName)
+  }, [renameGroup, requestPrompt])
+
+  const handleUngroup = useCallback(async (group: TileGroup) => {
+    const confirmed = await requestConfirm({
+      title: 'Ungroup tiles',
+      message: `Ungroup "${group.name}" and keep its tiles separate on the canvas?`,
+      confirmLabel: 'Ungroup',
+      cancelLabel: 'Keep Group',
+      danger: true,
+    })
+    if (!confirmed) return
+    ungroup(group.id)
+  }, [requestConfirm, ungroup])
+
+  const handleSelectGroup = useCallback((group: TileGroup) => {
+    const groupTiles = tiles.filter((tile) => group.tileIds.includes(tile.id))
+    if (groupTiles.length === 0) return
+
+    selectTiles(groupTiles.map((tile) => tile.id))
+    focusTile(null)
+
+    const minX = Math.min(...groupTiles.map((tile) => tile.x))
+    const minY = Math.min(...groupTiles.map((tile) => tile.y))
+    const maxX = Math.max(...groupTiles.map((tile) => tile.x + tile.width))
+    const maxY = Math.max(...groupTiles.map((tile) => tile.y + tile.height))
+    getCanvasMethods()?.centerViewOnBounds({ minX, minY, maxX, maxY })
+  }, [tiles, selectTiles, focusTile])
 
   const beginRenameTile = useCallback((tile: TileState) => {
     setTileMenu(null)
@@ -261,7 +416,13 @@ export default function App(): React.ReactElement {
   }, [updateTile])
 
   const createWorkspace = useCallback(async () => {
-    const name = window.prompt('Workspace name')
+    const name = await requestPrompt({
+      title: 'Create workspace',
+      message: 'Choose a name for the new workspace.',
+      confirmLabel: 'Create',
+      cancelLabel: 'Cancel',
+      placeholder: 'Workspace name',
+    })
     if (!name?.trim()) return
 
     if (activeWorkspaceId) saveToDisk(activeWorkspaceId)
@@ -273,11 +434,18 @@ export default function App(): React.ReactElement {
     if (!list.some((w) => w.id === created.id)) {
       setWorkspaces((prev) => [...prev, created])
     }
-  }, [activeWorkspaceId, saveToDisk, refreshWorkspaces, setWorkspace, loadWorkspace])
+  }, [activeWorkspaceId, loadWorkspace, refreshWorkspaces, requestPrompt, saveToDisk, setWorkspace])
 
   const deleteCurrentWorkspace = useCallback(async () => {
     if (!activeWorkspaceId) return
-    if (!window.confirm(`Delete workspace "${activeWorkspaceName}"?`)) return
+    const confirmed = await requestConfirm({
+      title: 'Delete workspace',
+      message: `Delete workspace "${activeWorkspaceName}"? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      cancelLabel: 'Keep Workspace',
+      danger: true,
+    })
+    if (!confirmed) return
 
     if (activeWorkspaceId) saveToDisk(activeWorkspaceId)
     await window.electron.workspace.delete(activeWorkspaceId)
@@ -293,7 +461,7 @@ export default function App(): React.ReactElement {
     }
 
     setShowWorkspacePicker(false)
-  }, [activeWorkspaceId, activeWorkspaceName, saveToDisk, refreshWorkspaces, setWorkspace, loadWorkspace])
+  }, [activeWorkspaceId, activeWorkspaceName, loadWorkspace, refreshWorkspaces, requestConfirm, saveToDisk, setWorkspace])
 
   const createTerminalFromSidebar = useCallback(() => {
     if (availableProfiles.length <= 1 && defaultProfile) {
@@ -316,6 +484,10 @@ export default function App(): React.ReactElement {
       action: () => updateTile(activeTileMenu.id, { hideTitlebar: !activeTileMenu.hideTitlebar }),
     },
     {
+      label: activeTileMenu.locked ? 'Unlock' : 'Lock',
+      action: () => updateTile(activeTileMenu.id, { locked: !activeTileMenu.locked }),
+    },
+    {
       label: 'Cycle Radius',
       action: () => updateTile(activeTileMenu.id, { radiusIndex: ((activeTileMenu.radiusIndex ?? 0) + 1) % 4 }),
     },
@@ -323,7 +495,9 @@ export default function App(): React.ReactElement {
       label: 'Close',
       icon: Trash2,
       danger: true,
-      action: () => deleteTile(activeTileMenu.id),
+      action: () => {
+        void deleteTile(activeTileMenu.id)
+      },
     },
   ] : []
 
@@ -346,7 +520,7 @@ export default function App(): React.ReactElement {
     }
   }, [tiles, sortedTiles, fullviewActiveTileId, focusedTileId, viewMode, setFullviewActiveTileId, setViewMode])
 
-  const closeTileFromFullview = useCallback((tileId: string) => {
+  const closeTileFromFullview = useCallback(async (tileId: string) => {
     const ordered = tiles.slice().sort((a, b) => b.zIndex - a.zIndex)
     const index = ordered.findIndex((tile) => tile.id === tileId)
     const fallback =
@@ -354,80 +528,24 @@ export default function App(): React.ReactElement {
       ordered[index - 1]?.id ??
       null
 
+    const deleted = await deleteTile(tileId)
+    if (!deleted) return
+
     if (fullviewActiveTileId === tileId) {
       setFullviewActiveTileId(fallback)
       if (!fallback) setViewMode('canvas')
     }
-
-    deleteTile(tileId)
   }, [tiles, fullviewActiveTileId, deleteTile, setFullviewActiveTileId, setViewMode])
 
-  const centerViewportForTiles = useCallback((nextTiles: TileState[]) => {
-    if (nextTiles.length === 0) {
-      setViewport({ tx: 0, ty: 0, zoom: 1 })
-      return
-    }
-
-    const minX = Math.min(...nextTiles.map((tile) => tile.x))
-    const minY = Math.min(...nextTiles.map((tile) => tile.y))
-    const maxX = Math.max(...nextTiles.map((tile) => tile.x + tile.width))
-    const maxY = Math.max(...nextTiles.map((tile) => tile.y + tile.height))
-    const boundsWidth = maxX - minX
-    const boundsHeight = maxY - minY
-    const container = document.querySelector('.canvas-root') as HTMLDivElement | null
-    const width = container?.clientWidth ?? window.innerWidth
-    const height = container?.clientHeight ?? window.innerHeight
-    setViewport({
-      tx: width / 2 - (minX + boundsWidth / 2),
-      ty: height / 2 - (minY + boundsHeight / 2),
-      zoom: 1,
+  const confirmRemoveTileFromGroup = useCallback(async (tile: TileState, group: TileGroup) => {
+    return requestConfirm({
+      title: 'Remove tile from group',
+      message: `Remove "${tile.label ?? 'this tile'}" from "${group.name}"? The tile will be moved outside the group frame.`,
+      confirmLabel: 'Remove',
+      cancelLabel: 'Keep In Group',
+      danger: true,
     })
-  }, [setViewport])
-
-  const arrangeTiles = useCallback((mode: 'grid' | 'columns' | 'rows') => {
-    if (tiles.length === 0) return
-
-    const gap = 40
-    let cursorX = 0
-    let cursorY = 0
-    let rowHeight = 0
-    const cols = mode === 'grid' ? Math.max(1, Math.ceil(Math.sqrt(tiles.length))) : 1
-
-    const nextTiles = sortedTiles.map((tile, index) => {
-      let nextX = cursorX
-      let nextY = cursorY
-
-      if (mode === 'grid') {
-        if (index > 0 && index % cols === 0) {
-          cursorX = 0
-          cursorY += rowHeight + gap
-          rowHeight = 0
-        }
-        nextX = cursorX
-        nextY = cursorY
-        cursorX += tile.width + gap
-        rowHeight = Math.max(rowHeight, tile.height)
-      } else if (mode === 'columns') {
-        nextX = 0
-        nextY = cursorY
-        cursorY += tile.height + gap
-      } else {
-        nextX = cursorX
-        nextY = 0
-        cursorX += tile.width + gap
-      }
-
-      return {
-        ...tile,
-        x: Math.round(nextX / 20) * 20,
-        y: Math.round(nextY / 20) * 20,
-        width: tile.type === 'kanban' ? KANBAN_BOARD_FIXED_WIDTH : tile.width,
-      }
-    })
-
-    setTiles(nextTiles)
-    centerViewportForTiles(nextTiles)
-  }, [tiles.length, sortedTiles, setTiles, centerViewportForTiles])
+  }, [requestConfirm])
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-bg-primary text-text-primary">
@@ -599,12 +717,18 @@ export default function App(): React.ReactElement {
               <span className="nd-caption text-text-secondary">FOCUSED APP</span>
               <span className="font-mono text-sm text-text-display">{focusedTileId ? focusedTileId.slice(-4) : '--'}</span>
             </div>
+            <div className="mt-2 flex items-center justify-between">
+              <span className="nd-caption text-text-secondary">SELECTION</span>
+              <span className="font-mono text-sm text-text-display">{selectedTileIds.length.toString().padStart(2, '0')}</span>
+            </div>
           </div>
 
           <div className="flex-1 px-3 py-4">
             <div className="mb-3 flex items-center justify-between px-2">
               <span className="nd-label text-text-secondary">Active Surfaces</span>
-              <span className="nd-caption text-text-secondary">{sortedTiles.length} TRACKED</span>
+              <span className="nd-caption text-text-secondary">
+                {selectedTileIds.length > 1 ? `${selectedTileIds.length} SELECTED` : `${sortedTiles.length} TRACKED`}
+              </span>
             </div>
             {tiles.length === 0 ? (
               <div className="nd-panel-raised rounded-[20px] px-5 py-8 text-center text-text-secondary">
@@ -620,15 +744,16 @@ export default function App(): React.ReactElement {
                     const meta = TILE_META[tile.type]
                     const Icon = meta.icon
                     const isActive = tile.id === focusedTileId
+                    const isSelected = selectedTileIds.includes(tile.id)
 
                     return (
                       <button
                         key={tile.id}
                         className="w-full rounded-[20px] border px-4 py-4 text-left transition-colors"
                         style={{
-                          background: isActive ? 'var(--surface-raised)' : 'var(--surface)',
-                          borderColor: isActive ? 'var(--text-display)' : 'var(--border)',
-                          color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
+                          background: isActive || isSelected ? 'var(--surface-raised)' : 'var(--surface)',
+                          borderColor: isActive ? 'var(--text-display)' : isSelected ? 'var(--border-visible)' : 'var(--border)',
+                          color: isActive || isSelected ? 'var(--text-primary)' : 'var(--text-secondary)',
                         }}
                         onClick={() => handleFocusTile(tile.id)}
                         onContextMenu={(event) => {
@@ -643,7 +768,7 @@ export default function App(): React.ReactElement {
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="nd-label text-text-secondary">
-                              {tile.id === fullviewActiveTileId ? '[ PRIMARY ]' : '[ OPEN ]'}
+                              {isSelected ? '[ SELECTED ]' : tile.id === fullviewActiveTileId ? '[ PRIMARY ]' : '[ OPEN ]'}
                             </div>
                             {renamingTileId === tile.id ? (
                               <input
@@ -677,6 +802,69 @@ export default function App(): React.ReactElement {
                   })}
               </div>
             )}
+
+            <div className="mb-3 mt-6 flex items-center justify-between px-2">
+              <span className="nd-label text-text-secondary">Groups</span>
+              <span className="nd-caption text-text-secondary">{groups.length} SAVED</span>
+            </div>
+            {groups.length === 0 ? (
+              <div className="rounded-[20px] border border-dashed border-border px-5 py-6 text-sm text-text-disabled">
+                Create a selection on the canvas and use the bottom Group bar to save it as a permanent group.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {groups.map((group) => {
+                  const isSelectedGroup = selectedGroup?.id === group.id
+                  const groupColor = GROUP_COLORS[group.colorId]
+
+                  return (
+                    <div
+                      key={group.id}
+                      className="rounded-[20px] border px-4 py-4 transition-colors"
+                      style={{
+                        background: isSelectedGroup ? 'var(--surface-raised)' : 'var(--surface)',
+                        borderColor: isSelectedGroup ? 'var(--text-display)' : 'var(--border)',
+                      }}
+                    >
+                      <button
+                        className="w-full text-left"
+                        onClick={() => handleSelectGroup(group)}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex min-w-0 gap-3">
+                            <span
+                              className="mt-1 h-3 w-3 shrink-0 rounded-full border"
+                              style={{ background: groupColor.swatch, borderColor: 'rgba(255,255,255,0.25)' }}
+                            />
+                            <div className="min-w-0">
+                              <div className="nd-label text-text-secondary">
+                                {isSelectedGroup ? '[ ACTIVE GROUP ]' : '[ GROUP ]'}
+                              </div>
+                              <div className="mt-2 truncate text-sm text-text-display">{group.name}</div>
+                            </div>
+                          </div>
+                          <span className="nd-caption shrink-0 text-text-secondary">{group.tileIds.length} TILES</span>
+                        </div>
+                      </button>
+                      <div className="mt-3 flex gap-2">
+                        <button
+                          className="rounded-full border border-border-visible px-3 py-2 text-xs text-text-secondary transition-colors hover:text-text-display"
+                          onClick={() => handleRenameGroup(group)}
+                        >
+                          Rename
+                        </button>
+                        <button
+                          className="rounded-full border border-border-visible px-3 py-2 text-xs text-text-secondary transition-colors hover:text-text-display"
+                          onClick={() => handleUngroup(group)}
+                        >
+                          Ungroup
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         </div>
       </Sidebar>
@@ -689,9 +877,7 @@ export default function App(): React.ReactElement {
           sidebarCollapsed={sidebarCollapsed}
           onToggleSidebar={() => setSidebarCollapsed(c => !c)}
           onSetViewMode={handleSetViewMode}
-          onArrangeGrid={() => arrangeTiles('grid')}
-          onArrangeColumns={() => arrangeTiles('columns')}
-          onArrangeRows={() => arrangeTiles('rows')}
+          onFitToContent={() => getCanvasMethods()?.fitViewToContent()}
           onZoomToggle={handleZoomToggle}
           onOpenSettings={() => setShowSettings(true)}
         />
@@ -705,10 +891,17 @@ export default function App(): React.ReactElement {
                 focusedTileId={focusedTileId}
                 onActivateTile={(tileId) => {
                   setFullviewActiveTileId(tileId)
-                  focusTile(tileId)
+                  handleSelectSingleTile(tileId)
                 }}
-                onCloseTile={closeTileFromFullview}
+                onCloseTile={(tileId) => {
+                  void closeTileFromFullview(tileId)
+                }}
                 onRenameTile={renameTile}
+                onToggleLock={(tileId) => {
+                  const tile = tiles.find((entry) => entry.id === tileId)
+                  if (!tile) return
+                  updateTile(tileId, { locked: !tile.locked })
+                }}
               />
             </div>
           )}
@@ -719,9 +912,14 @@ export default function App(): React.ReactElement {
             onCreateNote={() => addNote()}
             onCreateBrowser={() => addBrowser()}
             onCreateBoard={() => addBoard()}
+            onCreateGroupFromSelection={() => {
+              void handleCreateGroupFromSelection()
+            }}
+            onDeleteTile={deleteTile}
+            onConfirmRemoveFromGroup={confirmRemoveTileFromGroup}
             viewMode={viewMode}
             fullviewActiveTileId={fullviewActiveTileId}
-            fullviewTopInset={viewMode === 'fullview' ? 128 : 0}
+            fullviewTopInset={viewMode === 'fullview' ? 118 : 0}
           />
         </div>
       </div>
@@ -754,6 +952,11 @@ export default function App(): React.ReactElement {
           onClose={() => setTileMenu(null)}
         />
       )}
+      <AppDialog
+        request={activeDialog?.request ?? null}
+        onCancel={closeActiveDialog}
+        onConfirm={confirmActiveDialog}
+      />
     </div>
   )
 }

@@ -101,9 +101,9 @@ export const KANBAN_COLUMNS: Array<{ id: KanbanColumnId; label: string }> = [
 ]
 
 export const KANBAN_COLUMN_WIDTH = 280
-export const KANBAN_COLUMN_GAP = 12
-export const KANBAN_BOARD_PADDING_X = 24
-export const KANBAN_BOARD_EDGE_ALLOWANCE = 16
+export const KANBAN_COLUMN_GAP = 16
+export const KANBAN_BOARD_PADDING_X = 32
+export const KANBAN_BOARD_EDGE_ALLOWANCE = 24
 export const KANBAN_BOARD_FIXED_WIDTH =
   KANBAN_COLUMNS.length * KANBAN_COLUMN_WIDTH +
   (KANBAN_COLUMNS.length - 1) * KANBAN_COLUMN_GAP +
@@ -129,6 +129,50 @@ export interface KanbanBoardState {
   columns: Record<KanbanColumnId, KanbanCard[]>
 }
 
+export type GroupColorId = 'blue' | 'green' | 'amber' | 'rose' | 'slate'
+
+export const GROUP_COLOR_ORDER: GroupColorId[] = ['blue', 'green', 'amber', 'rose', 'slate']
+
+export const GROUP_COLORS: Record<GroupColorId, { swatch: string; border: string; background: string; text: string }> = {
+  blue: {
+    swatch: '#4a9eff',
+    border: '#4a9effcc',
+    background: 'rgba(74, 158, 255, 0.10)',
+    text: '#7db6ff',
+  },
+  green: {
+    swatch: '#2fbf71',
+    border: '#2fbf71cc',
+    background: 'rgba(47, 191, 113, 0.10)',
+    text: '#74dca0',
+  },
+  amber: {
+    swatch: '#f0a53a',
+    border: '#f0a53acc',
+    background: 'rgba(240, 165, 58, 0.10)',
+    text: '#ffc875',
+  },
+  rose: {
+    swatch: '#e56b8c',
+    border: '#e56b8ccc',
+    background: 'rgba(229, 107, 140, 0.10)',
+    text: '#f2a1b8',
+  },
+  slate: {
+    swatch: '#8a94a6',
+    border: '#8a94a6cc',
+    background: 'rgba(138, 148, 166, 0.10)',
+    text: '#c3cad4',
+  },
+}
+
+export interface TileGroup {
+  id: string
+  name: string
+  colorId: GroupColorId
+  tileIds: string[]
+}
+
 // ─── Tile State ────────────────────────────────────────────────────────────
 
 export interface TileState {
@@ -140,8 +184,10 @@ export interface TileState {
   height: number
   zIndex: number
   label?: string
+  locked?: boolean
   hideTitlebar?: boolean
   radiusIndex?: number
+  groupId?: string
 
   // Terminal-specific
   shellProfileId?: ShellProfileId
@@ -159,6 +205,7 @@ export interface TileState {
 
 export interface CanvasState {
   tiles: TileState[]
+  groups: TileGroup[]
   viewport: Viewport
   nextZIndex: number
   focusedTileId: string | null
