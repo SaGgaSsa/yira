@@ -92,7 +92,7 @@ The repository already includes a workflow at `.github/workflows/windows-release
 Behavior:
 
 - Push to `main`: builds the Windows installer and uploads it as a workflow artifact
-- Push a tag like `v0.1.0`: builds the installer and publishes it to GitHub Releases
+- Push a tag like `v0.1.0`: builds the installer and publishes the generated files to GitHub Releases
 - Manual trigger: available through `workflow_dispatch`
 
 Repository setup needed in GitHub:
@@ -101,5 +101,19 @@ Repository setup needed in GitHub:
 2. Ensure the workflow has `Read and write permissions`
 3. Use `main` as the default branch, or update the workflow branch filter
 4. Create release tags in the format `v*` when you want published installers
+
+Exact publish flow for the next version:
+
+1. Update `package.json` to the target version, for example `0.1.0`
+2. Commit and push the change to `main`
+3. Create and push the matching tag:
+
+```bash
+git tag -a v0.1.0 -m "v0.1.0"
+git push origin v0.1.0
+```
+
+4. Wait for the `Windows Release` workflow to complete
+5. Verify that GitHub created release `v0.1.0` and attached the installer files
 
 For more detail, see [docs/windows-release.md](docs/windows-release.md).

@@ -59,7 +59,7 @@ jobs:
           $files | Select-Object FullName, Length
 
       - name: Upload Windows artifacts
-        if: ${{ success() }}
+        if: ${{ success() && !startsWith(github.ref, 'refs/tags/v') }}
         uses: actions/upload-artifact@v6
         with:
           name: yira-windows-${{ github.ref_name }}
