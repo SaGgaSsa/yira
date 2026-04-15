@@ -1,5 +1,11 @@
 import type { TileGroup, TileState } from '@shared/types'
 
+export function isTileInteractionLocked(tile: TileState, groups: TileGroup[]): boolean {
+  if (tile.locked) return true
+  if (!tile.groupId) return false
+  return Boolean(groups.find((group) => group.id === tile.groupId)?.locked)
+}
+
 export function findSelectedGroup(groups: TileGroup[], selectedTileIds: string[]): TileGroup | null {
   if (selectedTileIds.length === 0) return null
 

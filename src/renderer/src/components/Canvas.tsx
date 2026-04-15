@@ -5,7 +5,7 @@ import { TileChrome } from '@/components/TileChrome'
 import { TileContent } from '@/components/TileContent'
 import { ContextMenu } from '@/components/ContextMenu'
 import { findMergeTargetGroup, findSelectedGroup } from '@/utils/grouping'
-import { Terminal, StickyNote, Globe, LayoutGrid } from 'lucide-react'
+import { Terminal, StickyNote, Globe, LayoutGrid, Lock } from 'lucide-react'
 import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type ShellProfileId, type TileGroup, type GroupColorId } from '@shared/types'
 
 const GROUP_FRAME_PADDING = 20
@@ -61,6 +61,7 @@ interface CanvasMethods {
   centerViewOnTile: (tileId: string) => void
   centerViewOnCanvas: () => void
   centerViewOnBounds: (bounds: { minX: number; minY: number; maxX: number; maxY: number }) => void
+  fitViewToBounds: (bounds: { minX: number; minY: number; maxX: number; maxY: number }) => void
   fitViewToContent: () => void
 }
 
@@ -116,6 +117,7 @@ export function Canvas({
   const focusTile = useCanvasStore((s) => s.focusTile)
   const removeTileFromGroup = useCanvasStore((s) => s.removeTileFromGroup)
   const setGroupColor = useCanvasStore((s) => s.setGroupColor)
+  const setGroupLocked = useCanvasStore((s) => s.setGroupLocked)
   const isFullview = viewMode === 'fullview'
   const showGrid = useSettingsStore((s) => s.showGrid)
   const gridSize = useSettingsStore((s) => s.gridSize)
@@ -211,6 +213,29 @@ export function Canvas({
     [viewport.zoom, setViewport],
   )
 
+  const fitViewToBounds = useCallback(
+    ({ minX, minY, maxX, maxY }: { minX: number; minY: number; maxX: number; maxY: number }) => {
+      if (!containerRef.current) return
+
+      const rect = containerRef.current.getBoundingClientRect()
+      const boundsWidth = Math.max(1, maxX - minX)
+      const boundsHeight = Math.max(1, maxY - minY)
+      const padding = 48
+      const availableWidth = Math.max(1, rect.width - padding * 2)
+      const availableHeight = Math.max(1, rect.height - padding * 2)
+      const nextZoom = Math.max(0.1, Math.min(5, Math.min(availableWidth / boundsWidth, availableHeight / boundsHeight)))
+      const boundsCenterX = minX + boundsWidth / 2
+      const boundsCenterY = minY + boundsHeight / 2
+
+      setViewport({
+        tx: rect.width / 2 - boundsCenterX * nextZoom,
+        ty: rect.height / 2 - boundsCenterY * nextZoom,
+        zoom: nextZoom,
+      })
+    },
+    [setViewport],
+  )
+
   const fitViewToContent = useCallback(() => {
     if (!containerRef.current) return
 
@@ -219,31 +244,18 @@ export function Canvas({
       return
     }
 
-    const rect = containerRef.current.getBoundingClientRect()
     const minX = Math.min(...tiles.map((tile) => tile.x))
     const minY = Math.min(...tiles.map((tile) => tile.y))
     const maxX = Math.max(...tiles.map((tile) => tile.x + tile.width))
     const maxY = Math.max(...tiles.map((tile) => tile.y + tile.height))
-    const boundsWidth = Math.max(1, maxX - minX)
-    const boundsHeight = Math.max(1, maxY - minY)
-    const padding = 48
-    const availableWidth = Math.max(1, rect.width - padding * 2)
-    const availableHeight = Math.max(1, rect.height - padding * 2)
-    const nextZoom = Math.max(0.1, Math.min(5, Math.min(availableWidth / boundsWidth, availableHeight / boundsHeight)))
-    const boundsCenterX = minX + boundsWidth / 2
-    const boundsCenterY = minY + boundsHeight / 2
-
-    setViewport({
-      tx: rect.width / 2 - boundsCenterX * nextZoom,
-      ty: rect.height / 2 - boundsCenterY * nextZoom,
-      zoom: nextZoom,
-    })
-  }, [tiles, centerViewOnCanvas, setViewport])
+    fitViewToBounds({ minX, minY, maxX, maxY })
+  }, [tiles, centerViewOnCanvas, fitViewToBounds])
 
   canvasMethodsRef.current = {
     centerViewOnTile,
     centerViewOnCanvas,
     centerViewOnBounds,
+    fitViewToBounds,
     fitViewToContent,
   }
 
@@ -286,6 +298,11 @@ export function Canvas({
       selectTiles(memberIds)
       focusTile(null)
 
+      if (groupState.group.locked) {
+        dragRef.current = null
+        return
+      }
+
       const positions = groupState.members
         .filter((tile) => !tile.locked)
         .map((tile) => ({ id: tile.id, x: tile.x, y: tile.y }))
@@ -314,6 +331,7 @@ export function Canvas({
 
       const groupState = groupRenderData.find((entry) => entry.group.id === tile.groupId)
       if (!groupState) return
+      if (groupState.group.locked) return
 
       const confirmed = await onConfirmRemoveFromGroup(tile, groupState.group)
       if (!confirmed) return
@@ -546,7 +564,7 @@ export function Canvas({
                   style={{
                     width: '100%',
                     height: '100%',
-                    border: `2px dashed ${palette.border}`,
+                    border: group.locked ? `2px solid ${palette.border}` : `2px dashed ${palette.border}`,
                     borderRadius: 16,
                     background: palette.background,
                     boxSizing: 'border-box',
@@ -619,7 +637,7 @@ export function Canvas({
                     borderColor: isSelected ? palette.border : 'var(--border-visible)',
                     color: palette.text,
                     userSelect: 'none',
-                    cursor: 'grab',
+                    cursor: group.locked ? 'default' : 'grab',
                   }}
                 >
                   <button
@@ -642,6 +660,22 @@ export function Canvas({
                     }}
                     title="Group color"
                   />
+
+                  <button
+                    className={`flex h-5 w-5 items-center justify-center rounded-full border transition-colors ${
+                      group.locked
+                        ? 'border-transparent bg-text-primary text-bg-primary'
+                        : 'border-border-visible text-text-secondary hover:bg-hover-bg hover:text-text-display'
+                    }`}
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      setGroupLocked(group.id, !group.locked)
+                    }}
+                    title={group.locked ? 'Unlock group' : 'Lock group'}
+                  >
+                    <Lock size={11} />
+                  </button>
 
                   <span
                     style={{

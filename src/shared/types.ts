@@ -65,6 +65,13 @@ export interface ShellProfile {
   available: boolean
 }
 
+export interface TerminalCreateOptions {
+  shellProfileId: ShellProfileId
+  workspaceDir?: string
+  wslStartInHome?: boolean
+  initialCommand?: string
+}
+
 // ─── Tile Types ────────────────────────────────────────────────────────────
 
 export type TileType = 'terminal' | 'note' | 'browser' | 'kanban'
@@ -171,6 +178,10 @@ export interface TileGroup {
   name: string
   colorId: GroupColorId
   tileIds: string[]
+  locked?: boolean
+  terminal?: {
+    wslStartupCommand?: string
+  }
 }
 
 // ─── Tile State ────────────────────────────────────────────────────────────

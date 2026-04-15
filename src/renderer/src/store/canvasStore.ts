@@ -4,6 +4,27 @@ import { GROUP_COLOR_ORDER, type TileState, type CanvasState, type Viewport, typ
 const UNTITLED_GROUP_NAME = 'Untitled Group'
 const DEFAULT_GROUP_COLOR: GroupColorId = GROUP_COLOR_ORDER[0]
 
+function normalizeGroupTerminalSettings(group: Pick<TileGroup, 'terminal'>): TileGroup['terminal'] {
+  const wslStartupCommand = group.terminal?.wslStartupCommand?.trim()
+
+  if (!wslStartupCommand) return undefined
+
+  return {
+    wslStartupCommand,
+  }
+}
+
+function normalizeGroup(group: TileGroup): TileGroup {
+  return {
+    id: group.id,
+    name: group.name.trim() || UNTITLED_GROUP_NAME,
+    colorId: GROUP_COLOR_ORDER.includes(group.colorId) ? group.colorId : DEFAULT_GROUP_COLOR,
+    tileIds: [...group.tileIds],
+    locked: Boolean(group.locked),
+    terminal: normalizeGroupTerminalSettings(group),
+  }
+}
+
 function buildNormalizedGroupedState(
   tiles: TileState[],
   groups: TileGroup[],
@@ -25,12 +46,10 @@ function buildNormalizedGroupedState(
 
     if (tileIds.length === 0) continue
 
-    normalizedGroups.push({
-      id: group.id,
-      name: group.name.trim() || UNTITLED_GROUP_NAME,
-      colorId: GROUP_COLOR_ORDER.includes(group.colorId) ? group.colorId : DEFAULT_GROUP_COLOR,
+    normalizedGroups.push(normalizeGroup({
+      ...group,
       tileIds,
-    })
+    }))
   }
 
   const groupsById = new Map(normalizedGroups.map((group) => [group.id, group]))
@@ -47,6 +66,8 @@ function buildNormalizedGroupedState(
         name: UNTITLED_GROUP_NAME,
         colorId: DEFAULT_GROUP_COLOR,
         tileIds: [tile.id],
+        locked: false,
+        terminal: undefined,
       }
       normalizedGroups.push(created)
       groupsById.set(created.id, created)
@@ -104,10 +125,17 @@ interface CanvasStore {
   setViewMode: (mode: 'canvas' | 'fullview') => void
   setFullviewActiveTileId: (tileId: string | null) => void
   selectTiles: (tileIds: string[]) => void
-  createGroup: (name: string, tileIds?: string[]) => TileGroup | null
+  createGroup: (
+    group: Pick<TileGroup, 'name' | 'colorId' | 'locked' | 'terminal'>,
+    tileIds?: string[],
+  ) => TileGroup | null
   addTilesToGroup: (groupId: string, tileIds: string[]) => void
-  renameGroup: (groupId: string, name: string) => void
+  updateGroup: (
+    groupId: string,
+    patch: Partial<Pick<TileGroup, 'name' | 'colorId' | 'locked' | 'terminal'>>,
+  ) => void
   setGroupColor: (groupId: string, colorId: GroupColorId) => void
+  setGroupLocked: (groupId: string, locked: boolean) => void
   ungroup: (groupId: string) => void
   removeTileFromGroup: (tileId: string) => void
 
@@ -188,17 +216,19 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
 
   selectTiles: (tileIds) => set({ selectedTileIds: tileIds }),
 
-  createGroup: (name, tileIds) => {
+  createGroup: (groupInput, tileIds) => {
     const nextIds = Array.from(new Set((tileIds ?? get().selectedTileIds).filter((tileId) => get().tiles.some((tile) => tile.id === tileId))))
     if (nextIds.length < 2) return null
     const nextColorIndex = get().groups.length % GROUP_COLOR_ORDER.length
 
-    const group: TileGroup = {
+    const group = normalizeGroup({
       id: `group-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      name: name.trim() || UNTITLED_GROUP_NAME,
-      colorId: GROUP_COLOR_ORDER[nextColorIndex] ?? DEFAULT_GROUP_COLOR,
+      name: groupInput.name,
+      colorId: groupInput.colorId ?? GROUP_COLOR_ORDER[nextColorIndex] ?? DEFAULT_GROUP_COLOR,
       tileIds: nextIds,
-    }
+      locked: groupInput.locked,
+      terminal: groupInput.terminal,
+    })
 
     set((s) => {
       const selected = new Set(nextIds)
@@ -252,10 +282,15 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     }
   }),
 
-  renameGroup: (groupId, name) => set((s) => ({
+  updateGroup: (groupId, patch) => set((s) => ({
     groups: s.groups.map((group) => (
       group.id === groupId
-        ? { ...group, name: name.trim() || UNTITLED_GROUP_NAME }
+        ? normalizeGroup({
+            ...group,
+            ...patch,
+            tileIds: group.tileIds,
+            terminal: patch.terminal ?? group.terminal,
+          })
         : group
     )),
   })),
@@ -264,6 +299,14 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     groups: s.groups.map((group) => (
       group.id === groupId
         ? { ...group, colorId }
+        : group
+    )),
+  })),
+
+  setGroupLocked: (groupId, locked) => set((s) => ({
+    groups: s.groups.map((group) => (
+      group.id === groupId
+        ? { ...group, locked }
         : group
     )),
   })),

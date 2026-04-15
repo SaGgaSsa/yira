@@ -1,4 +1,4 @@
-import type { ShellProfileId, CanvasState, Workspace, UserSettings, KanbanBoardState } from '@shared/types'
+import type { ShellProfileId, CanvasState, Workspace, UserSettings, KanbanBoardState, TerminalCreateOptions } from '@shared/types'
 
 interface ElectronWorld {
   workspace: {
@@ -28,7 +28,7 @@ interface ElectronWorld {
     save: (workspaceId: string, state: unknown) => Promise<void>
   }
   terminal: {
-    create: (tileId: string, workspaceDir: string, shellProfileId: string) => Promise<{ cols: number; rows: number; buffer: string }>
+    create: (tileId: string, options: TerminalCreateOptions) => Promise<{ cols: number; rows: number; buffer: string }>
     write: (tileId: string, data: string) => Promise<void>
     resize: (tileId: string, cols: number, rows: number) => Promise<void>
     destroy: (tileId: string) => Promise<void>
@@ -40,6 +40,10 @@ interface ElectronWorld {
   }
   shell: {
     openExternal: (url: string) => Promise<void>
+  }
+  clipboard: {
+    readText: () => Promise<string>
+    writeText: (text: string) => Promise<void>
   }
 }
 

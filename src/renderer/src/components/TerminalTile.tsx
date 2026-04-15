@@ -3,6 +3,8 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import type { TileState } from '@shared/types'
+import { consumeTerminalInitialCommand } from '@/utils/terminalLaunch'
+import { ContextMenu, type MenuItem } from './ContextMenu'
 
 interface Props {
   tile: TileState
@@ -18,6 +20,27 @@ export function TerminalTileWrapper({ tile, isFocused, onFocus, onUpdate, onDele
   const fitRef = useRef<FitAddon | null>(null)
   const ptyReadyRef = useRef(false)
   const [ptyReady, setPtyReady] = useState(false)
+  const [menuPosition, setMenuPosition] = useState<{ x: number; y: number; hasSelection: boolean } | null>(null)
+
+  const focusTerminal = useCallback(() => {
+    onFocus()
+    termRef.current?.focus()
+  }, [onFocus])
+
+  const copySelection = useCallback(async () => {
+    const term = termRef.current
+    if (!term?.hasSelection()) return
+    await window.electron.clipboard.writeText(term.getSelection())
+  }, [])
+
+  const pasteClipboard = useCallback(async () => {
+    const term = termRef.current
+    if (!term) return
+    const text = await window.electron.clipboard.readText()
+    if (!text) return
+    term.focus()
+    term.paste(text)
+  }, [])
 
   // Fit terminal to container
   const doFit = useCallback(() => {
@@ -95,12 +118,45 @@ export function TerminalTileWrapper({ tile, isFocused, onFocus, onUpdate, onDele
 
     // Shift+Enter for multi-line input (uses ref to avoid stale closure)
     term.attachCustomKeyEventHandler((ev: KeyboardEvent) => {
-      if (ev.key === 'Enter' && ev.shiftKey && ev.type === 'keydown') {
+      if (ev.type !== 'keydown') return true
+
+      if (ev.key === 'Enter' && ev.shiftKey) {
         if (ptyReadyRef.current) {
           window.electron.terminal.write(tile.id, '\\\r')
           return false
         }
       }
+
+      const hasAccel = ev.ctrlKey || ev.metaKey
+      const key = ev.key.toLowerCase()
+
+      if (hasAccel && !ev.altKey) {
+        if (key === 'c' && term.hasSelection()) {
+          void copySelection()
+          return false
+        }
+
+        if (key === 'v') {
+          void pasteClipboard()
+          return false
+        }
+
+        if (key === 'a') {
+          term.selectAll()
+          return false
+        }
+      }
+
+      if (ev.key === 'Insert' && ev.ctrlKey && term.hasSelection()) {
+        void copySelection()
+        return false
+      }
+
+      if (ev.key === 'Insert' && ev.shiftKey) {
+        void pasteClipboard()
+        return false
+      }
+
       return true
     })
 
@@ -108,9 +164,15 @@ export function TerminalTileWrapper({ tile, isFocused, onFocus, onUpdate, onDele
     let cancelled = false
     let ptyUnsub: (() => void) | null = null
     let inputDisposer: { dispose: () => void } | null = null
+    const initialCommand = consumeTerminalInitialCommand(tile.id)
 
     window.electron.terminal
-      .create(tile.id, '', tile.shellProfileId ?? 'bash')
+      .create(tile.id, {
+        shellProfileId: tile.shellProfileId ?? 'bash',
+        workspaceDir: '',
+        wslStartInHome: tile.shellProfileId === 'wsl',
+        initialCommand,
+      })
       .then(({ buffer }) => {
         if (cancelled) return
         ptyReadyRef.current = true
@@ -146,19 +208,67 @@ export function TerminalTileWrapper({ tile, isFocused, onFocus, onUpdate, onDele
       termRef.current = null
       fitRef.current = null
     }
-  }, [tile.id, tile.shellProfileId, doFit])
+  }, [tile.id, tile.shellProfileId, doFit, copySelection, pasteClipboard])
 
   // Re-fit on width/height changes
   useEffect(() => {
     doFit()
   }, [tile.width, tile.height, doFit])
 
+  useEffect(() => {
+    if (isFocused) {
+      termRef.current?.focus()
+    }
+  }, [isFocused])
+
+  const menuItems: MenuItem[] = [
+    {
+      label: 'Copy',
+      disabled: !menuPosition?.hasSelection,
+      action: () => {
+        void copySelection()
+      },
+    },
+    {
+      label: 'Paste',
+      action: () => {
+        void pasteClipboard()
+      },
+    },
+    {
+      label: 'Select All',
+      action: () => {
+        termRef.current?.focus()
+        termRef.current?.selectAll()
+      },
+    },
+  ]
+
   return (
-    <div
-      ref={containerRef}
-      className="h-full w-full"
-      style={{ background: 'var(--surface)', overflow: 'hidden' }}
-      onMouseDown={onFocus}
-    />
+    <>
+      <div
+        ref={containerRef}
+        className="h-full w-full"
+        style={{ background: 'var(--surface)', overflow: 'hidden' }}
+        onMouseDown={focusTerminal}
+        onContextMenu={(event) => {
+          event.preventDefault()
+          focusTerminal()
+          setMenuPosition({
+            x: event.clientX,
+            y: event.clientY,
+            hasSelection: termRef.current?.hasSelection() ?? false,
+          })
+        }}
+      />
+      {menuPosition && (
+        <ContextMenu
+          x={menuPosition.x}
+          y={menuPosition.y}
+          items={menuItems}
+          onClose={() => setMenuPosition(null)}
+        />
+      )}
+    </>
   )
 }

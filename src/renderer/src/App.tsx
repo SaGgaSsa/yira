@@ -7,6 +7,7 @@ import { RawJsonEditor } from './components/RawJsonEditor'
 import { ContextMenu, type MenuItem } from './components/ContextMenu'
 import { FullviewPanel } from './components/FullviewPanel'
 import { AppDialog, type ConfirmDialogOptions, type PromptDialogOptions } from './components/AppDialog'
+import { GroupEditorDialog, type GroupEditorValue } from './components/GroupEditorDialog'
 import { useCanvasStore } from './store/canvasStore'
 import { useSettingsStore } from './store/settingsStore'
 import { useCanvasActions } from './hooks/useCanvasActions'
@@ -14,9 +15,9 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useTheme } from './hooks/useTheme'
 import { useFontSize } from './hooks/useFontSize'
 import { findMergeTargetGroup, findSelectedGroup } from './utils/grouping'
-import { GROUP_COLORS, type TileState, type CanvasState, type Workspace, type TileGroup } from '@shared/types'
+import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type CanvasState, type Workspace, type TileGroup } from '@shared/types'
 import { TILE_META } from './components/TileContent'
-import { Terminal, StickyNote, Globe, LayoutGrid, ChevronDown, FolderPlus, Trash2, Pencil } from 'lucide-react'
+import { Terminal, StickyNote, Globe, LayoutGrid, ChevronDown, FolderPlus, Trash2, Pencil, Lock, Columns } from 'lucide-react'
 
 type PromptDialogState = {
   request: { mode: 'prompt' } & PromptDialogOptions
@@ -29,6 +30,19 @@ type ConfirmDialogState = {
 }
 
 type ActiveDialogState = PromptDialogState | ConfirmDialogState | null
+
+type GroupEditorState =
+  | {
+      mode: 'create'
+      tileIds: string[]
+      value: GroupEditorValue
+    }
+  | {
+      mode: 'edit'
+      groupId: string
+      value: GroupEditorValue
+    }
+  | null
 
 function isPromptDialog(dialog: PromptDialogState | ConfirmDialogState): dialog is PromptDialogState {
   return dialog.request.mode === 'prompt'
@@ -60,7 +74,8 @@ export default function App(): React.ReactElement {
   const bringToFront = useCanvasStore((s) => s.bringToFront)
   const createGroup = useCanvasStore((s) => s.createGroup)
   const addTilesToGroup = useCanvasStore((s) => s.addTilesToGroup)
-  const renameGroup = useCanvasStore((s) => s.renameGroup)
+  const updateGroup = useCanvasStore((s) => s.updateGroup)
+  const setGroupLocked = useCanvasStore((s) => s.setGroupLocked)
   const ungroup = useCanvasStore((s) => s.ungroup)
   const setWorkspace = useCanvasStore((s) => s.setWorkspace)
   const setProfiles = useCanvasStore((s) => s.setProfiles)
@@ -103,9 +118,11 @@ export default function App(): React.ReactElement {
   const [showSettings, setShowSettings] = useState(false)
   const [showJsonEditor, setShowJsonEditor] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [groupEditor, setGroupEditor] = useState<GroupEditorState>(null)
   const [renamingTileId, setRenamingTileId] = useState<string | null>(null)
   const [renamingValue, setRenamingValue] = useState('')
   const [tileMenu, setTileMenu] = useState<{ tileId: string; x: number; y: number } | null>(null)
+  const [groupMenu, setGroupMenu] = useState<{ groupId: string; x: number; y: number } | null>(null)
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const prevZoomRef = useRef(1)
   const footerRef = useRef<HTMLDivElement | null>(null)
@@ -204,7 +221,11 @@ export default function App(): React.ReactElement {
     (workspaceId: string) => {
       const state: CanvasState = {
         tiles: tiles.map((t) => ({ ...t })),
-        groups: groups.map((group) => ({ ...group, tileIds: [...group.tileIds] })),
+        groups: groups.map((group) => ({
+          ...group,
+          tileIds: [...group.tileIds],
+          terminal: group.terminal ? { ...group.terminal } : undefined,
+        })),
         viewport: { ...viewport },
         nextZIndex,
         focusedTileId,
@@ -269,6 +290,8 @@ export default function App(): React.ReactElement {
       setShowWorkspacePicker(false)
       setShowSettings(false)
       setTileMenu(null)
+      setGroupMenu(null)
+      setGroupEditor(null)
       setRenamingTileId(null)
       closeActiveDialog()
     },
@@ -332,41 +355,59 @@ export default function App(): React.ReactElement {
     [tiles, groups, selectedTileIds],
   )
 
-  const handleCreateGroupFromSelection = useCallback(async () => {
+  const handleCreateGroupFromSelection = useCallback(() => {
     if (mergeTargetGroup) {
       addTilesToGroup(mergeTargetGroup.id, selectedTileIds)
       return
     }
 
     if (selectedTileIds.length < 2) return
-    const name = await requestPrompt({
-      title: 'Create group',
-      message: 'Choose a name for the new group.',
-      confirmLabel: 'Create Group',
-      cancelLabel: 'Cancel',
-      defaultValue: 'Untitled Group',
-      placeholder: 'Group name',
+    setGroupEditor({
+      mode: 'create',
+      tileIds: [...selectedTileIds],
+      value: {
+        name: 'Untitled Group',
+        colorId: GROUP_COLOR_ORDER[groups.length % GROUP_COLOR_ORDER.length] ?? GROUP_COLOR_ORDER[0],
+        locked: false,
+        wslStartupCommand: '',
+      },
     })
+  }, [addTilesToGroup, groups.length, mergeTargetGroup, selectedTileIds])
 
-    const nextName = name?.trim()
-    if (!nextName) return
-    createGroup(nextName, selectedTileIds)
-  }, [addTilesToGroup, createGroup, mergeTargetGroup, requestPrompt, selectedTileIds])
-
-  const handleRenameGroup = useCallback(async (group: TileGroup) => {
-    const name = await requestPrompt({
-      title: 'Rename group',
-      message: 'Update the saved name for this group.',
-      confirmLabel: 'Save Name',
-      cancelLabel: 'Cancel',
-      defaultValue: group.name,
-      placeholder: 'Group name',
+  const openGroupEditor = useCallback((group: TileGroup) => {
+    setGroupMenu(null)
+    setGroupEditor({
+      mode: 'edit',
+      groupId: group.id,
+      value: {
+        name: group.name,
+        colorId: group.colorId,
+        locked: Boolean(group.locked),
+        wslStartupCommand: group.terminal?.wslStartupCommand ?? '',
+      },
     })
+  }, [])
 
-    const nextName = name?.trim()
-    if (!nextName || nextName === group.name) return
-    renameGroup(group.id, nextName)
-  }, [renameGroup, requestPrompt])
+  const handleConfirmGroupEditor = useCallback((value: GroupEditorValue) => {
+    if (!groupEditor) return
+
+    const nextGroup = {
+      name: value.name,
+      colorId: value.colorId,
+      locked: value.locked,
+      terminal: {
+        wslStartupCommand: value.wslStartupCommand || undefined,
+      },
+    }
+
+    if (groupEditor.mode === 'create') {
+      createGroup(nextGroup, groupEditor.tileIds)
+    } else {
+      updateGroup(groupEditor.groupId, nextGroup)
+    }
+
+    setGroupEditor(null)
+  }, [createGroup, groupEditor, updateGroup])
 
   const handleUngroup = useCallback(async (group: TileGroup) => {
     const confirmed = await requestConfirm({
@@ -380,19 +421,41 @@ export default function App(): React.ReactElement {
     ungroup(group.id)
   }, [requestConfirm, ungroup])
 
-  const handleSelectGroup = useCallback((group: TileGroup) => {
+  const handleToggleGroupLock = useCallback((group: TileGroup) => {
+    setGroupLocked(group.id, !group.locked)
+  }, [setGroupLocked])
+
+  const getGroupBounds = useCallback((group: TileGroup) => {
     const groupTiles = tiles.filter((tile) => group.tileIds.includes(tile.id))
-    if (groupTiles.length === 0) return
+    if (groupTiles.length === 0) return null
 
-    selectTiles(groupTiles.map((tile) => tile.id))
+    return {
+      tileIds: groupTiles.map((tile) => tile.id),
+      minX: Math.min(...groupTiles.map((tile) => tile.x)),
+      minY: Math.min(...groupTiles.map((tile) => tile.y)),
+      maxX: Math.max(...groupTiles.map((tile) => tile.x + tile.width)),
+      maxY: Math.max(...groupTiles.map((tile) => tile.y + tile.height)),
+    }
+  }, [tiles])
+
+  const handleSelectGroup = useCallback((group: TileGroup) => {
+    const bounds = getGroupBounds(group)
+    if (!bounds) return
+
+    selectTiles(bounds.tileIds)
     focusTile(null)
+    getCanvasMethods()?.centerViewOnBounds(bounds)
+  }, [getGroupBounds, selectTiles, focusTile])
 
-    const minX = Math.min(...groupTiles.map((tile) => tile.x))
-    const minY = Math.min(...groupTiles.map((tile) => tile.y))
-    const maxX = Math.max(...groupTiles.map((tile) => tile.x + tile.width))
-    const maxY = Math.max(...groupTiles.map((tile) => tile.y + tile.height))
-    getCanvasMethods()?.centerViewOnBounds({ minX, minY, maxX, maxY })
-  }, [tiles, selectTiles, focusTile])
+  const handleShowGroup = useCallback((group: TileGroup) => {
+    const bounds = getGroupBounds(group)
+    if (!bounds) return
+
+    setViewMode('canvas')
+    requestAnimationFrame(() => {
+      getCanvasMethods()?.fitViewToBounds(bounds)
+    })
+  }, [getGroupBounds, setViewMode])
 
   const beginRenameTile = useCallback((tile: TileState) => {
     setTileMenu(null)
@@ -473,6 +536,7 @@ export default function App(): React.ReactElement {
   }, [availableProfiles.length, defaultProfile, addTerminal])
 
   const activeTileMenu = tileMenu ? tiles.find((tile) => tile.id === tileMenu.tileId) ?? null : null
+  const activeGroupMenu = groupMenu ? groups.find((group) => group.id === groupMenu.groupId) ?? null : null
   const tileMenuItems: MenuItem[] = activeTileMenu ? [
     {
       label: 'Rename',
@@ -488,15 +552,38 @@ export default function App(): React.ReactElement {
       action: () => updateTile(activeTileMenu.id, { locked: !activeTileMenu.locked }),
     },
     {
-      label: 'Cycle Radius',
-      action: () => updateTile(activeTileMenu.id, { radiusIndex: ((activeTileMenu.radiusIndex ?? 0) + 1) % 4 }),
-    },
-    {
       label: 'Close',
       icon: Trash2,
       danger: true,
       action: () => {
         void deleteTile(activeTileMenu.id)
+      },
+    },
+  ] : []
+  const groupMenuItems: MenuItem[] = activeGroupMenu ? [
+    {
+      label: 'Show',
+      icon: Columns,
+      action: () => handleShowGroup(activeGroupMenu),
+    },
+    {
+      label: 'Edit Group',
+      icon: Pencil,
+      action: () => {
+        openGroupEditor(activeGroupMenu)
+      },
+    },
+    {
+      label: activeGroupMenu.locked ? 'Unlock' : 'Lock',
+      icon: Lock,
+      action: () => handleToggleGroupLock(activeGroupMenu),
+    },
+    {
+      label: 'Ungroup',
+      icon: Trash2,
+      danger: true,
+      action: () => {
+        void handleUngroup(activeGroupMenu)
       },
     },
   ] : []
@@ -758,6 +845,7 @@ export default function App(): React.ReactElement {
                         onClick={() => handleFocusTile(tile.id)}
                         onContextMenu={(event) => {
                           event.preventDefault()
+                          setGroupMenu(null)
                           setTileMenu({ tileId: tile.id, x: event.clientX, y: event.clientY })
                         }}
                         title={meta.label}
@@ -816,51 +904,41 @@ export default function App(): React.ReactElement {
                 {groups.map((group) => {
                   const isSelectedGroup = selectedGroup?.id === group.id
                   const groupColor = GROUP_COLORS[group.colorId]
+                  const isLockedGroup = Boolean(group.locked)
 
                   return (
-                    <div
+                    <button
                       key={group.id}
-                      className="rounded-[20px] border px-4 py-4 transition-colors"
+                      className="w-full rounded-[20px] border px-4 py-4 text-left transition-colors"
                       style={{
                         background: isSelectedGroup ? 'var(--surface-raised)' : 'var(--surface)',
                         borderColor: isSelectedGroup ? 'var(--text-display)' : 'var(--border)',
                       }}
+                      onClick={() => handleSelectGroup(group)}
+                      onContextMenu={(event) => {
+                        event.preventDefault()
+                        setTileMenu(null)
+                        setGroupMenu({ groupId: group.id, x: event.clientX, y: event.clientY })
+                      }}
                     >
-                      <button
-                        className="w-full text-left"
-                        onClick={() => handleSelectGroup(group)}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex min-w-0 gap-3">
-                            <span
-                              className="mt-1 h-3 w-3 shrink-0 rounded-full border"
-                              style={{ background: groupColor.swatch, borderColor: 'rgba(255,255,255,0.25)' }}
-                            />
-                            <div className="min-w-0">
-                              <div className="nd-label text-text-secondary">
-                                {isSelectedGroup ? '[ ACTIVE GROUP ]' : '[ GROUP ]'}
-                              </div>
-                              <div className="mt-2 truncate text-sm text-text-display">{group.name}</div>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex min-w-0 gap-3">
+                          <span
+                            className="mt-1 h-3 w-3 shrink-0 rounded-full border"
+                            style={{ background: groupColor.swatch, borderColor: 'rgba(255,255,255,0.25)' }}
+                          />
+                          <div className="min-w-0">
+                            <div className="nd-label text-text-secondary">
+                              {isLockedGroup
+                                ? isSelectedGroup ? '[ ACTIVE LOCKED GROUP ]' : '[ LOCKED GROUP ]'
+                                : isSelectedGroup ? '[ ACTIVE GROUP ]' : '[ GROUP ]'}
                             </div>
+                            <div className="mt-2 truncate text-sm text-text-display">{group.name}</div>
                           </div>
-                          <span className="nd-caption shrink-0 text-text-secondary">{group.tileIds.length} TILES</span>
                         </div>
-                      </button>
-                      <div className="mt-3 flex gap-2">
-                        <button
-                          className="rounded-full border border-border-visible px-3 py-2 text-xs text-text-secondary transition-colors hover:text-text-display"
-                          onClick={() => handleRenameGroup(group)}
-                        >
-                          Rename
-                        </button>
-                        <button
-                          className="rounded-full border border-border-visible px-3 py-2 text-xs text-text-secondary transition-colors hover:text-text-display"
-                          onClick={() => handleUngroup(group)}
-                        >
-                          Ungroup
-                        </button>
+                        <span className="nd-caption shrink-0 text-text-secondary">{group.tileIds.length} TILES</span>
                       </div>
-                    </div>
+                    </button>
                   )
                 })}
               </div>
@@ -952,10 +1030,27 @@ export default function App(): React.ReactElement {
           onClose={() => setTileMenu(null)}
         />
       )}
+      {groupMenu && activeGroupMenu && (
+        <ContextMenu
+          x={groupMenu.x}
+          y={groupMenu.y}
+          items={groupMenuItems}
+          onClose={() => setGroupMenu(null)}
+        />
+      )}
       <AppDialog
         request={activeDialog?.request ?? null}
         onCancel={closeActiveDialog}
         onConfirm={confirmActiveDialog}
+      />
+      <GroupEditorDialog
+        request={groupEditor ? {
+          title: groupEditor.mode === 'create' ? 'Create group' : 'Edit group',
+          confirmLabel: groupEditor.mode === 'create' ? 'Create Group' : 'Save Group',
+          value: groupEditor.value,
+        } : null}
+        onCancel={() => setGroupEditor(null)}
+        onConfirm={handleConfirmGroupEditor}
       />
     </div>
   )

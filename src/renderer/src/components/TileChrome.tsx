@@ -1,6 +1,7 @@
-import React, { useRef, useCallback, useEffect, useState, type ReactNode } from 'react'
+import React, { useRef, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useCanvasStore } from '@/store/canvasStore'
 import { useSettingsStore } from '@/store/settingsStore'
+import { isTileInteractionLocked } from '@/utils/grouping'
 import type { TileState, NoteColor } from '@shared/types'
 import { KANBAN_BOARD_FIXED_WIDTH, NOTE_COLORS } from '@shared/types'
 import { X, GripVertical, StickyNote, Globe, LayoutGrid, Terminal, Lock } from 'lucide-react'
@@ -36,8 +37,6 @@ const TYPE_LABELS: Record<string, string> = {
   kanban: 'Board',
 }
 
-const RADIUS_PRESETS = [12, 20, 28, 0]
-
 export function TileChrome({
   tile,
   isFocused,
@@ -57,6 +56,7 @@ export function TileChrome({
   const dragStartRef = useRef<{ mx: number; my: number; positions: Array<{ id: string; x: number; y: number }>; anchorX: number; anchorY: number } | null>(null)
   const resizeStartRef = useRef<{ mx: number; my: number; w: number; h: number; tx: number; ty: number } | null>(null)
   const tiles = useCanvasStore((s) => s.tiles)
+  const groups = useCanvasStore((s) => s.groups)
   const selectedTileIds = useCanvasStore((s) => s.selectedTileIds)
   const zoom = useCanvasStore((s) => s.viewport.zoom)
   const gridSize = useSettingsStore((s) => s.gridSize)
@@ -64,7 +64,12 @@ export function TileChrome({
   const isFullview = mode === 'fullview'
   const isFixedWidthKanban = tile.type === 'kanban'
   const isLocked = Boolean(tile.locked)
-  const radius = RADIUS_PRESETS[tile.radiusIndex ?? 0] ?? RADIUS_PRESETS[0]
+  const isGroupLocked = Boolean(tile.groupId && groups.find((group) => group.id === tile.groupId)?.locked)
+  const isInteractionLocked = isTileInteractionLocked(tile, groups)
+  const lockedGroupIds = useMemo(
+    () => new Set(groups.filter((group) => group.locked).map((group) => group.id)),
+    [groups],
+  )
 
   useEffect(() => {
     if (isFullview || !isFixedWidthKanban || tile.width === KANBAN_BOARD_FIXED_WIDTH) return
@@ -74,13 +79,17 @@ export function TileChrome({
   // ─── Drag ───────────────────────────────────────────────────────────────
   const handleDragStart = useCallback(
     (e: React.MouseEvent) => {
-      if (isFullview || isLocked) return
+      if (isFullview || isInteractionLocked) return
       e.preventDefault()
       e.stopPropagation()
       onFocus()
       const movableIds = new Set(isSelected ? selectedTileIds : [tile.id])
       const positions = tiles
-        .filter((entry) => movableIds.has(entry.id) && !entry.locked)
+        .filter((entry) => (
+          movableIds.has(entry.id) &&
+          !entry.locked &&
+          !(entry.groupId && lockedGroupIds.has(entry.groupId))
+        ))
         .map((entry) => ({ id: entry.id, x: entry.x, y: entry.y }))
 
       if (positions.length === 0) return
@@ -94,13 +103,13 @@ export function TileChrome({
       }
       setIsDragging(true)
     },
-    [tile, onFocus, isFullview, isLocked, isSelected, selectedTileIds, tiles],
+    [tile, onFocus, isFullview, isInteractionLocked, isSelected, selectedTileIds, tiles, lockedGroupIds],
   )
 
   // ─── Resize ─────────────────────────────────────────────────────────────
   const handleResizeStart = useCallback(
     (dir: ResizeDirection) => (e: React.MouseEvent) => {
-      if (isFullview || isLocked) return
+      if (isFullview || isInteractionLocked) return
       e.preventDefault()
       e.stopPropagation()
       onFocus()
@@ -114,7 +123,7 @@ export function TileChrome({
       }
       setIsResizing(dir)
     },
-    [tile, onFocus, isFullview, isLocked],
+    [tile, onFocus, isFullview, isInteractionLocked],
   )
 
   // ─── Global mouse move/up ──────────────────────────────────────────────
@@ -230,7 +239,7 @@ export function TileChrome({
               : tile.type === 'note'
                 ? '1px solid var(--border-visible)'
                 : '1px solid var(--border)',
-          borderRadius: isFullview ? 0 : radius,
+          borderRadius: 0,
           boxShadow: 'none',
           transition: 'border-color 0.15s ease, background 0.15s ease',
         }}
@@ -242,7 +251,7 @@ export function TileChrome({
             style={{
               background: 'var(--surface-raised)',
               borderBottom: '1px solid var(--border)',
-              cursor: isLocked ? 'default' : 'grab',
+              cursor: isInteractionLocked ? 'default' : 'grab',
               display: tile.hideTitlebar ? 'none' : 'flex',
             }}
             onMouseDown={handleDragStart}
@@ -251,15 +260,17 @@ export function TileChrome({
 
             <button
               className={`flex h-6 w-6 items-center justify-center rounded-full transition-colors shrink-0 ${
-                isLocked
+                isInteractionLocked
                   ? 'bg-text-primary text-bg-primary'
                   : 'text-text-secondary hover:bg-hover-bg hover:text-text-display'
               }`}
               onClick={(e) => {
                 e.stopPropagation()
+                if (isGroupLocked) return
                 onUpdate({ locked: !isLocked })
               }}
-              title={isLocked ? 'Unlock window' : 'Lock window'}
+              disabled={isGroupLocked}
+              title={isGroupLocked ? 'Locked by group' : isLocked ? 'Unlock window' : 'Lock window'}
             >
               <Lock size={11} />
             </button>
@@ -279,9 +290,15 @@ export function TileChrome({
                 className="rounded-full border border-border-visible px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display shrink-0"
                 onClick={(e) => {
                   e.stopPropagation()
+                  if (isGroupLocked) return
                   onRemoveFromGroup()
                 }}
-                title="Remove from group"
+                disabled={isGroupLocked}
+                style={{
+                  opacity: isGroupLocked ? 0.45 : 1,
+                  cursor: isGroupLocked ? 'not-allowed' : 'pointer',
+                }}
+                title={isGroupLocked ? 'Unlock group to remove this tile' : 'Remove from group'}
               >
                 Out
               </button>
@@ -326,7 +343,7 @@ export function TileChrome({
             className="shrink-0"
             style={{
               height: 8,
-              cursor: isLocked ? 'default' : 'grab',
+              cursor: isInteractionLocked ? 'default' : 'grab',
               background: 'transparent',
             }}
             onMouseDown={handleDragStart}
@@ -340,7 +357,7 @@ export function TileChrome({
       </div>
 
       {/* Resize handles (8 directions) */}
-      {!isFullview && !isDragging && !isLocked && (
+      {!isFullview && !isDragging && !isInteractionLocked && (
         <>
           {!isFixedWidthKanban && (
             <div

@@ -1,5 +1,5 @@
 import { ipcMain, WebContents } from 'electron'
-import type { ShellProfile } from '@shared/types'
+import type { ShellProfile, TerminalCreateOptions } from '@shared/types'
 import { detectShellProfiles } from '../shell-profiles'
 
 // node-pty must be required (not imported) due to native module ESM issues
@@ -36,7 +36,7 @@ export function registerTerminalIPC(): void {
     return profiles
   })
 
-  ipcMain.handle('terminal:create', async (event, tileId: string, workspaceDir: string, shellProfileId: string) => {
+  ipcMain.handle('terminal:create', async (event, tileId: string, options: TerminalCreateOptions) => {
     // Check for existing session (reattach)
     const existing = terminals.get(tileId)
     if (existing) {
@@ -45,21 +45,26 @@ export function registerTerminalIPC(): void {
     }
 
     // Resolve shell profile
-    const profile = resolveProfile(shellProfileId)
+    const profile = resolveProfile(options.shellProfileId)
     if (!profile) {
-      throw new Error(`Shell profile "${shellProfileId}" not found or not available`)
+      throw new Error(`Shell profile "${options.shellProfileId}" not found or not available`)
     }
 
     // Build spawn env
     const spawnEnv: Record<string, string> = { ...process.env as Record<string, string> }
+    const spawnArgs = [...profile.args]
+
+    if (profile.id === 'wsl' && options.wslStartInHome) {
+      spawnArgs.push('--cd', '~')
+    }
 
     let term: PtyInstance
     try {
-      term = pty.spawn(profile.shell, profile.args, {
+      term = pty.spawn(profile.shell, spawnArgs, {
         name: 'xterm-256color',
         cols: 80,
         rows: 24,
-        cwd: workspaceDir || process.cwd(),
+        cwd: options.workspaceDir || process.cwd(),
         env: spawnEnv,
       })
     } catch (err) {
@@ -92,6 +97,10 @@ export function registerTerminalIPC(): void {
         }
       }
     })
+
+    if (options.initialCommand?.trim()) {
+      term.write(`${options.initialCommand.trim()}\r`)
+    }
 
     return { cols: 80, rows: 24, buffer: '' }
   })

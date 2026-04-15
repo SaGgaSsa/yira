@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import type { TerminalCreateOptions } from '@shared/types'
 
 console.log('[preload] Loading...')
 
@@ -44,8 +45,8 @@ contextBridge.exposeInMainWorld('electron', {
 
   // Terminal
   terminal: {
-    create: (tileId: string, workspaceDir: string, shellProfileId: string) =>
-      ipcRenderer.invoke('terminal:create', tileId, workspaceDir, shellProfileId),
+    create: (tileId: string, options: TerminalCreateOptions) =>
+      ipcRenderer.invoke('terminal:create', tileId, options),
     write: (tileId: string, data: string) => ipcRenderer.invoke('terminal:write', tileId, data),
     resize: (tileId: string, cols: number, rows: number) =>
       ipcRenderer.invoke('terminal:resize', tileId, cols, rows),
@@ -66,6 +67,11 @@ contextBridge.exposeInMainWorld('electron', {
 
   shell: {
     openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
+  },
+
+  clipboard: {
+    readText: () => ipcRenderer.invoke('clipboard:readText'),
+    writeText: (text: string) => ipcRenderer.invoke('clipboard:writeText', text),
   },
 })
 
