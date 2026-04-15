@@ -4,10 +4,9 @@ import { fileURLToPath } from 'node:url'
 
 const rootDir = dirname(dirname(fileURLToPath(import.meta.url)))
 const target = process.argv[2] ?? 'all'
-const binName = process.platform === 'win32' ? 'electron-vite.cmd' : 'electron-vite'
-const electronViteBin = resolve(rootDir, 'node_modules', '.bin', binName)
+const electronViteCli = resolve(rootDir, 'node_modules', 'electron-vite', 'bin', 'electron-vite.js')
 
-const child = spawn(electronViteBin, ['build'], {
+const child = spawn(process.execPath, [electronViteCli, 'build'], {
   cwd: rootDir,
   env: {
     ...process.env,
