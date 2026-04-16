@@ -354,9 +354,11 @@ export default function App(): React.ReactElement {
   const handleSetViewMode = useCallback((mode: 'canvas' | 'fullview') => {
     if (mode === 'fullview') {
       const nextActive =
-        fullviewActiveTileId && tiles.some((tile) => tile.id === fullviewActiveTileId)
-          ? fullviewActiveTileId
-          : focusedTileId ??
+        focusedTileId && tiles.some((tile) => tile.id === focusedTileId)
+          ? focusedTileId
+          : fullviewActiveTileId && tiles.some((tile) => tile.id === fullviewActiveTileId)
+            ? fullviewActiveTileId
+            :
             tiles.slice().sort((a, b) => b.zIndex - a.zIndex)[0]?.id ??
             null
 
