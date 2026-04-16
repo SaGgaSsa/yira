@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useRef, useState } from 'react'
+import React, { useEffect, useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Terminal, StickyNote, Globe, LayoutGrid, ChevronRight, LucideIcon } from 'lucide-react'
 
@@ -150,10 +150,10 @@ function MenuItems({ items, onClose }: { items: MenuItem[]; onClose: () => void 
 
 export function ContextMenu({ x, y, items, onClose }: ContextMenuProps): React.ReactElement {
   const menuRef = useRef<HTMLDivElement>(null)
-  const [clamped, setClamped] = useState({ x: 0, y: 0 })
+  const [clamped, setClamped] = useState({ x, y })
 
   // Clamp position to viewport
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!menuRef.current) return
     const rect = menuRef.current.getBoundingClientRect()
     const vw = window.innerWidth

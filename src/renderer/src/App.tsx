@@ -7,8 +7,8 @@ import { RawJsonEditor } from './components/RawJsonEditor'
 import { ContextMenu, type MenuItem } from './components/ContextMenu'
 import { FullviewPanel } from './components/FullviewPanel'
 import { AppDialog, type ConfirmDialogOptions, type PromptDialogOptions } from './components/AppDialog'
-import { GroupEditorDialog, type GroupEditorValue } from './components/GroupEditorDialog'
-import { TileEditorDialog, type TileEditorValue } from './components/TileEditorDialog'
+import { GroupEditorDialog, type GroupEditorRequest, type GroupEditorValue } from './components/GroupEditorDialog'
+import { TileEditorDialog, type TileEditorRequest, type TileEditorValue } from './components/TileEditorDialog'
 import { useCanvasStore } from './store/canvasStore'
 import { useSettingsStore } from './store/settingsStore'
 import { useCanvasActions } from './hooks/useCanvasActions'
@@ -24,6 +24,18 @@ import { Terminal, StickyNote, Globe, LayoutGrid, ChevronDown, FolderPlus, Trash
 
 const GROUP_SHOW_MARGIN = 20
 const GROUP_SHOW_TOP_PADDING = 118
+
+function createEmptyCanvasState(): CanvasState {
+  return {
+    tiles: [],
+    groups: [],
+    viewport: { tx: 0, ty: 0, zoom: 1 },
+    nextZIndex: 1,
+    focusedTileId: null,
+    viewMode: 'fullview',
+    fullviewActiveTileId: null,
+  }
+}
 
 type PromptDialogState = {
   request: { mode: 'prompt' } & PromptDialogOptions
@@ -41,18 +53,18 @@ type GroupEditorState =
   | {
       mode: 'create'
       tileIds: string[]
-      value: GroupEditorValue
+      request: GroupEditorRequest
     }
   | {
       mode: 'edit'
       groupId: string
-      value: GroupEditorValue
+      request: GroupEditorRequest
     }
   | null
 
 type TileEditorState = {
   tileId: string
-  value: TileEditorValue
+  request: TileEditorRequest
 } | null
 
 function isPromptDialog(dialog: PromptDialogState | ConfirmDialogState): dialog is PromptDialogState {
@@ -95,6 +107,7 @@ export default function App(): React.ReactElement {
   const setGroupLocked = useCanvasStore((s) => s.setGroupLocked)
   const ungroup = useCanvasStore((s) => s.ungroup)
   const setWorkspace = useCanvasStore((s) => s.setWorkspace)
+  const restoreWorkspaceState = useCanvasStore((s) => s.restoreWorkspaceState)
   const setProfiles = useCanvasStore((s) => s.setProfiles)
   const setViewMode = useCanvasStore((s) => s.setViewMode)
   const setFullviewActiveTileId = useCanvasStore((s) => s.setFullviewActiveTileId)
@@ -131,7 +144,7 @@ export default function App(): React.ReactElement {
   // UI state
   const [showProfilePicker, setShowProfilePicker] = useState(false)
   const [showWorkspacePicker, setShowWorkspacePicker] = useState(false)
-  const [workspaces, setWorkspaces] = useState<Array<{ id: string; name: string }>>([])
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [showSettings, setShowSettings] = useState(false)
   const [showJsonEditor, setShowJsonEditor] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -141,7 +154,10 @@ export default function App(): React.ReactElement {
   const [tileRefreshKeys, setTileRefreshKeys] = useState<Record<string, number>>({})
   const [tileMenu, setTileMenu] = useState<{ tileId: string; x: number; y: number } | null>(null)
   const [groupMenu, setGroupMenu] = useState<{ groupId: string; x: number; y: number } | null>(null)
+  const [workspaceItemMenu, setWorkspaceItemMenu] = useState<{ workspaceId: string; x: number; y: number } | null>(null)
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const workspaceTransitionRef = useRef(0)
+  const skipNextAutosaveRef = useRef(false)
   const prevZoomRef = useRef(1)
   const footerRef = useRef<HTMLDivElement | null>(null)
   const workspaceMenuRef = useRef<HTMLDivElement | null>(null)
@@ -211,68 +227,14 @@ export default function App(): React.ReactElement {
     }
   }, [viewMode])
 
-  const loadWorkspace = useCallback(
-    (workspaceId: string) => {
-      window.electron.canvas.load(workspaceId).then((state: CanvasState | null) => {
-        if (state) {
-          restoreState(state)
-        } else {
-          restoreState({
-            tiles: [],
-            groups: [],
-            viewport: { tx: 0, ty: 0, zoom: 1 },
-            nextZIndex: 1,
-            focusedTileId: null,
-            viewMode: 'fullview',
-            fullviewActiveTileId: null,
-          })
-        }
-      })
-    },
-    [restoreState],
-  )
-
   const refreshWorkspaces = useCallback(async (): Promise<Workspace[]> => {
     const list = await window.electron.workspace.list()
     setWorkspaces(list)
     return list
   }, [])
 
-  // Load workspaces on mount
-  useEffect(() => {
-    console.log('[App] Loading workspaces and shell profiles...')
-    refreshWorkspaces().then((list) => {
-      console.log('[App] Workspaces:', list)
-      const active = list.find((w) => w.id === (activeWorkspaceId || list[0]?.id))
-      if (active) {
-        setWorkspace(active.id, active.name)
-        loadWorkspace(active.id)
-      }
-    }).catch((err) => console.error('[App] Error loading workspaces:', err))
-    window.electron.shellProfiles.list().then((profiles) => {
-      console.log('[App] Shell profiles:', profiles)
-      setProfiles(profiles.map((p) => ({ id: p.id, label: p.label, available: p.available })))
-    }).catch((err) => console.error('[App] Error loading shell profiles:', err))
-  }, [])
-
-  // Switch workspace
-  const switchWorkspace = useCallback(
-    (id: string) => {
-      if (activeWorkspaceId) saveToDisk(activeWorkspaceId)
-      window.electron.workspace.setActive(id)
-      const ws = workspaces.find((w) => w.id === id)
-      if (ws) {
-        setWorkspace(ws.id, ws.name)
-        loadWorkspace(ws.id)
-      }
-      setShowWorkspacePicker(false)
-    },
-    [activeWorkspaceId, workspaces, loadWorkspace],
-  )
-
-  // Auto-save (debounced)
   const saveToDisk = useCallback(
-    (workspaceId: string) => {
+    async (workspaceId: string) => {
       const state: CanvasState = {
         tiles: tiles.map((t) => ({ ...t })),
         groups: groups.map((group) => ({
@@ -286,20 +248,102 @@ export default function App(): React.ReactElement {
         viewMode,
         fullviewActiveTileId,
       }
-      window.electron.canvas.save(workspaceId, state)
+
+      await window.electron.canvas.save(workspaceId, state)
     },
     [tiles, groups, viewport, nextZIndex, focusedTileId, viewMode, fullviewActiveTileId],
   )
 
+  const activateWorkspace = useCallback(async (
+    workspace: Pick<Workspace, 'id' | 'name'> | null,
+    options?: { persistCurrent?: boolean; updateMain?: boolean },
+  ) => {
+    if (!workspace) return
+
+    const transitionId = ++workspaceTransitionRef.current
+
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current)
+      autosaveTimerRef.current = null
+    }
+
+    const currentWorkspaceId = useCanvasStore.getState().activeWorkspaceId
+    if (options?.persistCurrent !== false && currentWorkspaceId && currentWorkspaceId !== workspace.id) {
+      await saveToDisk(currentWorkspaceId)
+    }
+
+    const state = await window.electron.canvas.load(workspace.id)
+    if (transitionId !== workspaceTransitionRef.current) return
+
+    if (options?.updateMain !== false) {
+      await window.electron.workspace.setActive(workspace.id)
+      if (transitionId !== workspaceTransitionRef.current) return
+    }
+
+    skipNextAutosaveRef.current = true
+    restoreWorkspaceState(workspace.id, workspace.name, state ?? createEmptyCanvasState())
+    setShowWorkspacePicker(false)
+  }, [restoreWorkspaceState, saveToDisk])
+
+  // Load workspaces on mount
+  useEffect(() => {
+    console.log('[App] Loading workspaces and shell profiles...')
+    Promise.all([
+      refreshWorkspaces(),
+      window.electron.workspace.getActive(),
+    ]).then(([list, active]) => {
+      console.log('[App] Workspaces:', list)
+
+      if (active) {
+        void activateWorkspace(active, { persistCurrent: false, updateMain: false })
+        return
+      }
+
+      if (list[0]) {
+        void activateWorkspace(list[0], { persistCurrent: false })
+      }
+    }).catch((err) => console.error('[App] Error loading workspaces:', err))
+    window.electron.shellProfiles.list().then((profiles) => {
+      console.log('[App] Shell profiles:', profiles)
+      setProfiles(profiles.map((p) => ({ id: p.id, label: p.label, available: p.available })))
+    }).catch((err) => console.error('[App] Error loading shell profiles:', err))
+  }, [activateWorkspace, refreshWorkspaces, setProfiles])
+
+  // Switch workspace
+  const switchWorkspace = useCallback(
+    (workspace: Workspace) => {
+      if (workspace.id === activeWorkspaceId) {
+        setShowWorkspacePicker(false)
+        return
+      }
+
+      setWorkspaceItemMenu(null)
+      void activateWorkspace(workspace)
+    },
+    [activeWorkspaceId, activateWorkspace],
+  )
+
+  // Auto-save (debounced)
   const scheduleSave = useCallback(() => {
+    if (!activeWorkspaceId) return
+
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
     autosaveTimerRef.current = setTimeout(() => {
-      if (activeWorkspaceId) saveToDisk(activeWorkspaceId)
+      if (activeWorkspaceId) {
+        void saveToDisk(activeWorkspaceId)
+      }
     }, 500)
   }, [activeWorkspaceId, saveToDisk])
 
   useEffect(() => {
-    if (activeWorkspaceId) scheduleSave()
+    if (!activeWorkspaceId) return
+
+    if (skipNextAutosaveRef.current) {
+      skipNextAutosaveRef.current = false
+      return
+    }
+
+    scheduleSave()
   }, [tiles, groups, viewport, nextZIndex, activeWorkspaceId, scheduleSave])
 
   useEffect(() => {
@@ -321,12 +365,19 @@ export default function App(): React.ReactElement {
     const handlePointerDown = (event: MouseEvent) => {
       if (!workspaceMenuRef.current?.contains(event.target as Node)) {
         setShowWorkspacePicker(false)
+        setWorkspaceItemMenu(null)
       }
     }
 
     window.addEventListener('mousedown', handlePointerDown)
     return () => window.removeEventListener('mousedown', handlePointerDown)
   }, [showWorkspacePicker])
+
+  useEffect(() => {
+    if (!showWorkspacePicker && workspaceItemMenu) {
+      setWorkspaceItemMenu(null)
+    }
+  }, [showWorkspacePicker, workspaceItemMenu])
 
   // Keyboard shortcuts (extracted hook)
   useKeyboardShortcuts({
@@ -342,6 +393,7 @@ export default function App(): React.ReactElement {
     onClosePicker: () => {
       setShowProfilePicker(false)
       setShowWorkspacePicker(false)
+      setWorkspaceItemMenu(null)
       setShowSettings(false)
       setTileMenu(null)
       setGroupMenu(null)
@@ -471,11 +523,15 @@ export default function App(): React.ReactElement {
     setGroupEditor({
       mode: 'create',
       tileIds: [...selectedTileIds],
-      value: {
-        name: 'Untitled Group',
-        colorId: GROUP_COLOR_ORDER[groups.length % GROUP_COLOR_ORDER.length] ?? GROUP_COLOR_ORDER[0],
-        locked: false,
-        wslStartupCommand: '',
+      request: {
+        title: 'Create group',
+        confirmLabel: 'Create Group',
+        value: {
+          name: 'Untitled Group',
+          colorId: GROUP_COLOR_ORDER[groups.length % GROUP_COLOR_ORDER.length] ?? GROUP_COLOR_ORDER[0],
+          locked: false,
+          wslStartupCommand: '',
+        },
       },
     })
   }, [addTilesToGroup, groupingBlockedReason, groups.length, mergeTargetGroup, selectedTileIds])
@@ -485,11 +541,15 @@ export default function App(): React.ReactElement {
     setGroupEditor({
       mode: 'edit',
       groupId: group.id,
-      value: {
-        name: group.name,
-        colorId: group.colorId,
-        locked: Boolean(group.locked),
-        wslStartupCommand: group.terminal?.wslStartupCommand ?? '',
+      request: {
+        title: 'Edit group',
+        confirmLabel: 'Save Group',
+        value: {
+          name: group.name,
+          colorId: group.colorId,
+          locked: Boolean(group.locked),
+          wslStartupCommand: group.terminal?.wslStartupCommand ?? '',
+        },
       },
     })
   }, [])
@@ -589,9 +649,15 @@ export default function App(): React.ReactElement {
     setTileMenu(null)
     setTileEditor({
       tileId: tile.id,
-      value: {
-        label: tile.label ?? '',
-        startupCommand: tile.type === 'terminal' ? tile.startupCommand ?? '' : '',
+      request: {
+        title: `Edit ${TILE_META[tile.type].label}`,
+        confirmLabel: `Save ${TILE_META[tile.type].label}`,
+        tileType: tile.type,
+        shellProfileId: tile.shellProfileId,
+        value: {
+          label: tile.label ?? '',
+          startupCommand: tile.type === 'terminal' ? tile.startupCommand ?? '' : '',
+        },
       },
     })
   }, [])
@@ -686,6 +752,68 @@ export default function App(): React.ReactElement {
     bumpTileRefreshKey(tile.id)
   }, [bumpTileRefreshKey, requestRefreshTileConfirmation])
 
+  const renameWorkspace = useCallback(async (workspace: Workspace) => {
+    setWorkspaceItemMenu(null)
+
+    const name = await requestPrompt({
+      title: 'Rename workspace',
+      message: 'Choose a new name for this workspace.',
+      confirmLabel: 'Save',
+      cancelLabel: 'Cancel',
+      defaultValue: workspace.name,
+      placeholder: 'Workspace name',
+    })
+
+    if (!name?.trim()) return
+
+    const renamed = await window.electron.workspace.rename(workspace.id, name.trim())
+    if (!renamed) return
+
+    await refreshWorkspaces()
+
+    if (workspace.id === activeWorkspaceId) {
+      setWorkspace(renamed.id, renamed.name)
+    }
+  }, [activeWorkspaceId, refreshWorkspaces, requestPrompt, setWorkspace])
+
+  const deleteWorkspace = useCallback(async (workspace: Workspace) => {
+    setWorkspaceItemMenu(null)
+
+    const confirmed = await requestConfirm({
+      title: 'Delete workspace',
+      message: `Delete workspace "${workspace.name}"? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      cancelLabel: 'Keep Workspace',
+      danger: true,
+    })
+    if (!confirmed) return
+
+    const isActiveWorkspace = workspace.id === useCanvasStore.getState().activeWorkspaceId
+    if (isActiveWorkspace) {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current)
+        autosaveTimerRef.current = null
+      }
+
+      await saveToDisk(workspace.id)
+    }
+
+    await window.electron.workspace.delete(workspace.id)
+    const list = await refreshWorkspaces()
+
+    if (!isActiveWorkspace) return
+
+    const nextActive = await window.electron.workspace.getActive()
+    if (nextActive) {
+      await activateWorkspace(nextActive, { persistCurrent: false, updateMain: false })
+      return
+    }
+
+    if (list[0]) {
+      await activateWorkspace(list[0], { persistCurrent: false })
+    }
+  }, [activateWorkspace, refreshWorkspaces, requestConfirm, saveToDisk])
+
   const createWorkspace = useCallback(async () => {
     const name = await requestPrompt({
       title: 'Create workspace',
@@ -696,43 +824,19 @@ export default function App(): React.ReactElement {
     })
     if (!name?.trim()) return
 
-    if (activeWorkspaceId) saveToDisk(activeWorkspaceId)
+    if (activeWorkspaceId) {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current)
+        autosaveTimerRef.current = null
+      }
+
+      await saveToDisk(activeWorkspaceId)
+    }
+
     const created = await window.electron.workspace.create(name.trim())
-    const list = await refreshWorkspaces()
-    setWorkspace(created.id, created.name)
-    setShowWorkspacePicker(false)
-    loadWorkspace(created.id)
-    if (!list.some((w) => w.id === created.id)) {
-      setWorkspaces((prev) => [...prev, created])
-    }
-  }, [activeWorkspaceId, loadWorkspace, refreshWorkspaces, requestPrompt, saveToDisk, setWorkspace])
-
-  const deleteCurrentWorkspace = useCallback(async () => {
-    if (!activeWorkspaceId) return
-    const confirmed = await requestConfirm({
-      title: 'Delete workspace',
-      message: `Delete workspace "${activeWorkspaceName}"? This cannot be undone.`,
-      confirmLabel: 'Delete',
-      cancelLabel: 'Keep Workspace',
-      danger: true,
-    })
-    if (!confirmed) return
-
-    if (activeWorkspaceId) saveToDisk(activeWorkspaceId)
-    await window.electron.workspace.delete(activeWorkspaceId)
-    const list = await refreshWorkspaces()
-    const nextActive = await window.electron.workspace.getActive()
-
-    if (nextActive) {
-      setWorkspace(nextActive.id, nextActive.name)
-      loadWorkspace(nextActive.id)
-    } else if (list[0]) {
-      setWorkspace(list[0].id, list[0].name)
-      loadWorkspace(list[0].id)
-    }
-
-    setShowWorkspacePicker(false)
-  }, [activeWorkspaceId, activeWorkspaceName, loadWorkspace, refreshWorkspaces, requestConfirm, saveToDisk, setWorkspace])
+    await refreshWorkspaces()
+    await activateWorkspace(created, { persistCurrent: false, updateMain: false })
+  }, [activeWorkspaceId, activateWorkspace, refreshWorkspaces, requestPrompt, saveToDisk])
 
   const createTerminalFromSidebar = useCallback(() => {
     if (availableProfiles.length <= 1 && defaultProfile) {
@@ -745,6 +849,9 @@ export default function App(): React.ReactElement {
 
   const activeTileMenu = tileMenu ? tiles.find((tile) => tile.id === tileMenu.tileId) ?? null : null
   const activeGroupMenu = groupMenu ? groups.find((group) => group.id === groupMenu.groupId) ?? null : null
+  const activeWorkspaceMenu = workspaceItemMenu
+    ? workspaces.find((workspace) => workspace.id === workspaceItemMenu.workspaceId) ?? null
+    : null
   const tileMenuItems: MenuItem[] = activeTileMenu ? [
     {
       label: activeTileMenu.type === 'terminal' ? 'Edit' : 'Rename',
@@ -803,6 +910,23 @@ export default function App(): React.ReactElement {
       danger: true,
       action: () => {
         void handleUngroup(activeGroupMenu)
+      },
+    },
+  ] : []
+  const workspaceMenuItems: MenuItem[] = activeWorkspaceMenu ? [
+    {
+      label: 'Rename Workspace',
+      icon: Pencil,
+      action: () => {
+        void renameWorkspace(activeWorkspaceMenu)
+      },
+    },
+    {
+      label: 'Delete Workspace',
+      icon: Trash2,
+      danger: true,
+      action: () => {
+        void deleteWorkspace(activeWorkspaceMenu)
       },
     },
   ] : []
@@ -1005,7 +1129,16 @@ export default function App(): React.ReactElement {
                       style={{
                         color: workspace.id === activeWorkspaceId ? 'var(--text-primary)' : 'var(--text-secondary)',
                       }}
-                      onClick={() => switchWorkspace(workspace.id)}
+                      onClick={() => switchWorkspace(workspace)}
+                      onContextMenu={(event) => {
+                        event.preventDefault()
+                        event.stopPropagation()
+                        setWorkspaceItemMenu({
+                          workspaceId: workspace.id,
+                          x: event.clientX,
+                          y: event.clientY,
+                        })
+                      }}
                     >
                       <span className="truncate text-sm">{workspace.name}</span>
                       {workspace.id === activeWorkspaceId && (
@@ -1022,13 +1155,6 @@ export default function App(): React.ReactElement {
                   >
                     <FolderPlus size={14} />
                     <span className="nd-label">New Workspace</span>
-                  </button>
-                  <button
-                    className="flex w-full items-center gap-2 rounded-2xl px-4 py-3 text-left text-sm text-danger transition-colors hover:bg-hover-bg"
-                    onClick={() => void deleteCurrentWorkspace()}
-                  >
-                    <Trash2 size={14} />
-                    <span className="nd-label">Delete Workspace</span>
                   </button>
                 </div>
               </div>
@@ -1260,35 +1386,26 @@ export default function App(): React.ReactElement {
           onClose={() => setGroupMenu(null)}
         />
       )}
+      {workspaceItemMenu && activeWorkspaceMenu && (
+        <ContextMenu
+          x={workspaceItemMenu.x}
+          y={workspaceItemMenu.y}
+          items={workspaceMenuItems}
+          onClose={() => setWorkspaceItemMenu(null)}
+        />
+      )}
       <AppDialog
         request={activeDialog?.request ?? null}
         onCancel={closeActiveDialog}
         onConfirm={confirmActiveDialog}
       />
       <GroupEditorDialog
-        request={groupEditor ? {
-          title: groupEditor.mode === 'create' ? 'Create group' : 'Edit group',
-          confirmLabel: groupEditor.mode === 'create' ? 'Create Group' : 'Save Group',
-          value: groupEditor.value,
-        } : null}
+        request={groupEditor?.request ?? null}
         onCancel={() => setGroupEditor(null)}
         onConfirm={handleConfirmGroupEditor}
       />
       <TileEditorDialog
-        request={tileEditor ? (() => {
-          const tile = tiles.find((entry) => entry.id === tileEditor.tileId)
-          if (!tile) return null
-
-          const meta = TILE_META[tile.type]
-
-          return {
-            title: `Edit ${meta.label}`,
-            confirmLabel: `Save ${meta.label}`,
-            tileType: tile.type,
-            shellProfileId: tile.shellProfileId,
-            value: tileEditor.value,
-          }
-        })() : null}
+        request={tileEditor?.request ?? null}
         onCancel={() => setTileEditor(null)}
         onConfirm={handleConfirmTileEditor}
       />

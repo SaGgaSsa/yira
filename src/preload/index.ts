@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('electron', {
   workspace: {
     list: () => ipcRenderer.invoke('workspace:list'),
     create: (name: string) => ipcRenderer.invoke('workspace:create', name),
+    rename: (id: string, name: string) => ipcRenderer.invoke('workspace:rename', id, name),
     delete: (id: string) => ipcRenderer.invoke('workspace:delete', id),
     setActive: (id: string) => ipcRenderer.invoke('workspace:setActive', id),
     getActive: () => ipcRenderer.invoke('workspace:getActive'),

@@ -143,6 +143,7 @@ interface CanvasStore {
   bringToFront: (tileId: string) => number
 
   setWorkspace: (id: string, name: string) => void
+  restoreWorkspaceState: (id: string, name: string, state: CanvasState) => void
   setProfiles: (profiles: Array<{ id: ShellProfileId; label: string; available: boolean }>) => void
 }
 
@@ -359,5 +360,25 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   },
 
   setWorkspace: (id, name) => set({ activeWorkspaceId: id, activeWorkspaceName: name }),
+  restoreWorkspaceState: (id, name, state) => set(() => {
+    const normalized = buildNormalizedGroupedState(state.tiles, state.groups ?? [])
+
+    return {
+      activeWorkspaceId: id,
+      activeWorkspaceName: name,
+      tiles: normalized.tiles,
+      groups: normalized.groups,
+      viewport: state.viewport,
+      nextZIndex: state.nextZIndex,
+      focusedTileId: state.focusedTileId ?? null,
+      viewMode: state.viewMode ?? 'fullview',
+      fullviewActiveTileId:
+        state.fullviewActiveTileId ??
+        state.focusedTileId ??
+        state.tiles[0]?.id ??
+        null,
+      selectedTileIds: [],
+    }
+  }),
   setProfiles: (profiles) => set({ availableProfiles: profiles }),
 }))

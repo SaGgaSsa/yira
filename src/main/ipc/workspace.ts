@@ -88,6 +88,21 @@ export function registerWorkspaceIPC(): void {
     return workspace
   })
 
+  ipcMain.handle('workspace:rename', async (_, id: string, name: string) => {
+    const trimmedName = name.trim()
+    if (!trimmedName) {
+      throw new Error('Workspace name cannot be empty')
+    }
+
+    const config = await readConfig()
+    const workspace = config.workspaces.find((w) => w.id === id)
+    if (!workspace) return null
+
+    workspace.name = trimmedName
+    await writeConfig(config)
+    return workspace
+  })
+
   ipcMain.handle('workspace:delete', async (_, id: string) => {
     const config = await readConfig()
     const workspace = config.workspaces.find((w) => w.id === id)

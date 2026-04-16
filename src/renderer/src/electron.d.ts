@@ -12,6 +12,7 @@ interface ElectronWorld {
   workspace: {
     list: () => Promise<Workspace[]>
     create: (name: string) => Promise<Workspace>
+    rename: (id: string, name: string) => Promise<Workspace | null>
     delete: (id: string) => Promise<void>
     setActive: (id: string) => Promise<void>
     getActive: () => Promise<Workspace | null>
