@@ -1,5 +1,5 @@
 import React from 'react'
-import { Settings, Crosshair, LayoutGrid, Columns, PanelLeft, PanelsTopLeft } from 'lucide-react'
+import { Settings, Crosshair, LayoutGrid, Columns, PanelLeft } from 'lucide-react'
 
 interface TopBarProps {
   zoom: number
@@ -56,25 +56,13 @@ export function TopBar({
 
   return (
     <header className="nd-panel flex h-[84px] shrink-0 items-center justify-between border-x-0 border-t-0 px-6">
-      <div className="flex min-w-0 items-center gap-5">
-        <button
-          className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border-visible bg-bg-secondary text-text-secondary transition-colors hover:text-text-display"
-          onClick={onToggleSidebar}
-          title={sidebarCollapsed ? 'Open sidebar' : 'Collapse sidebar'}
-        >
-          <PanelLeft size={18} />
-        </button>
-
-        <div className="min-w-0">
-          <div className="nd-label text-text-secondary">Mode</div>
-          <div className="mt-1 flex items-center gap-2">
-            <PanelsTopLeft size={16} className="text-text-secondary" />
-            <span className="nd-display text-[34px] text-text-display">
-              {viewMode === 'fullview' ? 'FULLVIEW' : 'CANVAS'}
-            </span>
-          </div>
-        </div>
-      </div>
+      <button
+        className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border-visible bg-bg-secondary text-text-secondary transition-colors hover:text-text-display"
+        onClick={onToggleSidebar}
+        title={sidebarCollapsed ? 'Open sidebar' : 'Collapse sidebar'}
+      >
+        <PanelLeft size={18} />
+      </button>
 
       <div className="flex items-center gap-3 rounded-full border border-border-visible bg-bg-secondary px-2 py-2">
         <SegmentedButton

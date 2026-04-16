@@ -19,6 +19,7 @@ import { useUpdateStore } from './store/updateStore'
 import { findMergeTargetGroup, findSelectedGroup, getGroupingBlockedReason } from './utils/grouping'
 import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type CanvasState, type Workspace, type TileGroup } from '@shared/types'
 import { TILE_META } from './components/TileContent'
+import { TileListItem } from './components/TileListItem'
 import { Terminal, StickyNote, Globe, LayoutGrid, ChevronDown, FolderPlus, Trash2, Pencil, Lock, Columns, RefreshCw, Download, X } from 'lucide-react'
 
 const GROUP_SHOW_MARGIN = 20
@@ -144,6 +145,8 @@ export default function App(): React.ReactElement {
   const prevZoomRef = useRef(1)
   const footerRef = useRef<HTMLDivElement | null>(null)
   const workspaceMenuRef = useRef<HTMLDivElement | null>(null)
+  const fullviewPanelRef = useRef<HTMLDivElement | null>(null)
+  const [fullviewTopInset, setFullviewTopInset] = useState(0)
 
   const closeActiveDialog = useCallback(() => {
     if (!activeDialog) return
@@ -177,6 +180,36 @@ export default function App(): React.ReactElement {
   useEffect(() => {
     void initializeUpdates()
   }, [initializeUpdates])
+
+  useEffect(() => {
+    if (viewMode !== 'fullview') {
+      setFullviewTopInset(0)
+      return
+    }
+
+    const panelEl = fullviewPanelRef.current
+    if (!panelEl) return
+
+    const updatePanelHeight = () => {
+      setFullviewTopInset(Math.ceil(panelEl.getBoundingClientRect().height))
+    }
+
+    updatePanelHeight()
+
+    if (typeof ResizeObserver === 'undefined') {
+      return
+    }
+
+    const observer = new ResizeObserver(() => {
+      updatePanelHeight()
+    })
+
+    observer.observe(panelEl)
+
+    return () => {
+      observer.disconnect()
+    }
+  }, [viewMode])
 
   const loadWorkspace = useCallback(
     (workspaceId: string) => {
@@ -350,6 +383,22 @@ export default function App(): React.ReactElement {
     handleSelectSingleTile(tileId)
     getCanvasMethods()?.centerViewOnTile(tileId)
   }, [handleSelectSingleTile])
+
+  const handleShowTileFromSidebar = useCallback((tileId: string) => {
+    if (viewMode !== 'canvas') return
+    getCanvasMethods()?.centerViewOnTile(tileId)
+  }, [viewMode])
+
+  const handleSidebarTileClick = useCallback((tileId: string) => {
+    if (viewMode === 'fullview') {
+      focusTile(tileId)
+      selectTiles([tileId])
+      setFullviewActiveTileId(tileId)
+      return
+    }
+
+    handleShowTileFromSidebar(tileId)
+  }, [focusTile, handleShowTileFromSidebar, selectTiles, setFullviewActiveTileId, viewMode])
 
   const handleSetViewMode = useCallback((mode: 'canvas' | 'fullview') => {
     if (mode === 'fullview') {
@@ -899,21 +948,6 @@ export default function App(): React.ReactElement {
         }
       >
         <div className="flex h-full flex-col bg-bg-secondary">
-          <div className="border-b border-border px-5 py-6">
-            <div className="nd-label text-text-secondary">Workspace Console</div>
-            <div className="mt-2 flex items-end justify-between gap-4">
-              <div>
-                <div className="nd-display text-[44px] text-text-display">
-                  {tiles.length.toString().padStart(2, '0')}
-                </div>
-                <div className="nd-caption mt-1 text-text-secondary">OPEN SURFACES</div>
-              </div>
-              <div className="nd-caption text-right text-text-secondary">
-                {viewMode === 'fullview' ? '[ FOCUS MODE ]' : '[ CANVAS MODE ]'}
-              </div>
-            </div>
-          </div>
-
           <div ref={workspaceMenuRef} className="relative border-b border-border px-5 py-4">
             <button
               className="flex w-full items-center justify-between rounded-2xl border border-border-visible bg-bg-tertiary px-4 py-4 text-left transition-colors hover:border-text-secondary"
@@ -972,15 +1006,6 @@ export default function App(): React.ReactElement {
                 </div>
               </div>
             )}
-
-            <div className="mt-3 flex items-center justify-between">
-              <span className="nd-caption text-text-secondary">FOCUSED APP</span>
-              <span className="font-mono text-sm text-text-display">{focusedTileId ? focusedTileId.slice(-4) : '--'}</span>
-            </div>
-            <div className="mt-2 flex items-center justify-between">
-              <span className="nd-caption text-text-secondary">SELECTION</span>
-              <span className="font-mono text-sm text-text-display">{selectedTileIds.length.toString().padStart(2, '0')}</span>
-            </div>
           </div>
 
           <div className="flex-1 px-3 py-4">
@@ -1001,43 +1026,23 @@ export default function App(): React.ReactElement {
                   .slice()
                   .sort((a, b) => b.zIndex - a.zIndex)
                   .map((tile) => {
-                    const meta = TILE_META[tile.type]
-                    const Icon = meta.icon
                     const isActive = tile.id === focusedTileId
                     const isSelected = selectedTileIds.includes(tile.id)
 
                     return (
-                      <button
+                      <TileListItem
                         key={tile.id}
-                        className="w-full rounded-[20px] border px-4 py-4 text-left transition-colors"
-                        style={{
-                          background: isActive || isSelected ? 'var(--surface-raised)' : 'var(--surface)',
-                          borderColor: isActive ? 'var(--text-display)' : isSelected ? 'var(--border-visible)' : 'var(--border)',
-                          color: isActive || isSelected ? 'var(--text-primary)' : 'var(--text-secondary)',
-                        }}
-                        onClick={() => handleFocusTile(tile.id)}
+                        tile={tile}
+                        active={isActive || isSelected}
+                        className="w-full transition-colors"
+                        onClick={() => handleSidebarTileClick(tile.id)}
+                        onDoubleClick={() => handleShowTileFromSidebar(tile.id)}
                         onContextMenu={(event) => {
                           event.preventDefault()
                           setGroupMenu(null)
                           setTileMenu({ tileId: tile.id, x: event.clientX, y: event.clientY })
                         }}
-                        title={meta.label}
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border-visible">
-                            <Icon size={15} className="shrink-0" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="nd-label text-text-secondary">
-                              {isSelected ? '[ SELECTED ]' : tile.id === fullviewActiveTileId ? '[ PRIMARY ]' : '[ OPEN ]'}
-                            </div>
-                            <div className="mt-2 truncate text-sm text-text-display">
-                              {tile.label ?? `${meta.label} ${tile.id.slice(-4)}`}
-                            </div>
-                            <div className="nd-caption mt-2 text-text-secondary">{meta.label.toUpperCase()}</div>
-                          </div>
-                        </div>
-                      </button>
+                      />
                     )
                   })}
               </div>
@@ -1067,6 +1072,7 @@ export default function App(): React.ReactElement {
                         borderColor: isSelectedGroup ? 'var(--text-display)' : 'var(--border)',
                       }}
                       onClick={() => handleSelectGroup(group)}
+                      onDoubleClick={() => handleShowGroup(group)}
                       onContextMenu={(event) => {
                         event.preventDefault()
                         setTileMenu(null)
@@ -1150,9 +1156,9 @@ export default function App(): React.ReactElement {
           {viewMode === 'fullview' && (
             <div className="absolute inset-x-0 top-0 z-10">
               <FullviewPanel
+                containerRef={fullviewPanelRef}
                 tiles={sortedTiles}
                 activeTileId={fullviewActiveTileId}
-                focusedTileId={focusedTileId}
                 onActivateTile={(tileId) => {
                   setFullviewActiveTileId(tileId)
                   handleSelectSingleTile(tileId)
@@ -1186,7 +1192,7 @@ export default function App(): React.ReactElement {
             tileRefreshKeys={tileRefreshKeys}
             viewMode={viewMode}
             fullviewActiveTileId={fullviewActiveTileId}
-            fullviewTopInset={viewMode === 'fullview' ? 118 : 0}
+            fullviewTopInset={viewMode === 'fullview' ? fullviewTopInset : 0}
           />
         </div>
       </div>

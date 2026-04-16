@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { CornerDownLeft, TerminalSquare, X } from 'lucide-react'
 import type { TileState } from '@shared/types'
@@ -39,10 +39,6 @@ export function TileEditorDialog({ request, onCancel, onConfirm }: TileEditorDia
 
   const showCommandField = request?.tileType === 'terminal'
 
-  const handleBackdropClick = useCallback((event: React.MouseEvent) => {
-    if (event.target === event.currentTarget) onCancel()
-  }, [onCancel])
-
   useEffect(() => {
     if (!request || !value) return
 
@@ -70,7 +66,7 @@ export function TileEditorDialog({ request, onCancel, onConfirm }: TileEditorDia
   if (!request || !value) return null
 
   return createPortal(
-    <div className="fixed inset-0 z-[10035] flex items-center justify-center bg-black/80" onClick={handleBackdropClick}>
+    <div className="fixed inset-0 z-[10035] flex items-center justify-center bg-black/80">
       <div className="w-[620px] max-h-[86vh] max-w-[calc(100vw-32px)] overflow-hidden rounded-[24px] border border-border-visible bg-bg-secondary shadow-2xl">
         <div className="flex items-center justify-between gap-4 border-b border-border px-6 py-5">
           <div className="min-w-0">

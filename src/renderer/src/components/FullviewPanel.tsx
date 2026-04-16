@@ -1,13 +1,13 @@
 import React, { useMemo, useState } from 'react'
-import { Pencil, RefreshCw, Trash2, X } from 'lucide-react'
+import { Pencil, RefreshCw, Trash2 } from 'lucide-react'
 import type { TileState } from '@shared/types'
 import { ContextMenu, type MenuItem } from './ContextMenu'
-import { TILE_META } from './TileContent'
+import { TileListItem } from './TileListItem'
 
 interface FullviewPanelProps {
   tiles: TileState[]
   activeTileId: string | null
-  focusedTileId: string | null
+  containerRef?: React.Ref<HTMLDivElement>
   onActivateTile: (tileId: string) => void
   onCloseTile: (tileId: string) => void | Promise<void>
   onEditTile: (tile: TileState) => void
@@ -19,7 +19,7 @@ interface FullviewPanelProps {
 export function FullviewPanel({
   tiles,
   activeTileId,
-  focusedTileId,
+  containerRef,
   onActivateTile,
   onCloseTile,
   onEditTile,
@@ -66,56 +66,31 @@ export function FullviewPanel({
     : []
 
   return (
-    <div className="nd-panel border-x-0 border-t-0 px-4 py-3">
-      <div className="flex items-stretch gap-2 overflow-x-auto pb-1">
+    <div ref={containerRef} className="nd-panel border-x-0 border-t-0 px-4 pb-1 pt-3">
+      <div className="flex items-stretch gap-2 overflow-x-auto">
         {orderedTiles.length === 0 ? (
           <div className="nd-panel-raised flex h-[72px] min-w-[240px] items-center rounded-2xl px-5 text-text-secondary">
             <span className="nd-label">No items open</span>
           </div>
         ) : (
           orderedTiles.map((tile) => {
-            const meta = TILE_META[tile.type]
-            const Icon = meta.icon
             const isActive = tile.id === activeTile?.id
-            const isFocused = tile.id === focusedTileId
 
             return (
-              <div
+              <TileListItem
                 key={tile.id}
-                className={`relative min-w-[220px] max-w-[280px] rounded-2xl border ${
-                  isActive ? 'border-text-display bg-bg-secondary' : 'border-border bg-bg-secondary'
-                }`}
-              >
-                <button
-                  className="flex w-full items-start gap-3 px-4 py-4 text-left"
-                  onClick={() => onActivateTile(tile.id)}
-                  onContextMenu={(event) => {
-                    event.preventDefault()
-                    setTabMenu({ tileId: tile.id, x: event.clientX, y: event.clientY })
-                  }}
-                  title={meta.label}
-                >
-                  <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border-visible text-text-secondary">
-                    <Icon size={14} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="nd-label text-text-secondary">
-                      {isActive ? '[ ACTIVE ]' : isFocused ? '[ SELECTED ]' : '[ OPEN ]'}
-                    </div>
-                    <div className="mt-2 truncate text-base text-text-display">
-                      {tile.label ?? `${meta.label} ${tile.id.slice(-4)}`}
-                    </div>
-                  </div>
-                </button>
-
-                <button
-                  className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
-                  onClick={() => { void onCloseTile(tile.id) }}
-                  title="Close tab"
-                >
-                  <X size={13} />
-                </button>
-              </div>
+                tile={tile}
+                active={isActive}
+                className="min-w-[220px] max-w-[280px]"
+                onClick={() => onActivateTile(tile.id)}
+                onContextMenu={(event) => {
+                  event.preventDefault()
+                  setTabMenu({ tileId: tile.id, x: event.clientX, y: event.clientY })
+                }}
+                onClose={() => {
+                  void onCloseTile(tile.id)
+                }}
+              />
             )
           })
         )}

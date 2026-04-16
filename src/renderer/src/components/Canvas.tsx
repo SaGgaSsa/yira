@@ -185,7 +185,7 @@ export function Canvas({
     return getGroupingBlockedReason(tiles, groups, selectedTileIds, mergeTargetGroup?.id)
   }, [tiles, groups, selectedTileIds, mergeTargetGroup])
 
-  const showSelectionBar = !isFullview && selectedTileIds.length > 0 && selectedGroup === null
+  const showSelectionBar = !isFullview && selectedTileIds.length >= 2 && selectedGroup === null
   const canCreateGroup = selectedTileIds.length >= 2 && selectedGroup === null && !groupingBlockedReason
   const selectionActionLabel = mergeTargetGroup ? `Merge into "${mergeTargetGroup.name}"` : 'Group'
 
