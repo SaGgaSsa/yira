@@ -235,23 +235,24 @@ export default function App(): React.ReactElement {
 
   const saveToDisk = useCallback(
     async (workspaceId: string) => {
+      const stateSnapshot = useCanvasStore.getState()
       const state: CanvasState = {
-        tiles: tiles.map((t) => ({ ...t })),
-        groups: groups.map((group) => ({
+        tiles: stateSnapshot.tiles.map((tile) => ({ ...tile })),
+        groups: stateSnapshot.groups.map((group) => ({
           ...group,
           tileIds: [...group.tileIds],
           terminal: group.terminal ? { ...group.terminal } : undefined,
         })),
-        viewport: { ...viewport },
-        nextZIndex,
-        focusedTileId,
-        viewMode,
-        fullviewActiveTileId,
+        viewport: { ...stateSnapshot.viewport },
+        nextZIndex: stateSnapshot.nextZIndex,
+        focusedTileId: stateSnapshot.focusedTileId,
+        viewMode: stateSnapshot.viewMode,
+        fullviewActiveTileId: stateSnapshot.fullviewActiveTileId,
       }
 
       await window.electron.canvas.save(workspaceId, state)
     },
-    [tiles, groups, viewport, nextZIndex, focusedTileId, viewMode, fullviewActiveTileId],
+    [],
   )
 
   const activateWorkspace = useCallback(async (

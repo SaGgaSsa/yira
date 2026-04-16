@@ -8,8 +8,10 @@ import { registerTerminalIPC, initShellProfiles } from './ipc/terminal'
 import { registerSettingsIPC } from './ipc/settings'
 import { registerNotesIPC } from './ipc/notes'
 import { registerBoardsIPC } from './ipc/boards'
-import { YIRA_HOME } from './paths'
+import { APP_ID, APP_NAME, DEV_APP_NAME, YIRA_HOME } from './paths'
 import { registerUpdateIPC, scheduleStartupUpdateCheck } from './updater'
+
+const appDisplayName = is.dev ? DEV_APP_NAME : APP_NAME
 
 function createWindow(): BrowserWindow {
   // electron-vite outputs .mjs for preload; try .mjs first, fallback to .js
@@ -18,6 +20,7 @@ function createWindow(): BrowserWindow {
   console.log('[main] Preload path:', finalPreload, '| exists:', existsSync(finalPreload))
 
   const win = new BrowserWindow({
+    title: appDisplayName,
     width: 1400,
     height: 900,
     minWidth: 800,
@@ -49,6 +52,7 @@ function createWindow(): BrowserWindow {
   }
 
   win.webContents.once('did-finish-load', () => {
+    win.setTitle(appDisplayName)
     scheduleStartupUpdateCheck()
   })
 
@@ -64,7 +68,8 @@ function createWindow(): BrowserWindow {
 }
 
 app.whenReady().then(async () => {
-  app.setAppUserModelId('com.yira.app')
+  app.setName(appDisplayName)
+  app.setAppUserModelId(APP_ID)
 
   app.on('browser-window-created', (_, window) => {
     // Shortcuts handled by renderer
