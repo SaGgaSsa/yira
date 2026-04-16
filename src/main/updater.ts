@@ -1,7 +1,9 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
-import { autoUpdater } from 'electron-updater'
+import electronUpdater from 'electron-updater'
 import type { AppUpdater, ProgressInfo, UpdateDownloadedEvent, UpdateInfo } from 'electron-updater'
 import type { UpdateState } from '@shared/types'
+
+const { autoUpdater } = electronUpdater
 
 const UPDATE_STATE_CHANNEL = 'updates:state-changed'
 const STARTUP_CHECK_DELAY_MS = 5000
