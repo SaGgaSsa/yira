@@ -15,10 +15,11 @@ import { useCanvasActions } from './hooks/useCanvasActions'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useTheme } from './hooks/useTheme'
 import { useFontSize } from './hooks/useFontSize'
+import { useUpdateStore } from './store/updateStore'
 import { findMergeTargetGroup, findSelectedGroup, getGroupingBlockedReason } from './utils/grouping'
 import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type CanvasState, type Workspace, type TileGroup } from '@shared/types'
 import { TILE_META } from './components/TileContent'
-import { Terminal, StickyNote, Globe, LayoutGrid, ChevronDown, FolderPlus, Trash2, Pencil, Lock, Columns, RefreshCw } from 'lucide-react'
+import { Terminal, StickyNote, Globe, LayoutGrid, ChevronDown, FolderPlus, Trash2, Pencil, Lock, Columns, RefreshCw, Download, X } from 'lucide-react'
 
 const GROUP_SHOW_MARGIN = 20
 const GROUP_SHOW_TOP_PADDING = 118
@@ -62,6 +63,12 @@ export default function App(): React.ReactElement {
   const loadSettings = useSettingsStore((s) => s.loadSettings)
   useTheme()
   useFontSize()
+  const initializeUpdates = useUpdateStore((s) => s.initialize)
+  const updateStatus = useUpdateStore((s) => s.status)
+  const updateAvailableVersion = useUpdateStore((s) => s.availableVersion)
+  const updateProgressPercent = useUpdateStore((s) => s.progressPercent)
+  const updateMessage = useUpdateStore((s) => s.message)
+  const installUpdate = useUpdateStore((s) => s.installUpdate)
 
   // Canvas state
   const tiles = useCanvasStore((s) => s.tiles)
@@ -129,6 +136,7 @@ export default function App(): React.ReactElement {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [groupEditor, setGroupEditor] = useState<GroupEditorState>(null)
   const [tileEditor, setTileEditor] = useState<TileEditorState>(null)
+  const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState<string | null>(null)
   const [tileRefreshKeys, setTileRefreshKeys] = useState<Record<string, number>>({})
   const [tileMenu, setTileMenu] = useState<{ tileId: string; x: number; y: number } | null>(null)
   const [groupMenu, setGroupMenu] = useState<{ groupId: string; x: number; y: number } | null>(null)
@@ -165,6 +173,10 @@ export default function App(): React.ReactElement {
   useEffect(() => {
     loadSettings()
   }, [loadSettings])
+
+  useEffect(() => {
+    void initializeUpdates()
+  }, [initializeUpdates])
 
   const loadWorkspace = useCallback(
     (workspaceId: string) => {
@@ -763,6 +775,36 @@ export default function App(): React.ReactElement {
     })
   }, [requestConfirm])
 
+  const currentUpdateBannerKey = updateStatus === 'downloaded'
+    ? `downloaded:${updateAvailableVersion ?? 'ready'}`
+    : `progress:${updateAvailableVersion ?? updateStatus}`
+  const showUpdateBanner =
+    (updateStatus === 'available' || updateStatus === 'downloading' || updateStatus === 'downloaded') &&
+    dismissedUpdateVersion !== currentUpdateBannerKey
+
+  const updateBannerCopy = (() => {
+    if (updateStatus === 'downloaded') {
+      return {
+        title: `Update ${updateAvailableVersion ?? ''} is ready`,
+        message: 'Restart Yira to install the downloaded version.',
+      }
+    }
+
+    if (updateStatus === 'downloading') {
+      return {
+        title: `Downloading update${updateAvailableVersion ? ` ${updateAvailableVersion}` : ''}`,
+        message: updateProgressPercent !== null
+          ? `${updateProgressPercent}% completed in the background.`
+          : 'The update is downloading in the background.',
+      }
+    }
+
+    return {
+      title: `Update${updateAvailableVersion ? ` ${updateAvailableVersion}` : ''} found`,
+      message: updateMessage ?? 'Yira is downloading the new version in the background.',
+    }
+  })()
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-bg-primary text-text-primary">
       {/* Sidebar — goes to the very top */}
@@ -1057,6 +1099,40 @@ export default function App(): React.ReactElement {
 
       {/* Right side: content + bars */}
       <div className="flex min-w-0 flex-1 flex-col">
+        {showUpdateBanner && (
+          <div className="border-b border-border bg-bg-secondary px-6 py-3">
+            <div className="flex items-center justify-between gap-4 rounded-[20px] border border-border-visible bg-bg-tertiary px-4 py-3">
+              <div className="min-w-0">
+                <div className="nd-label text-text-secondary">Updates</div>
+                <div className="mt-1 text-sm text-text-display">{updateBannerCopy.title}</div>
+                <div className="mt-1 text-sm text-text-secondary">{updateBannerCopy.message}</div>
+              </div>
+
+              <div className="flex shrink-0 items-center gap-2">
+                {updateStatus === 'downloaded' && (
+                  <button
+                    className="inline-flex items-center gap-2 rounded-full border border-text-display px-4 py-2 text-sm text-text-display transition-colors hover:bg-bg-secondary"
+                    onClick={() => {
+                      void installUpdate()
+                    }}
+                  >
+                    <Download size={14} />
+                    <span>Restart to install</span>
+                  </button>
+                )}
+
+                <button
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border-visible text-text-secondary transition-colors hover:text-text-display"
+                  onClick={() => setDismissedUpdateVersion(currentUpdateBannerKey)}
+                  title="Dismiss update banner"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <TopBar
           zoom={viewport.zoom}
           viewMode={viewMode}

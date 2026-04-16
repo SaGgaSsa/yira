@@ -116,4 +116,25 @@ git push origin v0.1.0
 4. Wait for the `Windows Release` workflow to complete
 5. Verify that GitHub created release `v0.1.0` and attached the installer files
 
+### Windows code signing in CI
+
+The Windows release workflow is prepared to sign builds with `electron-builder` if you provide a certificate through GitHub secrets.
+
+Required GitHub secrets:
+
+1. `WINDOWS_CERTIFICATE_PFX_BASE64`: base64 content of an exportable `.pfx` certificate with private key
+2. `WINDOWS_CERTIFICATE_PASSWORD`: password for that `.pfx`
+
+Optional GitHub variable:
+
+1. `WINDOWS_CERTIFICATE_FILE_NAME`: temporary filename to use in the runner, defaults to `codesign.pfx`
+
+Behavior:
+
+- If both secrets exist, CI reconstructs the certificate, sets `CSC_LINK` and `CSC_KEY_PASSWORD`, and `electron-builder` signs the Windows binaries
+- If neither secret exists, the build still works and produces unsigned binaries
+- If only one signing secret exists, the workflow fails early with a clear configuration error
+
+This setup expects a standard Windows code signing certificate that can be exported as `.pfx`. EV certificates tied to USB tokens usually do not fit this secrets-only CI flow.
+
 For more detail, see [docs/windows-release.md](docs/windows-release.md).

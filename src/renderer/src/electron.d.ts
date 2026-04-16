@@ -1,4 +1,12 @@
-import type { ShellProfileId, CanvasState, Workspace, UserSettings, KanbanBoardState, TerminalCreateOptions } from '@shared/types'
+import type {
+  ShellProfileId,
+  CanvasState,
+  Workspace,
+  UserSettings,
+  KanbanBoardState,
+  TerminalCreateOptions,
+  UpdateState,
+} from '@shared/types'
 
 interface ElectronWorld {
   workspace: {
@@ -44,6 +52,12 @@ interface ElectronWorld {
   clipboard: {
     readText: () => Promise<string>
     writeText: (text: string) => Promise<void>
+  }
+  updates: {
+    getState: () => Promise<UpdateState>
+    check: () => Promise<UpdateState>
+    install: () => Promise<void>
+    onStateChange: (callback: (state: UpdateState) => void) => () => void
   }
 }
 

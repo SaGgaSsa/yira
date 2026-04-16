@@ -9,6 +9,7 @@ import { registerSettingsIPC } from './ipc/settings'
 import { registerNotesIPC } from './ipc/notes'
 import { registerBoardsIPC } from './ipc/boards'
 import { YIRA_HOME } from './paths'
+import { registerUpdateIPC, scheduleStartupUpdateCheck } from './updater'
 
 function createWindow(): BrowserWindow {
   // electron-vite outputs .mjs for preload; try .mjs first, fallback to .js
@@ -47,6 +48,10 @@ function createWindow(): BrowserWindow {
     win.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
+  win.webContents.once('did-finish-load', () => {
+    scheduleStartupUpdateCheck()
+  })
+
   // Debug: log load errors
   win.webContents.on('did-fail-load', (_event, code, desc, url) => {
     console.error('[main] did-fail-load:', code, desc, url)
@@ -78,6 +83,7 @@ app.whenReady().then(async () => {
   registerSettingsIPC()
   registerNotesIPC()
   registerBoardsIPC()
+  registerUpdateIPC()
 
   ipcMain.handle('shell:openExternal', async (_event, url: string) => {
     await shell.openExternal(url)

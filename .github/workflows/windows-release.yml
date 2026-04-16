@@ -35,6 +35,42 @@ jobs:
       - name: Validate TypeScript
         run: npx tsc --noEmit
 
+      - name: Validate Windows signing secrets
+        if: ${{ secrets.WINDOWS_CERTIFICATE_PFX_BASE64 != '' || secrets.WINDOWS_CERTIFICATE_PASSWORD != '' }}
+        shell: pwsh
+        run: |
+          if ("${{ secrets.WINDOWS_CERTIFICATE_PFX_BASE64 }}" -eq "") {
+            throw 'WINDOWS_CERTIFICATE_PFX_BASE64 is required when Windows code signing is enabled.'
+          }
+
+          if ("${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}" -eq "") {
+            throw 'WINDOWS_CERTIFICATE_PASSWORD is required when Windows code signing is enabled.'
+          }
+
+      - name: Prepare Windows code signing certificate
+        if: ${{ secrets.WINDOWS_CERTIFICATE_PFX_BASE64 != '' && secrets.WINDOWS_CERTIFICATE_PASSWORD != '' }}
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_PFX_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_PFX_BASE64 }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+          WINDOWS_CERTIFICATE_FILE_NAME: ${{ vars.WINDOWS_CERTIFICATE_FILE_NAME }}
+        run: |
+          $certFileName = if ($env:WINDOWS_CERTIFICATE_FILE_NAME) { $env:WINDOWS_CERTIFICATE_FILE_NAME } else { 'codesign.pfx' }
+          $certPath = Join-Path $env:RUNNER_TEMP $certFileName
+
+          [System.IO.File]::WriteAllBytes(
+            $certPath,
+            [System.Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_PFX_BASE64)
+          )
+
+          "CSC_LINK=$certPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "CSC_KEY_PASSWORD=$env:WINDOWS_CERTIFICATE_PASSWORD" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Build without Windows code signing
+        if: ${{ secrets.WINDOWS_CERTIFICATE_PFX_BASE64 == '' && secrets.WINDOWS_CERTIFICATE_PASSWORD == '' }}
+        shell: pwsh
+        run: Write-Host 'Windows code signing is disabled for this run because no signing secrets are configured.'
+
       - name: Build Windows installer artifact
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         run: npm run dist:win

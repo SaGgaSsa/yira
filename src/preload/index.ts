@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { TerminalCreateOptions } from '@shared/types'
+import type { TerminalCreateOptions, UpdateState } from '@shared/types'
 
 console.log('[preload] Loading...')
 
@@ -72,6 +72,19 @@ contextBridge.exposeInMainWorld('electron', {
   clipboard: {
     readText: () => ipcRenderer.invoke('clipboard:readText'),
     writeText: (text: string) => ipcRenderer.invoke('clipboard:writeText', text),
+  },
+
+  updates: {
+    getState: () => ipcRenderer.invoke('updates:getState'),
+    check: () => ipcRenderer.invoke('updates:check'),
+    install: () => ipcRenderer.invoke('updates:install'),
+    onStateChange: (callback: (state: UpdateState) => void) => {
+      const handler = (_event: unknown, state: UpdateState) => callback(state)
+      ipcRenderer.on('updates:state-changed', handler)
+      return () => {
+        ipcRenderer.removeListener('updates:state-changed', handler)
+      }
+    },
   },
 })
 

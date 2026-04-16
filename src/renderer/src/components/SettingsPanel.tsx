@@ -1,12 +1,35 @@
 import React, { useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Monitor, Moon, Sun, Type, Grid3X3, Globe, Code2 } from 'lucide-react'
+import { X, Monitor, Moon, Sun, Type, Grid3X3, Globe, Code2, Info, RefreshCw, Download } from 'lucide-react'
 import { useSettingsStore } from '@/store/settingsStore'
+import { useUpdateStore } from '@/store/updateStore'
+import type { UpdateState } from '@shared/types'
 
 interface SettingsPanelProps {
   open: boolean
   onClose: () => void
   onOpenJsonEditor: () => void
+}
+
+function getUpdateSummary(state: UpdateState): string {
+  switch (state.status) {
+    case 'unsupported':
+      return 'Automatic updates are available only in installed Windows builds.'
+    case 'checking':
+      return 'Checking GitHub Releases for a newer version.'
+    case 'available':
+      return `Update ${state.availableVersion ?? ''} found. Download will continue in the background.`
+    case 'downloading':
+      return `Downloading update${state.progressPercent !== null ? ` (${state.progressPercent}%)` : ''}.`
+    case 'downloaded':
+      return `Update ${state.availableVersion ?? ''} is ready. Restart Yira to install it.`
+    case 'up-to-date':
+      return 'You already have the latest published version.'
+    case 'error':
+      return state.message ?? 'Unable to check for updates right now.'
+    default:
+      return 'Check for updates manually or wait for the background check.'
+  }
 }
 
 export function SettingsPanel({ open, onClose, onOpenJsonEditor }: SettingsPanelProps): React.ReactElement {
@@ -22,6 +45,26 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor }: SettingsPanel
   const setSnapToGrid = useSettingsStore((s) => s.setSnapToGrid)
   const setGridSize = useSettingsStore((s) => s.setGridSize)
   const setBrowserHomeUrl = useSettingsStore((s) => s.setBrowserHomeUrl)
+  const currentVersion = useUpdateStore((s) => s.currentVersion)
+  const availableVersion = useUpdateStore((s) => s.availableVersion)
+  const updateStatus = useUpdateStore((s) => s.status)
+  const progressPercent = useUpdateStore((s) => s.progressPercent)
+  const updateMessage = useUpdateStore((s) => s.message)
+  const checkForUpdates = useUpdateStore((s) => s.checkForUpdates)
+  const installUpdate = useUpdateStore((s) => s.installUpdate)
+
+  const updateState: UpdateState = {
+    status: updateStatus,
+    currentVersion,
+    availableVersion,
+    progressPercent,
+    message: updateMessage,
+  }
+
+  const isChecking = updateStatus === 'checking'
+  const isDownloading = updateStatus === 'downloading'
+  const isRestartReady = updateStatus === 'downloaded'
+  const canCheckForUpdates = !isChecking && !isDownloading
 
   const handleBackdropClick = useCallback(
     (e: React.MouseEvent) => {
@@ -168,6 +211,64 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor }: SettingsPanel
               <span className="nd-label text-text-display">Open raw canvas JSON</span>
               <span className="nd-caption text-text-secondary">[ EDIT ]</span>
             </button>
+          </section>
+
+          <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
+            <div className="mb-4 flex items-center gap-2">
+              <Info size={14} className="text-text-secondary" />
+              <span className="nd-label text-text-secondary">About & Updates</span>
+            </div>
+
+            <div className="rounded-[20px] border border-border-visible bg-bg-primary px-4 py-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="nd-label text-text-secondary">Current version</div>
+                  <div className="mt-2 font-mono text-sm text-text-display">v{currentVersion}</div>
+                  {availableVersion && availableVersion !== currentVersion && (
+                    <div className="mt-2 font-mono text-xs text-text-secondary">Latest found: v{availableVersion}</div>
+                  )}
+                </div>
+                <div className="nd-caption text-text-secondary">[ {updateStatus.toUpperCase()} ]</div>
+              </div>
+
+              <p className="mt-4 text-sm leading-6 text-text-secondary">{getUpdateSummary(updateState)}</p>
+
+              {isDownloading && progressPercent !== null && (
+                <div className="mt-4">
+                  <div className="h-2 overflow-hidden rounded-full bg-bg-secondary">
+                    <div
+                      className="h-full rounded-full bg-text-display transition-[width]"
+                      style={{ width: `${progressPercent}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-5 flex flex-wrap gap-3">
+                <button
+                  className="inline-flex items-center gap-2 rounded-full border border-border-visible px-4 py-2 text-sm text-text-display transition-colors hover:border-text-secondary disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={() => {
+                    void checkForUpdates()
+                  }}
+                  disabled={!canCheckForUpdates}
+                >
+                  <RefreshCw size={14} className={isChecking ? 'animate-spin' : ''} />
+                  <span>{isChecking ? 'Checking...' : 'Check for updates'}</span>
+                </button>
+
+                {isRestartReady && (
+                  <button
+                    className="inline-flex items-center gap-2 rounded-full border border-text-display px-4 py-2 text-sm text-text-display transition-colors hover:bg-bg-secondary"
+                    onClick={() => {
+                      void installUpdate()
+                    }}
+                  >
+                    <Download size={14} />
+                    <span>Restart to install</span>
+                  </button>
+                )}
+              </div>
+            </div>
           </section>
         </div>
       </div>

@@ -53,6 +53,26 @@ export const DEFAULT_SETTINGS: AppSettings = {
   defaultTileSize: { w: 640, h: 420 },
 }
 
+// ─── App Updates ───────────────────────────────────────────────────────────
+
+export type UpdateStatus =
+  | 'idle'
+  | 'unsupported'
+  | 'checking'
+  | 'available'
+  | 'downloading'
+  | 'downloaded'
+  | 'up-to-date'
+  | 'error'
+
+export interface UpdateState {
+  status: UpdateStatus
+  currentVersion: string
+  availableVersion: string | null
+  progressPercent: number | null
+  message: string | null
+}
+
 // ─── Shell Profiles ────────────────────────────────────────────────────────
 
 export type ShellProfileId = 'powershell' | 'cmd' | 'wsl' | 'bash' | 'zsh' | 'fish'
