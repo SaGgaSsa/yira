@@ -379,15 +379,42 @@ export default function App(): React.ReactElement {
     setFullviewActiveTileId(tileId)
   }, [focusTile, selectTiles, bringToFront, setFullviewActiveTileId])
 
-  const handleFocusTile = useCallback((tileId: string) => {
-    handleSelectSingleTile(tileId)
-    getCanvasMethods()?.centerViewOnTile(tileId)
-  }, [handleSelectSingleTile])
-
-  const handleShowTileFromSidebar = useCallback((tileId: string) => {
+  const handleCenterTileFromSidebar = useCallback((tileId: string) => {
     if (viewMode !== 'canvas') return
     getCanvasMethods()?.centerViewOnTile(tileId)
   }, [viewMode])
+
+  const handleShowTileFromSidebar = useCallback((tileId: string) => {
+    const tile = tiles.find((entry) => entry.id === tileId)
+    if (!tile) return
+
+    const paddedBounds = {
+      minX: tile.x - GROUP_SHOW_MARGIN,
+      minY: tile.y - GROUP_SHOW_MARGIN,
+      maxX: tile.x + tile.width + GROUP_SHOW_MARGIN,
+      maxY: tile.y + tile.height + GROUP_SHOW_MARGIN,
+    }
+
+    setTileMenu(null)
+    selectTiles([tile.id])
+    focusTile(tile.id)
+
+    const fitTileBounds = () => {
+      getCanvasMethods()?.fitViewToBounds(paddedBounds, { top: GROUP_SHOW_TOP_PADDING })
+    }
+
+    if (viewMode === 'canvas') {
+      fitTileBounds()
+      return
+    }
+
+    setViewMode('canvas')
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        fitTileBounds()
+      })
+    })
+  }, [focusTile, selectTiles, setViewMode, tiles, viewMode])
 
   const handleSidebarTileClick = useCallback((tileId: string) => {
     if (viewMode === 'fullview') {
@@ -397,8 +424,8 @@ export default function App(): React.ReactElement {
       return
     }
 
-    handleShowTileFromSidebar(tileId)
-  }, [focusTile, handleShowTileFromSidebar, selectTiles, setFullviewActiveTileId, viewMode])
+    handleCenterTileFromSidebar(tileId)
+  }, [focusTile, handleCenterTileFromSidebar, selectTiles, setFullviewActiveTileId, viewMode])
 
   const handleSetViewMode = useCallback((mode: 'canvas' | 'fullview') => {
     if (mode === 'fullview') {
