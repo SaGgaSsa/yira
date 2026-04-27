@@ -73,6 +73,23 @@ export interface UpdateState {
   message: string | null
 }
 
+// ─── Notifications ────────────────────────────────────────────────────────
+
+export interface NotificationAttentionOptions {
+  onlyWhenInactive?: boolean
+}
+
+export type NotificationAttentionReason =
+  | 'marked'
+  | 'cleared'
+  | 'window-focused'
+  | 'no-window'
+
+export interface NotificationAttentionResult {
+  marked: boolean
+  reason: NotificationAttentionReason
+}
+
 // ─── Shell Profiles ────────────────────────────────────────────────────────
 
 export type ShellProfileId = 'powershell' | 'cmd' | 'wsl' | 'bash' | 'zsh' | 'fish'
@@ -92,11 +109,42 @@ export interface TerminalCreateOptions {
   initialCommand?: string
 }
 
+// ─── Files ─────────────────────────────────────────────────────────────────
+
+export type FileEntryKind = 'file' | 'directory'
+
+export interface FileEntry {
+  name: string
+  relativePath: string
+  kind: FileEntryKind
+  size: number
+  modifiedAt: string
+}
+
+export interface FileListOptions {
+  showIgnored?: boolean
+}
+
+export interface FileListResult {
+  currentDir: string
+  currentPath: string
+  parentPath: string | null
+  entries: FileEntry[]
+  rootLabel: string
+  rootPath: string
+}
+
+export interface FileSelectFolderResult {
+  path: string
+  name: string
+}
+
 // ─── Tile Types ────────────────────────────────────────────────────────────
 
-export type TileType = 'terminal' | 'note' | 'browser' | 'kanban'
+export type TileType = 'terminal' | 'note' | 'browser' | 'kanban' | 'timer' | 'files'
 export type KanbanColumnId = 'backlog' | 'in_development' | 'review' | 'done'
 export type KanbanCardColor = 'slate' | 'blue' | 'green' | 'amber' | 'rose'
+export type TimerStatus = 'idle' | 'running' | 'paused' | 'done'
 
 export type NoteColor = 'yellow' | 'green' | 'blue' | 'pink' | 'purple' | 'orange' | 'white' | 'dark'
 export type NoteFont = 'sans' | 'rounded' | 'serif' | 'marker' | 'handwritten'
@@ -202,6 +250,9 @@ export interface TileGroup {
   terminal?: {
     wslStartupCommand?: string
   }
+  files?: {
+    rootPath?: string
+  }
 }
 
 // ─── Tile State ────────────────────────────────────────────────────────────
@@ -231,6 +282,14 @@ export interface TileState {
 
   // Browser-specific
   browserUrl?: string
+
+  // Timer-specific
+  timerDurationMs?: number
+  timerRemainingMs?: number
+  timerStatus?: TimerStatus
+  timerEndsAt?: number
+  timerCompletedAt?: number
+  timerNotifiedAt?: number
 }
 
 // ─── Canvas State ──────────────────────────────────────────────────────────

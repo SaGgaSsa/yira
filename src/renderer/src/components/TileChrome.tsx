@@ -4,7 +4,7 @@ import { useSettingsStore } from '@/store/settingsStore'
 import { isTileInteractionLocked } from '@/utils/grouping'
 import type { TileState, NoteColor } from '@shared/types'
 import { KANBAN_BOARD_FIXED_WIDTH, NOTE_COLORS } from '@shared/types'
-import { X, GripVertical, StickyNote, Globe, LayoutGrid, Terminal, Lock } from 'lucide-react'
+import { X, GripVertical, StickyNote, Globe, LayoutGrid, Terminal, Clock, Folder, Lock } from 'lucide-react'
 
 interface Props {
   tile: TileState
@@ -28,6 +28,8 @@ const TYPE_ICONS: Record<string, typeof Terminal> = {
   note: StickyNote,
   browser: Globe,
   kanban: LayoutGrid,
+  timer: Clock,
+  files: Folder,
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -35,6 +37,8 @@ const TYPE_LABELS: Record<string, string> = {
   note: 'Note',
   browser: 'Browser',
   kanban: 'Board',
+  timer: 'Timer',
+  files: 'Files',
 }
 
 export function TileChrome({

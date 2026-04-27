@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { TerminalCreateOptions, UpdateState } from '@shared/types'
+import type { FileListOptions, NotificationAttentionOptions, TerminalCreateOptions, UpdateState } from '@shared/types'
 
 console.log('[preload] Loading...')
 
@@ -38,6 +38,18 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.invoke('board:delete', workspaceId, tileId),
   },
 
+  // Files
+  files: {
+    selectFolder: (defaultPath?: string) =>
+      ipcRenderer.invoke('files:selectFolder', defaultPath),
+    list: (rootPath: string, relativeDir: string, options?: FileListOptions) =>
+      ipcRenderer.invoke('files:list', rootPath, relativeDir, options),
+    open: (rootPath: string, relativePath: string) =>
+      ipcRenderer.invoke('files:open', rootPath, relativePath),
+    reveal: (rootPath: string, relativePath: string) =>
+      ipcRenderer.invoke('files:reveal', rootPath, relativePath),
+  },
+
   // Canvas persistence
   canvas: {
     load: (workspaceId: string) => ipcRenderer.invoke('canvas:load', workspaceId),
@@ -73,6 +85,12 @@ contextBridge.exposeInMainWorld('electron', {
   clipboard: {
     readText: () => ipcRenderer.invoke('clipboard:readText'),
     writeText: (text: string) => ipcRenderer.invoke('clipboard:writeText', text),
+  },
+
+  notifications: {
+    requestAttention: (options?: NotificationAttentionOptions) =>
+      ipcRenderer.invoke('notifications:requestAttention', options),
+    clearAttention: () => ipcRenderer.invoke('notifications:clearAttention'),
   },
 
   updates: {

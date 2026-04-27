@@ -15,6 +15,16 @@ function normalizeGroupTerminalSettings(group: Pick<TileGroup, 'terminal'>): Til
   }
 }
 
+function normalizeGroupFilesSettings(group: Pick<TileGroup, 'files'>): TileGroup['files'] {
+  const rootPath = group.files?.rootPath?.trim()
+
+  if (!rootPath) return undefined
+
+  return {
+    rootPath,
+  }
+}
+
 function normalizeGroup(group: TileGroup): TileGroup {
   return {
     id: group.id,
@@ -23,6 +33,7 @@ function normalizeGroup(group: TileGroup): TileGroup {
     tileIds: [...group.tileIds],
     locked: Boolean(group.locked),
     terminal: normalizeGroupTerminalSettings(group),
+    files: normalizeGroupFilesSettings(group),
   }
 }
 
@@ -69,6 +80,7 @@ function buildNormalizedGroupedState(
         tileIds: [tile.id],
         locked: false,
         terminal: undefined,
+        files: undefined,
       }
       normalizedGroups.push(created)
       groupsById.set(created.id, created)
@@ -127,13 +139,13 @@ interface CanvasStore {
   setFullviewActiveTileId: (tileId: string | null) => void
   selectTiles: (tileIds: string[]) => void
   createGroup: (
-    group: Pick<TileGroup, 'name' | 'colorId' | 'locked' | 'terminal'>,
+    group: Pick<TileGroup, 'name' | 'colorId' | 'locked' | 'terminal' | 'files'>,
     tileIds?: string[],
   ) => TileGroup | null
   addTilesToGroup: (groupId: string, tileIds: string[]) => void
   updateGroup: (
     groupId: string,
-    patch: Partial<Pick<TileGroup, 'name' | 'colorId' | 'locked' | 'terminal'>>,
+    patch: Partial<Pick<TileGroup, 'name' | 'colorId' | 'locked' | 'terminal' | 'files'>>,
   ) => void
   setGroupColor: (groupId: string, colorId: GroupColorId) => void
   setGroupLocked: (groupId: string, locked: boolean) => void
@@ -232,6 +244,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       tileIds: nextIds,
       locked: groupInput.locked,
       terminal: groupInput.terminal,
+      files: groupInput.files,
     })
 
     set((s) => {
@@ -295,6 +308,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
             ...patch,
             tileIds: group.tileIds,
             terminal: patch.terminal ?? group.terminal,
+            files: patch.files ?? group.files,
           })
         : group
     )),

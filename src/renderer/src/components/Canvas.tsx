@@ -5,7 +5,7 @@ import { TileChrome } from '@/components/TileChrome'
 import { TileContent } from '@/components/TileContent'
 import { ContextMenu } from '@/components/ContextMenu'
 import { findMergeTargetGroup, findSelectedGroup, getGroupingBlockedReason } from '@/utils/grouping'
-import { Terminal, StickyNote, Globe, LayoutGrid, Lock } from 'lucide-react'
+import { Terminal, StickyNote, Globe, LayoutGrid, Clock, Folder, Lock } from 'lucide-react'
 import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type ShellProfileId, type TileGroup, type GroupColorId } from '@shared/types'
 
 const GROUP_FRAME_PADDING = 20
@@ -95,6 +95,8 @@ interface CanvasProps {
   onCreateNote: () => void
   onCreateBrowser: () => void
   onCreateBoard: () => void
+  onCreateTimer: () => void
+  onCreateFiles: () => void
   onCreateGroupFromSelection: () => void | Promise<void>
   onDeleteTile: (tileId: string) => Promise<boolean>
   onConfirmRemoveFromGroup: (tile: TileState, group: TileGroup) => Promise<boolean>
@@ -110,6 +112,8 @@ export function Canvas({
   onCreateNote,
   onCreateBrowser,
   onCreateBoard,
+  onCreateTimer,
+  onCreateFiles,
   onCreateGroupFromSelection,
   onDeleteTile,
   onConfirmRemoveFromGroup,
@@ -848,6 +852,8 @@ export function Canvas({
             { label: 'New Note', icon: StickyNote, action: onCreateNote },
             { label: 'New Browser', icon: Globe, action: onCreateBrowser },
             { label: 'New Board', icon: LayoutGrid, action: onCreateBoard },
+            { label: 'New Timer', icon: Clock, action: onCreateTimer },
+            { label: 'New Files', icon: Folder, action: onCreateFiles },
           ]}
           onClose={() => setContextMenu(null)}
         />

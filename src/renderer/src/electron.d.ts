@@ -6,6 +6,11 @@ import type {
   KanbanBoardState,
   TerminalCreateOptions,
   UpdateState,
+  NotificationAttentionOptions,
+  NotificationAttentionResult,
+  FileListOptions,
+  FileListResult,
+  FileSelectFolderResult,
 } from '@shared/types'
 
 interface ElectronWorld {
@@ -32,6 +37,12 @@ interface ElectronWorld {
     load: (workspaceId: string, tileId: string) => Promise<KanbanBoardState | null>
     delete: (workspaceId: string, tileId: string) => Promise<void>
   }
+  files: {
+    selectFolder: (defaultPath?: string) => Promise<FileSelectFolderResult | null>
+    list: (rootPath: string, relativeDir: string, options?: FileListOptions) => Promise<FileListResult>
+    open: (rootPath: string, relativePath: string) => Promise<void>
+    reveal: (rootPath: string, relativePath: string) => Promise<void>
+  }
   canvas: {
     load: (workspaceId: string) => Promise<CanvasState | null>
     save: (workspaceId: string, state: unknown) => Promise<void>
@@ -53,6 +64,10 @@ interface ElectronWorld {
   clipboard: {
     readText: () => Promise<string>
     writeText: (text: string) => Promise<void>
+  }
+  notifications: {
+    requestAttention: (options?: NotificationAttentionOptions) => Promise<NotificationAttentionResult>
+    clearAttention: () => Promise<NotificationAttentionResult>
   }
   updates: {
     getState: () => Promise<UpdateState>

@@ -8,6 +8,8 @@ import { registerTerminalIPC, initShellProfiles } from './ipc/terminal'
 import { registerSettingsIPC } from './ipc/settings'
 import { registerNotesIPC } from './ipc/notes'
 import { registerBoardsIPC } from './ipc/boards'
+import { registerFilesIPC } from './ipc/files'
+import { clearWindowAttention, registerNotificationIPC } from './ipc/notifications'
 import { APP_ID, APP_NAME, DEV_APP_NAME, YIRA_HOME } from './paths'
 import { registerUpdateIPC, scheduleStartupUpdateCheck } from './updater'
 
@@ -40,6 +42,9 @@ function createWindow(): BrowserWindow {
   win.on('ready-to-show', () => {
     if (win.isDestroyed() || win.webContents.isDestroyed()) return
     win.show()
+  })
+  win.on('focus', () => {
+    clearWindowAttention(win)
   })
 
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
@@ -88,6 +93,8 @@ app.whenReady().then(async () => {
   registerSettingsIPC()
   registerNotesIPC()
   registerBoardsIPC()
+  registerFilesIPC()
+  registerNotificationIPC()
   registerUpdateIPC()
 
   ipcMain.handle('shell:openExternal', async (_event, url: string) => {

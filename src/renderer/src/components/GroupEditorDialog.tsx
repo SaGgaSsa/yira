@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Lock, TerminalSquare, X } from 'lucide-react'
+import { FolderOpen, Lock, TerminalSquare, X } from 'lucide-react'
 import { GROUP_COLORS, GROUP_COLOR_ORDER, type GroupColorId } from '@shared/types'
 
 export interface GroupEditorValue {
@@ -8,6 +8,7 @@ export interface GroupEditorValue {
   colorId: GroupColorId
   locked: boolean
   wslStartupCommand: string
+  filesRootPath: string
 }
 
 export interface GroupEditorRequest {
@@ -57,6 +58,7 @@ export function GroupEditorDialog({ request, onCancel, onConfirm }: GroupEditorD
           ...value,
           name: value.name.trim(),
           wslStartupCommand: value.wslStartupCommand.trim(),
+          filesRootPath: value.filesRootPath.trim(),
         })
       }
     }
@@ -167,6 +169,42 @@ export function GroupEditorDialog({ request, onCancel, onConfirm }: GroupEditorD
               Runs once when a new WSL terminal is created inside this group. Leave it empty to do nothing.
             </p>
           </section>
+
+          <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
+            <div className="mb-4 flex items-center gap-2">
+              <FolderOpen size={14} className="text-text-secondary" />
+              <span className="nd-label text-text-secondary">Files folder</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div
+                className="min-w-0 flex-1 truncate rounded-full border border-border-visible bg-bg-primary px-4 py-3 font-mono text-sm text-text-display"
+                title={value.filesRootPath || 'No folder selected'}
+              >
+                {value.filesRootPath || 'No folder selected'}
+              </div>
+              <button
+                className="shrink-0 rounded-full border border-border-visible px-4 py-3 text-sm text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
+                onClick={() => {
+                  void window.electron.files.selectFolder(value.filesRootPath || undefined).then((folder) => {
+                    if (!folder) return
+                    setValue((current) => current ? { ...current, filesRootPath: folder.path } : current)
+                  })
+                }}
+              >
+                Select
+              </button>
+              <button
+                className="shrink-0 rounded-full border border-border-visible px-4 py-3 text-sm text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => setValue((current) => current ? { ...current, filesRootPath: '' } : current)}
+                disabled={!value.filesRootPath}
+              >
+                Clear
+              </button>
+            </div>
+            <p className="mt-3 text-sm leading-6 text-text-secondary">
+              Files tiles inside this group browse this folder. It can be outside the active workspace.
+            </p>
+          </section>
         </div>
 
         <div className="flex items-center justify-end gap-3 border-t border-border px-6 py-5">
@@ -182,6 +220,7 @@ export function GroupEditorDialog({ request, onCancel, onConfirm }: GroupEditorD
               ...value,
               name: value.name.trim(),
               wslStartupCommand: value.wslStartupCommand.trim(),
+              filesRootPath: value.filesRootPath.trim(),
             })}
             disabled={!canSubmit}
           >

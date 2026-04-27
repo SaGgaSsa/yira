@@ -20,7 +20,7 @@ import { findMergeTargetGroup, findSelectedGroup, getGroupingBlockedReason } fro
 import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type CanvasState, type Workspace, type TileGroup } from '@shared/types'
 import { TILE_META } from './components/TileContent'
 import { TileListItem } from './components/TileListItem'
-import { Terminal, StickyNote, Globe, LayoutGrid, ChevronDown, FolderPlus, Trash2, Pencil, Lock, Columns, RefreshCw, Download, X } from 'lucide-react'
+import { Terminal, StickyNote, Globe, LayoutGrid, Clock, Folder, ChevronDown, FolderPlus, Trash2, Pencil, Lock, Columns, RefreshCw, Download, X } from 'lucide-react'
 
 const GROUP_SHOW_MARGIN = 20
 const GROUP_SHOW_TOP_PADDING = 118
@@ -139,7 +139,7 @@ export default function App(): React.ReactElement {
     })
   }, [])
 
-  const { addTerminal, addNote, addBrowser, addBoard, deleteTile, resetZoom } = useCanvasActions({ requestConfirm })
+  const { addTerminal, addNote, addBrowser, addBoard, addTimer, addFiles, deleteTile, resetZoom } = useCanvasActions({ requestConfirm })
 
   // UI state
   const [showProfilePicker, setShowProfilePicker] = useState(false)
@@ -242,6 +242,7 @@ export default function App(): React.ReactElement {
           ...group,
           tileIds: [...group.tileIds],
           terminal: group.terminal ? { ...group.terminal } : undefined,
+          files: group.files ? { ...group.files } : undefined,
         })),
         viewport: { ...stateSnapshot.viewport },
         nextZIndex: stateSnapshot.nextZIndex,
@@ -532,6 +533,7 @@ export default function App(): React.ReactElement {
           colorId: GROUP_COLOR_ORDER[groups.length % GROUP_COLOR_ORDER.length] ?? GROUP_COLOR_ORDER[0],
           locked: false,
           wslStartupCommand: '',
+          filesRootPath: '',
         },
       },
     })
@@ -550,6 +552,7 @@ export default function App(): React.ReactElement {
           colorId: group.colorId,
           locked: Boolean(group.locked),
           wslStartupCommand: group.terminal?.wslStartupCommand ?? '',
+          filesRootPath: group.files?.rootPath ?? '',
         },
       },
     })
@@ -564,6 +567,9 @@ export default function App(): React.ReactElement {
       locked: value.locked,
       terminal: {
         wslStartupCommand: value.wslStartupCommand || undefined,
+      },
+      files: {
+        rootPath: value.filesRootPath || undefined,
       },
     }
 
@@ -1095,6 +1101,28 @@ export default function App(): React.ReactElement {
                 <LayoutGrid size={16} />
                 <span className="nd-label">Board</span>
               </button>
+              <button
+                className="nd-panel-raised flex h-14 items-center justify-center gap-2 rounded-full text-text-secondary transition-colors hover:text-text-display"
+                onClick={() => {
+                  setShowProfilePicker(false)
+                  addTimer()
+                }}
+                title="New timer"
+              >
+                <Clock size={16} />
+                <span className="nd-label">Timer</span>
+              </button>
+              <button
+                className="nd-panel-raised flex h-14 items-center justify-center gap-2 rounded-full text-text-secondary transition-colors hover:text-text-display"
+                onClick={() => {
+                  setShowProfilePicker(false)
+                  addFiles()
+                }}
+                title="New files"
+              >
+                <Folder size={16} />
+                <span className="nd-label">Files</span>
+              </button>
             </div>
           </div>
         }
@@ -1172,7 +1200,7 @@ export default function App(): React.ReactElement {
             {tiles.length === 0 ? (
               <div className="nd-panel-raised rounded-[20px] px-5 py-8 text-center text-text-secondary">
                 <div className="nd-label">[ EMPTY ]</div>
-                <div className="mt-3 text-sm text-text-disabled">Create a terminal, note, browser, or board.</div>
+                <div className="mt-3 text-sm text-text-disabled">Create a terminal, note, browser, board, timer, or files tile.</div>
               </div>
             ) : (
               <div className="space-y-2">
@@ -1338,6 +1366,8 @@ export default function App(): React.ReactElement {
             onCreateNote={() => addNote()}
             onCreateBrowser={() => addBrowser()}
             onCreateBoard={() => addBoard()}
+            onCreateTimer={() => addTimer()}
+            onCreateFiles={() => addFiles()}
             onCreateGroupFromSelection={() => {
               void handleCreateGroupFromSelection()
             }}

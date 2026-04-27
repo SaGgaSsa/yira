@@ -2,10 +2,17 @@ import React, { useEffect, useRef, useState, useCallback } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
-import type { TileState } from '@shared/types'
+import type { FontSize, TileState } from '@shared/types'
 import { useCanvasStore } from '@/store/canvasStore'
+import { useSettingsStore } from '@/store/settingsStore'
 import { buildTerminalStartupCommand } from '@/utils/terminalLaunch'
 import { ContextMenu, type MenuItem } from './ContextMenu'
+
+const TERMINAL_FONT_SIZES: Record<FontSize, number> = {
+  small: 14,
+  medium: 16,
+  large: 18,
+}
 
 interface Props {
   tile: TileState
@@ -20,18 +27,22 @@ export function TerminalTileWrapper({ tile, isFocused, onFocus, onUpdate, onDele
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
   const ptyReadyRef = useRef(false)
+  const isFocusedRef = useRef(isFocused)
+  const fontSize = useSettingsStore((s) => s.fontSize)
   const [ptyReady, setPtyReady] = useState(false)
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number; hasSelection: boolean } | null>(null)
 
   const focusTerminal = useCallback(() => {
+    isFocusedRef.current = true
     onFocus()
     termRef.current?.focus()
   }, [onFocus])
 
-  const copySelection = useCallback(async () => {
+  const copySelection = useCallback(() => {
     const term = termRef.current
     if (!term?.hasSelection()) return
-    await window.electron.clipboard.writeText(term.getSelection())
+    term.focus()
+    document.execCommand('copy')
   }, [])
 
   const pasteClipboard = useCallback(async () => {
@@ -54,6 +65,10 @@ export function TerminalTileWrapper({ tile, isFocused, onFocus, onUpdate, onDele
       }
     } catch { /* ignore */ }
   }, [tile.id])
+
+  useEffect(() => {
+    isFocusedRef.current = isFocused
+  }, [isFocused])
 
   // Create terminal + PTY on mount
   useEffect(() => {
@@ -85,7 +100,7 @@ export function TerminalTileWrapper({ tile, isFocused, onFocus, onUpdate, onDele
         brightWhite: '#ffffff',
       },
       fontFamily: '"IBM Plex Mono", "JetBrains Mono", "Consolas", monospace',
-      fontSize: 13,
+      fontSize: TERMINAL_FONT_SIZES[useSettingsStore.getState().fontSize],
       lineHeight: 1.15,
       cursorBlink: true,
       allowProposedApi: true,
@@ -111,6 +126,15 @@ export function TerminalTileWrapper({ tile, isFocused, onFocus, onUpdate, onDele
     termRef.current = term
     fitRef.current = fitAddon
 
+    const handleCopy = (event: ClipboardEvent) => {
+      if (!isFocusedRef.current || !term.hasSelection()) return
+      const selection = term.getSelection()
+      event.clipboardData?.setData('text/plain', selection)
+      event.preventDefault()
+    }
+
+    document.addEventListener('copy', handleCopy)
+
     // ResizeObserver for container size changes
     const ro = new ResizeObserver(() => doFit())
     if (containerRef.current.parentElement) {
@@ -133,7 +157,7 @@ export function TerminalTileWrapper({ tile, isFocused, onFocus, onUpdate, onDele
 
       if (hasAccel && !ev.altKey) {
         if (key === 'c' && term.hasSelection()) {
-          void copySelection()
+          copySelection()
           return false
         }
 
@@ -149,7 +173,7 @@ export function TerminalTileWrapper({ tile, isFocused, onFocus, onUpdate, onDele
       }
 
       if (ev.key === 'Insert' && ev.ctrlKey && term.hasSelection()) {
-        void copySelection()
+        copySelection()
         return false
       }
 
@@ -201,6 +225,7 @@ export function TerminalTileWrapper({ tile, isFocused, onFocus, onUpdate, onDele
     // Cleanup on unmount / before re-run
     return () => {
       cancelled = true
+      document.removeEventListener('copy', handleCopy)
       ro.disconnect()
       ptyUnsub?.()
       inputDisposer?.dispose()
@@ -217,6 +242,13 @@ export function TerminalTileWrapper({ tile, isFocused, onFocus, onUpdate, onDele
   }, [tile.width, tile.height, doFit])
 
   useEffect(() => {
+    const term = termRef.current
+    if (!term) return
+    term.options.fontSize = TERMINAL_FONT_SIZES[fontSize]
+    requestAnimationFrame(() => doFit())
+  }, [fontSize, doFit])
+
+  useEffect(() => {
     if (isFocused) {
       termRef.current?.focus()
     }
@@ -227,7 +259,7 @@ export function TerminalTileWrapper({ tile, isFocused, onFocus, onUpdate, onDele
       label: 'Copy',
       disabled: !menuPosition?.hasSelection,
       action: () => {
-        void copySelection()
+        copySelection()
       },
     },
     {

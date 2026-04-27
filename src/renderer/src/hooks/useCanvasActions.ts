@@ -193,6 +193,46 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
     [finalizeAddedTile, getSpawnPos],
   )
 
+  const addTimer = useCallback(() => {
+    const state = useCanvasStore.getState()
+    const targetGroup = findSelectedGroup(state.groups, state.selectedTileIds)
+    const pos = getSpawnPos(360, 300, 40)
+    const defaultDurationMs = 25 * 60 * 1000
+
+    const tile: TileState = {
+      id: generateId(),
+      type: 'timer',
+      x: pos.x,
+      y: pos.y,
+      width: 360,
+      height: 300,
+      zIndex: state.nextZIndex,
+      timerDurationMs: defaultDurationMs,
+      timerRemainingMs: defaultDurationMs,
+      timerStatus: 'idle',
+      groupId: targetGroup?.id,
+    }
+    finalizeAddedTile(tile, targetGroup?.id)
+  }, [finalizeAddedTile, getSpawnPos])
+
+  const addFiles = useCallback(() => {
+    const state = useCanvasStore.getState()
+    const targetGroup = findSelectedGroup(state.groups, state.selectedTileIds)
+    const pos = getSpawnPos(420, 320, 40)
+
+    const tile: TileState = {
+      id: generateId(),
+      type: 'files',
+      x: pos.x,
+      y: pos.y,
+      width: 420,
+      height: 320,
+      zIndex: state.nextZIndex,
+      groupId: targetGroup?.id,
+    }
+    finalizeAddedTile(tile, targetGroup?.id)
+  }, [finalizeAddedTile, getSpawnPos])
+
   const deleteTile = useCallback(
     async (tileId: string): Promise<boolean> => {
       const tile = useCanvasStore.getState().tiles.find((t) => t.id === tileId)
@@ -224,6 +264,8 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
     addBrowser,
     addBoard,
     addNote,
+    addTimer,
+    addFiles,
     deleteTile,
     resetZoom,
     focusTile,
