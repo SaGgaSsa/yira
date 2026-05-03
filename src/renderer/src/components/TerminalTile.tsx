@@ -26,10 +26,8 @@ export function TerminalTileWrapper({ tile, isFocused, onFocus, onUpdate, onDele
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
-  const ptyReadyRef = useRef(false)
   const isFocusedRef = useRef(isFocused)
   const fontSize = useSettingsStore((s) => s.fontSize)
-  const [ptyReady, setPtyReady] = useState(false)
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number; hasSelection: boolean } | null>(null)
 
   const focusTerminal = useCallback(() => {
@@ -141,16 +139,9 @@ export function TerminalTileWrapper({ tile, isFocused, onFocus, onUpdate, onDele
       ro.observe(containerRef.current.parentElement)
     }
 
-    // Shift+Enter for multi-line input (uses ref to avoid stale closure)
+    // Keep terminal clipboard shortcuts while leaving shell input semantics intact.
     term.attachCustomKeyEventHandler((ev: KeyboardEvent) => {
       if (ev.type !== 'keydown') return true
-
-      if (ev.key === 'Enter' && ev.shiftKey) {
-        if (ptyReadyRef.current) {
-          window.electron.terminal.write(tile.id, '\\\r')
-          return false
-        }
-      }
 
       const hasAccel = ev.ctrlKey || ev.metaKey
       const key = ev.key.toLowerCase()
@@ -158,16 +149,6 @@ export function TerminalTileWrapper({ tile, isFocused, onFocus, onUpdate, onDele
       if (hasAccel && !ev.altKey) {
         if (key === 'c' && term.hasSelection()) {
           copySelection()
-          return false
-        }
-
-        if (key === 'v') {
-          void pasteClipboard()
-          return false
-        }
-
-        if (key === 'a') {
-          term.selectAll()
           return false
         }
       }
@@ -200,8 +181,6 @@ export function TerminalTileWrapper({ tile, isFocused, onFocus, onUpdate, onDele
       })
       .then(({ buffer }) => {
         if (cancelled) return
-        ptyReadyRef.current = true
-        setPtyReady(true)
         if (buffer) term.write(buffer)
 
         // Listen for PTY data
