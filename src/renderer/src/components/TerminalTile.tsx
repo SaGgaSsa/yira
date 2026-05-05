@@ -143,6 +143,11 @@ export function TerminalTileWrapper({ tile, isFocused, onFocus, onUpdate, onDele
     term.attachCustomKeyEventHandler((ev: KeyboardEvent) => {
       if (ev.type !== 'keydown') return true
 
+      if (ev.key === 'Enter' && ev.shiftKey) {
+        term.input('\x0a')
+        return false
+      }
+
       const hasAccel = ev.ctrlKey || ev.metaKey
       const key = ev.key.toLowerCase()
 

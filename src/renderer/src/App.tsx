@@ -387,7 +387,6 @@ export default function App(): React.ReactElement {
     focusedTileId,
     selectedTileIds,
     viewMode,
-    deleteTile,
     resetZoom,
     focusTile,
     selectTiles,

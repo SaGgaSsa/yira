@@ -7,7 +7,6 @@ interface UseKeyboardShortcutsDeps {
   focusedTileId: string | null
   selectedTileIds: string[]
   viewMode: 'canvas' | 'fullview'
-  deleteTile: (id: string) => void | Promise<boolean>
   resetZoom: () => void
   focusTile: (id: string | null) => void
   selectTiles: (ids: string[]) => void
@@ -16,7 +15,7 @@ interface UseKeyboardShortcutsDeps {
 }
 
 export function useKeyboardShortcuts(deps: UseKeyboardShortcutsDeps) {
-  const { tiles, focusedTileId, selectedTileIds, viewMode, deleteTile, resetZoom, focusTile, selectTiles, setViewMode, onClosePicker } = deps
+  const { tiles, focusedTileId, selectedTileIds, viewMode, resetZoom, focusTile, selectTiles, setViewMode, onClosePicker } = deps
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -25,17 +24,6 @@ export function useKeyboardShortcuts(deps: UseKeyboardShortcutsDeps) {
         target.tagName === 'INPUT' ||
         target.tagName === 'TEXTAREA' ||
         target.getAttribute('contenteditable') === 'true'
-
-      // Delete focused tile
-      if ((e.key === 'Backspace' || e.key === 'Delete') && !isInput) {
-        if (focusedTileId) {
-          void deleteTile(focusedTileId)
-          e.preventDefault()
-        } else if (selectedTileIds.length === 1) {
-          void deleteTile(selectedTileIds[0])
-          e.preventDefault()
-        }
-      }
 
       // Reset zoom: Ctrl+0 / Cmd+0
       if ((e.ctrlKey || e.metaKey) && e.key === '0') {
@@ -68,5 +56,5 @@ export function useKeyboardShortcuts(deps: UseKeyboardShortcutsDeps) {
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [focusedTileId, selectedTileIds, tiles, viewMode, deleteTile, resetZoom, focusTile, selectTiles, setViewMode, onClosePicker])
+  }, [focusedTileId, selectedTileIds, tiles, viewMode, resetZoom, focusTile, selectTiles, setViewMode, onClosePicker])
 }

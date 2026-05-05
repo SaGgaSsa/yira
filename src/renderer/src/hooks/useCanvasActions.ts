@@ -6,6 +6,15 @@ import type { ConfirmDialogOptions } from '@/components/AppDialog'
 import { KANBAN_BOARD_FIXED_WIDTH } from '@shared/types'
 import type { TileState, ShellProfileId, NoteColor } from '@shared/types'
 
+const TILE_TYPE_LABELS: Record<TileState['type'], string> = {
+  terminal: 'Terminal',
+  note: 'Note',
+  browser: 'Browser',
+  kanban: 'Board',
+  timer: 'Timer',
+  files: 'Files',
+}
+
 function generateId(): string {
   return `tile-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
@@ -236,16 +245,18 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
   const deleteTile = useCallback(
     async (tileId: string): Promise<boolean> => {
       const tile = useCanvasStore.getState().tiles.find((t) => t.id === tileId)
-      if (tile?.locked) {
-        const confirmed = await requestConfirm({
-          title: 'Close locked tile',
-          message: `"${tile.label ?? 'This window'}" is locked. Close it anyway?`,
-          confirmLabel: 'Close',
-          cancelLabel: 'Keep Open',
-          danger: true,
-        })
-        if (!confirmed) return false
-      }
+      if (!tile) return false
+
+      const label = tile.label ?? TILE_TYPE_LABELS[tile.type]
+      const confirmed = await requestConfirm({
+        title: 'Close tile',
+        message: `Close "${label}"? Any running session or unsaved surface state may be lost.`,
+        confirmLabel: 'Close',
+        cancelLabel: 'Keep Open',
+        danger: true,
+      })
+      if (!confirmed) return false
+
       if (tile?.type === 'terminal') window.electron.terminal.destroy(tileId)
       if (tile?.type === 'note') window.electron.note.delete(tileId)
       if (tile?.type === 'kanban' && activeWorkspaceId) window.electron.board.delete(activeWorkspaceId, tileId)
