@@ -36,11 +36,13 @@ export function TerminalTileWrapper({ tile, isFocused, onFocus, onUpdate, onDele
     termRef.current?.focus()
   }, [onFocus])
 
-  const copySelection = useCallback(() => {
+  const copySelection = useCallback(async () => {
     const term = termRef.current
     if (!term?.hasSelection()) return
+    const selection = term.getSelection()
+    if (!selection) return
     term.focus()
-    document.execCommand('copy')
+    await window.electron.clipboard.writeText(selection)
   }, [])
 
   const pasteClipboard = useCallback(async () => {
@@ -124,52 +126,11 @@ export function TerminalTileWrapper({ tile, isFocused, onFocus, onUpdate, onDele
     termRef.current = term
     fitRef.current = fitAddon
 
-    const handleCopy = (event: ClipboardEvent) => {
-      if (!isFocusedRef.current || !term.hasSelection()) return
-      const selection = term.getSelection()
-      event.clipboardData?.setData('text/plain', selection)
-      event.preventDefault()
-    }
-
-    document.addEventListener('copy', handleCopy)
-
     // ResizeObserver for container size changes
     const ro = new ResizeObserver(() => doFit())
     if (containerRef.current.parentElement) {
       ro.observe(containerRef.current.parentElement)
     }
-
-    // Keep terminal clipboard shortcuts while leaving shell input semantics intact.
-    term.attachCustomKeyEventHandler((ev: KeyboardEvent) => {
-      if (ev.type !== 'keydown') return true
-
-      if (ev.key === 'Enter' && ev.shiftKey) {
-        term.input('\x0a')
-        return false
-      }
-
-      const hasAccel = ev.ctrlKey || ev.metaKey
-      const key = ev.key.toLowerCase()
-
-      if (hasAccel && !ev.altKey) {
-        if (key === 'c' && term.hasSelection()) {
-          copySelection()
-          return false
-        }
-      }
-
-      if (ev.key === 'Insert' && ev.ctrlKey && term.hasSelection()) {
-        copySelection()
-        return false
-      }
-
-      if (ev.key === 'Insert' && ev.shiftKey) {
-        void pasteClipboard()
-        return false
-      }
-
-      return true
-    })
 
     // Create PTY session
     let cancelled = false
@@ -209,7 +170,6 @@ export function TerminalTileWrapper({ tile, isFocused, onFocus, onUpdate, onDele
     // Cleanup on unmount / before re-run
     return () => {
       cancelled = true
-      document.removeEventListener('copy', handleCopy)
       ro.disconnect()
       ptyUnsub?.()
       inputDisposer?.dispose()
@@ -218,7 +178,7 @@ export function TerminalTileWrapper({ tile, isFocused, onFocus, onUpdate, onDele
       termRef.current = null
       fitRef.current = null
     }
-  }, [tile.id, tile.shellProfileId, doFit, copySelection, pasteClipboard])
+  }, [tile.id, tile.shellProfileId, doFit])
 
   // Re-fit on width/height changes
   useEffect(() => {
@@ -243,7 +203,7 @@ export function TerminalTileWrapper({ tile, isFocused, onFocus, onUpdate, onDele
       label: 'Copy',
       disabled: !menuPosition?.hasSelection,
       action: () => {
-        copySelection()
+        void copySelection()
       },
     },
     {
