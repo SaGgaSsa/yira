@@ -113,8 +113,7 @@ function InactiveFilesState({
 }
 
 export function FilesTile({ tile }: FilesTileProps): React.ReactElement {
-  const group = useCanvasStore((s) => s.groups.find((entry) => entry.id === tile.groupId))
-  const rootPath = group?.files?.rootPath?.trim() ?? ''
+  const rootPath = useCanvasStore((s) => s.activeWorkspaceConfig.rootFolderPath?.trim() ?? '')
   const rootLabel = useMemo(() => folderLabelFromPath(rootPath), [rootPath])
   const [location, setLocation] = useState<LocationState>({ rootPath: '', relativeDir: '' })
   const [result, setResult] = useState<FileListResult | null>(null)
@@ -272,20 +271,11 @@ export function FilesTile({ tile }: FilesTileProps): React.ReactElement {
     ]
   }, [copyEntryPath, entryMenu, openEntry, revealEntry])
 
-  if (!tile.groupId) {
-    return (
-      <InactiveFilesState
-        title="Files inactive"
-        message="Add this tile to a group, then select a Files folder in the group settings."
-      />
-    )
-  }
-
   if (!rootPath) {
     return (
       <InactiveFilesState
-        title="No folder selected"
-        message="Select a Files folder in this group's settings to browse files here."
+        title="No workspace folder"
+        message="Set a root folder in workspace settings to browse files here."
       />
     )
   }

@@ -62,7 +62,9 @@ export function TileChrome({
   const dragStartRef = useRef<{ mx: number; my: number; positions: Array<{ id: string; x: number; y: number }>; anchorX: number; anchorY: number } | null>(null)
   const resizeStartRef = useRef<{ mx: number; my: number; w: number; h: number; tx: number; ty: number } | null>(null)
   const tiles = useCanvasStore((s) => s.tiles)
-  const groups = useCanvasStore((s) => s.groups)
+  const storedGroups = useCanvasStore((s) => s.groups)
+  const groupsEnabled = useSettingsStore((s) => s.groups.enabled)
+  const groups = groupsEnabled ? storedGroups : []
   const selectedTileIds = useCanvasStore((s) => s.selectedTileIds)
   const zoom = useCanvasStore((s) => s.viewport.zoom)
   const gridSize = useSettingsStore((s) => s.gridSize)

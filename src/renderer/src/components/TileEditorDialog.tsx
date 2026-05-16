@@ -119,7 +119,7 @@ export function TileEditorDialog({ request, onCancel, onConfirm }: TileEditorDia
                 />
               </label>
               <p className="mt-3 text-sm leading-6 text-text-secondary">
-                Runs on the next real terminal start. In WSL groups, the group command runs first and this one runs after it.
+                Runs on the next real terminal start after the workspace initial command.
               </p>
             </section>
           )}

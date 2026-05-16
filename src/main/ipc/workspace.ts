@@ -1,7 +1,7 @@
 import { ipcMain, dialog, BrowserWindow } from 'electron'
 import { promises as fs, readFileSync } from 'fs'
-import { basename, join } from 'path'
-import type { Config, Workspace, AppSettings } from '@shared/types'
+import { basename, join, resolve } from 'path'
+import type { Config, Workspace, AppSettings, WorkspaceConfig, WorkspaceCreateInput, WorkspaceUpdatePatch } from '@shared/types'
 import { DEFAULT_SETTINGS } from '@shared/types'
 import { YIRA_HOME, CONFIG_PATH, WORKSPACES_DIR } from '../paths'
 
@@ -9,12 +9,61 @@ async function ensureDir(dir: string): Promise<void> {
   await fs.mkdir(dir, { recursive: true })
 }
 
+function normalizeWorkspaceConfig(config: Partial<WorkspaceConfig> | undefined): WorkspaceConfig {
+  const rootFolderPath = config?.rootFolderPath?.trim()
+  const initialCommand = config?.initialCommand?.trim()
+
+  return {
+    rootFolderPath: rootFolderPath || undefined,
+    initialCommand: initialCommand || undefined,
+  }
+}
+
+function internalWorkspacePath(id: string): string {
+  return join(WORKSPACES_DIR, id)
+}
+
+function isInsideWorkspacesDir(path: string): boolean {
+  const resolvedPath = resolve(path)
+  const resolvedWorkspacesDir = resolve(WORKSPACES_DIR)
+
+  return resolvedPath === resolvedWorkspacesDir || resolvedPath.startsWith(`${resolvedWorkspacesDir}/`)
+}
+
+function normalizeWorkspace(workspace: Partial<Workspace> & { id: string; name?: string; path?: string }): Workspace {
+  const storagePath = internalWorkspacePath(workspace.id)
+  const migratedRootFolderPath =
+    workspace.path && !isInsideWorkspacesDir(workspace.path)
+      ? workspace.path
+      : undefined
+  const config = normalizeWorkspaceConfig({
+    rootFolderPath: workspace.config?.rootFolderPath ?? migratedRootFolderPath,
+    initialCommand: workspace.config?.initialCommand,
+  })
+
+  return {
+    id: workspace.id,
+    name: workspace.name?.trim() || 'Untitled Workspace',
+    path: storagePath,
+    config,
+  }
+}
+
 async function readConfig(): Promise<Config> {
   try {
     const raw = await fs.readFile(CONFIG_PATH, 'utf8')
     const parsed = JSON.parse(raw)
+    const workspaces = Array.isArray(parsed.workspaces)
+      ? parsed.workspaces.map(normalizeWorkspace)
+      : []
+    const activeWorkspaceId = workspaces.some((workspace: Workspace) => workspace.id === parsed.activeWorkspaceId)
+      ? parsed.activeWorkspaceId
+      : workspaces[0]?.id ?? ''
+
     return {
       ...parsed,
+      workspaces,
+      activeWorkspaceId,
       settings: { ...DEFAULT_SETTINGS, ...(parsed.settings ?? {}) },
     }
   } catch {
@@ -44,25 +93,51 @@ export async function getWorkspacePathById(workspaceId: string): Promise<string 
 export async function initWorkspaces(): Promise<void> {
   await ensureDir(YIRA_HOME)
   await ensureDir(WORKSPACES_DIR)
-  let config = await readConfig()
-
-  // Create default workspace if none exist
-  if (config.workspaces.length === 0) {
-    const defaultId = 'default'
-    const defaultPath = join(WORKSPACES_DIR, defaultId)
-    await ensureDir(defaultPath)
-    config = {
-      workspaces: [{ id: defaultId, name: 'Default', path: defaultPath }],
-      activeWorkspaceId: defaultId,
-      settings: { ...DEFAULT_SETTINGS },
-    }
-    await writeConfig(config)
-  }
+  const config = await readConfig()
 
   // Ensure all workspace dirs exist
   for (const ws of config.workspaces) {
     await ensureDir(ws.path)
   }
+
+  await writeConfig(config)
+}
+
+function parseWorkspaceCreateInput(input: string | WorkspaceCreateInput): WorkspaceCreateInput {
+  if (typeof input === 'string') return { name: input }
+
+  return input
+}
+
+function createWorkspaceFromInput(input: WorkspaceCreateInput): Workspace {
+  const trimmedName = input.name.trim()
+  if (!trimmedName) {
+    throw new Error('Workspace name cannot be empty')
+  }
+
+  const id = `ws-${Date.now()}`
+
+  return {
+    id,
+    name: trimmedName,
+    path: internalWorkspacePath(id),
+    config: normalizeWorkspaceConfig(input),
+  }
+}
+
+function updateWorkspace(workspace: Workspace, patch: WorkspaceUpdatePatch): Workspace {
+  const nextName = patch.name === undefined ? workspace.name : patch.name.trim()
+  if (!nextName) {
+    throw new Error('Workspace name cannot be empty')
+  }
+
+  workspace.name = nextName
+  workspace.config = normalizeWorkspaceConfig({
+    ...workspace.config,
+    ...(patch.config ?? {}),
+  })
+
+  return workspace
 }
 
 export function registerWorkspaceIPC(): void {
@@ -76,31 +151,34 @@ export function registerWorkspaceIPC(): void {
     return config.workspaces.find(w => w.id === config.activeWorkspaceId) ?? config.workspaces[0] ?? null
   })
 
-  ipcMain.handle('workspace:create', async (_, name: string) => {
+  ipcMain.handle('workspace:create', async (_, input: string | WorkspaceCreateInput) => {
     const config = await readConfig()
-    const id = `ws-${Date.now()}`
-    const wsPath = join(WORKSPACES_DIR, id)
-    await ensureDir(wsPath)
-    const workspace: Workspace = { id, name, path: wsPath }
+    const workspace = createWorkspaceFromInput(parseWorkspaceCreateInput(input))
+    await ensureDir(workspace.path)
     config.workspaces.push(workspace)
-    config.activeWorkspaceId = id
+    config.activeWorkspaceId = workspace.id
     await writeConfig(config)
     return workspace
   })
 
-  ipcMain.handle('workspace:rename', async (_, id: string, name: string) => {
-    const trimmedName = name.trim()
-    if (!trimmedName) {
-      throw new Error('Workspace name cannot be empty')
-    }
-
+  ipcMain.handle('workspace:update', async (_, id: string, patch: WorkspaceUpdatePatch) => {
     const config = await readConfig()
     const workspace = config.workspaces.find((w) => w.id === id)
     if (!workspace) return null
 
-    workspace.name = trimmedName
+    const updated = updateWorkspace(workspace, patch)
     await writeConfig(config)
-    return workspace
+    return updated
+  })
+
+  ipcMain.handle('workspace:rename', async (_, id: string, name: string) => {
+    const config = await readConfig()
+    const workspace = config.workspaces.find((w) => w.id === id)
+    if (!workspace) return null
+
+    const updated = updateWorkspace(workspace, { name })
+    await writeConfig(config)
+    return updated
   })
 
   ipcMain.handle('workspace:delete', async (_, id: string) => {
@@ -119,11 +197,7 @@ export function registerWorkspaceIPC(): void {
     }
 
     if (config.workspaces.length === 0) {
-      const defaultId = 'default'
-      const defaultPath = join(WORKSPACES_DIR, defaultId)
-      await ensureDir(defaultPath)
-      config.workspaces = [{ id: defaultId, name: 'Default', path: defaultPath }]
-      config.activeWorkspaceId = defaultId
+      config.activeWorkspaceId = ''
     } else if (config.activeWorkspaceId === id) {
       config.activeWorkspaceId = config.workspaces[0].id
     }
@@ -141,7 +215,7 @@ export function registerWorkspaceIPC(): void {
 
     const folderPath = result.filePaths[0]
     const config = await readConfig()
-    const existing = config.workspaces.find(w => w.path === folderPath)
+    const existing = config.workspaces.find(w => w.config.rootFolderPath === folderPath)
     if (existing) {
       config.activeWorkspaceId = existing.id
       await writeConfig(config)
@@ -150,7 +224,13 @@ export function registerWorkspaceIPC(): void {
 
     const id = `ws-${Date.now()}`
     const name = basename(folderPath)
-    const workspace: Workspace = { id, name, path: folderPath }
+    const workspace: Workspace = {
+      id,
+      name,
+      path: internalWorkspacePath(id),
+      config: { rootFolderPath: folderPath },
+    }
+    await ensureDir(workspace.path)
     config.workspaces.push(workspace)
     config.activeWorkspaceId = id
     await writeConfig(config)

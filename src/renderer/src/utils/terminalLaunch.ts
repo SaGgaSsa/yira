@@ -1,4 +1,4 @@
-import type { TileGroup, TileState } from '@shared/types'
+import type { TileState, WorkspaceConfig } from '@shared/types'
 
 function normalizeCommand(command?: string): string | undefined {
   const nextCommand = command?.trim()
@@ -7,19 +7,14 @@ function normalizeCommand(command?: string): string | undefined {
 }
 
 export function buildTerminalStartupCommand(
-  tile: Pick<TileState, 'type' | 'shellProfileId' | 'startupCommand' | 'groupId'>,
-  groups: TileGroup[],
+  tile: Pick<TileState, 'type' | 'shellProfileId' | 'startupCommand'>,
+  workspaceConfig?: WorkspaceConfig,
 ): string | undefined {
   if (tile.type !== 'terminal') return undefined
 
   const commands: string[] = []
-
-  if (tile.groupId) {
-    const group = groups.find((entry) => entry.id === tile.groupId)
-    const groupCommand = normalizeCommand(group?.terminal?.startupCommand)
-
-    if (groupCommand) commands.push(groupCommand)
-  }
+  const workspaceCommand = normalizeCommand(workspaceConfig?.initialCommand)
+  if (workspaceCommand) commands.push(workspaceCommand)
 
   const tileCommand = normalizeCommand(tile.startupCommand)
   if (tileCommand) commands.push(tileCommand)

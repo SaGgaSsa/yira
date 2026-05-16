@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { FileListOptions, NotificationAttentionOptions, TerminalCreateOptions, UpdateState } from '@shared/types'
+import type { FileListOptions, NotificationAttentionOptions, TerminalCreateOptions, UpdateState, WorkspaceCreateInput, WorkspaceUpdatePatch } from '@shared/types'
 
 console.log('[preload] Loading...')
 
@@ -7,7 +7,8 @@ contextBridge.exposeInMainWorld('electron', {
   // Workspace
   workspace: {
     list: () => ipcRenderer.invoke('workspace:list'),
-    create: (name: string) => ipcRenderer.invoke('workspace:create', name),
+    create: (input: WorkspaceCreateInput) => ipcRenderer.invoke('workspace:create', input),
+    update: (id: string, patch: WorkspaceUpdatePatch) => ipcRenderer.invoke('workspace:update', id, patch),
     rename: (id: string, name: string) => ipcRenderer.invoke('workspace:rename', id, name),
     delete: (id: string) => ipcRenderer.invoke('workspace:delete', id),
     setActive: (id: string) => ipcRenderer.invoke('workspace:setActive', id),

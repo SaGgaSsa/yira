@@ -3,7 +3,24 @@
 export interface Workspace {
   id: string
   name: string
+  config: WorkspaceConfig
+  /** Internal storage location for persisted Yira state. */
   path: string
+}
+
+export interface WorkspaceConfig {
+  rootFolderPath?: string
+  initialCommand?: string
+}
+
+export interface WorkspaceCreateInput {
+  name: string
+  rootFolderPath?: string
+  initialCommand?: string
+}
+
+export type WorkspaceUpdatePatch = Partial<Pick<Workspace, 'name'>> & {
+  config?: Partial<WorkspaceConfig>
 }
 
 export interface Config {
@@ -26,6 +43,9 @@ export interface UserSettings {
   browser: {
     homeUrl: string
   }
+  groups: {
+    enabled: boolean
+  }
 }
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
@@ -36,6 +56,9 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   gridSize: 20,
   browser: {
     homeUrl: 'https://example.com',
+  },
+  groups: {
+    enabled: false,
   },
 }
 
@@ -247,12 +270,6 @@ export interface TileGroup {
   colorId: GroupColorId
   tileIds: string[]
   locked?: boolean
-  terminal?: {
-    startupCommand?: string
-  }
-  files?: {
-    rootPath?: string
-  }
 }
 
 // ─── Tile State ────────────────────────────────────────────────────────────

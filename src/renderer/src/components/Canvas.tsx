@@ -97,9 +97,11 @@ interface CanvasProps {
   onCreateBoard: () => void
   onCreateTimer: () => void
   onCreateFiles: () => void
+  canCreateFiles: boolean
   onCreateGroupFromSelection: () => void | Promise<void>
   onDeleteTile: (tileId: string) => Promise<boolean>
   onConfirmRemoveFromGroup: (tile: TileState, group: TileGroup) => Promise<boolean>
+  groupsEnabled: boolean
   profiles: Array<{ id: ShellProfileId; label: string; available: boolean }>
   tileRefreshKeys?: Record<string, number>
   viewMode?: ViewMode
@@ -116,9 +118,11 @@ export function Canvas({
   onCreateBoard,
   onCreateTimer,
   onCreateFiles,
+  canCreateFiles,
   onCreateGroupFromSelection,
   onDeleteTile,
   onConfirmRemoveFromGroup,
+  groupsEnabled,
   profiles,
   tileRefreshKeys = {},
   viewMode = 'canvas',
@@ -136,7 +140,8 @@ export function Canvas({
   const [colorPicker, setColorPicker] = useState<{ groupId: string; x: number; y: number } | null>(null)
 
   const tiles = useCanvasStore((s) => s.tiles)
-  const groups = useCanvasStore((s) => s.groups)
+  const storedGroups = useCanvasStore((s) => s.groups)
+  const groups = groupsEnabled ? storedGroups : []
   const viewport = useCanvasStore((s) => s.viewport)
   const selectedTileIds = useCanvasStore((s) => s.selectedTileIds)
   const setViewport = useCanvasStore((s) => s.setViewport)
@@ -195,8 +200,8 @@ export function Canvas({
     return getGroupingBlockedReason(tiles, groups, selectedTileIds, mergeTargetGroup?.id)
   }, [tiles, groups, selectedTileIds, mergeTargetGroup])
 
-  const showSelectionBar = !isFixedView && selectedTileIds.length >= 2 && selectedGroup === null
-  const canCreateGroup = selectedTileIds.length >= 2 && selectedGroup === null && !groupingBlockedReason
+  const showSelectionBar = groupsEnabled && !isFixedView && selectedTileIds.length >= 2 && selectedGroup === null
+  const canCreateGroup = groupsEnabled && selectedTileIds.length >= 2 && selectedGroup === null && !groupingBlockedReason
   const selectionActionLabel = mergeTargetGroup ? `Merge into "${mergeTargetGroup.name}"` : 'Group'
 
   const onContextMenu = useCallback(
@@ -607,7 +612,7 @@ export function Canvas({
             height: isFixedView ? '100%' : 0,
           }}
         >
-          {!isFixedView && groupRenderData.map(({ group, bounds }) => {
+          {groupsEnabled && !isFixedView && groupRenderData.map(({ group, bounds }) => {
             const palette = GROUP_COLORS[group.colorId]
 
             return (
@@ -669,7 +674,7 @@ export function Canvas({
                 onDelete={() => {
                   void onDeleteTile(tile.id)
                 }}
-                onRemoveFromGroup={tile.groupId ? () => {
+                onRemoveFromGroup={groupsEnabled && tile.groupId ? () => {
                   void handleRemoveTileFromGroup(tile)
                 } : undefined}
               >
@@ -689,7 +694,7 @@ export function Canvas({
             )
           })}
 
-          {!isFixedView && groupRenderData.map((groupState) => {
+          {groupsEnabled && !isFixedView && groupRenderData.map((groupState) => {
             const { group, bounds } = groupState
             const palette = GROUP_COLORS[group.colorId]
             const isSelected = selectedGroup?.id === group.id
@@ -859,9 +864,11 @@ export function Canvas({
           x={contextMenu.x}
           y={contextMenu.y}
           items={[
-            { label: selectionActionLabel, icon: LayoutGrid, action: () => { void onCreateGroupFromSelection() }, disabled: !canCreateGroup },
-            { label: 'Clear Selection', action: () => selectTiles([]), disabled: selectedTileIds.length === 0 },
-            { divider: true, label: '' },
+            ...(groupsEnabled ? [
+              { label: selectionActionLabel, icon: LayoutGrid, action: () => { void onCreateGroupFromSelection() }, disabled: !canCreateGroup },
+              { label: 'Clear Selection', action: () => selectTiles([]), disabled: selectedTileIds.length === 0 },
+              { divider: true, label: '' },
+            ] : []),
             {
               label: 'New Terminal',
               icon: Terminal,
@@ -875,7 +882,7 @@ export function Canvas({
             { label: 'New Browser', icon: Globe, action: onCreateBrowser },
             { label: 'New Board', icon: LayoutGrid, action: onCreateBoard },
             { label: 'New Timer', icon: Clock, action: onCreateTimer },
-            { label: 'New Files', icon: Folder, action: onCreateFiles },
+            { label: 'New Files', icon: Folder, action: onCreateFiles, disabled: !canCreateFiles },
           ]}
           onClose={() => setContextMenu(null)}
         />

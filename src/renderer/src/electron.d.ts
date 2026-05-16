@@ -2,6 +2,8 @@ import type {
   ShellProfileId,
   CanvasState,
   Workspace,
+  WorkspaceCreateInput,
+  WorkspaceUpdatePatch,
   UserSettings,
   KanbanBoardState,
   TerminalCreateOptions,
@@ -16,7 +18,8 @@ import type {
 interface ElectronWorld {
   workspace: {
     list: () => Promise<Workspace[]>
-    create: (name: string) => Promise<Workspace>
+    create: (input: WorkspaceCreateInput) => Promise<Workspace>
+    update: (id: string, patch: WorkspaceUpdatePatch) => Promise<Workspace | null>
     rename: (id: string, name: string) => Promise<Workspace | null>
     delete: (id: string) => Promise<void>
     setActive: (id: string) => Promise<void>

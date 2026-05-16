@@ -12,6 +12,7 @@ export interface SettingsState extends UserSettings {
   setSnapToGrid: (snap: boolean) => void
   setGridSize: (size: number) => void
   setBrowserHomeUrl: (url: string) => void
+  setGroupsEnabled: (enabled: boolean) => void
   loadSettings: () => Promise<void>
   saveSettings: () => void
 }
@@ -29,6 +30,7 @@ function scheduleSave() {
       snapToGrid: state.snapToGrid,
       gridSize: state.gridSize,
       browser: { homeUrl: state.browser.homeUrl },
+      groups: { enabled: state.groups.enabled },
     }
     window.electron.settings.save(settings)
   }, 500)
@@ -68,6 +70,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     scheduleSave()
   },
 
+  setGroupsEnabled: (enabled) => {
+    set((state) => ({ groups: { ...state.groups, enabled } }))
+    scheduleSave()
+  },
+
   loadSettings: async () => {
     try {
       const settings = await window.electron.settings.load()
@@ -80,6 +87,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           gridSize: settings.gridSize ?? DEFAULT_USER_SETTINGS.gridSize,
           browser: {
             homeUrl: settings.browser?.homeUrl ?? DEFAULT_USER_SETTINGS.browser.homeUrl,
+          },
+          groups: {
+            enabled: settings.groups?.enabled ?? DEFAULT_USER_SETTINGS.groups.enabled,
           },
           loaded: true,
         })
@@ -101,6 +111,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       snapToGrid: state.snapToGrid,
       gridSize: state.gridSize,
       browser: { homeUrl: state.browser.homeUrl },
+      groups: { enabled: state.groups.enabled },
     }
     window.electron.settings.save(settings)
   },

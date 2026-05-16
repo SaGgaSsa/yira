@@ -9,6 +9,7 @@ import { FullviewPanel } from './components/FullviewPanel'
 import { SplitviewPanel } from './components/SplitviewPanel'
 import { AppDialog, type ConfirmDialogOptions, type PromptDialogOptions } from './components/AppDialog'
 import { GroupEditorDialog, type GroupEditorRequest, type GroupEditorValue } from './components/GroupEditorDialog'
+import { WorkspaceDialog, type WorkspaceDialogRequest, type WorkspaceDialogValue } from './components/WorkspaceDialog'
 import { TileEditorDialog, type TileEditorRequest, type TileEditorValue } from './components/TileEditorDialog'
 import { useCanvasStore } from './store/canvasStore'
 import { useSettingsStore } from './store/settingsStore'
@@ -21,7 +22,7 @@ import { findMergeTargetGroup, findSelectedGroup, getGroupingBlockedReason } fro
 import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type CanvasState, type Workspace, type TileGroup, type ViewMode, type SplitPanelId, type SplitViewState } from '@shared/types'
 import { TILE_META } from './components/TileContent'
 import { TileListItem } from './components/TileListItem'
-import { Terminal, StickyNote, Globe, LayoutGrid, Clock, Folder, ChevronDown, FolderPlus, Trash2, Pencil, Lock, Columns, RefreshCw, Download, X } from 'lucide-react'
+import { Terminal, StickyNote, Globe, LayoutGrid, Clock, Folder, ChevronDown, FolderPlus, FolderOpen, Trash2, Pencil, Lock, Columns, RefreshCw, Download, X } from 'lucide-react'
 
 const GROUP_SHOW_MARGIN = 20
 const GROUP_SHOW_TOP_PADDING = 118
@@ -144,6 +145,18 @@ type TileEditorState = {
   request: TileEditorRequest
 } | null
 
+type WorkspaceEditorState =
+  | {
+      mode: 'create'
+      request: WorkspaceDialogRequest
+    }
+  | {
+      mode: 'edit'
+      workspaceId: string
+      request: WorkspaceDialogRequest
+    }
+  | null
+
 function isPromptDialog(dialog: PromptDialogState | ConfirmDialogState): dialog is PromptDialogState {
   return dialog.request.mode === 'prompt'
 }
@@ -159,6 +172,7 @@ export default function App(): React.ReactElement {
   const updateProgressPercent = useUpdateStore((s) => s.progressPercent)
   const updateMessage = useUpdateStore((s) => s.message)
   const installUpdate = useUpdateStore((s) => s.installUpdate)
+  const groupsEnabled = useSettingsStore((s) => s.groups.enabled)
 
   // Canvas state
   const tiles = useCanvasStore((s) => s.tiles)
@@ -172,6 +186,7 @@ export default function App(): React.ReactElement {
   const splitViewState = useCanvasStore((s) => s.splitViewState)
   const activeWorkspaceId = useCanvasStore((s) => s.activeWorkspaceId)
   const activeWorkspaceName = useCanvasStore((s) => s.activeWorkspaceName)
+  const activeWorkspaceConfig = useCanvasStore((s) => s.activeWorkspaceConfig)
   const availableProfiles = useCanvasStore((s) => s.availableProfiles)
   const setViewport = useCanvasStore((s) => s.setViewport)
   const restoreState = useCanvasStore((s) => s.restoreState)
@@ -231,6 +246,7 @@ export default function App(): React.ReactElement {
   const [showJsonEditor, setShowJsonEditor] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [groupEditor, setGroupEditor] = useState<GroupEditorState>(null)
+  const [workspaceEditor, setWorkspaceEditor] = useState<WorkspaceEditorState>(null)
   const [tileEditor, setTileEditor] = useState<TileEditorState>(null)
   const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState<string | null>(null)
   const [tileRefreshKeys, setTileRefreshKeys] = useState<Record<string, number>>({})
@@ -323,8 +339,6 @@ export default function App(): React.ReactElement {
         groups: stateSnapshot.groups.map((group) => ({
           ...group,
           tileIds: [...group.tileIds],
-          terminal: group.terminal ? { ...group.terminal } : undefined,
-          files: group.files ? { ...group.files } : undefined,
         })),
         viewport: { ...stateSnapshot.viewport },
         nextZIndex: stateSnapshot.nextZIndex,
@@ -344,7 +358,7 @@ export default function App(): React.ReactElement {
   )
 
   const activateWorkspace = useCallback(async (
-    workspace: Pick<Workspace, 'id' | 'name'> | null,
+    workspace: Pick<Workspace, 'id' | 'name' | 'config'> | null,
     options?: { persistCurrent?: boolean; updateMain?: boolean },
   ) => {
     if (!workspace) return
@@ -370,7 +384,7 @@ export default function App(): React.ReactElement {
     }
 
     skipNextAutosaveRef.current = true
-    restoreWorkspaceState(workspace.id, workspace.name, state ?? createEmptyCanvasState())
+    restoreWorkspaceState(workspace.id, workspace.name, workspace.config, state ?? createEmptyCanvasState())
     setShowWorkspacePicker(false)
   }, [restoreWorkspaceState, saveToDisk])
 
@@ -390,13 +404,32 @@ export default function App(): React.ReactElement {
 
       if (list[0]) {
         void activateWorkspace(list[0], { persistCurrent: false })
+        return
       }
+
+      skipNextAutosaveRef.current = true
+      setWorkspace('', '', {})
+      restoreState(createEmptyCanvasState())
+      setWorkspaceEditor({
+        mode: 'create',
+        request: {
+          title: 'Create your first workspace',
+          eyebrow: 'First Workspace Setup',
+          confirmLabel: 'Create Workspace',
+          canCancel: false,
+          value: {
+            name: '',
+            rootFolderPath: '',
+            initialCommand: '',
+          },
+        },
+      })
     }).catch((err) => console.error('[App] Error loading workspaces:', err))
     window.electron.shellProfiles.list().then((profiles) => {
       console.log('[App] Shell profiles:', profiles)
       setProfiles(profiles.map((p) => ({ id: p.id, label: p.label, available: p.available })))
     }).catch((err) => console.error('[App] Error loading shell profiles:', err))
-  }, [activateWorkspace, refreshWorkspaces, setProfiles])
+  }, [activateWorkspace, refreshWorkspaces, restoreState, setProfiles, setWorkspace])
 
   // Switch workspace
   const switchWorkspace = useCallback(
@@ -495,6 +528,7 @@ export default function App(): React.ReactElement {
   const defaultProfile = availableProfiles.find((p) => p.id === 'bash') ??
     availableProfiles.find((p) => p.id === 'zsh') ??
     availableProfiles.find((p) => p.available)
+  const effectiveGroups = groupsEnabled ? groups : []
 
   // Zoom toggle: switch between 100% and previous zoom
   const handleZoomToggle = useCallback(() => {
@@ -638,21 +672,22 @@ export default function App(): React.ReactElement {
   }, [focusTile, focusedTileId, fullviewActiveTileId, selectTiles, setFullviewActiveTileId, setSplitViewState, setViewMode, splitViewState, tiles, viewMode])
 
   const selectedGroup = useMemo(
-    () => findSelectedGroup(groups, selectedTileIds),
-    [groups, selectedTileIds],
+    () => findSelectedGroup(effectiveGroups, selectedTileIds),
+    [effectiveGroups, selectedTileIds],
   )
 
   const mergeTargetGroup = useMemo(
-    () => findMergeTargetGroup(tiles, groups, selectedTileIds),
-    [tiles, groups, selectedTileIds],
+    () => findMergeTargetGroup(tiles, effectiveGroups, selectedTileIds),
+    [tiles, effectiveGroups, selectedTileIds],
   )
 
   const groupingBlockedReason = useMemo(
-    () => getGroupingBlockedReason(tiles, groups, selectedTileIds, mergeTargetGroup?.id),
-    [tiles, groups, selectedTileIds, mergeTargetGroup],
+    () => getGroupingBlockedReason(tiles, effectiveGroups, selectedTileIds, mergeTargetGroup?.id),
+    [tiles, effectiveGroups, selectedTileIds, mergeTargetGroup],
   )
 
   const handleCreateGroupFromSelection = useCallback(() => {
+    if (!groupsEnabled) return
     if (groupingBlockedReason) return
 
     if (mergeTargetGroup) {
@@ -671,12 +706,10 @@ export default function App(): React.ReactElement {
           name: 'Untitled Group',
           colorId: GROUP_COLOR_ORDER[groups.length % GROUP_COLOR_ORDER.length] ?? GROUP_COLOR_ORDER[0],
           locked: false,
-          startupCommand: '',
-          filesRootPath: '',
         },
       },
     })
-  }, [addTilesToGroup, groupingBlockedReason, groups.length, mergeTargetGroup, selectedTileIds])
+  }, [addTilesToGroup, groupingBlockedReason, groups.length, groupsEnabled, mergeTargetGroup, selectedTileIds])
 
   const openGroupEditor = useCallback((group: TileGroup) => {
     setGroupMenu(null)
@@ -690,8 +723,6 @@ export default function App(): React.ReactElement {
           name: group.name,
           colorId: group.colorId,
           locked: Boolean(group.locked),
-          startupCommand: group.terminal?.startupCommand ?? '',
-          filesRootPath: group.files?.rootPath ?? '',
         },
       },
     })
@@ -704,12 +735,6 @@ export default function App(): React.ReactElement {
       name: value.name,
       colorId: value.colorId,
       locked: value.locked,
-      terminal: {
-        startupCommand: value.startupCommand || undefined,
-      },
-      files: {
-        rootPath: value.filesRootPath || undefined,
-      },
     }
 
     if (groupEditor.mode === 'create') {
@@ -899,41 +924,79 @@ export default function App(): React.ReactElement {
     bumpTileRefreshKey(tile.id)
   }, [bumpTileRefreshKey, clearTerminalTitle, requestRefreshTileConfirmation])
 
-  const renameWorkspace = useCallback(async (workspace: Workspace) => {
+  const openWorkspaceEditor = useCallback((workspace: Workspace) => {
     setWorkspaceItemMenu(null)
-
-    const name = await requestPrompt({
-      title: 'Rename workspace',
-      message: 'Choose a new name for this workspace.',
-      confirmLabel: 'Save',
-      cancelLabel: 'Cancel',
-      defaultValue: workspace.name,
-      placeholder: 'Workspace name',
+    setWorkspaceEditor({
+      mode: 'edit',
+      workspaceId: workspace.id,
+      request: {
+        title: 'Edit workspace',
+        confirmLabel: 'Save Workspace',
+        value: {
+          name: workspace.name,
+          rootFolderPath: workspace.config.rootFolderPath ?? '',
+          initialCommand: workspace.config.initialCommand ?? '',
+        },
+      },
     })
+  }, [])
 
-    if (!name?.trim()) return
+  const handleConfirmWorkspaceEditor = useCallback(async (value: WorkspaceDialogValue) => {
+    if (!workspaceEditor) return
 
-    const renamed = await window.electron.workspace.rename(workspace.id, name.trim())
-    if (!renamed) return
+    if (workspaceEditor.mode === 'create') {
+      if (activeWorkspaceId) {
+        if (autosaveTimerRef.current) {
+          clearTimeout(autosaveTimerRef.current)
+          autosaveTimerRef.current = null
+        }
 
-    await refreshWorkspaces()
+        await saveToDisk(activeWorkspaceId)
+      }
 
-    if (workspace.id === activeWorkspaceId) {
-      setWorkspace(renamed.id, renamed.name)
+      const created = await window.electron.workspace.create({
+        name: value.name,
+        rootFolderPath: value.rootFolderPath || undefined,
+        initialCommand: value.initialCommand || undefined,
+      })
+      await refreshWorkspaces()
+      setWorkspaceEditor(null)
+      await activateWorkspace(created, { persistCurrent: false, updateMain: false })
+      return
     }
-  }, [activeWorkspaceId, refreshWorkspaces, requestPrompt, setWorkspace])
+
+    const updated = await window.electron.workspace.update(workspaceEditor.workspaceId, {
+      name: value.name,
+      config: {
+        rootFolderPath: value.rootFolderPath || undefined,
+        initialCommand: value.initialCommand || undefined,
+      },
+    })
+    if (!updated) return
+
+    const list = await refreshWorkspaces()
+    setWorkspaceEditor(null)
+
+    if (updated.id === activeWorkspaceId) {
+      setWorkspace(updated.id, updated.name, updated.config)
+      const refreshed = list.find((workspace) => workspace.id === updated.id) ?? updated
+      void activateWorkspace(refreshed, { persistCurrent: false, updateMain: false })
+    }
+  }, [activateWorkspace, activeWorkspaceId, refreshWorkspaces, saveToDisk, setWorkspace, workspaceEditor])
 
   const deleteWorkspace = useCallback(async (workspace: Workspace) => {
     setWorkspaceItemMenu(null)
 
-    const confirmed = await requestConfirm({
+    const confirmation = await requestPrompt({
       title: 'Delete workspace',
-      message: `Delete workspace "${workspace.name}"? This cannot be undone.`,
+      message: `Type "${workspace.name}" to delete this workspace. This cannot be undone.`,
       confirmLabel: 'Delete',
       cancelLabel: 'Keep Workspace',
       danger: true,
+      placeholder: workspace.name,
+      requiredValue: workspace.name,
     })
-    if (!confirmed) return
+    if (confirmation?.trim() !== workspace.name) return
 
     const isActiveWorkspace = workspace.id === useCanvasStore.getState().activeWorkspaceId
     if (isActiveWorkspace) {
@@ -958,19 +1021,44 @@ export default function App(): React.ReactElement {
 
     if (list[0]) {
       await activateWorkspace(list[0], { persistCurrent: false })
+      return
     }
-  }, [activateWorkspace, refreshWorkspaces, requestConfirm, saveToDisk])
+    setWorkspace('', '', {})
+    restoreState(createEmptyCanvasState())
+    setWorkspaceEditor({
+      mode: 'create',
+      request: {
+        title: 'Create your first workspace',
+        eyebrow: 'First Workspace Setup',
+        confirmLabel: 'Create Workspace',
+        canCancel: false,
+        value: {
+          name: '',
+          rootFolderPath: '',
+          initialCommand: '',
+        },
+      },
+    })
+  }, [activateWorkspace, refreshWorkspaces, requestPrompt, saveToDisk, setWorkspace, restoreState])
 
   const createWorkspace = useCallback(async () => {
-    const name = await requestPrompt({
-      title: 'Create workspace',
-      message: 'Choose a name for the new workspace.',
-      confirmLabel: 'Create',
-      cancelLabel: 'Cancel',
-      placeholder: 'Workspace name',
+    setWorkspaceEditor({
+      mode: 'create',
+      request: {
+        title: activeWorkspaceId ? 'Create workspace' : 'Create your first workspace',
+        eyebrow: activeWorkspaceId ? 'Workspace Settings' : 'First Workspace Setup',
+        confirmLabel: 'Create Workspace',
+        canCancel: Boolean(activeWorkspaceId),
+        value: {
+          name: '',
+          rootFolderPath: '',
+          initialCommand: '',
+        },
+      },
     })
-    if (!name?.trim()) return
+  }, [activeWorkspaceId])
 
+  const openFolderAsWorkspace = useCallback(async () => {
     if (activeWorkspaceId) {
       if (autosaveTimerRef.current) {
         clearTimeout(autosaveTimerRef.current)
@@ -980,10 +1068,12 @@ export default function App(): React.ReactElement {
       await saveToDisk(activeWorkspaceId)
     }
 
-    const created = await window.electron.workspace.create(name.trim())
+    const workspace = await window.electron.workspace.openFolder()
+    if (!workspace) return
+
     await refreshWorkspaces()
-    await activateWorkspace(created, { persistCurrent: false, updateMain: false })
-  }, [activeWorkspaceId, activateWorkspace, refreshWorkspaces, requestPrompt, saveToDisk])
+    await activateWorkspace(workspace, { persistCurrent: false, updateMain: false })
+  }, [activeWorkspaceId, activateWorkspace, refreshWorkspaces, saveToDisk])
 
   const createTerminalFromSidebar = useCallback(() => {
     if (availableProfiles.length <= 1 && defaultProfile) {
@@ -995,7 +1085,7 @@ export default function App(): React.ReactElement {
   }, [availableProfiles.length, defaultProfile, addTerminal])
 
   const activeTileMenu = tileMenu ? tiles.find((tile) => tile.id === tileMenu.tileId) ?? null : null
-  const activeGroupMenu = groupMenu ? groups.find((group) => group.id === groupMenu.groupId) ?? null : null
+  const activeGroupMenu = groupsEnabled && groupMenu ? effectiveGroups.find((group) => group.id === groupMenu.groupId) ?? null : null
   const activeWorkspaceMenu = workspaceItemMenu
     ? workspaces.find((workspace) => workspace.id === workspaceItemMenu.workspaceId) ?? null
     : null
@@ -1062,10 +1152,10 @@ export default function App(): React.ReactElement {
   ] : []
   const workspaceMenuItems: MenuItem[] = activeWorkspaceMenu ? [
     {
-      label: 'Rename Workspace',
+      label: 'Edit Workspace',
       icon: Pencil,
       action: () => {
-        void renameWorkspace(activeWorkspaceMenu)
+        openWorkspaceEditor(activeWorkspaceMenu)
       },
     },
     {
@@ -1299,7 +1389,7 @@ export default function App(): React.ReactElement {
 
             <div className="grid grid-cols-2 gap-2">
               <button
-                className="nd-panel-raised flex h-14 items-center justify-center gap-2 rounded-full text-text-secondary transition-colors hover:text-text-display"
+                className="nd-panel-raised flex h-14 items-center justify-center gap-2 rounded-full text-text-secondary transition-colors hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
                 onClick={createTerminalFromSidebar}
                 title="New terminal"
               >
@@ -1307,7 +1397,7 @@ export default function App(): React.ReactElement {
                 <span className="nd-label">Terminal</span>
               </button>
               <button
-                className="nd-panel-raised flex h-14 items-center justify-center gap-2 rounded-full text-text-secondary transition-colors hover:text-text-display"
+                className="nd-panel-raised flex h-14 items-center justify-center gap-2 rounded-full text-text-secondary transition-colors hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
                 onClick={() => {
                   setShowProfilePicker(false)
                   addNote()
@@ -1353,9 +1443,11 @@ export default function App(): React.ReactElement {
               <button
                 className="nd-panel-raised flex h-14 items-center justify-center gap-2 rounded-full text-text-secondary transition-colors hover:text-text-display"
                 onClick={() => {
+                  if (!activeWorkspaceConfig.rootFolderPath) return
                   setShowProfilePicker(false)
                   addFiles()
                 }}
+                disabled={!activeWorkspaceConfig.rootFolderPath}
                 title="New files"
               >
                 <Folder size={16} />
@@ -1390,13 +1482,9 @@ export default function App(): React.ReactElement {
               >
                 <div className="max-h-56 overflow-y-auto py-2">
                   {workspaces.map((workspace) => (
-                    <button
+                    <div
                       key={workspace.id}
-                      className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-hover-bg"
-                      style={{
-                        color: workspace.id === activeWorkspaceId ? 'var(--text-primary)' : 'var(--text-secondary)',
-                      }}
-                      onClick={() => switchWorkspace(workspace)}
+                      className="flex items-center gap-2 px-2 py-1"
                       onContextMenu={(event) => {
                         event.preventDefault()
                         event.stopPropagation()
@@ -1407,11 +1495,29 @@ export default function App(): React.ReactElement {
                         })
                       }}
                     >
-                      <span className="truncate text-sm">{workspace.name}</span>
-                      {workspace.id === activeWorkspaceId && (
-                        <span className="nd-caption ml-3 text-text-secondary">[ ACTIVE ]</span>
-                      )}
-                    </button>
+                      <button
+                        className="flex min-w-0 flex-1 items-center justify-between rounded-2xl px-3 py-2 text-left transition-colors hover:bg-hover-bg"
+                        style={{
+                          color: workspace.id === activeWorkspaceId ? 'var(--text-primary)' : 'var(--text-secondary)',
+                        }}
+                        onClick={() => switchWorkspace(workspace)}
+                      >
+                        <span className="truncate text-sm">{workspace.name}</span>
+                        {workspace.id === activeWorkspaceId && (
+                          <span className="nd-caption ml-3 shrink-0 text-text-secondary">[ ACTIVE ]</span>
+                        )}
+                      </button>
+                      <button
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border-visible text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          openWorkspaceEditor(workspace)
+                        }}
+                        title="Edit workspace"
+                      >
+                        <Pencil size={13} />
+                      </button>
+                    </div>
                   ))}
                 </div>
 
@@ -1422,6 +1528,13 @@ export default function App(): React.ReactElement {
                   >
                     <FolderPlus size={14} />
                     <span className="nd-label">New Workspace</span>
+                  </button>
+                  <button
+                    className="flex w-full items-center gap-2 rounded-2xl px-4 py-3 text-left text-sm text-text-primary transition-colors hover:bg-hover-bg"
+                    onClick={() => void openFolderAsWorkspace()}
+                  >
+                    <FolderOpen size={14} />
+                    <span className="nd-label">Open Folder</span>
                   </button>
                 </div>
               </div>
@@ -1468,17 +1581,19 @@ export default function App(): React.ReactElement {
               </div>
             )}
 
-            <div className="mb-3 mt-6 flex items-center justify-between px-2">
-              <span className="nd-label text-text-secondary">Groups</span>
-              <span className="nd-caption text-text-secondary">{groups.length} SAVED</span>
-            </div>
-            {groups.length === 0 ? (
-              <div className="rounded-[20px] border border-dashed border-border px-5 py-6 text-sm text-text-disabled">
-                Create a selection on the canvas and use the bottom Group bar to save it as a permanent group.
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {groups.map((group) => {
+            {groupsEnabled && (
+              <>
+                <div className="mb-3 mt-6 flex items-center justify-between px-2">
+                  <span className="nd-label text-text-secondary">Groups</span>
+                  <span className="nd-caption text-text-secondary">{effectiveGroups.length} SAVED</span>
+                </div>
+                {effectiveGroups.length === 0 ? (
+                  <div className="rounded-[20px] border border-dashed border-border px-5 py-6 text-sm text-text-disabled">
+                    Create a selection on the canvas and use the bottom Group bar to save it as a permanent group.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {effectiveGroups.map((group) => {
                   const isSelectedGroup = selectedGroup?.id === group.id
                   const groupColor = GROUP_COLORS[group.colorId]
                   const isLockedGroup = Boolean(group.locked)
@@ -1518,8 +1633,10 @@ export default function App(): React.ReactElement {
                       </div>
                     </button>
                   )
-                })}
-              </div>
+                    })}
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -1561,20 +1678,22 @@ export default function App(): React.ReactElement {
           </div>
         )}
 
-        <TopBar
-          zoom={viewport.zoom}
-          viewMode={viewMode}
-          canSplitView={tiles.length >= 2}
-          sidebarCollapsed={sidebarCollapsed}
-          onToggleSidebar={() => setSidebarCollapsed(c => !c)}
-          onSetViewMode={handleSetViewMode}
-          onFitToContent={() => getCanvasMethods()?.fitViewToContent()}
-          onZoomToggle={handleZoomToggle}
-          onOpenSettings={() => setShowSettings(true)}
-        />
+        {activeWorkspaceId ? (
+          <>
+            <TopBar
+              zoom={viewport.zoom}
+              viewMode={viewMode}
+              canSplitView={tiles.length >= 2}
+              sidebarCollapsed={sidebarCollapsed}
+              onToggleSidebar={() => setSidebarCollapsed(c => !c)}
+              onSetViewMode={handleSetViewMode}
+              onFitToContent={() => getCanvasMethods()?.fitViewToContent()}
+              onZoomToggle={handleZoomToggle}
+              onOpenSettings={() => setShowSettings(true)}
+            />
 
-        <div className="relative flex-1 overflow-hidden">
-          {(viewMode === 'fullview' || viewMode === 'splitview') && (
+            <div className="relative flex-1 overflow-hidden">
+              {(viewMode === 'fullview' || viewMode === 'splitview') && (
             <div className="absolute inset-x-0 top-0 z-10">
               {viewMode === 'fullview' ? (
                 <FullviewPanel
@@ -1619,9 +1738,9 @@ export default function App(): React.ReactElement {
                 />
               )}
             </div>
-          )}
+              )}
 
-          <Canvas
+              <Canvas
             profiles={availableProfiles}
             onCreateTerminal={(profileId) => addTerminal(profileId)}
             onCreateNote={() => addNote()}
@@ -1629,9 +1748,11 @@ export default function App(): React.ReactElement {
             onCreateBoard={() => addBoard()}
             onCreateTimer={() => addTimer()}
             onCreateFiles={() => addFiles()}
+            canCreateFiles={Boolean(activeWorkspaceConfig.rootFolderPath)}
             onCreateGroupFromSelection={() => {
               void handleCreateGroupFromSelection()
             }}
+            groupsEnabled={groupsEnabled}
             onDeleteTile={deleteTile}
             onConfirmRemoveFromGroup={confirmRemoveTileFromGroup}
             tileRefreshKeys={tileRefreshKeys}
@@ -1640,8 +1761,12 @@ export default function App(): React.ReactElement {
             splitViewState={splitViewState}
             onFocusSplitPanel={setSplitFocusedPanel}
             fullviewTopInset={viewMode === 'fullview' || viewMode === 'splitview' ? fullviewTopInset : 0}
-          />
-        </div>
+              />
+            </div>
+          </>
+        ) : (
+          <div className="flex flex-1 items-center justify-center bg-bg-primary" />
+        )}
       </div>
 
       {/* Settings panel */}
@@ -1697,6 +1822,14 @@ export default function App(): React.ReactElement {
         request={groupEditor?.request ?? null}
         onCancel={() => setGroupEditor(null)}
         onConfirm={handleConfirmGroupEditor}
+      />
+      <WorkspaceDialog
+        request={workspaceEditor?.request ?? null}
+        onCancel={() => {
+          if (workspaceEditor?.request.canCancel === false) return
+          setWorkspaceEditor(null)
+        }}
+        onConfirm={handleConfirmWorkspaceEditor}
       />
       <TileEditorDialog
         request={tileEditor?.request ?? null}

@@ -61,12 +61,14 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor }: SettingsPanel
   const snapToGrid = useSettingsStore((s) => s.snapToGrid)
   const gridSize = useSettingsStore((s) => s.gridSize)
   const browserHomeUrl = useSettingsStore((s) => s.browser.homeUrl)
+  const groupsEnabled = useSettingsStore((s) => s.groups.enabled)
   const setAppearance = useSettingsStore((s) => s.setAppearance)
   const setFontSize = useSettingsStore((s) => s.setFontSize)
   const setShowGrid = useSettingsStore((s) => s.setShowGrid)
   const setSnapToGrid = useSettingsStore((s) => s.setSnapToGrid)
   const setGridSize = useSettingsStore((s) => s.setGridSize)
   const setBrowserHomeUrl = useSettingsStore((s) => s.setBrowserHomeUrl)
+  const setGroupsEnabled = useSettingsStore((s) => s.setGroupsEnabled)
   const currentVersion = useUpdateStore((s) => s.currentVersion)
   const availableVersion = useUpdateStore((s) => s.availableVersion)
   const updateStatus = useUpdateStore((s) => s.status)
@@ -221,6 +223,38 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor }: SettingsPanel
       )
     }
 
+    if (activeSection === 'advanced') {
+      return (
+        <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
+          <div className="mb-5 flex items-center gap-3">
+            <ActiveSectionIcon size={16} className="text-text-secondary" />
+            <div>
+              <div className="nd-label text-text-secondary">Advanced</div>
+              <h3 className="mt-1 text-xl text-text-display">Workspace internals</h3>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <label className="flex items-center justify-between gap-4 rounded-[20px] border border-border-visible bg-bg-primary px-4 py-4">
+              <span>
+                <span className="nd-label block text-text-display">Groups capability</span>
+                <span className="mt-2 block text-sm leading-6 text-text-secondary">Show visual groups and apply group locks.</span>
+              </span>
+              <input type="checkbox" checked={groupsEnabled} onChange={(event) => setGroupsEnabled(event.target.checked)} />
+            </label>
+
+            <button
+              className="flex w-full items-center justify-between rounded-full border border-border-visible px-4 py-3 text-left transition-colors hover:border-text-secondary"
+              onClick={onOpenJsonEditor}
+            >
+              <span className="nd-label text-text-display">Open raw canvas JSON</span>
+              <span className="nd-caption text-text-secondary">[ EDIT ]</span>
+            </button>
+          </div>
+        </section>
+      )
+    }
+
     if (activeSection === 'browser') {
       return (
         <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
@@ -241,28 +275,6 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor }: SettingsPanel
               spellCheck={false}
             />
           </label>
-        </section>
-      )
-    }
-
-    if (activeSection === 'advanced') {
-      return (
-        <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
-          <div className="mb-5 flex items-center gap-3">
-            <ActiveSectionIcon size={16} className="text-text-secondary" />
-            <div>
-              <div className="nd-label text-text-secondary">Advanced</div>
-              <h3 className="mt-1 text-xl text-text-display">Workspace internals</h3>
-            </div>
-          </div>
-
-          <button
-            className="flex w-full items-center justify-between rounded-full border border-border-visible px-4 py-3 text-left transition-colors hover:border-text-secondary"
-            onClick={onOpenJsonEditor}
-          >
-            <span className="nd-label text-text-display">Open raw canvas JSON</span>
-            <span className="nd-caption text-text-secondary">[ EDIT ]</span>
-          </button>
         </section>
       )
     }

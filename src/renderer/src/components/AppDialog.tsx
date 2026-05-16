@@ -9,6 +9,7 @@ export interface PromptDialogOptions {
   cancelLabel?: string
   defaultValue?: string
   placeholder?: string
+  requiredValue?: string
   danger?: boolean
 }
 
@@ -54,6 +55,7 @@ export function AppDialog({ request, onCancel, onConfirm }: AppDialogProps): Rea
 
   const canSubmitPrompt = useMemo(() => {
     if (request?.mode !== 'prompt') return true
+    if (request.requiredValue !== undefined) return value.trim() === request.requiredValue
     return value.trim().length > 0
   }, [request, value])
 

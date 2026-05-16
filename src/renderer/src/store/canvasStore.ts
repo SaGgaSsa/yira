@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { GROUP_COLOR_ORDER, type TileState, type CanvasState, type Viewport, type ShellProfileId, type TileGroup, type GroupColorId, type ViewMode, type SplitViewState, type SplitPanelId } from '@shared/types'
+import { GROUP_COLOR_ORDER, type TileState, type CanvasState, type Viewport, type ShellProfileId, type TileGroup, type GroupColorId, type ViewMode, type SplitViewState, type SplitPanelId, type WorkspaceConfig } from '@shared/types'
 import { getGroupingBlockedReason } from '@/utils/grouping'
 
 const UNTITLED_GROUP_NAME = 'Untitled Group'
@@ -74,26 +74,6 @@ function isTileInSplitState(splitViewState: SplitViewState, tileId: string): boo
   return splitViewState.leftTileIds.includes(tileId) || splitViewState.rightTileIds.includes(tileId)
 }
 
-function normalizeGroupTerminalSettings(group: Pick<TileGroup, 'terminal'>): TileGroup['terminal'] {
-  const startupCommand = group.terminal?.startupCommand?.trim()
-
-  if (!startupCommand) return undefined
-
-  return {
-    startupCommand,
-  }
-}
-
-function normalizeGroupFilesSettings(group: Pick<TileGroup, 'files'>): TileGroup['files'] {
-  const rootPath = group.files?.rootPath?.trim()
-
-  if (!rootPath) return undefined
-
-  return {
-    rootPath,
-  }
-}
-
 function normalizeGroup(group: TileGroup): TileGroup {
   return {
     id: group.id,
@@ -101,8 +81,6 @@ function normalizeGroup(group: TileGroup): TileGroup {
     colorId: GROUP_COLOR_ORDER.includes(group.colorId) ? group.colorId : DEFAULT_GROUP_COLOR,
     tileIds: [...group.tileIds],
     locked: Boolean(group.locked),
-    terminal: normalizeGroupTerminalSettings(group),
-    files: normalizeGroupFilesSettings(group),
   }
 }
 
@@ -148,8 +126,6 @@ function buildNormalizedGroupedState(
         colorId: DEFAULT_GROUP_COLOR,
         tileIds: [tile.id],
         locked: false,
-        terminal: undefined,
-        files: undefined,
       }
       normalizedGroups.push(created)
       groupsById.set(created.id, created)
@@ -194,6 +170,7 @@ interface CanvasStore {
   terminalTitles: Record<string, string>
   activeWorkspaceId: string
   activeWorkspaceName: string
+  activeWorkspaceConfig: WorkspaceConfig
   availableProfiles: Array<{ id: ShellProfileId; label: string; available: boolean }>
 
   // Actions
@@ -215,13 +192,13 @@ interface CanvasStore {
   clearTerminalTitle: (tileId: string) => void
   selectTiles: (tileIds: string[]) => void
   createGroup: (
-    group: Pick<TileGroup, 'name' | 'colorId' | 'locked' | 'terminal' | 'files'>,
+    group: Pick<TileGroup, 'name' | 'colorId' | 'locked'>,
     tileIds?: string[],
   ) => TileGroup | null
   addTilesToGroup: (groupId: string, tileIds: string[]) => void
   updateGroup: (
     groupId: string,
-    patch: Partial<Pick<TileGroup, 'name' | 'colorId' | 'locked' | 'terminal' | 'files'>>,
+    patch: Partial<Pick<TileGroup, 'name' | 'colorId' | 'locked'>>,
   ) => void
   setGroupColor: (groupId: string, colorId: GroupColorId) => void
   setGroupLocked: (groupId: string, locked: boolean) => void
@@ -230,8 +207,8 @@ interface CanvasStore {
 
   bringToFront: (tileId: string) => number
 
-  setWorkspace: (id: string, name: string) => void
-  restoreWorkspaceState: (id: string, name: string, state: CanvasState) => void
+  setWorkspace: (id: string, name: string, config?: WorkspaceConfig) => void
+  restoreWorkspaceState: (id: string, name: string, config: WorkspaceConfig | undefined, state: CanvasState) => void
   setProfiles: (profiles: Array<{ id: ShellProfileId; label: string; available: boolean }>) => void
 }
 
@@ -248,6 +225,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   terminalTitles: {},
   activeWorkspaceId: '',
   activeWorkspaceName: '',
+  activeWorkspaceConfig: {},
   availableProfiles: [],
 
   setViewport: (vp) => set({ viewport: vp }),
@@ -411,8 +389,6 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       colorId: groupInput.colorId ?? GROUP_COLOR_ORDER[nextColorIndex] ?? DEFAULT_GROUP_COLOR,
       tileIds: nextIds,
       locked: groupInput.locked,
-      terminal: groupInput.terminal,
-      files: groupInput.files,
     })
 
     set((s) => {
@@ -475,8 +451,6 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
             ...group,
             ...patch,
             tileIds: group.tileIds,
-            terminal: patch.terminal ?? group.terminal,
-            files: patch.files ?? group.files,
           })
         : group
     )),
@@ -541,8 +515,8 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     return nextZIndex
   },
 
-  setWorkspace: (id, name) => set({ activeWorkspaceId: id, activeWorkspaceName: name }),
-  restoreWorkspaceState: (id, name, state) => set(() => {
+  setWorkspace: (id, name, config = {}) => set({ activeWorkspaceId: id, activeWorkspaceName: name, activeWorkspaceConfig: { ...config } }),
+  restoreWorkspaceState: (id, name, config = {}, state) => set(() => {
     const normalized = buildNormalizedGroupedState(state.tiles, state.groups ?? [])
     const fullviewActiveTileId =
       state.fullviewActiveTileId ??
@@ -553,6 +527,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     return {
       activeWorkspaceId: id,
       activeWorkspaceName: name,
+      activeWorkspaceConfig: { ...config },
       tiles: normalized.tiles,
       groups: normalized.groups,
       viewport: state.viewport,

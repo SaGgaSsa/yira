@@ -139,13 +139,14 @@ export function TerminalTileWrapper({ tile, isFocused, onFocus, onUpdate, onDele
     const titleDisposer = term.onTitleChange((title) => {
       useCanvasStore.getState().setTerminalTitle(tile.id, title)
     })
-    const initialCommand = buildTerminalStartupCommand(tile, useCanvasStore.getState().groups)
+    const workspaceConfig = useCanvasStore.getState().activeWorkspaceConfig
+    const initialCommand = buildTerminalStartupCommand(tile, workspaceConfig)
 
     window.electron.terminal
       .create(tile.id, {
         shellProfileId: tile.shellProfileId ?? 'bash',
-        workspaceDir: '',
-        wslStartInHome: tile.shellProfileId === 'wsl',
+        workspaceDir: workspaceConfig.rootFolderPath,
+        wslStartInHome: tile.shellProfileId === 'wsl' && !workspaceConfig.rootFolderPath,
         initialCommand,
       })
       .then(({ buffer }) => {

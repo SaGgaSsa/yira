@@ -26,6 +26,7 @@ interface UseCanvasActionsOptions {
 export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
   const activeWorkspaceId = useCanvasStore((s) => s.activeWorkspaceId)
   const browserHomeUrl = useSettingsStore((s) => s.browser.homeUrl)
+  const groupsEnabled = useSettingsStore((s) => s.groups.enabled)
   const gridSize = useSettingsStore((s) => s.gridSize)
   const snapToGrid = useSettingsStore((s) => s.snapToGrid)
   const addTile = useCanvasStore((s) => s.addTile)
@@ -50,7 +51,7 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
   const getSpawnPos = useCallback(
     (w: number, h: number, offset: number) => {
       const state = useCanvasStore.getState()
-      const selectedGroup = findSelectedGroup(state.groups, state.selectedTileIds)
+      const selectedGroup = groupsEnabled ? findSelectedGroup(state.groups, state.selectedTileIds) : null
       const groupAnchor = selectedGroup
         ? getGroupAnchorTile(selectedGroup, state.tiles, state.focusedTileId)
         : null
@@ -93,7 +94,7 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
         y: snapCoordinate(cy),
       }
     },
-    [gridSize, snapCoordinate, snapToGrid],
+    [gridSize, groupsEnabled, snapCoordinate, snapToGrid],
   )
 
   const finalizeAddedTile = useCallback(
@@ -121,7 +122,7 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
   const addTerminal = useCallback(
     (profileId: ShellProfileId) => {
       const state = useCanvasStore.getState()
-      const targetGroup = findSelectedGroup(state.groups, state.selectedTileIds)
+      const targetGroup = groupsEnabled ? findSelectedGroup(state.groups, state.selectedTileIds) : null
       const pos = getSpawnPos(640, 420, 40)
 
       const tile: TileState = {
@@ -138,12 +139,12 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
 
       finalizeAddedTile(tile, targetGroup?.id)
     },
-    [finalizeAddedTile, getSpawnPos],
+    [finalizeAddedTile, getSpawnPos, groupsEnabled],
   )
 
   const addBrowser = useCallback(() => {
     const state = useCanvasStore.getState()
-    const targetGroup = findSelectedGroup(state.groups, state.selectedTileIds)
+    const targetGroup = groupsEnabled ? findSelectedGroup(state.groups, state.selectedTileIds) : null
     const pos = getSpawnPos(720, 480, 40)
 
     const tile: TileState = {
@@ -158,11 +159,11 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
       groupId: targetGroup?.id,
     }
     finalizeAddedTile(tile, targetGroup?.id)
-  }, [browserHomeUrl, finalizeAddedTile, getSpawnPos])
+  }, [browserHomeUrl, finalizeAddedTile, getSpawnPos, groupsEnabled])
 
   const addBoard = useCallback(() => {
     const state = useCanvasStore.getState()
-    const targetGroup = findSelectedGroup(state.groups, state.selectedTileIds)
+    const targetGroup = groupsEnabled ? findSelectedGroup(state.groups, state.selectedTileIds) : null
     const pos = getSpawnPos(KANBAN_BOARD_FIXED_WIDTH, 520, 40)
 
     const tile: TileState = {
@@ -176,12 +177,12 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
       groupId: targetGroup?.id,
     }
     finalizeAddedTile(tile, targetGroup?.id)
-  }, [finalizeAddedTile, getSpawnPos])
+  }, [finalizeAddedTile, getSpawnPos, groupsEnabled])
 
   const addNote = useCallback(
     (color?: NoteColor) => {
       const state = useCanvasStore.getState()
-      const targetGroup = findSelectedGroup(state.groups, state.selectedTileIds)
+      const targetGroup = groupsEnabled ? findSelectedGroup(state.groups, state.selectedTileIds) : null
       const pos = getSpawnPos(320, 280, 40)
 
       const tile: TileState = {
@@ -199,12 +200,12 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
       }
       finalizeAddedTile(tile, targetGroup?.id)
     },
-    [finalizeAddedTile, getSpawnPos],
+    [finalizeAddedTile, getSpawnPos, groupsEnabled],
   )
 
   const addTimer = useCallback(() => {
     const state = useCanvasStore.getState()
-    const targetGroup = findSelectedGroup(state.groups, state.selectedTileIds)
+    const targetGroup = groupsEnabled ? findSelectedGroup(state.groups, state.selectedTileIds) : null
     const pos = getSpawnPos(360, 300, 40)
     const defaultDurationMs = 25 * 60 * 1000
 
@@ -222,11 +223,12 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
       groupId: targetGroup?.id,
     }
     finalizeAddedTile(tile, targetGroup?.id)
-  }, [finalizeAddedTile, getSpawnPos])
+  }, [finalizeAddedTile, getSpawnPos, groupsEnabled])
 
   const addFiles = useCallback(() => {
     const state = useCanvasStore.getState()
-    const targetGroup = findSelectedGroup(state.groups, state.selectedTileIds)
+    if (!state.activeWorkspaceConfig.rootFolderPath) return
+    const targetGroup = groupsEnabled ? findSelectedGroup(state.groups, state.selectedTileIds) : null
     const pos = getSpawnPos(420, 320, 40)
 
     const tile: TileState = {
@@ -240,7 +242,7 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
       groupId: targetGroup?.id,
     }
     finalizeAddedTile(tile, targetGroup?.id)
-  }, [finalizeAddedTile, getSpawnPos])
+  }, [finalizeAddedTile, getSpawnPos, groupsEnabled])
 
   const deleteTile = useCallback(
     async (tileId: string): Promise<boolean> => {
