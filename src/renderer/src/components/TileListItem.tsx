@@ -11,6 +11,10 @@ interface TileListItemProps {
   onDoubleClick?: () => void
   onContextMenu?: (event: React.MouseEvent) => void
   onClose?: () => void
+  draggable?: boolean
+  onDragStart?: (event: React.DragEvent) => void
+  onDragOver?: (event: React.DragEvent) => void
+  onDrop?: (event: React.DragEvent) => void
   className?: string
 }
 
@@ -22,6 +26,10 @@ export function TileListItem({
   onDoubleClick,
   onContextMenu,
   onClose,
+  draggable = false,
+  onDragStart,
+  onDragOver,
+  onDrop,
   className = '',
 }: TileListItemProps): React.ReactElement {
   const meta = TILE_META[tile.type]
@@ -31,6 +39,10 @@ export function TileListItem({
   return (
     <div
       className={`relative rounded-2xl border ${className}`.trim()}
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
       style={{
         background: active ? 'var(--surface-raised)' : 'var(--surface)',
         borderColor: active ? 'var(--text-display)' : 'var(--border)',

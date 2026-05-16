@@ -1,16 +1,17 @@
 import { useEffect } from 'react'
 import { useCanvasStore } from '@/store/canvasStore'
 import { getCanvasMethods } from '@/components/Canvas'
+import type { ViewMode } from '@shared/types'
 
 interface UseKeyboardShortcutsDeps {
   tiles: Array<{ id: string }>
   focusedTileId: string | null
   selectedTileIds: string[]
-  viewMode: 'canvas' | 'fullview'
+  viewMode: ViewMode
   resetZoom: () => void
   focusTile: (id: string | null) => void
   selectTiles: (ids: string[]) => void
-  setViewMode: (mode: 'canvas' | 'fullview') => void
+  setViewMode: (mode: ViewMode) => void
   onClosePicker?: () => void
 }
 

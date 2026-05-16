@@ -6,7 +6,7 @@ import { TileContent } from '@/components/TileContent'
 import { ContextMenu } from '@/components/ContextMenu'
 import { findMergeTargetGroup, findSelectedGroup, getGroupingBlockedReason } from '@/utils/grouping'
 import { Terminal, StickyNote, Globe, LayoutGrid, Clock, Folder, Lock } from 'lucide-react'
-import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type ShellProfileId, type TileGroup, type GroupColorId } from '@shared/types'
+import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type ShellProfileId, type TileGroup, type GroupColorId, type ViewMode, type SplitViewState, type SplitPanelId } from '@shared/types'
 
 const GROUP_FRAME_PADDING = 20
 const GROUP_TOOLBAR_GAP = 30
@@ -102,8 +102,10 @@ interface CanvasProps {
   onConfirmRemoveFromGroup: (tile: TileState, group: TileGroup) => Promise<boolean>
   profiles: Array<{ id: ShellProfileId; label: string; available: boolean }>
   tileRefreshKeys?: Record<string, number>
-  viewMode?: 'canvas' | 'fullview'
+  viewMode?: ViewMode
   fullviewActiveTileId?: string | null
+  splitViewState?: SplitViewState
+  onFocusSplitPanel?: (panel: SplitPanelId) => void
   fullviewTopInset?: number
 }
 
@@ -121,6 +123,8 @@ export function Canvas({
   tileRefreshKeys = {},
   viewMode = 'canvas',
   fullviewActiveTileId = null,
+  splitViewState,
+  onFocusSplitPanel,
   fullviewTopInset = 0,
 }: CanvasProps): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -146,6 +150,8 @@ export function Canvas({
   const setGroupColor = useCanvasStore((s) => s.setGroupColor)
   const setGroupLocked = useCanvasStore((s) => s.setGroupLocked)
   const isFullview = viewMode === 'fullview'
+  const isSplitview = viewMode === 'splitview'
+  const isFixedView = isFullview || isSplitview
   const showGrid = useSettingsStore((s) => s.showGrid)
   const gridSize = useSettingsStore((s) => s.gridSize)
   const snapToGrid = useSettingsStore((s) => s.snapToGrid)
@@ -189,18 +195,18 @@ export function Canvas({
     return getGroupingBlockedReason(tiles, groups, selectedTileIds, mergeTargetGroup?.id)
   }, [tiles, groups, selectedTileIds, mergeTargetGroup])
 
-  const showSelectionBar = !isFullview && selectedTileIds.length >= 2 && selectedGroup === null
+  const showSelectionBar = !isFixedView && selectedTileIds.length >= 2 && selectedGroup === null
   const canCreateGroup = selectedTileIds.length >= 2 && selectedGroup === null && !groupingBlockedReason
   const selectionActionLabel = mergeTargetGroup ? `Merge into "${mergeTargetGroup.name}"` : 'Group'
 
   const onContextMenu = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault()
-      if (isFullview) return
+      if (isFixedView) return
       if (e.target !== containerRef.current && e.target !== e.currentTarget) return
       setContextMenu({ x: e.clientX, y: e.clientY })
     },
-    [isFullview],
+    [isFixedView],
   )
 
   const centerViewOnTile = useCallback(
@@ -330,7 +336,7 @@ export function Canvas({
   const handleWheel = useCallback(
     (e: React.WheelEvent) => {
       e.preventDefault()
-      if (isFullview) return
+      if (isFixedView) return
       const rect = containerRef.current!.getBoundingClientRect()
       const mx = e.clientX - rect.left
       const my = e.clientY - rect.top
@@ -342,7 +348,7 @@ export function Canvas({
 
       setViewport({ tx: newTx, ty: newTy, zoom: newZoom })
     },
-    [isFullview, viewport, setViewport],
+    [isFixedView, viewport, setViewport],
   )
 
   const startGroupDrag = useCallback(
@@ -410,7 +416,7 @@ export function Canvas({
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
-      if (isFullview) return
+      if (isFixedView) return
       if (e.target !== containerRef.current && e.target !== e.currentTarget) return
 
       if (e.button === 1 || (e.button === 0 && spaceHeldRef.current)) {
@@ -447,7 +453,7 @@ export function Canvas({
         })
       }
     },
-    [isFullview, viewport, focusTile, selectTiles],
+    [isFixedView, viewport, focusTile, selectTiles],
   )
 
   useEffect(() => {
@@ -566,16 +572,16 @@ export function Canvas({
         ref={containerRef}
         className="canvas-root absolute inset-0 overflow-hidden"
         style={{
-          background: isFullview ? 'var(--bg-primary)' : 'var(--surface-panel)',
-          cursor: isFullview ? 'default' : isPanning ? 'grabbing' : spaceHeldRef.current ? 'grab' : 'default',
+          background: isFixedView ? 'var(--bg-primary)' : 'var(--surface-panel)',
+          cursor: isFixedView ? 'default' : isPanning ? 'grabbing' : spaceHeldRef.current ? 'grab' : 'default',
         }}
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
         onContextMenu={onContextMenu}
       >
-        {!isFullview && showGrid && <GridBackground tx={viewport.tx} ty={viewport.ty} zoom={viewport.zoom} gridSize={gridSize} />}
+        {!isFixedView && showGrid && <GridBackground tx={viewport.tx} ty={viewport.ty} zoom={viewport.zoom} gridSize={gridSize} />}
 
-        {!isFullview && marqueeRect && (
+        {!isFixedView && marqueeRect && (
           <div
             className="pointer-events-none absolute border"
             style={{
@@ -594,14 +600,14 @@ export function Canvas({
           className={`canvas-viewport ${isPanning ? 'no-transition' : ''}`}
           style={{
             position: 'absolute',
-            inset: isFullview ? 0 : undefined,
-            transform: isFullview ? 'none' : `translate(${viewport.tx}px, ${viewport.ty}px) scale(${viewport.zoom})`,
-            transformOrigin: isFullview ? undefined : '0 0',
-            width: isFullview ? '100%' : 0,
-            height: isFullview ? '100%' : 0,
+            inset: isFixedView ? 0 : undefined,
+            transform: isFixedView ? 'none' : `translate(${viewport.tx}px, ${viewport.ty}px) scale(${viewport.zoom})`,
+            transformOrigin: isFixedView ? undefined : '0 0',
+            width: isFixedView ? '100%' : 0,
+            height: isFixedView ? '100%' : 0,
           }}
         >
-          {!isFullview && groupRenderData.map(({ group, bounds }) => {
+          {!isFixedView && groupRenderData.map(({ group, bounds }) => {
             const palette = GROUP_COLORS[group.colorId]
 
             return (
@@ -630,44 +636,60 @@ export function Canvas({
             )
           })}
 
-          {tiles.map((tile: TileState) => (
-            <TileChrome
-              key={tile.id}
-              tile={tile}
-              isFocused={tile.id === focusedTileId}
-              isSelected={selectedTileIds.includes(tile.id)}
-              mode={viewMode}
-              fullviewTopInset={fullviewTopInset}
-              isHiddenInFullview={isFullview && tile.id !== fullviewActiveTileId}
-              onFocus={() => {
-                focusTile(tile.id)
-                if (!selectedTileIds.includes(tile.id)) selectTiles([tile.id])
-                if (!isFullview) bringToFront(tile.id)
-              }}
-              onUpdate={(patch) => updateTile(tile.id, patch)}
-              onUpdatePositions={updateTilePositions}
-              onDelete={() => {
-                void onDeleteTile(tile.id)
-              }}
-              onRemoveFromGroup={tile.groupId ? () => {
-                void handleRemoveTileFromGroup(tile)
-              } : undefined}
-            >
-              <TileContent
-                key={`${tile.id}:${tileRefreshKeys[tile.id] ?? 0}`}
+          {tiles.map((tile: TileState) => {
+            const splitPanel: SplitPanelId | undefined = splitViewState?.activeLeftTileId === tile.id
+              ? 'left'
+              : splitViewState?.activeRightTileId === tile.id
+                ? 'right'
+                : undefined
+            const hiddenInFixedView = isFullview
+              ? tile.id !== fullviewActiveTileId
+              : isSplitview
+                ? splitPanel === undefined
+                : false
+
+            return (
+              <TileChrome
+                key={tile.id}
                 tile={tile}
                 isFocused={tile.id === focusedTileId}
+                isSelected={selectedTileIds.includes(tile.id)}
+                mode={viewMode}
+                fullviewTopInset={fullviewTopInset}
+                isHiddenInFullview={hiddenInFixedView}
+                splitPanel={splitPanel}
                 onFocus={() => {
+                  if (isSplitview && splitPanel) onFocusSplitPanel?.(splitPanel)
                   focusTile(tile.id)
                   if (!selectedTileIds.includes(tile.id)) selectTiles([tile.id])
-                  if (!isFullview) bringToFront(tile.id)
+                  if (!isFixedView) bringToFront(tile.id)
                 }}
                 onUpdate={(patch) => updateTile(tile.id, patch)}
-              />
-            </TileChrome>
-          ))}
+                onUpdatePositions={updateTilePositions}
+                onDelete={() => {
+                  void onDeleteTile(tile.id)
+                }}
+                onRemoveFromGroup={tile.groupId ? () => {
+                  void handleRemoveTileFromGroup(tile)
+                } : undefined}
+              >
+                <TileContent
+                  key={`${tile.id}:${tileRefreshKeys[tile.id] ?? 0}`}
+                  tile={tile}
+                  isFocused={tile.id === focusedTileId}
+                  onFocus={() => {
+                    if (isSplitview && splitPanel) onFocusSplitPanel?.(splitPanel)
+                    focusTile(tile.id)
+                    if (!selectedTileIds.includes(tile.id)) selectTiles([tile.id])
+                    if (!isFixedView) bringToFront(tile.id)
+                  }}
+                  onUpdate={(patch) => updateTile(tile.id, patch)}
+                />
+              </TileChrome>
+            )
+          })}
 
-          {!isFullview && groupRenderData.map((groupState) => {
+          {!isFixedView && groupRenderData.map((groupState) => {
             const { group, bounds } = groupState
             const palette = GROUP_COLORS[group.colorId]
             const isSelected = selectedGroup?.id === group.id
@@ -789,7 +811,7 @@ export function Canvas({
           </div>
         )}
 
-        {!isFullview && colorPicker && (
+        {!isFixedView && colorPicker && (
           <div
             className="absolute inset-0 z-[140]"
             onMouseDown={(event) => {

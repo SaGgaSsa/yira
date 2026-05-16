@@ -2,7 +2,7 @@ import React, { useRef, useCallback, useEffect, useMemo, useState, type ReactNod
 import { useCanvasStore } from '@/store/canvasStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { isTileInteractionLocked } from '@/utils/grouping'
-import type { TileState, NoteColor } from '@shared/types'
+import type { TileState, ViewMode, SplitPanelId } from '@shared/types'
 import { KANBAN_BOARD_FIXED_WIDTH, NOTE_COLORS } from '@shared/types'
 import { X, GripVertical, StickyNote, Globe, LayoutGrid, Terminal, Clock, Folder, Lock } from 'lucide-react'
 
@@ -16,9 +16,10 @@ interface Props {
   onDelete: () => void
   onRemoveFromGroup?: () => void
   children: ReactNode
-  mode?: 'canvas' | 'fullview'
+  mode?: ViewMode
   fullviewTopInset?: number
   isHiddenInFullview?: boolean
+  splitPanel?: SplitPanelId
 }
 
 type ResizeDirection = 'e' | 's' | 'se' | 'w' | 'n' | 'ne' | 'sw' | 'nw'
@@ -54,6 +55,7 @@ export function TileChrome({
   mode = 'canvas',
   fullviewTopInset = 0,
   isHiddenInFullview = false,
+  splitPanel = 'left',
 }: Props): React.ReactElement {
   const [isDragging, setIsDragging] = useState(false)
   const [isResizing, setIsResizing] = useState<ResizeDirection | null>(null)
@@ -66,6 +68,8 @@ export function TileChrome({
   const gridSize = useSettingsStore((s) => s.gridSize)
   const snapToGrid = useSettingsStore((s) => s.snapToGrid)
   const isFullview = mode === 'fullview'
+  const isSplitview = mode === 'splitview'
+  const isFixedView = isFullview || isSplitview
   const isFixedWidthKanban = tile.type === 'kanban'
   const isLocked = Boolean(tile.locked)
   const isGroupLocked = Boolean(tile.groupId && groups.find((group) => group.id === tile.groupId)?.locked)
@@ -76,14 +80,14 @@ export function TileChrome({
   )
 
   useEffect(() => {
-    if (isFullview || !isFixedWidthKanban || tile.width === KANBAN_BOARD_FIXED_WIDTH) return
+    if (isFixedView || !isFixedWidthKanban || tile.width === KANBAN_BOARD_FIXED_WIDTH) return
     onUpdate({ width: KANBAN_BOARD_FIXED_WIDTH })
-  }, [isFullview, isFixedWidthKanban, tile.width, onUpdate])
+  }, [isFixedView, isFixedWidthKanban, tile.width, onUpdate])
 
   // ─── Drag ───────────────────────────────────────────────────────────────
   const handleDragStart = useCallback(
     (e: React.MouseEvent) => {
-      if (isFullview || isInteractionLocked) return
+      if (isFixedView || isInteractionLocked) return
       e.preventDefault()
       e.stopPropagation()
       onFocus()
@@ -107,13 +111,13 @@ export function TileChrome({
       }
       setIsDragging(true)
     },
-    [tile, onFocus, isFullview, isInteractionLocked, isSelected, selectedTileIds, tiles, lockedGroupIds],
+    [tile, onFocus, isFixedView, isInteractionLocked, isSelected, selectedTileIds, tiles, lockedGroupIds],
   )
 
   // ─── Resize ─────────────────────────────────────────────────────────────
   const handleResizeStart = useCallback(
     (dir: ResizeDirection) => (e: React.MouseEvent) => {
-      if (isFullview || isInteractionLocked) return
+      if (isFixedView || isInteractionLocked) return
       e.preventDefault()
       e.stopPropagation()
       onFocus()
@@ -127,7 +131,7 @@ export function TileChrome({
       }
       setIsResizing(dir)
     },
-    [tile, onFocus, isFullview, isInteractionLocked],
+    [tile, onFocus, isFixedView, isInteractionLocked],
   )
 
   // ─── Global mouse move/up ──────────────────────────────────────────────
@@ -212,15 +216,15 @@ export function TileChrome({
     <div
       className="absolute"
       style={{
-        left: isFullview ? 0 : tile.x,
-        top: isFullview ? fullviewTopInset : tile.y,
-        width: isFullview ? '100%' : tile.width,
-        height: isFullview ? `calc(100% - ${fullviewTopInset}px)` : tile.height,
-        zIndex: isFullview ? (isHiddenInFullview ? 0 : 1) : tile.zIndex,
+        left: isFullview ? 0 : isSplitview ? (splitPanel === 'left' ? 0 : '50%') : tile.x,
+        top: isFixedView ? fullviewTopInset : tile.y,
+        width: isFullview ? '100%' : isSplitview ? '50%' : tile.width,
+        height: isFixedView ? `calc(100% - ${fullviewTopInset}px)` : tile.height,
+        zIndex: isFixedView ? (isHiddenInFullview ? 0 : 1) : tile.zIndex,
         cursor,
-        opacity: isFullview && isHiddenInFullview ? 0 : 1,
-        pointerEvents: isFullview && isHiddenInFullview ? 'none' : 'auto',
-        visibility: isFullview && isHiddenInFullview ? 'hidden' : 'visible',
+        opacity: isFixedView && isHiddenInFullview ? 0 : 1,
+        pointerEvents: isFixedView && isHiddenInFullview ? 'none' : 'auto',
+        visibility: isFixedView && isHiddenInFullview ? 'hidden' : 'visible',
       }}
       onMouseDown={onFocus}
     >
@@ -234,7 +238,7 @@ export function TileChrome({
           color: tile.type === 'note' && tile.noteColor
             ? NOTE_COLORS[tile.noteColor]?.text || '#78350f'
             : 'var(--text-primary)',
-          border: isFullview
+          border: isFixedView
             ? 'none'
             : isFocused
               ? '1px solid var(--text-display)'
@@ -249,7 +253,7 @@ export function TileChrome({
         }}
       >
         {/* Title bar */}
-        {!isFullview && (
+        {!isFixedView && (
           <div
             className="flex items-center gap-2 px-3 py-2 select-none shrink-0"
             style={{
@@ -342,7 +346,7 @@ export function TileChrome({
           </div>
         )}
 
-        {!isFullview && tile.hideTitlebar && (
+        {!isFixedView && tile.hideTitlebar && (
           <div
             className="shrink-0"
             style={{
@@ -361,7 +365,7 @@ export function TileChrome({
       </div>
 
       {/* Resize handles (8 directions) */}
-      {!isFullview && !isDragging && !isInteractionLocked && (
+      {!isFixedView && !isDragging && !isInteractionLocked && (
         <>
           {!isFixedWidthKanban && (
             <div

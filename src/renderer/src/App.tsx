@@ -6,6 +6,7 @@ import { SettingsPanel } from './components/SettingsPanel'
 import { RawJsonEditor } from './components/RawJsonEditor'
 import { ContextMenu, type MenuItem } from './components/ContextMenu'
 import { FullviewPanel } from './components/FullviewPanel'
+import { SplitviewPanel } from './components/SplitviewPanel'
 import { AppDialog, type ConfirmDialogOptions, type PromptDialogOptions } from './components/AppDialog'
 import { GroupEditorDialog, type GroupEditorRequest, type GroupEditorValue } from './components/GroupEditorDialog'
 import { TileEditorDialog, type TileEditorRequest, type TileEditorValue } from './components/TileEditorDialog'
@@ -17,7 +18,7 @@ import { useTheme } from './hooks/useTheme'
 import { useFontSize } from './hooks/useFontSize'
 import { useUpdateStore } from './store/updateStore'
 import { findMergeTargetGroup, findSelectedGroup, getGroupingBlockedReason } from './utils/grouping'
-import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type CanvasState, type Workspace, type TileGroup } from '@shared/types'
+import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type CanvasState, type Workspace, type TileGroup, type ViewMode, type SplitPanelId, type SplitViewState } from '@shared/types'
 import { TILE_META } from './components/TileContent'
 import { TileListItem } from './components/TileListItem'
 import { Terminal, StickyNote, Globe, LayoutGrid, Clock, Folder, ChevronDown, FolderPlus, Trash2, Pencil, Lock, Columns, RefreshCw, Download, X } from 'lucide-react'
@@ -34,7 +35,83 @@ function createEmptyCanvasState(): CanvasState {
     focusedTileId: null,
     viewMode: 'fullview',
     fullviewActiveTileId: null,
+    splitViewState: {
+      leftTileIds: [],
+      rightTileIds: [],
+      activeLeftTileId: null,
+      activeRightTileId: null,
+      focusedPanel: 'left',
+    },
   }
+}
+
+function buildInitialSplitViewState(tiles: TileState[], activeTileId: string | null): SplitViewState {
+  if (tiles.length < 2) {
+    return {
+      leftTileIds: [],
+      rightTileIds: [],
+      activeLeftTileId: null,
+      activeRightTileId: null,
+      focusedPanel: 'left',
+    }
+  }
+
+  const ordered = tiles.slice().sort((a, b) => b.zIndex - a.zIndex)
+  const existingIds = new Set(ordered.map((tile) => tile.id))
+  const leftActiveId = activeTileId && existingIds.has(activeTileId)
+    ? activeTileId
+    : ordered[0]?.id ?? null
+  const rightTileIds = ordered.map((tile) => tile.id).filter((tileId) => tileId !== leftActiveId)
+
+  return {
+    leftTileIds: leftActiveId ? [leftActiveId] : [],
+    rightTileIds,
+    activeLeftTileId: leftActiveId,
+    activeRightTileId: rightTileIds[0] ?? null,
+    focusedPanel: 'left',
+  }
+}
+
+function normalizeSplitViewForTiles(
+  splitViewState: SplitViewState,
+  tiles: TileState[],
+  activeTileId: string | null,
+): SplitViewState {
+  const existingIds = new Set(tiles.map((tile) => tile.id))
+  const seen = new Set<string>()
+  const cleanIds = (ids: string[]) => ids.filter((tileId) => {
+    if (!existingIds.has(tileId) || seen.has(tileId)) return false
+    seen.add(tileId)
+    return true
+  })
+  const leftTileIds = cleanIds(splitViewState.leftTileIds)
+  const rightTileIds = cleanIds(splitViewState.rightTileIds)
+
+  if (leftTileIds.length === 0 || rightTileIds.length === 0) {
+    return buildInitialSplitViewState(tiles, activeTileId)
+  }
+
+  return {
+    leftTileIds,
+    rightTileIds,
+    activeLeftTileId: splitViewState.activeLeftTileId && leftTileIds.includes(splitViewState.activeLeftTileId)
+      ? splitViewState.activeLeftTileId
+      : leftTileIds[0] ?? null,
+    activeRightTileId: splitViewState.activeRightTileId && rightTileIds.includes(splitViewState.activeRightTileId)
+      ? splitViewState.activeRightTileId
+      : rightTileIds[0] ?? null,
+    focusedPanel: splitViewState.focusedPanel === 'right' ? 'right' : 'left',
+  }
+}
+
+function areSplitViewStatesEqual(a: SplitViewState, b: SplitViewState): boolean {
+  return a.focusedPanel === b.focusedPanel &&
+    a.activeLeftTileId === b.activeLeftTileId &&
+    a.activeRightTileId === b.activeRightTileId &&
+    a.leftTileIds.length === b.leftTileIds.length &&
+    a.rightTileIds.length === b.rightTileIds.length &&
+    a.leftTileIds.every((tileId, index) => tileId === b.leftTileIds[index]) &&
+    a.rightTileIds.every((tileId, index) => tileId === b.rightTileIds[index])
 }
 
 type PromptDialogState = {
@@ -92,6 +169,7 @@ export default function App(): React.ReactElement {
   const selectedTileIds = useCanvasStore((s) => s.selectedTileIds)
   const viewMode = useCanvasStore((s) => s.viewMode)
   const fullviewActiveTileId = useCanvasStore((s) => s.fullviewActiveTileId)
+  const splitViewState = useCanvasStore((s) => s.splitViewState)
   const activeWorkspaceId = useCanvasStore((s) => s.activeWorkspaceId)
   const activeWorkspaceName = useCanvasStore((s) => s.activeWorkspaceName)
   const availableProfiles = useCanvasStore((s) => s.availableProfiles)
@@ -111,6 +189,9 @@ export default function App(): React.ReactElement {
   const setProfiles = useCanvasStore((s) => s.setProfiles)
   const setViewMode = useCanvasStore((s) => s.setViewMode)
   const setFullviewActiveTileId = useCanvasStore((s) => s.setFullviewActiveTileId)
+  const setSplitViewState = useCanvasStore((s) => s.setSplitViewState)
+  const setSplitPanelActiveTile = useCanvasStore((s) => s.setSplitPanelActiveTile)
+  const setSplitFocusedPanel = useCanvasStore((s) => s.setSplitFocusedPanel)
   const clearTerminalTitle = useCanvasStore((s) => s.clearTerminalTitle)
 
   // Canvas actions (extracted hook)
@@ -199,7 +280,7 @@ export default function App(): React.ReactElement {
   }, [initializeUpdates])
 
   useEffect(() => {
-    if (viewMode !== 'fullview') {
+    if (viewMode === 'canvas') {
       setFullviewTopInset(0)
       return
     }
@@ -250,6 +331,11 @@ export default function App(): React.ReactElement {
         focusedTileId: stateSnapshot.focusedTileId,
         viewMode: stateSnapshot.viewMode,
         fullviewActiveTileId: stateSnapshot.fullviewActiveTileId,
+        splitViewState: {
+          ...stateSnapshot.splitViewState,
+          leftTileIds: [...stateSnapshot.splitViewState.leftTileIds],
+          rightTileIds: [...stateSnapshot.splitViewState.rightTileIds],
+        },
       }
 
       await window.electron.canvas.save(workspaceId, state)
@@ -347,7 +433,7 @@ export default function App(): React.ReactElement {
     }
 
     scheduleSave()
-  }, [tiles, groups, viewport, nextZIndex, activeWorkspaceId, scheduleSave])
+  }, [tiles, groups, viewport, nextZIndex, viewMode, fullviewActiveTileId, splitViewState, activeWorkspaceId, scheduleSave])
 
   useEffect(() => {
     if (!showProfilePicker) return
@@ -433,6 +519,13 @@ export default function App(): React.ReactElement {
     setFullviewActiveTileId(tileId)
   }, [focusTile, selectTiles, bringToFront, setFullviewActiveTileId])
 
+  const activateSplitTile = useCallback((panel: SplitPanelId, tileId: string) => {
+    focusTile(tileId)
+    selectTiles([tileId])
+    setSplitPanelActiveTile(panel, tileId)
+    setFullviewActiveTileId(tileId)
+  }, [focusTile, selectTiles, setFullviewActiveTileId, setSplitPanelActiveTile])
+
   const handleCenterTileFromSidebar = useCallback((tileId: string) => {
     if (viewMode !== 'canvas') return
     getCanvasMethods()?.centerViewOnTile(tileId)
@@ -478,25 +571,71 @@ export default function App(): React.ReactElement {
       return
     }
 
-    handleCenterTileFromSidebar(tileId)
-  }, [focusTile, handleCenterTileFromSidebar, selectTiles, setFullviewActiveTileId, viewMode])
+    if (viewMode === 'splitview') {
+      if (splitViewState.leftTileIds.includes(tileId)) {
+        activateSplitTile('left', tileId)
+        return
+      }
 
-  const handleSetViewMode = useCallback((mode: 'canvas' | 'fullview') => {
+      if (splitViewState.rightTileIds.includes(tileId)) {
+        activateSplitTile('right', tileId)
+        return
+      }
+
+      const targetPanel = splitViewState.focusedPanel
+      setSplitViewState(targetPanel === 'left'
+        ? {
+            ...splitViewState,
+            leftTileIds: [...splitViewState.leftTileIds, tileId],
+            activeLeftTileId: tileId,
+          }
+        : {
+            ...splitViewState,
+            rightTileIds: [...splitViewState.rightTileIds, tileId],
+            activeRightTileId: tileId,
+          })
+      activateSplitTile(targetPanel, tileId)
+      return
+    }
+
+    handleCenterTileFromSidebar(tileId)
+  }, [activateSplitTile, focusTile, handleCenterTileFromSidebar, selectTiles, setFullviewActiveTileId, setSplitViewState, splitViewState, viewMode])
+
+  const handleSetViewMode = useCallback((mode: ViewMode) => {
     if (mode === 'fullview') {
-      const nextActive =
-        focusedTileId && tiles.some((tile) => tile.id === focusedTileId)
+      const splitActiveId = splitViewState.focusedPanel === 'left'
+        ? splitViewState.activeLeftTileId
+        : splitViewState.activeRightTileId
+      const nextActive = viewMode === 'splitview'
+        ? splitActiveId ?? tiles.slice().sort((a, b) => b.zIndex - a.zIndex)[0]?.id ?? null
+        : focusedTileId && tiles.some((tile) => tile.id === focusedTileId)
           ? focusedTileId
           : fullviewActiveTileId && tiles.some((tile) => tile.id === fullviewActiveTileId)
             ? fullviewActiveTileId
-            :
-            tiles.slice().sort((a, b) => b.zIndex - a.zIndex)[0]?.id ??
-            null
+            : tiles.slice().sort((a, b) => b.zIndex - a.zIndex)[0]?.id ?? null
 
       setFullviewActiveTileId(nextActive)
     }
 
+    if (mode === 'splitview') {
+      if (tiles.length < 2) return
+      const activeTileId = focusedTileId && tiles.some((tile) => tile.id === focusedTileId)
+        ? focusedTileId
+        : fullviewActiveTileId
+      const nextSplitState = normalizeSplitViewForTiles(splitViewState, tiles, activeTileId)
+      setSplitViewState(nextSplitState)
+      const nextActiveId = nextSplitState.focusedPanel === 'left'
+        ? nextSplitState.activeLeftTileId
+        : nextSplitState.activeRightTileId
+      if (nextActiveId) {
+        focusTile(nextActiveId)
+        selectTiles([nextActiveId])
+        setFullviewActiveTileId(nextActiveId)
+      }
+    }
+
     setViewMode(mode)
-  }, [focusedTileId, fullviewActiveTileId, tiles, setFullviewActiveTileId, setViewMode])
+  }, [focusTile, focusedTileId, fullviewActiveTileId, selectTiles, setFullviewActiveTileId, setSplitViewState, setViewMode, splitViewState, tiles, viewMode])
 
   const selectedGroup = useMemo(
     () => findSelectedGroup(groups, selectedTileIds),
@@ -958,6 +1097,28 @@ export default function App(): React.ReactElement {
     }
   }, [tiles, sortedTiles, fullviewActiveTileId, focusedTileId, viewMode, setFullviewActiveTileId, setViewMode])
 
+  useEffect(() => {
+    if (viewMode !== 'splitview') return
+
+    if (tiles.length < 2) {
+      const fallback = tiles[0]?.id ?? null
+      setFullviewActiveTileId(fallback)
+      if (fallback) {
+        focusTile(fallback)
+        selectTiles([fallback])
+        setViewMode('fullview')
+      } else {
+        setViewMode('canvas')
+      }
+      return
+    }
+
+    const normalized = normalizeSplitViewForTiles(splitViewState, sortedTiles, fullviewActiveTileId ?? focusedTileId)
+    if (!areSplitViewStatesEqual(splitViewState, normalized)) {
+      setSplitViewState(normalized)
+    }
+  }, [focusTile, focusedTileId, fullviewActiveTileId, selectTiles, setFullviewActiveTileId, setSplitViewState, setViewMode, sortedTiles, splitViewState, tiles, viewMode])
+
   const closeTileFromFullview = useCallback(async (tileId: string) => {
     const ordered = tiles.slice().sort((a, b) => b.zIndex - a.zIndex)
     const index = ordered.findIndex((tile) => tile.id === tileId)
@@ -974,6 +1135,82 @@ export default function App(): React.ReactElement {
       if (!fallback) setViewMode('canvas')
     }
   }, [tiles, fullviewActiveTileId, deleteTile, setFullviewActiveTileId, setViewMode])
+
+  const closeTileFromSplitview = useCallback(async (panel: SplitPanelId, tileId: string) => {
+    const panelIds = panel === 'left' ? splitViewState.leftTileIds : splitViewState.rightTileIds
+    const otherPanelIds = panel === 'left' ? splitViewState.rightTileIds : splitViewState.leftTileIds
+    const activeTileId = panel === 'left' ? splitViewState.activeLeftTileId : splitViewState.activeRightTileId
+    const index = panelIds.indexOf(tileId)
+    const fallback =
+      panelIds[index + 1] ??
+      panelIds[index - 1] ??
+      null
+    const otherFallback = panel === 'left'
+      ? splitViewState.activeRightTileId ?? otherPanelIds[0] ?? null
+      : splitViewState.activeLeftTileId ?? otherPanelIds[0] ?? null
+
+    const deleted = await deleteTile(tileId)
+    if (!deleted) return
+
+    if (panelIds.length === 1) {
+      setFullviewActiveTileId(otherFallback)
+      if (otherFallback) {
+        focusTile(otherFallback)
+        selectTiles([otherFallback])
+        setViewMode('fullview')
+      } else {
+        setViewMode('canvas')
+      }
+      return
+    }
+
+    if (activeTileId === tileId && fallback) {
+      activateSplitTile(panel, fallback)
+    }
+  }, [activateSplitTile, deleteTile, focusTile, selectTiles, setFullviewActiveTileId, setViewMode, splitViewState])
+
+  const moveTileToSplitPanel = useCallback((tileId: string, targetPanel: SplitPanelId) => {
+    const sourcePanel = splitViewState.leftTileIds.includes(tileId)
+      ? 'left'
+      : splitViewState.rightTileIds.includes(tileId)
+        ? 'right'
+        : null
+
+    if (sourcePanel === targetPanel) {
+      activateSplitTile(targetPanel, tileId)
+      return
+    }
+
+    const sourceIds = sourcePanel === 'left'
+      ? splitViewState.leftTileIds
+      : sourcePanel === 'right'
+        ? splitViewState.rightTileIds
+        : []
+    if (sourcePanel && sourceIds.length <= 1) return
+
+    const leftTileIds = splitViewState.leftTileIds.filter((id) => id !== tileId)
+    const rightTileIds = splitViewState.rightTileIds.filter((id) => id !== tileId)
+    const nextLeftIds = targetPanel === 'left' ? [...leftTileIds, tileId] : leftTileIds
+    const nextRightIds = targetPanel === 'right' ? [...rightTileIds, tileId] : rightTileIds
+    const sourceFallback = sourceIds.find((id) => id !== tileId) ?? null
+
+    setSplitViewState({
+      leftTileIds: nextLeftIds,
+      rightTileIds: nextRightIds,
+      activeLeftTileId: targetPanel === 'left'
+        ? tileId
+        : splitViewState.activeLeftTileId === tileId
+          ? sourceFallback
+          : splitViewState.activeLeftTileId,
+      activeRightTileId: targetPanel === 'right'
+        ? tileId
+        : splitViewState.activeRightTileId === tileId
+          ? sourceFallback
+          : splitViewState.activeRightTileId,
+      focusedPanel: targetPanel,
+    })
+    activateSplitTile(targetPanel, tileId)
+  }, [activateSplitTile, setSplitViewState, splitViewState])
 
   const confirmRemoveTileFromGroup = useCallback(async (tile: TileState, group: TileGroup) => {
     return requestConfirm({
@@ -1327,6 +1564,7 @@ export default function App(): React.ReactElement {
         <TopBar
           zoom={viewport.zoom}
           viewMode={viewMode}
+          canSplitView={tiles.length >= 2}
           sidebarCollapsed={sidebarCollapsed}
           onToggleSidebar={() => setSidebarCollapsed(c => !c)}
           onSetViewMode={handleSetViewMode}
@@ -1336,28 +1574,50 @@ export default function App(): React.ReactElement {
         />
 
         <div className="relative flex-1 overflow-hidden">
-          {viewMode === 'fullview' && (
+          {(viewMode === 'fullview' || viewMode === 'splitview') && (
             <div className="absolute inset-x-0 top-0 z-10">
-              <FullviewPanel
-                containerRef={fullviewPanelRef}
-                tiles={sortedTiles}
-                activeTileId={fullviewActiveTileId}
-                onActivateTile={(tileId) => {
-                  setFullviewActiveTileId(tileId)
-                  handleSelectSingleTile(tileId)
-                }}
-                onCloseTile={(tileId) => {
-                  void closeTileFromFullview(tileId)
-                }}
-                onEditTile={openTileEditor}
-                onFocusTile={focusTileInFullview}
-                onRefreshTile={handleRefreshTile}
-                onToggleLock={(tileId) => {
-                  const tile = tiles.find((entry) => entry.id === tileId)
-                  if (!tile) return
-                  updateTile(tileId, { locked: !tile.locked })
-                }}
-              />
+              {viewMode === 'fullview' ? (
+                <FullviewPanel
+                  containerRef={fullviewPanelRef}
+                  tiles={sortedTiles}
+                  activeTileId={fullviewActiveTileId}
+                  onActivateTile={(tileId) => {
+                    setFullviewActiveTileId(tileId)
+                    handleSelectSingleTile(tileId)
+                  }}
+                  onCloseTile={(tileId) => {
+                    void closeTileFromFullview(tileId)
+                  }}
+                  onEditTile={openTileEditor}
+                  onFocusTile={focusTileInFullview}
+                  onRefreshTile={handleRefreshTile}
+                  onToggleLock={(tileId) => {
+                    const tile = tiles.find((entry) => entry.id === tileId)
+                    if (!tile) return
+                    updateTile(tileId, { locked: !tile.locked })
+                  }}
+                />
+              ) : (
+                <SplitviewPanel
+                  containerRef={fullviewPanelRef}
+                  tiles={sortedTiles}
+                  splitViewState={splitViewState}
+                  onActivateTile={activateSplitTile}
+                  onCloseTile={(panel, tileId) => {
+                    void closeTileFromSplitview(panel, tileId)
+                  }}
+                  onEditTile={openTileEditor}
+                  onFocusTile={focusTileInFullview}
+                  onRefreshTile={handleRefreshTile}
+                  onMoveTile={moveTileToSplitPanel}
+                  onFocusPanel={setSplitFocusedPanel}
+                  onToggleLock={(tileId) => {
+                    const tile = tiles.find((entry) => entry.id === tileId)
+                    if (!tile) return
+                    updateTile(tileId, { locked: !tile.locked })
+                  }}
+                />
+              )}
             </div>
           )}
 
@@ -1377,7 +1637,9 @@ export default function App(): React.ReactElement {
             tileRefreshKeys={tileRefreshKeys}
             viewMode={viewMode}
             fullviewActiveTileId={fullviewActiveTileId}
-            fullviewTopInset={viewMode === 'fullview' ? fullviewTopInset : 0}
+            splitViewState={splitViewState}
+            onFocusSplitPanel={setSplitFocusedPanel}
+            fullviewTopInset={viewMode === 'fullview' || viewMode === 'splitview' ? fullviewTopInset : 0}
           />
         </div>
       </div>

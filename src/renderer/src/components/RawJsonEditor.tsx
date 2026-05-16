@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AlertCircle, Save, X } from 'lucide-react'
 import type { CanvasState } from '@shared/types'
+import type { ViewMode, SplitViewState } from '@shared/types'
 
 interface RawJsonEditorProps {
   open: boolean
@@ -11,11 +12,36 @@ interface RawJsonEditorProps {
 }
 
 function normalizeCanvasState(state: CanvasState): CanvasState {
+  const viewMode: ViewMode = state.viewMode === 'canvas' || state.viewMode === 'fullview' || state.viewMode === 'splitview'
+    ? state.viewMode
+    : 'fullview'
+  const tileIds = new Set(state.tiles.map((tile) => tile.id))
+  const seen = new Set<string>()
+  const cleanIds = (ids?: string[]) => (ids ?? []).filter((tileId) => {
+    if (!tileIds.has(tileId) || seen.has(tileId)) return false
+    seen.add(tileId)
+    return true
+  })
+  const leftTileIds = cleanIds(state.splitViewState?.leftTileIds)
+  const rightTileIds = cleanIds(state.splitViewState?.rightTileIds)
+  const splitViewState: SplitViewState = {
+    leftTileIds,
+    rightTileIds,
+    activeLeftTileId: state.splitViewState?.activeLeftTileId && leftTileIds.includes(state.splitViewState.activeLeftTileId)
+      ? state.splitViewState.activeLeftTileId
+      : leftTileIds[0] ?? null,
+    activeRightTileId: state.splitViewState?.activeRightTileId && rightTileIds.includes(state.splitViewState.activeRightTileId)
+      ? state.splitViewState.activeRightTileId
+      : rightTileIds[0] ?? null,
+    focusedPanel: state.splitViewState?.focusedPanel === 'right' ? 'right' : 'left',
+  }
+
   return {
     ...state,
     groups: state.groups ?? [],
-    viewMode: state.viewMode ?? 'fullview',
+    viewMode,
     fullviewActiveTileId: state.fullviewActiveTileId ?? state.focusedTileId ?? state.tiles[0]?.id ?? null,
+    splitViewState,
   }
 }
 
@@ -34,6 +60,13 @@ export function RawJsonEditor({ open, workspaceId, onClose, onApply }: RawJsonEd
         focusedTileId: null,
         viewMode: 'fullview',
         fullviewActiveTileId: null,
+        splitViewState: {
+          leftTileIds: [],
+          rightTileIds: [],
+          activeLeftTileId: null,
+          activeRightTileId: null,
+          focusedPanel: 'left',
+        },
       })
       setValue(JSON.stringify(nextState, null, 2))
       setError(null)

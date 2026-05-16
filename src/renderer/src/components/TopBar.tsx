@@ -1,12 +1,14 @@
 import React from 'react'
-import { Settings, Crosshair, LayoutGrid, Columns, PanelLeft } from 'lucide-react'
+import { Settings, Crosshair, LayoutGrid, Columns, PanelLeft, SplitSquareHorizontal } from 'lucide-react'
+import type { ViewMode } from '@shared/types'
 
 interface TopBarProps {
   zoom: number
-  viewMode: 'canvas' | 'fullview'
+  viewMode: ViewMode
+  canSplitView: boolean
   sidebarCollapsed: boolean
   onToggleSidebar: () => void
-  onSetViewMode: (mode: 'canvas' | 'fullview') => void
+  onSetViewMode: (mode: ViewMode) => void
   onFitToContent: () => void
   onZoomToggle: () => void
   onOpenSettings: () => void
@@ -45,6 +47,7 @@ function SegmentedButton({
 export function TopBar({
   zoom,
   viewMode,
+  canSplitView,
   sidebarCollapsed,
   onToggleSidebar,
   onSetViewMode,
@@ -70,6 +73,13 @@ export function TopBar({
           label="Focus"
           icon={Columns}
           onClick={() => onSetViewMode('fullview')}
+        />
+        <SegmentedButton
+          active={viewMode === 'splitview'}
+          label="Split"
+          icon={SplitSquareHorizontal}
+          onClick={() => onSetViewMode('splitview')}
+          disabled={!canSplitView}
         />
         <SegmentedButton
           active={viewMode === 'canvas'}

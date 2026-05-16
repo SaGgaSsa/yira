@@ -1,9 +1,78 @@
 import { create } from 'zustand'
-import { GROUP_COLOR_ORDER, type TileState, type CanvasState, type Viewport, type ShellProfileId, type TileGroup, type GroupColorId } from '@shared/types'
+import { GROUP_COLOR_ORDER, type TileState, type CanvasState, type Viewport, type ShellProfileId, type TileGroup, type GroupColorId, type ViewMode, type SplitViewState, type SplitPanelId } from '@shared/types'
 import { getGroupingBlockedReason } from '@/utils/grouping'
 
 const UNTITLED_GROUP_NAME = 'Untitled Group'
 const DEFAULT_GROUP_COLOR: GroupColorId = GROUP_COLOR_ORDER[0]
+const EMPTY_SPLIT_VIEW_STATE: SplitViewState = {
+  leftTileIds: [],
+  rightTileIds: [],
+  activeLeftTileId: null,
+  activeRightTileId: null,
+  focusedPanel: 'left',
+}
+
+function normalizeViewMode(mode: CanvasState['viewMode'] | undefined): ViewMode {
+  return mode === 'canvas' || mode === 'fullview' || mode === 'splitview'
+    ? mode
+    : 'fullview'
+}
+
+function normalizeSplitViewState(
+  splitViewState: SplitViewState | undefined,
+  tiles: TileState[],
+  focusedTileId: string | null,
+  fullviewActiveTileId: string | null,
+): SplitViewState {
+  const tileIds = tiles.map((tile) => tile.id)
+  const existingIds = new Set(tileIds)
+  const seen = new Set<string>()
+  const cleanPanelIds = (ids?: string[]) => (ids ?? []).filter((tileId) => {
+    if (!existingIds.has(tileId) || seen.has(tileId)) return false
+    seen.add(tileId)
+    return true
+  })
+
+  const leftTileIds = cleanPanelIds(splitViewState?.leftTileIds)
+  const rightTileIds = cleanPanelIds(splitViewState?.rightTileIds)
+  const activeLeftTileId = splitViewState?.activeLeftTileId && leftTileIds.includes(splitViewState.activeLeftTileId)
+    ? splitViewState.activeLeftTileId
+    : leftTileIds[0] ?? null
+  const activeRightTileId = splitViewState?.activeRightTileId && rightTileIds.includes(splitViewState.activeRightTileId)
+    ? splitViewState.activeRightTileId
+    : rightTileIds[0] ?? null
+
+  if (leftTileIds.length > 0 && rightTileIds.length > 0) {
+    return {
+      leftTileIds,
+      rightTileIds,
+      activeLeftTileId,
+      activeRightTileId,
+      focusedPanel: splitViewState?.focusedPanel === 'right' ? 'right' : 'left',
+    }
+  }
+
+  if (tiles.length < 2) return { ...EMPTY_SPLIT_VIEW_STATE }
+
+  const preferredActiveId =
+    (focusedTileId && existingIds.has(focusedTileId) ? focusedTileId : null) ??
+    (fullviewActiveTileId && existingIds.has(fullviewActiveTileId) ? fullviewActiveTileId : null) ??
+    tileIds[0]
+  const rebuiltLeftIds = preferredActiveId ? [preferredActiveId] : []
+  const rebuiltRightIds = tileIds.filter((tileId) => tileId !== preferredActiveId)
+
+  return {
+    leftTileIds: rebuiltLeftIds,
+    rightTileIds: rebuiltRightIds,
+    activeLeftTileId: rebuiltLeftIds[0] ?? null,
+    activeRightTileId: rebuiltRightIds[0] ?? null,
+    focusedPanel: 'left',
+  }
+}
+
+function isTileInSplitState(splitViewState: SplitViewState, tileId: string): boolean {
+  return splitViewState.leftTileIds.includes(tileId) || splitViewState.rightTileIds.includes(tileId)
+}
 
 function normalizeGroupTerminalSettings(group: Pick<TileGroup, 'terminal'>): TileGroup['terminal'] {
   const wslStartupCommand = group.terminal?.wslStartupCommand?.trim()
@@ -118,8 +187,9 @@ interface CanvasStore {
   viewport: Viewport
   nextZIndex: number
   focusedTileId: string | null
-  viewMode: 'canvas' | 'fullview'
+  viewMode: ViewMode
   fullviewActiveTileId: string | null
+  splitViewState: SplitViewState
   selectedTileIds: string[]
   terminalTitles: Record<string, string>
   activeWorkspaceId: string
@@ -136,8 +206,11 @@ interface CanvasStore {
   updateTile: (tileId: string, patch: Partial<TileState>) => void
   updateTilePositions: (positions: Array<{ id: string; x: number; y: number }>) => void
   focusTile: (tileId: string | null) => void
-  setViewMode: (mode: 'canvas' | 'fullview') => void
+  setViewMode: (mode: ViewMode) => void
   setFullviewActiveTileId: (tileId: string | null) => void
+  setSplitViewState: (state: SplitViewState) => void
+  setSplitPanelActiveTile: (panel: SplitPanelId, tileId: string | null) => void
+  setSplitFocusedPanel: (panel: SplitPanelId) => void
   setTerminalTitle: (tileId: string, title: string | null) => void
   clearTerminalTitle: (tileId: string) => void
   selectTiles: (tileIds: string[]) => void
@@ -170,6 +243,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   focusedTileId: null,
   viewMode: 'fullview',
   fullviewActiveTileId: null,
+  splitViewState: { ...EMPTY_SPLIT_VIEW_STATE },
   selectedTileIds: [],
   terminalTitles: {},
   activeWorkspaceId: '',
@@ -191,6 +265,11 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
 
   restoreState: (state) => set(() => {
     const normalized = buildNormalizedGroupedState(state.tiles, state.groups ?? [])
+    const fullviewActiveTileId =
+      state.fullviewActiveTileId ??
+      state.focusedTileId ??
+      state.tiles[0]?.id ??
+      null
 
     return {
       tiles: normalized.tiles,
@@ -198,34 +277,70 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       viewport: state.viewport,
       nextZIndex: state.nextZIndex,
       focusedTileId: state.focusedTileId ?? null,
-      viewMode: state.viewMode ?? 'fullview',
-      fullviewActiveTileId:
-        state.fullviewActiveTileId ??
-        state.focusedTileId ??
-        state.tiles[0]?.id ??
-        null,
+      viewMode: normalizeViewMode(state.viewMode),
+      fullviewActiveTileId,
+      splitViewState: normalizeSplitViewState(state.splitViewState, normalized.tiles, state.focusedTileId ?? null, fullviewActiveTileId),
       selectedTileIds: [],
       terminalTitles: {},
     }
   }),
 
-  addTile: (tile) => set((s) => ({
-    tiles: [...s.tiles, tile],
-    nextZIndex: tile.zIndex + 1,
-  })),
+  addTile: (tile) => set((s) => {
+    if (s.viewMode !== 'splitview' || isTileInSplitState(s.splitViewState, tile.id)) {
+      return {
+        tiles: [...s.tiles, tile],
+        nextZIndex: tile.zIndex + 1,
+      }
+    }
 
-  removeTile: (tileId) => set((s) => ({
-    tiles: s.tiles.filter(t => t.id !== tileId),
-    groups: s.groups
-      .map((group) => ({ ...group, tileIds: group.tileIds.filter(id => id !== tileId) }))
-      .filter((group) => group.tileIds.length > 0),
-    focusedTileId: s.focusedTileId === tileId ? null : s.focusedTileId,
-    fullviewActiveTileId: s.fullviewActiveTileId === tileId ? null : s.fullviewActiveTileId,
-    selectedTileIds: s.selectedTileIds.filter(id => id !== tileId),
-    terminalTitles: Object.fromEntries(
-      Object.entries(s.terminalTitles).filter(([id]) => id !== tileId),
-    ),
-  })),
+    const targetPanel = s.splitViewState.focusedPanel
+
+    return {
+      tiles: [...s.tiles, tile],
+      nextZIndex: tile.zIndex + 1,
+      splitViewState: targetPanel === 'left'
+        ? {
+            ...s.splitViewState,
+            leftTileIds: [...s.splitViewState.leftTileIds, tile.id],
+            activeLeftTileId: tile.id,
+          }
+        : {
+            ...s.splitViewState,
+            rightTileIds: [...s.splitViewState.rightTileIds, tile.id],
+            activeRightTileId: tile.id,
+          },
+    }
+  }),
+
+  removeTile: (tileId) => set((s) => {
+    const nextSplitViewState = {
+      ...s.splitViewState,
+      leftTileIds: s.splitViewState.leftTileIds.filter((id) => id !== tileId),
+      rightTileIds: s.splitViewState.rightTileIds.filter((id) => id !== tileId),
+    }
+
+    return {
+      tiles: s.tiles.filter(t => t.id !== tileId),
+      groups: s.groups
+        .map((group) => ({ ...group, tileIds: group.tileIds.filter(id => id !== tileId) }))
+        .filter((group) => group.tileIds.length > 0),
+      focusedTileId: s.focusedTileId === tileId ? null : s.focusedTileId,
+      fullviewActiveTileId: s.fullviewActiveTileId === tileId ? null : s.fullviewActiveTileId,
+      splitViewState: {
+        ...nextSplitViewState,
+        activeLeftTileId: nextSplitViewState.activeLeftTileId === tileId
+          ? nextSplitViewState.leftTileIds[0] ?? null
+          : nextSplitViewState.activeLeftTileId,
+        activeRightTileId: nextSplitViewState.activeRightTileId === tileId
+          ? nextSplitViewState.rightTileIds[0] ?? null
+          : nextSplitViewState.activeRightTileId,
+      },
+      selectedTileIds: s.selectedTileIds.filter(id => id !== tileId),
+      terminalTitles: Object.fromEntries(
+        Object.entries(s.terminalTitles).filter(([id]) => id !== tileId),
+      ),
+    }
+  }),
 
   updateTile: (tileId, patch) => set((s) => ({
     tiles: s.tiles.map(t => t.id === tileId ? { ...t, ...patch } : t),
@@ -245,6 +360,15 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   focusTile: (tileId) => set({ focusedTileId: tileId }),
   setViewMode: (mode) => set({ viewMode: mode }),
   setFullviewActiveTileId: (tileId) => set({ fullviewActiveTileId: tileId }),
+  setSplitViewState: (splitViewState) => set({ splitViewState }),
+  setSplitPanelActiveTile: (panel, tileId) => set((s) => ({
+    splitViewState: panel === 'left'
+      ? { ...s.splitViewState, activeLeftTileId: tileId, focusedPanel: 'left' }
+      : { ...s.splitViewState, activeRightTileId: tileId, focusedPanel: 'right' },
+  })),
+  setSplitFocusedPanel: (focusedPanel) => set((s) => ({
+    splitViewState: { ...s.splitViewState, focusedPanel },
+  })),
   setTerminalTitle: (tileId, title) => set((s) => {
     const normalized = title?.trim()
     const existing = s.terminalTitles[tileId]
@@ -420,6 +544,11 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   setWorkspace: (id, name) => set({ activeWorkspaceId: id, activeWorkspaceName: name }),
   restoreWorkspaceState: (id, name, state) => set(() => {
     const normalized = buildNormalizedGroupedState(state.tiles, state.groups ?? [])
+    const fullviewActiveTileId =
+      state.fullviewActiveTileId ??
+      state.focusedTileId ??
+      state.tiles[0]?.id ??
+      null
 
     return {
       activeWorkspaceId: id,
@@ -429,12 +558,9 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       viewport: state.viewport,
       nextZIndex: state.nextZIndex,
       focusedTileId: state.focusedTileId ?? null,
-      viewMode: state.viewMode ?? 'fullview',
-      fullviewActiveTileId:
-        state.fullviewActiveTileId ??
-        state.focusedTileId ??
-        state.tiles[0]?.id ??
-        null,
+      viewMode: normalizeViewMode(state.viewMode),
+      fullviewActiveTileId,
+      splitViewState: normalizeSplitViewState(state.splitViewState, normalized.tiles, state.focusedTileId ?? null, fullviewActiveTileId),
       selectedTileIds: [],
       terminalTitles: {},
     }

@@ -300,8 +300,21 @@ export interface CanvasState {
   viewport: Viewport
   nextZIndex: number
   focusedTileId: string | null
-  viewMode: 'canvas' | 'fullview'
+  viewMode: ViewMode
   fullviewActiveTileId: string | null
+  splitViewState?: SplitViewState
+}
+
+export type ViewMode = 'canvas' | 'fullview' | 'splitview'
+
+export type SplitPanelId = 'left' | 'right'
+
+export interface SplitViewState {
+  leftTileIds: string[]
+  rightTileIds: string[]
+  activeLeftTileId: string | null
+  activeRightTileId: string | null
+  focusedPanel: SplitPanelId
 }
 
 export interface Viewport {
