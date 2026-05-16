@@ -121,6 +121,7 @@ interface CanvasStore {
   viewMode: 'canvas' | 'fullview'
   fullviewActiveTileId: string | null
   selectedTileIds: string[]
+  terminalTitles: Record<string, string>
   activeWorkspaceId: string
   activeWorkspaceName: string
   availableProfiles: Array<{ id: ShellProfileId; label: string; available: boolean }>
@@ -137,6 +138,8 @@ interface CanvasStore {
   focusTile: (tileId: string | null) => void
   setViewMode: (mode: 'canvas' | 'fullview') => void
   setFullviewActiveTileId: (tileId: string | null) => void
+  setTerminalTitle: (tileId: string, title: string | null) => void
+  clearTerminalTitle: (tileId: string) => void
   selectTiles: (tileIds: string[]) => void
   createGroup: (
     group: Pick<TileGroup, 'name' | 'colorId' | 'locked' | 'terminal' | 'files'>,
@@ -168,12 +171,23 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   viewMode: 'fullview',
   fullviewActiveTileId: null,
   selectedTileIds: [],
+  terminalTitles: {},
   activeWorkspaceId: '',
   activeWorkspaceName: '',
   availableProfiles: [],
 
   setViewport: (vp) => set({ viewport: vp }),
-  setTiles: (tiles) => set({ tiles }),
+  setTiles: (tiles) => set((s) => {
+    const nextIds = new Set(tiles.map((tile) => tile.id))
+    const nextTerminalTitles = Object.fromEntries(
+      Object.entries(s.terminalTitles).filter(([tileId]) => nextIds.has(tileId)),
+    )
+
+    return {
+      tiles,
+      terminalTitles: nextTerminalTitles,
+    }
+  }),
 
   restoreState: (state) => set(() => {
     const normalized = buildNormalizedGroupedState(state.tiles, state.groups ?? [])
@@ -191,6 +205,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
         state.tiles[0]?.id ??
         null,
       selectedTileIds: [],
+      terminalTitles: {},
     }
   }),
 
@@ -207,6 +222,9 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     focusedTileId: s.focusedTileId === tileId ? null : s.focusedTileId,
     fullviewActiveTileId: s.fullviewActiveTileId === tileId ? null : s.fullviewActiveTileId,
     selectedTileIds: s.selectedTileIds.filter(id => id !== tileId),
+    terminalTitles: Object.fromEntries(
+      Object.entries(s.terminalTitles).filter(([id]) => id !== tileId),
+    ),
   })),
 
   updateTile: (tileId, patch) => set((s) => ({
@@ -227,6 +245,32 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   focusTile: (tileId) => set({ focusedTileId: tileId }),
   setViewMode: (mode) => set({ viewMode: mode }),
   setFullviewActiveTileId: (tileId) => set({ fullviewActiveTileId: tileId }),
+  setTerminalTitle: (tileId, title) => set((s) => {
+    const normalized = title?.trim()
+    const existing = s.terminalTitles[tileId]
+
+    if (!normalized) {
+      if (existing === undefined) return {}
+
+      const { [tileId]: _removed, ...terminalTitles } = s.terminalTitles
+      return { terminalTitles }
+    }
+
+    if (existing === normalized) return {}
+
+    return {
+      terminalTitles: {
+        ...s.terminalTitles,
+        [tileId]: normalized,
+      },
+    }
+  }),
+  clearTerminalTitle: (tileId) => set((s) => {
+    if (s.terminalTitles[tileId] === undefined) return {}
+
+    const { [tileId]: _removed, ...terminalTitles } = s.terminalTitles
+    return { terminalTitles }
+  }),
 
   selectTiles: (tileIds) => set({ selectedTileIds: tileIds }),
 
@@ -392,6 +436,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
         state.tiles[0]?.id ??
         null,
       selectedTileIds: [],
+      terminalTitles: {},
     }
   }),
   setProfiles: (profiles) => set({ availableProfiles: profiles }),

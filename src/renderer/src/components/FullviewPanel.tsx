@@ -1,7 +1,9 @@
 import React, { useMemo, useState } from 'react'
 import { Pencil, RefreshCw, Trash2 } from 'lucide-react'
 import type { TileState } from '@shared/types'
+import { useCanvasStore } from '@/store/canvasStore'
 import { ContextMenu, type MenuItem } from './ContextMenu'
+import { TILE_META } from './TileContent'
 import { TileListItem } from './TileListItem'
 
 interface FullviewPanelProps {
@@ -29,6 +31,7 @@ export function FullviewPanel({
 }: FullviewPanelProps): React.ReactElement {
   const orderedTiles = useMemo(() => tiles.slice().sort((a, b) => b.zIndex - a.zIndex), [tiles])
   const activeTile = orderedTiles.find((tile) => tile.id === activeTileId) ?? orderedTiles[0] ?? null
+  const terminalTitles = useCanvasStore((s) => s.terminalTitles)
   const [tabMenu, setTabMenu] = useState<{ tileId: string; x: number; y: number } | null>(null)
 
   const activeMenuTile = tabMenu ? orderedTiles.find((tile) => tile.id === tabMenu.tileId) ?? null : null
@@ -75,12 +78,16 @@ export function FullviewPanel({
         ) : (
           orderedTiles.map((tile) => {
             const isActive = tile.id === activeTile?.id
+            const displayLabel = tile.type === 'terminal'
+              ? terminalTitles[tile.id] || tile.label || `${TILE_META.terminal.label} ${tile.id.slice(-4)}`
+              : undefined
 
             return (
               <TileListItem
                 key={tile.id}
                 tile={tile}
                 active={isActive}
+                displayLabel={displayLabel}
                 className="min-w-[220px] max-w-[280px]"
                 onClick={() => onActivateTile(tile.id)}
                 onContextMenu={(event) => {

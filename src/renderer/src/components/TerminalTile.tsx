@@ -136,6 +136,9 @@ export function TerminalTileWrapper({ tile, isFocused, onFocus, onUpdate, onDele
     let cancelled = false
     let ptyUnsub: (() => void) | null = null
     let inputDisposer: { dispose: () => void } | null = null
+    const titleDisposer = term.onTitleChange((title) => {
+      useCanvasStore.getState().setTerminalTitle(tile.id, title)
+    })
     const initialCommand = buildTerminalStartupCommand(tile, useCanvasStore.getState().groups)
 
     window.electron.terminal
@@ -173,6 +176,7 @@ export function TerminalTileWrapper({ tile, isFocused, onFocus, onUpdate, onDele
       ro.disconnect()
       ptyUnsub?.()
       inputDisposer?.dispose()
+      titleDisposer.dispose()
       window.electron?.terminal?.detach?.(tile.id)
       term.dispose()
       termRef.current = null

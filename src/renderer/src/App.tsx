@@ -111,6 +111,7 @@ export default function App(): React.ReactElement {
   const setProfiles = useCanvasStore((s) => s.setProfiles)
   const setViewMode = useCanvasStore((s) => s.setViewMode)
   const setFullviewActiveTileId = useCanvasStore((s) => s.setFullviewActiveTileId)
+  const clearTerminalTitle = useCanvasStore((s) => s.clearTerminalTitle)
 
   // Canvas actions (extracted hook)
   const [activeDialog, setActiveDialog] = useState<ActiveDialogState>(null)
@@ -752,11 +753,12 @@ export default function App(): React.ReactElement {
     if (!confirmed) return
 
     if (tile.type === 'terminal') {
+      clearTerminalTitle(tile.id)
       await window.electron.terminal.destroy(tile.id)
     }
 
     bumpTileRefreshKey(tile.id)
-  }, [bumpTileRefreshKey, requestRefreshTileConfirmation])
+  }, [bumpTileRefreshKey, clearTerminalTitle, requestRefreshTileConfirmation])
 
   const renameWorkspace = useCallback(async (workspace: Workspace) => {
     setWorkspaceItemMenu(null)

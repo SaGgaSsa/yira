@@ -6,6 +6,7 @@ import { TILE_META } from './TileContent'
 interface TileListItemProps {
   tile: TileState
   active?: boolean
+  displayLabel?: string
   onClick: () => void
   onDoubleClick?: () => void
   onContextMenu?: (event: React.MouseEvent) => void
@@ -16,6 +17,7 @@ interface TileListItemProps {
 export function TileListItem({
   tile,
   active = false,
+  displayLabel,
   onClick,
   onDoubleClick,
   onContextMenu,
@@ -24,6 +26,7 @@ export function TileListItem({
 }: TileListItemProps): React.ReactElement {
   const meta = TILE_META[tile.type]
   const Icon = meta.icon
+  const label = displayLabel ?? tile.label ?? `${meta.label} ${tile.id.slice(-4)}`
 
   return (
     <div
@@ -38,14 +41,14 @@ export function TileListItem({
         onClick={onClick}
         onDoubleClick={onDoubleClick}
         onContextMenu={onContextMenu}
-        title={meta.label}
+        title={label}
       >
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border-visible text-text-secondary">
           <Icon size={15} className="shrink-0" />
         </div>
         <div className="min-w-0 flex-1 text-center">
           <div className="truncate text-sm text-text-display">
-            {tile.label ?? `${meta.label} ${tile.id.slice(-4)}`}
+            {label}
           </div>
         </div>
       </button>
