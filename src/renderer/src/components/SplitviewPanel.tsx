@@ -24,7 +24,6 @@ interface PanelTabStripProps {
   panel: SplitPanelId
   tiles: TileState[]
   activeTileId: string | null
-  focused: boolean
   onActivateTile: (panel: SplitPanelId, tileId: string) => void
   onCloseTile: (panel: SplitPanelId, tileId: string) => void | Promise<void>
   onContextMenu: (tileId: string, x: number, y: number) => void
@@ -36,7 +35,6 @@ function PanelTabStrip({
   panel,
   tiles,
   activeTileId,
-  focused,
   onActivateTile,
   onCloseTile,
   onContextMenu,
@@ -57,9 +55,6 @@ function PanelTabStrip({
         event.preventDefault()
         const tileId = event.dataTransfer.getData('application/x-yira-tile-id')
         if (tileId) onMoveTile(tileId, panel)
-      }}
-      style={{
-        background: focused ? 'var(--bg-secondary)' : 'var(--bg-primary)',
       }}
     >
       <div className="flex items-stretch gap-2 overflow-x-auto">
@@ -182,7 +177,6 @@ export function SplitviewPanel({
         panel="left"
         tiles={leftTiles}
         activeTileId={splitViewState.activeLeftTileId}
-        focused={splitViewState.focusedPanel === 'left'}
         onActivateTile={onActivateTile}
         onCloseTile={onCloseTile}
         onContextMenu={(tileId, x, y) => setTabMenu({ tileId, x, y })}
@@ -193,7 +187,6 @@ export function SplitviewPanel({
         panel="right"
         tiles={rightTiles}
         activeTileId={splitViewState.activeRightTileId}
-        focused={splitViewState.focusedPanel === 'right'}
         onActivateTile={onActivateTile}
         onCloseTile={onCloseTile}
         onContextMenu={(tileId, x, y) => setTabMenu({ tileId, x, y })}
