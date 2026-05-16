@@ -75,12 +75,12 @@ function isTileInSplitState(splitViewState: SplitViewState, tileId: string): boo
 }
 
 function normalizeGroupTerminalSettings(group: Pick<TileGroup, 'terminal'>): TileGroup['terminal'] {
-  const wslStartupCommand = group.terminal?.wslStartupCommand?.trim()
+  const startupCommand = group.terminal?.startupCommand?.trim()
 
-  if (!wslStartupCommand) return undefined
+  if (!startupCommand) return undefined
 
   return {
-    wslStartupCommand,
+    startupCommand,
   }
 }
 

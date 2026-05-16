@@ -14,9 +14,9 @@ export function buildTerminalStartupCommand(
 
   const commands: string[] = []
 
-  if (tile.shellProfileId === 'wsl' && tile.groupId) {
+  if (tile.groupId) {
     const group = groups.find((entry) => entry.id === tile.groupId)
-    const groupCommand = normalizeCommand(group?.terminal?.wslStartupCommand)
+    const groupCommand = normalizeCommand(group?.terminal?.startupCommand)
 
     if (groupCommand) commands.push(groupCommand)
   }

@@ -1,13 +1,13 @@
-name: Windows Release
+name: Release
 
 on:
-  workflow_dispatch:
   push:
     tags:
       - 'v*'
 
 jobs:
-  release:
+  windows:
+    name: Windows Release
     runs-on: windows-latest
     permissions:
       contents: write
@@ -35,3 +35,32 @@ jobs:
 
       - name: Build and publish GitHub release assets
         run: npm run release:win
+
+  linux:
+    name: Linux Release
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build and publish GitHub release assets
+        run: npm run release:linux

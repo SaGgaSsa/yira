@@ -671,7 +671,7 @@ export default function App(): React.ReactElement {
           name: 'Untitled Group',
           colorId: GROUP_COLOR_ORDER[groups.length % GROUP_COLOR_ORDER.length] ?? GROUP_COLOR_ORDER[0],
           locked: false,
-          wslStartupCommand: '',
+          startupCommand: '',
           filesRootPath: '',
         },
       },
@@ -690,7 +690,7 @@ export default function App(): React.ReactElement {
           name: group.name,
           colorId: group.colorId,
           locked: Boolean(group.locked),
-          wslStartupCommand: group.terminal?.wslStartupCommand ?? '',
+          startupCommand: group.terminal?.startupCommand ?? '',
           filesRootPath: group.files?.rootPath ?? '',
         },
       },
@@ -705,7 +705,7 @@ export default function App(): React.ReactElement {
       colorId: value.colorId,
       locked: value.locked,
       terminal: {
-        wslStartupCommand: value.wslStartupCommand || undefined,
+        startupCommand: value.startupCommand || undefined,
       },
       files: {
         rootPath: value.filesRootPath || undefined,

@@ -35,7 +35,7 @@ const SETTINGS_SECTIONS: Array<{
 function getUpdateSummary(state: UpdateState): string {
   switch (state.status) {
     case 'unsupported':
-      return 'Automatic updates are available only in installed Windows builds.'
+      return 'Automatic updates are available only in installed builds.'
     case 'checking':
       return 'Checking GitHub Releases for a newer version.'
     case 'available':

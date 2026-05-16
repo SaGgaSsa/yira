@@ -7,7 +7,7 @@ export interface GroupEditorValue {
   name: string
   colorId: GroupColorId
   locked: boolean
-  wslStartupCommand: string
+  startupCommand: string
   filesRootPath: string
 }
 
@@ -57,7 +57,7 @@ export function GroupEditorDialog({ request, onCancel, onConfirm }: GroupEditorD
         onConfirm({
           ...value,
           name: value.name.trim(),
-          wslStartupCommand: value.wslStartupCommand.trim(),
+          startupCommand: value.startupCommand.trim(),
           filesRootPath: value.filesRootPath.trim(),
         })
       }
@@ -153,20 +153,20 @@ export function GroupEditorDialog({ request, onCancel, onConfirm }: GroupEditorD
           <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
             <div className="mb-4 flex items-center gap-2">
               <TerminalSquare size={14} className="text-text-secondary" />
-              <span className="nd-label text-text-secondary">WSL terminal</span>
+              <span className="nd-label text-text-secondary">Group terminal</span>
             </div>
             <label className="block">
               <span className="nd-label mb-2 block text-text-secondary">Startup command</span>
               <input
                 className="w-full rounded-full border border-border-visible bg-bg-primary px-4 py-3 font-mono text-sm text-text-display outline-none"
-                value={value.wslStartupCommand}
-                onChange={(event) => setValue((current) => current ? { ...current, wslStartupCommand: event.target.value } : current)}
-                placeholder="Optional command for new WSL terminals"
+                value={value.startupCommand}
+                onChange={(event) => setValue((current) => current ? { ...current, startupCommand: event.target.value } : current)}
+                placeholder="Optional command for new grouped terminals"
                 spellCheck={false}
               />
             </label>
             <p className="mt-3 text-sm leading-6 text-text-secondary">
-              Runs once when a new WSL terminal is created inside this group. Leave it empty to do nothing.
+              Runs once when a new terminal is created inside this group. Leave it empty to do nothing.
             </p>
           </section>
 
@@ -219,7 +219,7 @@ export function GroupEditorDialog({ request, onCancel, onConfirm }: GroupEditorD
             onClick={() => onConfirm({
               ...value,
               name: value.name.trim(),
-              wslStartupCommand: value.wslStartupCommand.trim(),
+              startupCommand: value.startupCommand.trim(),
               filesRootPath: value.filesRootPath.trim(),
             })}
             disabled={!canSubmit}

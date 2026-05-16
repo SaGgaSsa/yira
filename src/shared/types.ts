@@ -248,7 +248,7 @@ export interface TileGroup {
   tileIds: string[]
   locked?: boolean
   terminal?: {
-    wslStartupCommand?: string
+    startupCommand?: string
   }
   files?: {
     rootPath?: string

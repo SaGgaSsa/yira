@@ -2,7 +2,7 @@
   "name": "yira",
   "version": "0.1.10",
   "productName": "Yira",
-  "description": "Infinite canvas terminal workspace for Windows",
+  "description": "Infinite canvas terminal workspace",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/SaGgaSsa/yira.git"
@@ -17,11 +17,13 @@
     "build": "node ./scripts/electron-vite-build.mjs all",
     "dist:win": "npm run build && electron-builder --win --publish never",
     "release:win": "npm run build && electron-builder --win --publish always",
+    "dist:linux": "npm run build && electron-builder --linux --publish never",
+    "release:linux": "npm run build && electron-builder --linux --publish always",
     "preview": "electron-vite preview",
     "postinstall": "electron-rebuild -f -w node-pty"
   },
   "keywords": [],
-  "author": "",
+  "author": "SaGgaSsa",
   "license": "MIT",
   "devDependencies": {
     "@electron-toolkit/tsconfig": "^2.0.0",
@@ -80,6 +82,31 @@
           ]
         }
       ]
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "category": "Development",
+      "maintainer": "SaGgaSsa",
+      "synopsis": "Infinite canvas terminal workspace",
+      "description": "Yira is an infinite canvas terminal workspace for organizing terminals, files, notes, browsers, timers, and kanban boards.",
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    },
+    "deb": {
+      "maintainer": "SaGgaSsa",
+      "packageCategory": "devel"
     },
     "nsis": {
       "oneClick": false,
