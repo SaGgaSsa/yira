@@ -12,6 +12,12 @@ const EMPTY_SPLIT_VIEW_STATE: SplitViewState = {
   focusedPanel: 'left',
 }
 
+function moveTileIdToFront(tileIds: string[], tileId: string | null): string[] {
+  if (!tileId) return tileIds
+  if (!tileIds.includes(tileId)) return tileIds
+  return [tileId, ...tileIds.filter((id) => id !== tileId)]
+}
+
 function normalizeViewMode(mode: CanvasState['viewMode'] | undefined): ViewMode {
   return mode === 'canvas' || mode === 'fullview' || mode === 'splitview'
     ? mode
@@ -341,8 +347,18 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   setSplitViewState: (splitViewState) => set({ splitViewState }),
   setSplitPanelActiveTile: (panel, tileId) => set((s) => ({
     splitViewState: panel === 'left'
-      ? { ...s.splitViewState, activeLeftTileId: tileId, focusedPanel: 'left' }
-      : { ...s.splitViewState, activeRightTileId: tileId, focusedPanel: 'right' },
+      ? {
+          ...s.splitViewState,
+          leftTileIds: moveTileIdToFront(s.splitViewState.leftTileIds, tileId),
+          activeLeftTileId: tileId,
+          focusedPanel: 'left',
+        }
+      : {
+          ...s.splitViewState,
+          rightTileIds: moveTileIdToFront(s.splitViewState.rightTileIds, tileId),
+          activeRightTileId: tileId,
+          focusedPanel: 'right',
+        },
   })),
   setSplitFocusedPanel: (focusedPanel) => set((s) => ({
     splitViewState: { ...s.splitViewState, focusedPanel },
