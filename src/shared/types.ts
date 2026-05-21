@@ -272,6 +272,13 @@ export interface TileGroup {
   locked?: boolean
 }
 
+export const NOTE_TILE_DEFAULT_WIDTH = 900
+export const NOTE_TILE_DEFAULT_HEIGHT = 760
+export const NOTE_TILE_MIN_WIDTH = 640
+export const NOTE_TILE_MIN_HEIGHT = 560
+
+export type NoteBlocks = import('@blocknote/core').PartialBlock[]
+
 // ─── Tile State ────────────────────────────────────────────────────────────
 
 export interface TileState {

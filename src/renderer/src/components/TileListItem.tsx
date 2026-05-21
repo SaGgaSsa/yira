@@ -34,7 +34,8 @@ export function TileListItem({
 }: TileListItemProps): React.ReactElement {
   const meta = TILE_META[tile.type]
   const Icon = meta.icon
-  const label = displayLabel ?? tile.label ?? `${meta.label} ${tile.id.slice(-4)}`
+  const fallbackLabel = tile.type === 'note' ? meta.label : `${meta.label} ${tile.id.slice(-4)}`
+  const label = (displayLabel ?? tile.label)?.trim() || fallbackLabel
 
   return (
     <div

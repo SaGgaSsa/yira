@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { GROUP_COLOR_ORDER, type TileState, type CanvasState, type Viewport, type ShellProfileId, type TileGroup, type GroupColorId, type ViewMode, type SplitViewState, type SplitPanelId, type WorkspaceConfig } from '@shared/types'
+import { GROUP_COLOR_ORDER, NOTE_TILE_MIN_HEIGHT, NOTE_TILE_MIN_WIDTH, type TileState, type CanvasState, type Viewport, type ShellProfileId, type TileGroup, type GroupColorId, type ViewMode, type SplitViewState, type SplitPanelId, type WorkspaceConfig } from '@shared/types'
 import { getGroupingBlockedReason } from '@/utils/grouping'
 
 const UNTITLED_GROUP_NAME = 'Untitled Group'
@@ -90,11 +90,26 @@ function normalizeGroup(group: TileGroup): TileGroup {
   }
 }
 
+function normalizeTile(tile: TileState): TileState {
+  if (tile.type !== 'note') return tile
+
+  const width = Math.max(NOTE_TILE_MIN_WIDTH, tile.width)
+  const height = Math.max(NOTE_TILE_MIN_HEIGHT, tile.height)
+  if (width === tile.width && height === tile.height) return tile
+
+  return {
+    ...tile,
+    width,
+    height,
+  }
+}
+
 function buildNormalizedGroupedState(
   tiles: TileState[],
   groups: TileGroup[],
 ): { tiles: TileState[]; groups: TileGroup[] } {
-  const tileMap = new Map(tiles.map((tile) => [tile.id, tile]))
+  const dimensionedTiles = tiles.map(normalizeTile)
+  const tileMap = new Map(dimensionedTiles.map((tile) => [tile.id, tile]))
   const tileToGroup = new Map<string, string>()
   const normalizedGroups: TileGroup[] = []
 
@@ -139,7 +154,7 @@ function buildNormalizedGroupedState(
     tileToGroup.set(tile.id, tile.groupId)
   }
 
-  const normalizedTiles = tiles.map((tile) => {
+  const normalizedTiles = dimensionedTiles.map((tile) => {
     const nextGroupId = tileToGroup.get(tile.id)
     if (!nextGroupId) {
       return {
@@ -236,13 +251,14 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
 
   setViewport: (vp) => set({ viewport: vp }),
   setTiles: (tiles) => set((s) => {
+    const normalizedTiles = tiles.map(normalizeTile)
     const nextIds = new Set(tiles.map((tile) => tile.id))
     const nextTerminalTitles = Object.fromEntries(
       Object.entries(s.terminalTitles).filter(([tileId]) => nextIds.has(tileId)),
     )
 
     return {
-      tiles,
+      tiles: normalizedTiles,
       terminalTitles: nextTerminalTitles,
     }
   }),
@@ -272,7 +288,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   addTile: (tile) => set((s) => {
     if (s.viewMode !== 'splitview' || isTileInSplitState(s.splitViewState, tile.id)) {
       return {
-        tiles: [...s.tiles, tile],
+        tiles: [...s.tiles, normalizeTile(tile)],
         nextZIndex: tile.zIndex + 1,
       }
     }
@@ -280,7 +296,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     const targetPanel = s.splitViewState.focusedPanel
 
     return {
-      tiles: [...s.tiles, tile],
+      tiles: [...s.tiles, normalizeTile(tile)],
       nextZIndex: tile.zIndex + 1,
       splitViewState: targetPanel === 'left'
         ? {
@@ -327,7 +343,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   }),
 
   updateTile: (tileId, patch) => set((s) => ({
-    tiles: s.tiles.map(t => t.id === tileId ? { ...t, ...patch } : t),
+    tiles: s.tiles.map(t => t.id === tileId ? normalizeTile({ ...t, ...patch }) : t),
   })),
 
   updateTilePositions: (positions) => set((s) => {

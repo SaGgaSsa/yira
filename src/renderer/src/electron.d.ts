@@ -13,7 +13,16 @@ import type {
   FileListOptions,
   FileListResult,
   FileSelectFolderResult,
+  NoteBlocks,
 } from '@shared/types'
+
+type NoteData = {
+  title?: string
+  blocks?: NoteBlocks
+  content?: string
+  color?: string
+  font?: string
+}
 
 interface ElectronWorld {
   workspace: {
@@ -31,8 +40,8 @@ interface ElectronWorld {
     save: (settings: UserSettings) => Promise<void>
   }
   note: {
-    save: (tileId: string, data: { color?: string; font?: string; content?: string }) => Promise<void>
-    load: (tileId: string) => Promise<{ color?: string; font?: string; content?: string } | null>
+    save: (tileId: string, data: NoteData) => Promise<void>
+    load: (tileId: string) => Promise<NoteData | null>
     delete: (tileId: string) => Promise<void>
   }
   board: {

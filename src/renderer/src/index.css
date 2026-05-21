@@ -194,6 +194,43 @@ textarea {
   overflow-x: hidden !important;
 }
 
+.yira-note-editor {
+  min-height: 100%;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-body);
+}
+
+.yira-note-editor .bn-editor {
+  min-height: 420px;
+  padding: 0 10px 40px;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-body);
+}
+
+.yira-note-editor .bn-block-content {
+  font-size: 16px;
+  line-height: 1.72;
+}
+
+.yira-note-editor [data-content-type='heading'] .bn-inline-content {
+  color: var(--text-display);
+  font-family: var(--font-body);
+  letter-spacing: 0;
+}
+
+.yira-note-editor [data-content-type='codeBlock'] .bn-block-content {
+  font-family: var(--font-mono);
+}
+
+.yira-note-editor .bn-side-menu,
+.yira-note-editor .bn-formatting-toolbar,
+.yira-note-editor .bn-suggestion-menu,
+.yira-note-editor .bn-table-handle-menu {
+  font-family: var(--font-body);
+}
+
 .dragging,
 .dragging * {
   user-select: none !important;

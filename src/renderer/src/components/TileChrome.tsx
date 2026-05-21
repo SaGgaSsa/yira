@@ -3,7 +3,7 @@ import { useCanvasStore } from '@/store/canvasStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { isTileInteractionLocked } from '@/utils/grouping'
 import type { TileState, ViewMode, SplitPanelId } from '@shared/types'
-import { KANBAN_BOARD_FIXED_WIDTH, NOTE_COLORS } from '@shared/types'
+import { KANBAN_BOARD_FIXED_WIDTH, NOTE_COLORS, NOTE_TILE_MIN_HEIGHT, NOTE_TILE_MIN_WIDTH } from '@shared/types'
 import { X, GripVertical, StickyNote, Globe, LayoutGrid, Terminal, Clock, Folder, Lock } from 'lucide-react'
 
 interface Props {
@@ -42,6 +42,10 @@ const TYPE_LABELS: Record<string, string> = {
   files: 'Files',
 }
 
+function getTileDisplayLabel(tile: TileState): string {
+  return tile.label?.trim() || TYPE_LABELS[tile.type] || 'Tile'
+}
+
 export function TileChrome({
   tile,
   isFocused,
@@ -73,6 +77,9 @@ export function TileChrome({
   const isSplitview = mode === 'splitview'
   const isFixedView = isFullview || isSplitview
   const isFixedWidthKanban = tile.type === 'kanban'
+  const isNote = tile.type === 'note'
+  const minWidth = isNote ? NOTE_TILE_MIN_WIDTH : 300
+  const minHeight = isNote ? NOTE_TILE_MIN_HEIGHT : 200
   const isLocked = Boolean(tile.locked)
   const isGroupLocked = Boolean(tile.groupId && groups.find((group) => group.id === tile.groupId)?.locked)
   const isInteractionLocked = isTileInteractionLocked(tile, groups)
@@ -85,6 +92,14 @@ export function TileChrome({
     if (isFixedView || !isFixedWidthKanban || tile.width === KANBAN_BOARD_FIXED_WIDTH) return
     onUpdate({ width: KANBAN_BOARD_FIXED_WIDTH })
   }, [isFixedView, isFixedWidthKanban, tile.width, onUpdate])
+
+  useEffect(() => {
+    if (isFixedView || !isNote) return
+    const width = Math.max(NOTE_TILE_MIN_WIDTH, tile.width)
+    const height = Math.max(NOTE_TILE_MIN_HEIGHT, tile.height)
+    if (width === tile.width && height === tile.height) return
+    onUpdate({ width, height })
+  }, [isFixedView, isNote, tile.height, tile.width, onUpdate])
 
   // ─── Drag ───────────────────────────────────────────────────────────────
   const handleDragStart = useCallback(
@@ -171,15 +186,15 @@ export function TileChrome({
         let newX = resizeStartRef.current.tx
         let newY = resizeStartRef.current.ty
 
-        if (!isFixedWidthKanban && dir.includes('e')) newW = Math.max(300, resizeStartRef.current.w + dx)
+        if (!isFixedWidthKanban && dir.includes('e')) newW = Math.max(minWidth, resizeStartRef.current.w + dx)
         if (!isFixedWidthKanban && dir.includes('w')) {
-          newW = Math.max(300, resizeStartRef.current.w - dx)
-          newX = resizeStartRef.current.tx + dx
+          newW = Math.max(minWidth, resizeStartRef.current.w - dx)
+          newX = resizeStartRef.current.tx + (resizeStartRef.current.w - newW)
         }
-        if (dir.includes('s')) newH = Math.max(200, resizeStartRef.current.h + dy)
+        if (dir.includes('s')) newH = Math.max(minHeight, resizeStartRef.current.h + dy)
         if (dir.includes('n')) {
-          newH = Math.max(200, resizeStartRef.current.h - dy)
-          newY = resizeStartRef.current.ty + dy
+          newH = Math.max(minHeight, resizeStartRef.current.h - dy)
+          newY = resizeStartRef.current.ty + (resizeStartRef.current.h - newH)
         }
 
         // Snap
@@ -191,6 +206,15 @@ export function TileChrome({
         } else if (isFixedWidthKanban) {
           newW = KANBAN_BOARD_FIXED_WIDTH
           newX = resizeStartRef.current.tx
+        }
+
+        if (!isFixedWidthKanban && newW < minWidth) {
+          newW = minWidth
+          if (dir.includes('w')) newX = resizeStartRef.current.tx + (resizeStartRef.current.w - newW)
+        }
+        if (newH < minHeight) {
+          newH = minHeight
+          if (dir.includes('n')) newY = resizeStartRef.current.ty + (resizeStartRef.current.h - newH)
         }
 
         onUpdate({ width: newW, height: newH, x: newX, y: newY })
@@ -210,7 +234,7 @@ export function TileChrome({
       window.removeEventListener('mousemove', handleMouseMove)
       window.removeEventListener('mouseup', handleMouseUp)
     }
-  }, [gridSize, isDragging, isFixedWidthKanban, isResizing, onUpdate, onUpdatePositions, snapToGrid, zoom])
+  }, [gridSize, isDragging, isFixedWidthKanban, isResizing, minHeight, minWidth, onUpdate, onUpdatePositions, snapToGrid, zoom])
 
   const cursor = isDragging ? 'grabbing' : isResizing ? `${isResizing}-resize` : 'default'
 
@@ -234,12 +258,8 @@ export function TileChrome({
       <div
         className="w-full h-full flex flex-col overflow-hidden"
         style={{
-          background: tile.type === 'note' && tile.noteColor
-            ? NOTE_COLORS[tile.noteColor]?.bg || 'var(--surface)'
-            : 'var(--surface)',
-          color: tile.type === 'note' && tile.noteColor
-            ? NOTE_COLORS[tile.noteColor]?.text || '#78350f'
-            : 'var(--text-primary)',
+          background: 'var(--surface)',
+          color: 'var(--text-primary)',
           border: isFixedView
             ? 'none'
             : isFocused
@@ -250,8 +270,10 @@ export function TileChrome({
                 ? '1px solid var(--border-visible)'
                 : '1px solid var(--border)',
           borderRadius: 0,
-          boxShadow: 'none',
           transition: 'border-color 0.15s ease, background 0.15s ease',
+          boxShadow: isNote && tile.noteColor
+            ? `inset 0 3px 0 ${NOTE_COLORS[tile.noteColor]?.bg || 'var(--border-visible)'}`
+            : 'none',
         }}
       >
         {/* Title bar */}
@@ -292,7 +314,7 @@ export function TileChrome({
             })()}
 
             <span className="nd-label truncate flex-1 text-text-secondary">
-              {tile.label ?? TYPE_LABELS[tile.type] ?? 'Tile'}
+              {getTileDisplayLabel(tile)}
             </span>
 
             {tile.groupId && onRemoveFromGroup && (

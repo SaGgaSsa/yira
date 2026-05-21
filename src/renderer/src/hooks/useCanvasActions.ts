@@ -3,7 +3,7 @@ import { useCanvasStore } from '@/store/canvasStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { findSelectedGroup, getGroupAnchorTile } from '@/utils/grouping'
 import type { ConfirmDialogOptions } from '@/components/AppDialog'
-import { KANBAN_BOARD_FIXED_WIDTH } from '@shared/types'
+import { KANBAN_BOARD_FIXED_WIDTH, NOTE_TILE_DEFAULT_HEIGHT, NOTE_TILE_DEFAULT_WIDTH } from '@shared/types'
 import type { TileState, ShellProfileId, NoteColor } from '@shared/types'
 
 const TILE_TYPE_LABELS: Record<TileState['type'], string> = {
@@ -183,15 +183,15 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
     (color?: NoteColor) => {
       const state = useCanvasStore.getState()
       const targetGroup = groupsEnabled ? findSelectedGroup(state.groups, state.selectedTileIds) : null
-      const pos = getSpawnPos(320, 280, 40)
+      const pos = getSpawnPos(NOTE_TILE_DEFAULT_WIDTH, NOTE_TILE_DEFAULT_HEIGHT, 40)
 
       const tile: TileState = {
         id: generateId(),
         type: 'note',
         x: pos.x,
         y: pos.y,
-        width: 320,
-        height: 280,
+        width: NOTE_TILE_DEFAULT_WIDTH,
+        height: NOTE_TILE_DEFAULT_HEIGHT,
         zIndex: state.nextZIndex,
         noteColor: color ?? 'yellow',
         noteFont: 'sans',
@@ -249,7 +249,7 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
       const tile = useCanvasStore.getState().tiles.find((t) => t.id === tileId)
       if (!tile) return false
 
-      const label = tile.label ?? TILE_TYPE_LABELS[tile.type]
+      const label = tile.label?.trim() || TILE_TYPE_LABELS[tile.type]
       const confirmed = await requestConfirm({
         title: 'Close tile',
         message: `Close "${label}"? Any running session or unsaved surface state may be lost.`,
