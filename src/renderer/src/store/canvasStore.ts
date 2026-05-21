@@ -41,17 +41,30 @@ function normalizeSplitViewState(
 
   const leftTileIds = cleanPanelIds(splitViewState?.leftTileIds)
   const rightTileIds = cleanPanelIds(splitViewState?.rightTileIds)
-  const activeLeftTileId = splitViewState?.activeLeftTileId && leftTileIds.includes(splitViewState.activeLeftTileId)
+  const preferredActiveId =
+    (focusedTileId && existingIds.has(focusedTileId) ? focusedTileId : null) ??
+    (fullviewActiveTileId && existingIds.has(fullviewActiveTileId) ? fullviewActiveTileId : null) ??
+    tileIds[0]
+  const missingTileIds = tileIds.filter((tileId) => !seen.has(tileId))
+  const missingActiveId = preferredActiveId && missingTileIds.includes(preferredActiveId)
+    ? preferredActiveId
+    : null
+  const missingInactiveIds = missingTileIds.filter((tileId) => tileId !== missingActiveId)
+  const nextLeftTileIds = missingActiveId
+    ? [missingActiveId, ...leftTileIds]
+    : leftTileIds
+  const nextRightTileIds = [...rightTileIds, ...missingInactiveIds]
+  const activeLeftTileId = missingActiveId ?? (splitViewState?.activeLeftTileId && nextLeftTileIds.includes(splitViewState.activeLeftTileId)
     ? splitViewState.activeLeftTileId
-    : leftTileIds[0] ?? null
-  const activeRightTileId = splitViewState?.activeRightTileId && rightTileIds.includes(splitViewState.activeRightTileId)
+    : nextLeftTileIds[0] ?? null)
+  const activeRightTileId = splitViewState?.activeRightTileId && nextRightTileIds.includes(splitViewState.activeRightTileId)
     ? splitViewState.activeRightTileId
-    : rightTileIds[0] ?? null
+    : nextRightTileIds[0] ?? null
 
-  if (leftTileIds.length > 0 && rightTileIds.length > 0) {
+  if (nextLeftTileIds.length > 0 && nextRightTileIds.length > 0) {
     return {
-      leftTileIds,
-      rightTileIds,
+      leftTileIds: nextLeftTileIds,
+      rightTileIds: nextRightTileIds,
       activeLeftTileId,
       activeRightTileId,
       focusedPanel: splitViewState?.focusedPanel === 'right' ? 'right' : 'left',
@@ -60,10 +73,6 @@ function normalizeSplitViewState(
 
   if (tiles.length < 2) return { ...EMPTY_SPLIT_VIEW_STATE }
 
-  const preferredActiveId =
-    (focusedTileId && existingIds.has(focusedTileId) ? focusedTileId : null) ??
-    (fullviewActiveTileId && existingIds.has(fullviewActiveTileId) ? fullviewActiveTileId : null) ??
-    tileIds[0]
   const rebuiltLeftIds = preferredActiveId ? [preferredActiveId] : []
   const rebuiltRightIds = tileIds.filter((tileId) => tileId !== preferredActiveId)
 

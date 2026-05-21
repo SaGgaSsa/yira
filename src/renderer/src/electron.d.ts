@@ -81,6 +81,9 @@ interface ElectronWorld {
     requestAttention: (options?: NotificationAttentionOptions) => Promise<NotificationAttentionResult>
     clearAttention: () => Promise<NotificationAttentionResult>
   }
+  window: {
+    setTitle: (title: string) => Promise<void>
+  }
   updates: {
     getState: () => Promise<UpdateState>
     check: () => Promise<UpdateState>

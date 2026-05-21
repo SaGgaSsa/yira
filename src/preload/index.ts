@@ -94,6 +94,10 @@ contextBridge.exposeInMainWorld('electron', {
     clearAttention: () => ipcRenderer.invoke('notifications:clearAttention'),
   },
 
+  window: {
+    setTitle: (title: string) => ipcRenderer.invoke('window:setTitle', title),
+  },
+
   updates: {
     getState: () => ipcRenderer.invoke('updates:getState'),
     check: () => ipcRenderer.invoke('updates:check'),

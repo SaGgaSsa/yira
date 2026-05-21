@@ -10,6 +10,7 @@ import { registerNotesIPC } from './ipc/notes'
 import { registerBoardsIPC } from './ipc/boards'
 import { registerFilesIPC } from './ipc/files'
 import { clearWindowAttention, registerNotificationIPC } from './ipc/notifications'
+import { registerWindowIPC } from './ipc/window'
 import { APP_ID, APP_NAME, DEV_APP_NAME, YIRA_HOME } from './paths'
 import { registerUpdateIPC, scheduleStartupUpdateCheck } from './updater'
 
@@ -95,6 +96,7 @@ app.whenReady().then(async () => {
   registerBoardsIPC()
   registerFilesIPC()
   registerNotificationIPC()
+  registerWindowIPC()
   registerUpdateIPC()
 
   ipcMain.handle('shell:openExternal', async (_event, url: string) => {

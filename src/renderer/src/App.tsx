@@ -26,6 +26,8 @@ import { Terminal, StickyNote, Globe, LayoutGrid, Clock, Folder, ChevronDown, Fo
 
 const GROUP_SHOW_MARGIN = 20
 const GROUP_SHOW_TOP_PADDING = 118
+const BASE_WINDOW_TITLE = 'Yira'
+const MAX_TERMINAL_WINDOW_TITLE_LENGTH = 120
 
 function createEmptyCanvasState(): CanvasState {
   return {
@@ -87,20 +89,30 @@ function normalizeSplitViewForTiles(
   })
   const leftTileIds = cleanIds(splitViewState.leftTileIds)
   const rightTileIds = cleanIds(splitViewState.rightTileIds)
+  const missingTileIds = tiles.map((tile) => tile.id).filter((tileId) => !seen.has(tileId))
+  const missingActiveId = activeTileId && missingTileIds.includes(activeTileId)
+    ? activeTileId
+    : null
+  const missingInactiveIds = missingTileIds.filter((tileId) => tileId !== missingActiveId)
 
   if (leftTileIds.length === 0 || rightTileIds.length === 0) {
     return buildInitialSplitViewState(tiles, activeTileId)
   }
 
+  const nextLeftTileIds = missingActiveId
+    ? [missingActiveId, ...leftTileIds]
+    : leftTileIds
+  const nextRightTileIds = [...rightTileIds, ...missingInactiveIds]
+
   return {
-    leftTileIds,
-    rightTileIds,
-    activeLeftTileId: splitViewState.activeLeftTileId && leftTileIds.includes(splitViewState.activeLeftTileId)
+    leftTileIds: nextLeftTileIds,
+    rightTileIds: nextRightTileIds,
+    activeLeftTileId: missingActiveId ?? (splitViewState.activeLeftTileId && nextLeftTileIds.includes(splitViewState.activeLeftTileId)
       ? splitViewState.activeLeftTileId
-      : leftTileIds[0] ?? null,
-    activeRightTileId: splitViewState.activeRightTileId && rightTileIds.includes(splitViewState.activeRightTileId)
+      : nextLeftTileIds[0] ?? null),
+    activeRightTileId: splitViewState.activeRightTileId && nextRightTileIds.includes(splitViewState.activeRightTileId)
       ? splitViewState.activeRightTileId
-      : rightTileIds[0] ?? null,
+      : nextRightTileIds[0] ?? null,
     focusedPanel: splitViewState.focusedPanel === 'right' ? 'right' : 'left',
   }
 }
@@ -113,6 +125,14 @@ function areSplitViewStatesEqual(a: SplitViewState, b: SplitViewState): boolean 
     a.rightTileIds.length === b.rightTileIds.length &&
     a.leftTileIds.every((tileId, index) => tileId === b.leftTileIds[index]) &&
     a.rightTileIds.every((tileId, index) => tileId === b.rightTileIds[index])
+}
+
+function normalizeTerminalWindowTitle(title: string): string {
+  return title.trim().replace(/\s+/g, ' ').slice(0, MAX_TERMINAL_WINDOW_TITLE_LENGTH)
+}
+
+function getTerminalDisplayTitle(tile: TileState, terminalTitles: Record<string, string>): string {
+  return terminalTitles[tile.id] || tile.label || `${TILE_META.terminal.label} ${tile.id.slice(-4)}`
 }
 
 type PromptDialogState = {
@@ -184,6 +204,7 @@ export default function App(): React.ReactElement {
   const viewMode = useCanvasStore((s) => s.viewMode)
   const fullviewActiveTileId = useCanvasStore((s) => s.fullviewActiveTileId)
   const splitViewState = useCanvasStore((s) => s.splitViewState)
+  const terminalTitles = useCanvasStore((s) => s.terminalTitles)
   const activeWorkspaceId = useCanvasStore((s) => s.activeWorkspaceId)
   const activeWorkspaceName = useCanvasStore((s) => s.activeWorkspaceName)
   const activeWorkspaceConfig = useCanvasStore((s) => s.activeWorkspaceConfig)
@@ -324,6 +345,31 @@ export default function App(): React.ReactElement {
       observer.disconnect()
     }
   }, [viewMode])
+
+  const windowTitle = useMemo(() => {
+    const tilesById = new Map(tiles.map((tile) => [tile.id, tile]))
+    let activeTile: TileState | null = null
+
+    if (viewMode === 'fullview') {
+      activeTile = fullviewActiveTileId
+        ? tilesById.get(fullviewActiveTileId) ?? null
+        : tiles.slice().sort((a, b) => b.zIndex - a.zIndex)[0] ?? null
+    } else if (viewMode === 'splitview') {
+      const activeTileId = splitViewState.focusedPanel === 'right'
+        ? splitViewState.activeRightTileId
+        : splitViewState.activeLeftTileId
+      activeTile = activeTileId ? tilesById.get(activeTileId) ?? null : null
+    }
+
+    if (!activeTile || activeTile.type !== 'terminal') return BASE_WINDOW_TITLE
+
+    const terminalTitle = normalizeTerminalWindowTitle(getTerminalDisplayTitle(activeTile, terminalTitles))
+    return terminalTitle ? `${terminalTitle} - ${BASE_WINDOW_TITLE}` : BASE_WINDOW_TITLE
+  }, [fullviewActiveTileId, splitViewState, terminalTitles, tiles, viewMode])
+
+  useEffect(() => {
+    void window.electron.window.setTitle(windowTitle)
+  }, [windowTitle])
 
   const refreshWorkspaces = useCallback(async (): Promise<Workspace[]> => {
     const list = await window.electron.workspace.list()
