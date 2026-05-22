@@ -233,7 +233,7 @@ export function NoteTile({ tile, onUpdate }: NoteTileProps): React.ReactElement 
   }, [onUpdate, scheduleSave])
 
   return (
-    <div className="h-full w-full overflow-auto bg-bg-primary px-8 py-8">
+    <div className="h-full w-full overflow-auto bg-bg-primary">
       <div
         className="mx-auto flex min-h-full w-full max-w-[760px] flex-col border border-border-visible bg-bg-secondary shadow-[0_18px_60px_rgba(0,0,0,0.26)]"
         style={{ borderTopColor: accentColor, borderTopWidth: 4 }}

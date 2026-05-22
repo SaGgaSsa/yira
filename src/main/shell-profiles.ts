@@ -55,7 +55,7 @@ export function detectShellProfiles(): ShellProfile[] {
       },
       {
         id: 'cmd',
-        label: 'Command Prompt',
+        label: 'CMD',
         shell: cmd ?? 'cmd.exe',
         args: [],
         available: cmd !== null,

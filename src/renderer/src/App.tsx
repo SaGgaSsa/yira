@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, getCanvasMethods } from './components/Canvas'
 import { TopBar } from './components/TopBar'
 import { Sidebar } from './components/Sidebar'
@@ -316,7 +316,7 @@ export default function App(): React.ReactElement {
     void initializeUpdates()
   }, [initializeUpdates])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (viewMode === 'canvas') {
       setFullviewTopInset(0)
       return
@@ -330,9 +330,12 @@ export default function App(): React.ReactElement {
     }
 
     updatePanelHeight()
+    const frame = window.requestAnimationFrame(updatePanelHeight)
 
     if (typeof ResizeObserver === 'undefined') {
-      return
+      return () => {
+        window.cancelAnimationFrame(frame)
+      }
     }
 
     const observer = new ResizeObserver(() => {
@@ -342,6 +345,7 @@ export default function App(): React.ReactElement {
     observer.observe(panelEl)
 
     return () => {
+      window.cancelAnimationFrame(frame)
       observer.disconnect()
     }
   }, [viewMode])

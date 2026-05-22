@@ -3,7 +3,7 @@ import { useCanvasStore } from '@/store/canvasStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { isTileInteractionLocked } from '@/utils/grouping'
 import type { TileState, ViewMode, SplitPanelId } from '@shared/types'
-import { KANBAN_BOARD_FIXED_WIDTH, NOTE_COLORS, NOTE_TILE_MIN_HEIGHT, NOTE_TILE_MIN_WIDTH } from '@shared/types'
+import { KANBAN_BOARD_FIXED_WIDTH, NOTE_COLORS, NOTE_TILE_MAX_WIDTH, NOTE_TILE_MIN_HEIGHT, NOTE_TILE_MIN_WIDTH } from '@shared/types'
 import { X, GripVertical, StickyNote, Globe, LayoutGrid, Terminal, Clock, Folder, Lock } from 'lucide-react'
 
 interface Props {
@@ -80,6 +80,7 @@ export function TileChrome({
   const isNote = tile.type === 'note'
   const minWidth = isNote ? NOTE_TILE_MIN_WIDTH : 300
   const minHeight = isNote ? NOTE_TILE_MIN_HEIGHT : 200
+  const maxWidth = isNote ? NOTE_TILE_MAX_WIDTH : null
   const isLocked = Boolean(tile.locked)
   const isGroupLocked = Boolean(tile.groupId && groups.find((group) => group.id === tile.groupId)?.locked)
   const isInteractionLocked = isTileInteractionLocked(tile, groups)
@@ -95,7 +96,7 @@ export function TileChrome({
 
   useEffect(() => {
     if (isFixedView || !isNote) return
-    const width = Math.max(NOTE_TILE_MIN_WIDTH, tile.width)
+    const width = Math.min(NOTE_TILE_MAX_WIDTH, Math.max(NOTE_TILE_MIN_WIDTH, tile.width))
     const height = Math.max(NOTE_TILE_MIN_HEIGHT, tile.height)
     if (width === tile.width && height === tile.height) return
     onUpdate({ width, height })
@@ -212,6 +213,10 @@ export function TileChrome({
           newW = minWidth
           if (dir.includes('w')) newX = resizeStartRef.current.tx + (resizeStartRef.current.w - newW)
         }
+        if (maxWidth !== null && newW > maxWidth) {
+          newW = maxWidth
+          if (dir.includes('w')) newX = resizeStartRef.current.tx + (resizeStartRef.current.w - newW)
+        }
         if (newH < minHeight) {
           newH = minHeight
           if (dir.includes('n')) newY = resizeStartRef.current.ty + (resizeStartRef.current.h - newH)
@@ -234,7 +239,7 @@ export function TileChrome({
       window.removeEventListener('mousemove', handleMouseMove)
       window.removeEventListener('mouseup', handleMouseUp)
     }
-  }, [gridSize, isDragging, isFixedWidthKanban, isResizing, minHeight, minWidth, onUpdate, onUpdatePositions, snapToGrid, zoom])
+  }, [gridSize, isDragging, isFixedWidthKanban, isResizing, maxWidth, minHeight, minWidth, onUpdate, onUpdatePositions, snapToGrid, zoom])
 
   const cursor = isDragging ? 'grabbing' : isResizing ? `${isResizing}-resize` : 'default'
 
@@ -253,6 +258,9 @@ export function TileChrome({
         visibility: isFixedView && isHiddenInFullview ? 'hidden' : 'visible',
       }}
       onMouseDown={onFocus}
+      onWheel={(event) => {
+        event.stopPropagation()
+      }}
     >
       {/* Tile body */}
       <div
