@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { Pencil, RefreshCw, Trash2 } from 'lucide-react'
+import { CopyPlus, Eye, EyeOff, Lock, Maximize2, Pencil, RefreshCw, Trash2, Unlock } from 'lucide-react'
 import type { TileState } from '@shared/types'
 import { useCanvasStore } from '@/store/canvasStore'
 import { ContextMenu, type MenuItem } from './ContextMenu'
@@ -13,7 +13,9 @@ interface FullviewPanelProps {
   onCloseTile: (tileId: string) => void | Promise<void>
   onEditTile: (tile: TileState) => void
   onFocusTile: (tile: TileState) => void
+  onDuplicateTile: (tile: TileState) => void
   onRefreshTile: (tile: TileState) => void | Promise<void>
+  onToggleTitlebar: (tileId: string) => void
   onToggleLock: (tileId: string) => void
 }
 
@@ -24,7 +26,9 @@ export function FullviewPanel({
   onCloseTile,
   onEditTile,
   onFocusTile,
+  onDuplicateTile,
   onRefreshTile,
+  onToggleTitlebar,
   onToggleLock,
 }: FullviewPanelProps): React.ReactElement {
   const orderedTiles = useMemo(() => tiles.slice().sort((a, b) => b.zIndex - a.zIndex), [tiles])
@@ -45,11 +49,22 @@ export function FullviewPanel({
         },
         {
           label: 'Focus',
+          icon: Maximize2,
           action: () => {
             setTabMenu(null)
             onFocusTile(activeMenuTile)
           },
         },
+        ...(activeMenuTile.type === 'terminal'
+          ? [{
+              label: 'Duplicate',
+              icon: CopyPlus,
+              action: () => {
+                setTabMenu(null)
+                onDuplicateTile(activeMenuTile)
+              },
+            }]
+          : []),
         {
           label: 'Refresh',
           icon: RefreshCw,
@@ -59,7 +74,13 @@ export function FullviewPanel({
           },
         },
         {
+          label: activeMenuTile.hideTitlebar ? 'Show Titlebar' : 'Hide Titlebar',
+          icon: activeMenuTile.hideTitlebar ? Eye : EyeOff,
+          action: () => onToggleTitlebar(activeMenuTile.id),
+        },
+        {
           label: activeMenuTile.locked ? 'Unlock' : 'Lock',
+          icon: activeMenuTile.locked ? Unlock : Lock,
           action: () => onToggleLock(activeMenuTile.id),
         },
         { label: 'Close', icon: Trash2, danger: true, action: () => { void onCloseTile(activeMenuTile.id) } },

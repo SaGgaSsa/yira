@@ -2,9 +2,10 @@ import { useCallback } from 'react'
 import { useCanvasStore } from '@/store/canvasStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { findSelectedGroup, getGroupAnchorTile } from '@/utils/grouping'
+import { buildDuplicateTerminalTile, insertDuplicateIntoSplitPanel } from '@/utils/duplicateTerminalTile'
 import type { ConfirmDialogOptions } from '@/components/AppDialog'
 import { NOTE_TILE_DEFAULT_HEIGHT, NOTE_TILE_DEFAULT_WIDTH } from '@shared/types'
-import type { TileState, ShellProfileId, NoteColor } from '@shared/types'
+import type { TileState, ShellProfileId, NoteColor, SplitPanelId } from '@shared/types'
 
 const TILE_TYPE_LABELS: Record<TileState['type'], string> = {
   terminal: 'Terminal',
@@ -38,6 +39,7 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
   const selectTiles = useCanvasStore((s) => s.selectTiles)
   const bringToFront = useCanvasStore((s) => s.bringToFront)
   const setViewport = useCanvasStore((s) => s.setViewport)
+  const setSplitViewState = useCanvasStore((s) => s.setSplitViewState)
 
   const snapCoordinate = useCallback(
     (value: number) => (
@@ -141,6 +143,48 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
       finalizeAddedTile(tile, targetGroup?.id)
     },
     [finalizeAddedTile, getSpawnPos, groupsEnabled],
+  )
+
+  const duplicateTerminalTile = useCallback(
+    (sourceTileId: string, options: { splitPanel?: SplitPanelId } = {}) => {
+      const state = useCanvasStore.getState()
+      const source = state.tiles.find((tile) => tile.id === sourceTileId)
+      if (!source) return null
+
+      const tile = buildDuplicateTerminalTile({
+        source,
+        groups: groupsEnabled ? state.groups : [],
+        id: generateId(),
+        position: {
+          x: snapCoordinate(source.x + 40),
+          y: snapCoordinate(source.y + 40),
+        },
+        zIndex: state.nextZIndex,
+      })
+      if (!tile) return null
+
+      addTile(tile)
+
+      if (tile.groupId) {
+        addTilesToGroup(tile.groupId, [tile.id])
+      }
+
+      if (options.splitPanel) {
+        const nextSplitViewState = insertDuplicateIntoSplitPanel(
+          useCanvasStore.getState().splitViewState,
+          options.splitPanel,
+          tile.id,
+        )
+        setSplitViewState(nextSplitViewState)
+      }
+
+      focusTile(tile.id)
+      selectTiles([tile.id])
+      bringToFront(tile.id)
+
+      return tile.id
+    },
+    [addTile, addTilesToGroup, bringToFront, focusTile, groupsEnabled, selectTiles, setSplitViewState, snapCoordinate],
   )
 
   const addBrowser = useCallback(() => {
@@ -269,6 +313,7 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
 
   return {
     addTerminal,
+    duplicateTerminalTile,
     addBrowser,
     addBoard,
     addNote,

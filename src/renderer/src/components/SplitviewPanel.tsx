@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { Pencil, RefreshCw, Trash2 } from 'lucide-react'
+import { CopyPlus, Eye, EyeOff, Lock, Maximize2, Pencil, RefreshCw, Trash2, Unlock } from 'lucide-react'
 import type { SplitPanelId, SplitViewState, TileState } from '@shared/types'
 import { useCanvasStore } from '@/store/canvasStore'
 import { ContextMenu, type MenuItem } from './ContextMenu'
@@ -13,7 +13,9 @@ interface SplitviewPanelProps {
   onCloseTile: (panel: SplitPanelId, tileId: string) => void | Promise<void>
   onEditTile: (tile: TileState) => void
   onFocusTile: (tile: TileState) => void
+  onDuplicateTile: (panel: SplitPanelId, tile: TileState) => void
   onRefreshTile: (tile: TileState) => void | Promise<void>
+  onToggleTitlebar: (tileId: string) => void
   onToggleLock: (tileId: string) => void
   onMoveTile: (tileId: string, targetPanel: SplitPanelId) => void
   onFocusPanel: (panel: SplitPanelId) => void
@@ -113,7 +115,9 @@ export function SplitviewPanel({
   onCloseTile,
   onEditTile,
   onFocusTile,
+  onDuplicateTile,
   onRefreshTile,
+  onToggleTitlebar,
   onToggleLock,
   onMoveTile,
   onFocusPanel,
@@ -148,11 +152,22 @@ export function SplitviewPanel({
         },
         {
           label: 'Focus',
+          icon: Maximize2,
           action: () => {
             setTabMenu(null)
             onFocusTile(activeMenuTile)
           },
         },
+        ...(activeMenuTile.type === 'terminal' && activeMenuPanel
+          ? [{
+              label: 'Duplicate',
+              icon: CopyPlus,
+              action: () => {
+                setTabMenu(null)
+                onDuplicateTile(activeMenuPanel, activeMenuTile)
+              },
+            }]
+          : []),
         {
           label: 'Refresh',
           icon: RefreshCw,
@@ -162,7 +177,13 @@ export function SplitviewPanel({
           },
         },
         {
+          label: activeMenuTile.hideTitlebar ? 'Show Titlebar' : 'Hide Titlebar',
+          icon: activeMenuTile.hideTitlebar ? Eye : EyeOff,
+          action: () => onToggleTitlebar(activeMenuTile.id),
+        },
+        {
           label: activeMenuTile.locked ? 'Unlock' : 'Lock',
+          icon: activeMenuTile.locked ? Unlock : Lock,
           action: () => onToggleLock(activeMenuTile.id),
         },
         { label: 'Close', icon: Trash2, danger: true, action: () => { if (activeMenuPanel) void onCloseTile(activeMenuPanel, activeMenuTile.id) } },
