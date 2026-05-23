@@ -9,7 +9,6 @@ import { TileListItem } from './TileListItem'
 interface SplitviewPanelProps {
   tiles: TileState[]
   splitViewState: SplitViewState
-  containerRef?: React.Ref<HTMLDivElement>
   onActivateTile: (panel: SplitPanelId, tileId: string) => void
   onCloseTile: (panel: SplitPanelId, tileId: string) => void | Promise<void>
   onEditTile: (tile: TileState) => void
@@ -45,7 +44,7 @@ function PanelTabStrip({
 
   return (
     <div
-      className="min-w-0 flex-1 border-r border-border px-4 pb-1 pt-3 last:border-r-0"
+      className="min-w-0 flex-1 border-r border-border px-4 pt-3 last:border-r-0"
       onMouseDown={() => onFocusPanel(panel)}
       onDragOver={(event) => {
         event.preventDefault()
@@ -110,7 +109,6 @@ function PanelTabStrip({
 export function SplitviewPanel({
   tiles,
   splitViewState,
-  containerRef,
   onActivateTile,
   onCloseTile,
   onEditTile,
@@ -172,7 +170,7 @@ export function SplitviewPanel({
     : []
 
   return (
-    <div ref={containerRef} className="nd-panel flex border-x-0 border-t-0">
+    <div className="flex shrink-0 border-b border-border bg-bg-secondary">
       <PanelTabStrip
         panel="left"
         tiles={leftTiles}

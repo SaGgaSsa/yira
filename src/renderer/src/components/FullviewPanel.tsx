@@ -9,7 +9,6 @@ import { TileListItem } from './TileListItem'
 interface FullviewPanelProps {
   tiles: TileState[]
   activeTileId: string | null
-  containerRef?: React.Ref<HTMLDivElement>
   onActivateTile: (tileId: string) => void
   onCloseTile: (tileId: string) => void | Promise<void>
   onEditTile: (tile: TileState) => void
@@ -21,7 +20,6 @@ interface FullviewPanelProps {
 export function FullviewPanel({
   tiles,
   activeTileId,
-  containerRef,
   onActivateTile,
   onCloseTile,
   onEditTile,
@@ -69,7 +67,7 @@ export function FullviewPanel({
     : []
 
   return (
-    <div ref={containerRef} className="nd-panel border-x-0 border-t-0 px-4 pb-1 pt-3">
+    <div className="shrink-0 border-b border-border bg-bg-secondary px-4 pt-3">
       <div className="flex items-stretch gap-2 overflow-x-auto">
         {orderedTiles.length === 0 ? (
           <div className="nd-panel-raised flex h-[72px] min-w-[240px] items-center rounded-2xl px-5 text-text-secondary">

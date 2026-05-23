@@ -108,7 +108,6 @@ interface CanvasProps {
   fullviewActiveTileId?: string | null
   splitViewState?: SplitViewState
   onFocusSplitPanel?: (panel: SplitPanelId) => void
-  fullviewTopInset?: number
 }
 
 export function Canvas({
@@ -129,7 +128,6 @@ export function Canvas({
   fullviewActiveTileId = null,
   splitViewState,
   onFocusSplitPanel,
-  fullviewTopInset = 0,
 }: CanvasProps): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<DragState | null>(null)
@@ -660,7 +658,6 @@ export function Canvas({
                 isFocused={tile.id === focusedTileId}
                 isSelected={selectedTileIds.includes(tile.id)}
                 mode={viewMode}
-                fullviewTopInset={fullviewTopInset}
                 isHiddenInFullview={hiddenInFixedView}
                 splitPanel={splitPanel}
                 onFocus={() => {
@@ -682,6 +679,7 @@ export function Canvas({
                   key={`${tile.id}:${tileRefreshKeys[tile.id] ?? 0}`}
                   tile={tile}
                   isFocused={tile.id === focusedTileId}
+                  edgeToEdge={isFixedView}
                   onFocus={() => {
                     if (isSplitview && splitPanel) onFocusSplitPanel?.(splitPanel)
                     focusTile(tile.id)

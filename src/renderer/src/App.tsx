@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useCallback, useMemo, useRef, useState } from 'react'
 import { Canvas, getCanvasMethods } from './components/Canvas'
 import { TopBar } from './components/TopBar'
 import { Sidebar } from './components/Sidebar'
@@ -302,9 +302,6 @@ export default function App(): React.ReactElement {
   const prevZoomRef = useRef(1)
   const footerRef = useRef<HTMLDivElement | null>(null)
   const workspaceMenuRef = useRef<HTMLDivElement | null>(null)
-  const fullviewPanelRef = useRef<HTMLDivElement | null>(null)
-  const [fullviewTopInset, setFullviewTopInset] = useState(0)
-
   const closeActiveDialog = useCallback(() => {
     if (!activeDialog) return
 
@@ -337,40 +334,6 @@ export default function App(): React.ReactElement {
   useEffect(() => {
     void initializeUpdates()
   }, [initializeUpdates])
-
-  useLayoutEffect(() => {
-    if (viewMode === 'canvas') {
-      setFullviewTopInset(0)
-      return
-    }
-
-    const panelEl = fullviewPanelRef.current
-    if (!panelEl) return
-
-    const updatePanelHeight = () => {
-      setFullviewTopInset(Math.ceil(panelEl.getBoundingClientRect().height))
-    }
-
-    updatePanelHeight()
-    const frame = window.requestAnimationFrame(updatePanelHeight)
-
-    if (typeof ResizeObserver === 'undefined') {
-      return () => {
-        window.cancelAnimationFrame(frame)
-      }
-    }
-
-    const observer = new ResizeObserver(() => {
-      updatePanelHeight()
-    })
-
-    observer.observe(panelEl)
-
-    return () => {
-      window.cancelAnimationFrame(frame)
-      observer.disconnect()
-    }
-  }, [viewMode])
 
   const windowTitle = useMemo(() => {
     const tilesById = new Map(tiles.map((tile) => [tile.id, tile]))
@@ -1763,76 +1726,73 @@ export default function App(): React.ReactElement {
               onOpenSettings={() => setShowSettings(true)}
             />
 
-            <div className="relative flex-1 overflow-hidden">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               {(viewMode === 'fullview' || viewMode === 'splitview') && (
-            <div className="absolute inset-x-0 top-0 z-10">
-              {viewMode === 'fullview' ? (
-                <FullviewPanel
-                  containerRef={fullviewPanelRef}
-                  tiles={sortedTiles}
-                  activeTileId={fullviewActiveTileId}
-                  onActivateTile={(tileId) => {
-                    setFullviewActiveTileId(tileId)
-                    handleSelectSingleTile(tileId)
-                  }}
-                  onCloseTile={(tileId) => {
-                    void closeTileFromFullview(tileId)
-                  }}
-                  onEditTile={openTileEditor}
-                  onFocusTile={focusTileInFullview}
-                  onRefreshTile={handleRefreshTile}
-                  onToggleLock={(tileId) => {
-                    const tile = tiles.find((entry) => entry.id === tileId)
-                    if (!tile) return
-                    updateTile(tileId, { locked: !tile.locked })
-                  }}
-                />
-              ) : (
-                <SplitviewPanel
-                  containerRef={fullviewPanelRef}
-                  tiles={sortedTiles}
-                  splitViewState={splitViewState}
-                  onActivateTile={activateSplitTile}
-                  onCloseTile={(panel, tileId) => {
-                    void closeTileFromSplitview(panel, tileId)
-                  }}
-                  onEditTile={openTileEditor}
-                  onFocusTile={focusTileInFullview}
-                  onRefreshTile={handleRefreshTile}
-                  onMoveTile={moveTileToSplitPanel}
-                  onFocusPanel={setSplitFocusedPanel}
-                  onToggleLock={(tileId) => {
-                    const tile = tiles.find((entry) => entry.id === tileId)
-                    if (!tile) return
-                    updateTile(tileId, { locked: !tile.locked })
-                  }}
-                />
-              )}
-            </div>
+                viewMode === 'fullview' ? (
+                  <FullviewPanel
+                    tiles={sortedTiles}
+                    activeTileId={fullviewActiveTileId}
+                    onActivateTile={(tileId) => {
+                      setFullviewActiveTileId(tileId)
+                      handleSelectSingleTile(tileId)
+                    }}
+                    onCloseTile={(tileId) => {
+                      void closeTileFromFullview(tileId)
+                    }}
+                    onEditTile={openTileEditor}
+                    onFocusTile={focusTileInFullview}
+                    onRefreshTile={handleRefreshTile}
+                    onToggleLock={(tileId) => {
+                      const tile = tiles.find((entry) => entry.id === tileId)
+                      if (!tile) return
+                      updateTile(tileId, { locked: !tile.locked })
+                    }}
+                  />
+                ) : (
+                  <SplitviewPanel
+                    tiles={sortedTiles}
+                    splitViewState={splitViewState}
+                    onActivateTile={activateSplitTile}
+                    onCloseTile={(panel, tileId) => {
+                      void closeTileFromSplitview(panel, tileId)
+                    }}
+                    onEditTile={openTileEditor}
+                    onFocusTile={focusTileInFullview}
+                    onRefreshTile={handleRefreshTile}
+                    onMoveTile={moveTileToSplitPanel}
+                    onFocusPanel={setSplitFocusedPanel}
+                    onToggleLock={(tileId) => {
+                      const tile = tiles.find((entry) => entry.id === tileId)
+                      if (!tile) return
+                      updateTile(tileId, { locked: !tile.locked })
+                    }}
+                  />
+                )
               )}
 
-              <Canvas
-            profiles={availableProfiles}
-            onCreateTerminal={(profileId) => addTerminal(profileId)}
-            onCreateNote={() => addNote()}
-            onCreateBrowser={() => addBrowser()}
-            onCreateBoard={() => addBoard()}
-            onCreateTimer={() => addTimer()}
-            onCreateFiles={() => addFiles()}
-            canCreateFiles={Boolean(activeWorkspaceConfig.rootFolderPath)}
-            onCreateGroupFromSelection={() => {
-              void handleCreateGroupFromSelection()
-            }}
-            groupsEnabled={groupsEnabled}
-            onDeleteTile={deleteTile}
-            onConfirmRemoveFromGroup={confirmRemoveTileFromGroup}
-            tileRefreshKeys={tileRefreshKeys}
-            viewMode={viewMode}
-            fullviewActiveTileId={fullviewActiveTileId}
-            splitViewState={splitViewState}
-            onFocusSplitPanel={setSplitFocusedPanel}
-            fullviewTopInset={viewMode === 'fullview' || viewMode === 'splitview' ? fullviewTopInset : 0}
-              />
+              <div className="relative min-h-0 flex-1">
+                <Canvas
+                  profiles={availableProfiles}
+                  onCreateTerminal={(profileId) => addTerminal(profileId)}
+                  onCreateNote={() => addNote()}
+                  onCreateBrowser={() => addBrowser()}
+                  onCreateBoard={() => addBoard()}
+                  onCreateTimer={() => addTimer()}
+                  onCreateFiles={() => addFiles()}
+                  canCreateFiles={Boolean(activeWorkspaceConfig.rootFolderPath)}
+                  onCreateGroupFromSelection={() => {
+                    void handleCreateGroupFromSelection()
+                  }}
+                  groupsEnabled={groupsEnabled}
+                  onDeleteTile={deleteTile}
+                  onConfirmRemoveFromGroup={confirmRemoveTileFromGroup}
+                  tileRefreshKeys={tileRefreshKeys}
+                  viewMode={viewMode}
+                  fullviewActiveTileId={fullviewActiveTileId}
+                  splitViewState={splitViewState}
+                  onFocusSplitPanel={setSplitFocusedPanel}
+                />
+              </div>
             </div>
           </>
         ) : (

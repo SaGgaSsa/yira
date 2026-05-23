@@ -17,12 +17,24 @@ const TERMINAL_FONT_SIZES: Record<FontSize, number> = {
 interface Props {
   tile: TileState
   isFocused: boolean
+  edgeToEdge?: boolean
   onFocus: () => void
   onUpdate: (patch: Partial<TileState>) => void
   onDelete: () => void
 }
 
-export function TerminalTileWrapper({ tile, isFocused, onFocus, onUpdate, onDelete }: Props): React.ReactElement {
+function applyTerminalPadding(container: HTMLElement | null, edgeToEdge: boolean): void {
+  const xtermEl = container?.querySelector('.xterm') as HTMLElement | null
+  if (!xtermEl) return
+  const horizontalPadding = edgeToEdge ? '0px' : '14px'
+  const verticalPadding = edgeToEdge ? '0px' : '12px'
+  xtermEl.style.paddingLeft = horizontalPadding
+  xtermEl.style.paddingRight = horizontalPadding
+  xtermEl.style.paddingTop = verticalPadding
+  xtermEl.style.paddingBottom = verticalPadding
+}
+
+export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, onFocus, onUpdate, onDelete }: Props): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
@@ -114,14 +126,7 @@ export function TerminalTileWrapper({ tile, isFocused, onFocus, onUpdate, onDele
     containerRef.current.innerHTML = ''
     term.open(containerRef.current)
 
-    // Padding
-    const xtermEl = containerRef.current.querySelector('.xterm') as HTMLElement | null
-    if (xtermEl) {
-      xtermEl.style.paddingLeft = '14px'
-      xtermEl.style.paddingRight = '14px'
-      xtermEl.style.paddingTop = '12px'
-      xtermEl.style.paddingBottom = '12px'
-    }
+    applyTerminalPadding(containerRef.current, edgeToEdge)
 
     termRef.current = term
     fitRef.current = fitAddon
@@ -184,6 +189,11 @@ export function TerminalTileWrapper({ tile, isFocused, onFocus, onUpdate, onDele
       fitRef.current = null
     }
   }, [tile.id, tile.shellProfileId, doFit])
+
+  useEffect(() => {
+    applyTerminalPadding(containerRef.current, edgeToEdge)
+    requestAnimationFrame(() => doFit())
+  }, [edgeToEdge, doFit])
 
   // Re-fit on width/height changes
   useEffect(() => {

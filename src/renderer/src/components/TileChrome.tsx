@@ -17,7 +17,6 @@ interface Props {
   onRemoveFromGroup?: () => void
   children: ReactNode
   mode?: ViewMode
-  fullviewTopInset?: number
   isHiddenInFullview?: boolean
   splitPanel?: SplitPanelId
 }
@@ -57,7 +56,6 @@ export function TileChrome({
   onRemoveFromGroup,
   children,
   mode = 'canvas',
-  fullviewTopInset = 0,
   isHiddenInFullview = false,
   splitPanel = 'left',
 }: Props): React.ReactElement {
@@ -248,9 +246,9 @@ export function TileChrome({
       className="absolute"
       style={{
         left: isFullview ? 0 : isSplitview ? (splitPanel === 'left' ? 0 : '50%') : tile.x,
-        top: isFixedView ? fullviewTopInset : tile.y,
+        top: isFixedView ? 0 : tile.y,
         width: isFullview ? '100%' : isSplitview ? '50%' : tile.width,
-        height: isFixedView ? `calc(100% - ${fullviewTopInset}px)` : tile.height,
+        height: isFixedView ? '100%' : tile.height,
         zIndex: isFixedView ? (isHiddenInFullview ? 0 : 1) : tile.zIndex,
         cursor,
         opacity: isFixedView && isHiddenInFullview ? 0 : 1,
