@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AlertCircle, Save, X } from 'lucide-react'
-import type { CanvasState } from '@shared/types'
-import type { ViewMode, SplitViewState } from '@shared/types'
+import type { CanvasState, SplitViewState, ViewMode } from '@shared/types'
 
 interface RawJsonEditorProps {
   open: boolean
   workspaceId: string
+  canvasState: CanvasState | null
   onClose: () => void
   onApply: (state: CanvasState) => void
 }
@@ -45,35 +45,31 @@ function normalizeCanvasState(state: CanvasState): CanvasState {
   }
 }
 
-export function RawJsonEditor({ open, workspaceId, onClose, onApply }: RawJsonEditorProps): React.ReactElement | null {
+export function RawJsonEditor({ open, workspaceId, canvasState, onClose, onApply }: RawJsonEditorProps): React.ReactElement | null {
   const [value, setValue] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open || !workspaceId) return
-    window.electron.canvas.load(workspaceId).then((state) => {
-      const nextState = normalizeCanvasState(state ?? {
-        tiles: [],
-        groups: [],
-        viewport: { tx: 0, ty: 0, zoom: 1 },
-        nextZIndex: 1,
-        focusedTileId: null,
-        viewMode: 'fullview',
-        fullviewActiveTileId: null,
-        splitViewState: {
-          leftTileIds: [],
-          rightTileIds: [],
-          activeLeftTileId: null,
-          activeRightTileId: null,
-          focusedPanel: 'left',
-        },
-      })
-      setValue(JSON.stringify(nextState, null, 2))
-      setError(null)
-    }).catch((err) => {
-      setError(err instanceof Error ? err.message : String(err))
+    const nextState = normalizeCanvasState(canvasState ?? {
+      tiles: [],
+      groups: [],
+      viewport: { tx: 0, ty: 0, zoom: 1 },
+      nextZIndex: 1,
+      focusedTileId: null,
+      viewMode: 'fullview',
+      fullviewActiveTileId: null,
+      splitViewState: {
+        leftTileIds: [],
+        rightTileIds: [],
+        activeLeftTileId: null,
+        activeRightTileId: null,
+        focusedPanel: 'left',
+      },
     })
-  }, [open, workspaceId])
+    setValue(JSON.stringify(nextState, null, 2))
+    setError(null)
+  }, [canvasState, open, workspaceId])
 
   useEffect(() => {
     if (!open) return

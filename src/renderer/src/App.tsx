@@ -19,7 +19,7 @@ import { useTheme } from './hooks/useTheme'
 import { useFontSize } from './hooks/useFontSize'
 import { useUpdateStore } from './store/updateStore'
 import { findMergeTargetGroup, findSelectedGroup, getGroupingBlockedReason } from './utils/grouping'
-import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type CanvasState, type Workspace, type TileGroup, type ViewMode, type SplitPanelId, type SplitViewState } from '@shared/types'
+import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type CanvasState, type Workspace, type WorkspaceMetadata, type TileGroup, type ViewMode, type SplitPanelId, type SplitViewState } from '@shared/types'
 import { TILE_META } from './components/TileContent'
 import { TileListItem } from './components/TileListItem'
 import { Terminal, StickyNote, Globe, LayoutGrid, Clock, Folder, ChevronDown, FolderPlus, FolderOpen, Trash2, Pencil, Lock, Columns, RefreshCw, Download, X } from 'lucide-react'
@@ -44,6 +44,28 @@ function createEmptyCanvasState(): CanvasState {
       activeLeftTileId: null,
       activeRightTileId: null,
       focusedPanel: 'left',
+    },
+  }
+}
+
+type CanvasSnapshotSource = Pick<ReturnType<typeof useCanvasStore.getState>, 'tiles' | 'groups' | 'viewport' | 'nextZIndex' | 'focusedTileId' | 'viewMode' | 'fullviewActiveTileId' | 'splitViewState'>
+
+function createCanvasSnapshot(source: CanvasSnapshotSource): CanvasState {
+  return {
+    tiles: source.tiles.map((tile) => ({ ...tile })),
+    groups: source.groups.map((group) => ({
+      ...group,
+      tileIds: [...group.tileIds],
+    })),
+    viewport: { ...source.viewport },
+    nextZIndex: source.nextZIndex,
+    focusedTileId: source.focusedTileId,
+    viewMode: source.viewMode,
+    fullviewActiveTileId: source.fullviewActiveTileId,
+    splitViewState: {
+      ...source.splitViewState,
+      leftTileIds: [...source.splitViewState.leftTileIds],
+      rightTileIds: [...source.splitViewState.rightTileIds],
     },
   }
 }
@@ -262,7 +284,7 @@ export default function App(): React.ReactElement {
   // UI state
   const [showProfilePicker, setShowProfilePicker] = useState(false)
   const [showWorkspacePicker, setShowWorkspacePicker] = useState(false)
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
+  const [workspaceMetadata, setWorkspaceMetadata] = useState<WorkspaceMetadata[]>([])
   const [showSettings, setShowSettings] = useState(false)
   const [showJsonEditor, setShowJsonEditor] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -375,32 +397,30 @@ export default function App(): React.ReactElement {
     void window.electron.window.setTitle(windowTitle)
   }, [windowTitle])
 
-  const refreshWorkspaces = useCallback(async (): Promise<Workspace[]> => {
+  const currentCanvasState = useMemo(
+    () => createCanvasSnapshot({
+      tiles,
+      groups,
+      viewport,
+      nextZIndex,
+      focusedTileId,
+      viewMode,
+      fullviewActiveTileId,
+      splitViewState,
+    }),
+    [tiles, groups, viewport, nextZIndex, focusedTileId, viewMode, fullviewActiveTileId, splitViewState],
+  )
+
+  const refreshWorkspaceMetadata = useCallback(async (): Promise<WorkspaceMetadata[]> => {
     const list = await window.electron.workspace.list()
-    setWorkspaces(list)
+    setWorkspaceMetadata(list)
     return list
   }, [])
 
   const saveToDisk = useCallback(
     async (workspaceId: string) => {
       const stateSnapshot = useCanvasStore.getState()
-      const state: CanvasState = {
-        tiles: stateSnapshot.tiles.map((tile) => ({ ...tile })),
-        groups: stateSnapshot.groups.map((group) => ({
-          ...group,
-          tileIds: [...group.tileIds],
-        })),
-        viewport: { ...stateSnapshot.viewport },
-        nextZIndex: stateSnapshot.nextZIndex,
-        focusedTileId: stateSnapshot.focusedTileId,
-        viewMode: stateSnapshot.viewMode,
-        fullviewActiveTileId: stateSnapshot.fullviewActiveTileId,
-        splitViewState: {
-          ...stateSnapshot.splitViewState,
-          leftTileIds: [...stateSnapshot.splitViewState.leftTileIds],
-          rightTileIds: [...stateSnapshot.splitViewState.rightTileIds],
-        },
-      }
+      const state = createCanvasSnapshot(stateSnapshot)
 
       await window.electron.canvas.save(workspaceId, state)
     },
@@ -425,6 +445,7 @@ export default function App(): React.ReactElement {
       await saveToDisk(currentWorkspaceId)
     }
 
+    // Canvas state is active-workspace-only data. Workspace list/getActive stay metadata-only.
     const state = await window.electron.canvas.load(workspace.id)
     if (transitionId !== workspaceTransitionRef.current) return
 
@@ -442,7 +463,7 @@ export default function App(): React.ReactElement {
   useEffect(() => {
     console.log('[App] Loading workspaces and shell profiles...')
     Promise.all([
-      refreshWorkspaces(),
+      refreshWorkspaceMetadata(),
       window.electron.workspace.getActive(),
     ]).then(([list, active]) => {
       console.log('[App] Workspaces:', list)
@@ -479,11 +500,11 @@ export default function App(): React.ReactElement {
       console.log('[App] Shell profiles:', profiles)
       setProfiles(profiles.map((p) => ({ id: p.id, label: p.label, available: p.available })))
     }).catch((err) => console.error('[App] Error loading shell profiles:', err))
-  }, [activateWorkspace, refreshWorkspaces, restoreState, setProfiles, setWorkspace])
+  }, [activateWorkspace, refreshWorkspaceMetadata, restoreState, setProfiles, setWorkspace])
 
   // Switch workspace
   const switchWorkspace = useCallback(
-    (workspace: Workspace) => {
+    (workspace: WorkspaceMetadata) => {
       if (workspace.id === activeWorkspaceId) {
         setShowWorkspacePicker(false)
         return
@@ -974,7 +995,7 @@ export default function App(): React.ReactElement {
     bumpTileRefreshKey(tile.id)
   }, [bumpTileRefreshKey, clearTerminalTitle, requestRefreshTileConfirmation])
 
-  const openWorkspaceEditor = useCallback((workspace: Workspace) => {
+  const openWorkspaceEditor = useCallback((workspace: WorkspaceMetadata) => {
     setWorkspaceItemMenu(null)
     setWorkspaceEditor({
       mode: 'edit',
@@ -1009,7 +1030,7 @@ export default function App(): React.ReactElement {
         rootFolderPath: value.rootFolderPath || undefined,
         initialCommand: value.initialCommand || undefined,
       })
-      await refreshWorkspaces()
+      await refreshWorkspaceMetadata()
       setWorkspaceEditor(null)
       await activateWorkspace(created, { persistCurrent: false, updateMain: false })
       return
@@ -1024,7 +1045,7 @@ export default function App(): React.ReactElement {
     })
     if (!updated) return
 
-    const list = await refreshWorkspaces()
+    const list = await refreshWorkspaceMetadata()
     setWorkspaceEditor(null)
 
     if (updated.id === activeWorkspaceId) {
@@ -1032,9 +1053,9 @@ export default function App(): React.ReactElement {
       const refreshed = list.find((workspace) => workspace.id === updated.id) ?? updated
       void activateWorkspace(refreshed, { persistCurrent: false, updateMain: false })
     }
-  }, [activateWorkspace, activeWorkspaceId, refreshWorkspaces, saveToDisk, setWorkspace, workspaceEditor])
+  }, [activateWorkspace, activeWorkspaceId, refreshWorkspaceMetadata, saveToDisk, setWorkspace, workspaceEditor])
 
-  const deleteWorkspace = useCallback(async (workspace: Workspace) => {
+  const deleteWorkspace = useCallback(async (workspace: WorkspaceMetadata) => {
     setWorkspaceItemMenu(null)
 
     const confirmation = await requestPrompt({
@@ -1059,7 +1080,7 @@ export default function App(): React.ReactElement {
     }
 
     await window.electron.workspace.delete(workspace.id)
-    const list = await refreshWorkspaces()
+    const list = await refreshWorkspaceMetadata()
 
     if (!isActiveWorkspace) return
 
@@ -1089,7 +1110,7 @@ export default function App(): React.ReactElement {
         },
       },
     })
-  }, [activateWorkspace, refreshWorkspaces, requestPrompt, saveToDisk, setWorkspace, restoreState])
+  }, [activateWorkspace, refreshWorkspaceMetadata, requestPrompt, saveToDisk, setWorkspace, restoreState])
 
   const createWorkspace = useCallback(async () => {
     setWorkspaceEditor({
@@ -1121,9 +1142,9 @@ export default function App(): React.ReactElement {
     const workspace = await window.electron.workspace.openFolder()
     if (!workspace) return
 
-    await refreshWorkspaces()
+    await refreshWorkspaceMetadata()
     await activateWorkspace(workspace, { persistCurrent: false, updateMain: false })
-  }, [activeWorkspaceId, activateWorkspace, refreshWorkspaces, saveToDisk])
+  }, [activeWorkspaceId, activateWorkspace, refreshWorkspaceMetadata, saveToDisk])
 
   const createTerminalFromSidebar = useCallback(() => {
     if (availableProfiles.length <= 1 && defaultProfile) {
@@ -1137,7 +1158,7 @@ export default function App(): React.ReactElement {
   const activeTileMenu = tileMenu ? tiles.find((tile) => tile.id === tileMenu.tileId) ?? null : null
   const activeGroupMenu = groupsEnabled && groupMenu ? effectiveGroups.find((group) => group.id === groupMenu.groupId) ?? null : null
   const activeWorkspaceMenu = workspaceItemMenu
-    ? workspaces.find((workspace) => workspace.id === workspaceItemMenu.workspaceId) ?? null
+    ? workspaceMetadata.find((workspace) => workspace.id === workspaceItemMenu.workspaceId) ?? null
     : null
   const tileMenuItems: MenuItem[] = activeTileMenu ? [
     {
@@ -1531,7 +1552,7 @@ export default function App(): React.ReactElement {
                 }}
               >
                 <div className="max-h-56 overflow-y-auto py-2">
-                  {workspaces.map((workspace) => (
+                  {workspaceMetadata.map((workspace) => (
                     <div
                       key={workspace.id}
                       className="flex items-center gap-2 px-2 py-1"
@@ -1831,6 +1852,7 @@ export default function App(): React.ReactElement {
       <RawJsonEditor
         open={showJsonEditor}
         workspaceId={activeWorkspaceId}
+        canvasState={activeWorkspaceId ? currentCanvasState : null}
         onClose={() => setShowJsonEditor(false)}
         onApply={(state) => {
           restoreState(state)

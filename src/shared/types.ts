@@ -8,6 +8,9 @@ export interface Workspace {
   path: string
 }
 
+/** Config-only workspace data used for selectors and workspace editing. */
+export type WorkspaceMetadata = Workspace
+
 export interface WorkspaceConfig {
   rootFolderPath?: string
   initialCommand?: string
@@ -24,7 +27,7 @@ export type WorkspaceUpdatePatch = Partial<Pick<Workspace, 'name'>> & {
 }
 
 export interface Config {
-  workspaces: Workspace[]
+  workspaces: WorkspaceMetadata[]
   activeWorkspaceId: string
   settings: AppSettings
 }

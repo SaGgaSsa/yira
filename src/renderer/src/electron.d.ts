@@ -2,6 +2,7 @@ import type {
   ShellProfileId,
   CanvasState,
   Workspace,
+  WorkspaceMetadata,
   WorkspaceCreateInput,
   WorkspaceUpdatePatch,
   UserSettings,
@@ -26,7 +27,7 @@ type NoteData = {
 
 interface ElectronWorld {
   workspace: {
-    list: () => Promise<Workspace[]>
+    list: () => Promise<WorkspaceMetadata[]>
     create: (input: WorkspaceCreateInput) => Promise<Workspace>
     update: (id: string, patch: WorkspaceUpdatePatch) => Promise<Workspace | null>
     rename: (id: string, name: string) => Promise<Workspace | null>

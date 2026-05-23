@@ -143,11 +143,13 @@ function updateWorkspace(workspace: Workspace, patch: WorkspaceUpdatePatch): Wor
 export function registerWorkspaceIPC(): void {
   ipcMain.handle('workspace:list', async () => {
     const config = await readConfig()
+    // Metadata only: selectors/editors need config rows, not canvas, boards, notes, or tile state.
     return config.workspaces
   })
 
   ipcMain.handle('workspace:getActive', async () => {
     const config = await readConfig()
+    // Metadata only. The renderer decides when to restore the active workspace canvas.
     return config.workspaces.find(w => w.id === config.activeWorkspaceId) ?? config.workspaces[0] ?? null
   })
 
