@@ -22,7 +22,7 @@ import { findMergeTargetGroup, findSelectedGroup, getGroupingBlockedReason } fro
 import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type CanvasState, type Workspace, type WorkspaceMetadata, type TileGroup, type ViewMode, type SplitPanelId, type SplitViewState } from '@shared/types'
 import { TILE_META } from './components/TileContent'
 import { TileListItem } from './components/TileListItem'
-import { Terminal, StickyNote, Globe, LayoutGrid, Clock, Folder, ChevronDown, FolderPlus, FolderOpen, Trash2, Pencil, Lock, Columns, RefreshCw, Download, X } from 'lucide-react'
+import { Terminal, StickyNote, Globe, Clock, Folder, ChevronDown, FolderPlus, FolderOpen, Trash2, Pencil, Lock, Columns, RefreshCw, Download, X } from 'lucide-react'
 
 const GROUP_SHOW_MARGIN = 20
 const GROUP_SHOW_TOP_PADDING = 118
@@ -215,6 +215,7 @@ export default function App(): React.ReactElement {
   const updateMessage = useUpdateStore((s) => s.message)
   const installUpdate = useUpdateStore((s) => s.installUpdate)
   const groupsEnabled = useSettingsStore((s) => s.groups.enabled)
+  const tileCreationAvailability = useSettingsStore((s) => s.tiles.creationAvailability)
 
   // Canvas state
   const tiles = useCanvasStore((s) => s.tiles)
@@ -279,7 +280,7 @@ export default function App(): React.ReactElement {
     })
   }, [])
 
-  const { addTerminal, addNote, addBrowser, addBoard, addTimer, addFiles, deleteTile, resetZoom } = useCanvasActions({ requestConfirm })
+  const { addTerminal, addNote, addBrowser, addTimer, addFiles, deleteTile, resetZoom } = useCanvasActions({ requestConfirm })
 
   // UI state
   const [showProfilePicker, setShowProfilePicker] = useState(false)
@@ -563,6 +564,11 @@ export default function App(): React.ReactElement {
     availableProfiles.find((p) => p.id === 'zsh') ??
     availableProfiles.find((p) => p.available)
   const effectiveGroups = groupsEnabled ? groups : []
+  const canCreateNote = tileCreationAvailability.note
+  const canCreateBrowser = tileCreationAvailability.browser
+  const canCreateTimer = tileCreationAvailability.timer
+  const canShowFilesCreation = tileCreationAvailability.files
+  const canCreateFiles = canShowFilesCreation && Boolean(activeWorkspaceConfig.rootFolderPath)
 
   // Zoom toggle: switch between 100% and previous zoom
   const handleZoomToggle = useCallback(() => {
@@ -1430,63 +1436,60 @@ export default function App(): React.ReactElement {
                 <Terminal size={16} />
                 <span className="nd-label">Terminal</span>
               </button>
-              <button
-                className="nd-panel-raised flex h-14 items-center justify-center gap-2 rounded-full text-text-secondary transition-colors hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
-                onClick={() => {
-                  setShowProfilePicker(false)
-                  addNote()
-                }}
-                title="New note"
-              >
-                <StickyNote size={16} />
-                <span className="nd-label">Note</span>
-              </button>
-              <button
-                className="nd-panel-raised flex h-14 items-center justify-center gap-2 rounded-full text-text-secondary transition-colors hover:text-text-display"
-                onClick={() => {
-                  setShowProfilePicker(false)
-                  addBrowser()
-                }}
-                title="New browser"
-              >
-                <Globe size={16} />
-                <span className="nd-label">Browser</span>
-              </button>
-              <button
-                className="nd-panel-raised flex h-14 items-center justify-center gap-2 rounded-full text-text-secondary transition-colors hover:text-text-display"
-                onClick={() => {
-                  setShowProfilePicker(false)
-                  addBoard()
-                }}
-                title="New board"
-              >
-                <LayoutGrid size={16} />
-                <span className="nd-label">Board</span>
-              </button>
-              <button
-                className="nd-panel-raised flex h-14 items-center justify-center gap-2 rounded-full text-text-secondary transition-colors hover:text-text-display"
-                onClick={() => {
-                  setShowProfilePicker(false)
-                  addTimer()
-                }}
-                title="New timer"
-              >
-                <Clock size={16} />
-                <span className="nd-label">Timer</span>
-              </button>
-              <button
-                className="nd-panel-raised flex h-14 items-center justify-center gap-2 rounded-full text-text-secondary transition-colors hover:text-text-display"
-                onClick={() => {
-                  if (!activeWorkspaceConfig.rootFolderPath) return
-                  setShowProfilePicker(false)
-                  addFiles()
-                }}
-                disabled={!activeWorkspaceConfig.rootFolderPath}
-                title="New files"
-              >
-                <Folder size={16} />
-                <span className="nd-label">Files</span>
-              </button>
+              {canCreateNote && (
+                <button
+                  className="nd-panel-raised flex h-14 items-center justify-center gap-2 rounded-full text-text-secondary transition-colors hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
+                  onClick={() => {
+                    setShowProfilePicker(false)
+                    addNote()
+                  }}
+                  title="New note"
+                >
+                  <StickyNote size={16} />
+                  <span className="nd-label">Note</span>
+                </button>
+              )}
+              {canCreateBrowser && (
+                <button
+                  className="nd-panel-raised flex h-14 items-center justify-center gap-2 rounded-full text-text-secondary transition-colors hover:text-text-display"
+                  onClick={() => {
+                    setShowProfilePicker(false)
+                    addBrowser()
+                  }}
+                  title="New browser"
+                >
+                  <Globe size={16} />
+                  <span className="nd-label">Browser</span>
+                </button>
+              )}
+              {canCreateTimer && (
+                <button
+                  className="nd-panel-raised flex h-14 items-center justify-center gap-2 rounded-full text-text-secondary transition-colors hover:text-text-display"
+                  onClick={() => {
+                    setShowProfilePicker(false)
+                    addTimer()
+                  }}
+                  title="New timer"
+                >
+                  <Clock size={16} />
+                  <span className="nd-label">Timer</span>
+                </button>
+              )}
+              {canShowFilesCreation && (
+                <button
+                  className="nd-panel-raised flex h-14 items-center justify-center gap-2 rounded-full text-text-secondary transition-colors hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
+                  onClick={() => {
+                    if (!canCreateFiles) return
+                    setShowProfilePicker(false)
+                    addFiles()
+                  }}
+                  disabled={!canCreateFiles}
+                  title="New files"
+                >
+                  <Folder size={16} />
+                  <span className="nd-label">Files</span>
+                </button>
+              )}
             </div>
           </div>
         }
@@ -1776,10 +1779,13 @@ export default function App(): React.ReactElement {
                   onCreateTerminal={(profileId) => addTerminal(profileId)}
                   onCreateNote={() => addNote()}
                   onCreateBrowser={() => addBrowser()}
-                  onCreateBoard={() => addBoard()}
                   onCreateTimer={() => addTimer()}
                   onCreateFiles={() => addFiles()}
-                  canCreateFiles={Boolean(activeWorkspaceConfig.rootFolderPath)}
+                  canCreateNote={canCreateNote}
+                  canCreateBrowser={canCreateBrowser}
+                  canCreateTimer={canCreateTimer}
+                  canShowFilesCreation={canShowFilesCreation}
+                  canCreateFiles={canCreateFiles}
                   onCreateGroupFromSelection={() => {
                     void handleCreateGroupFromSelection()
                   }}

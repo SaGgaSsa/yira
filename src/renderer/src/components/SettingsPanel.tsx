@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Monitor, Moon, Sun, Type, Grid3X3, Globe, Code2, Info, RefreshCw, Download } from 'lucide-react'
+import { X, Monitor, Moon, Sun, Type, Grid3X3, Globe, Code2, Info, RefreshCw, Download, LayoutGrid } from 'lucide-react'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useUpdateStore } from '@/store/updateStore'
 import type { UpdateState } from '@shared/types'
@@ -15,6 +15,7 @@ type SettingsSectionId =
   | 'appearance'
   | 'density'
   | 'canvas'
+  | 'tiles'
   | 'browser'
   | 'advanced'
   | 'about'
@@ -27,6 +28,7 @@ const SETTINGS_SECTIONS: Array<{
   { id: 'appearance', label: 'Appearance', icon: Monitor },
   { id: 'density', label: 'Density', icon: Type },
   { id: 'canvas', label: 'Canvas', icon: Grid3X3 },
+  { id: 'tiles', label: 'Tiles', icon: LayoutGrid },
   { id: 'browser', label: 'Browser', icon: Globe },
   { id: 'advanced', label: 'Advanced', icon: Code2 },
   { id: 'about', label: 'About & Updates', icon: Info },
@@ -61,6 +63,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor }: SettingsPanel
   const snapToGrid = useSettingsStore((s) => s.snapToGrid)
   const gridSize = useSettingsStore((s) => s.gridSize)
   const browserHomeUrl = useSettingsStore((s) => s.browser.homeUrl)
+  const tileCreationAvailability = useSettingsStore((s) => s.tiles.creationAvailability)
   const groupsEnabled = useSettingsStore((s) => s.groups.enabled)
   const setAppearance = useSettingsStore((s) => s.setAppearance)
   const setFontSize = useSettingsStore((s) => s.setFontSize)
@@ -68,6 +71,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor }: SettingsPanel
   const setSnapToGrid = useSettingsStore((s) => s.setSnapToGrid)
   const setGridSize = useSettingsStore((s) => s.setGridSize)
   const setBrowserHomeUrl = useSettingsStore((s) => s.setBrowserHomeUrl)
+  const setTileCreationAvailable = useSettingsStore((s) => s.setTileCreationAvailable)
   const setGroupsEnabled = useSettingsStore((s) => s.setGroupsEnabled)
   const currentVersion = useUpdateStore((s) => s.currentVersion)
   const availableVersion = useUpdateStore((s) => s.availableVersion)
@@ -250,6 +254,51 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor }: SettingsPanel
               <span className="nd-label text-text-display">Open raw canvas JSON</span>
               <span className="nd-caption text-text-secondary">[ EDIT ]</span>
             </button>
+          </div>
+        </section>
+      )
+    }
+
+    if (activeSection === 'tiles') {
+      return (
+        <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
+          <div className="mb-5 flex items-center gap-3">
+            <ActiveSectionIcon size={16} className="text-text-secondary" />
+            <div>
+              <div className="nd-label text-text-secondary">Tiles</div>
+              <h3 className="mt-1 text-xl text-text-display">Creation availability</h3>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {([
+              { type: 'note' as const, label: 'Note' },
+              { type: 'browser' as const, label: 'Browser' },
+              { type: 'timer' as const, label: 'Timer' },
+              { type: 'files' as const, label: 'Files' },
+            ]).map(({ type, label }) => (
+              <label
+                key={type}
+                className="flex items-center justify-between gap-4 rounded-[20px] border border-border-visible bg-bg-primary px-4 py-4"
+              >
+                <span className="nd-label text-text-display">{label}</span>
+                <input
+                  type="checkbox"
+                  checked={tileCreationAvailability[type]}
+                  onChange={(event) => setTileCreationAvailable(type, event.target.checked)}
+                />
+              </label>
+            ))}
+
+            <div className="flex items-center justify-between gap-4 rounded-[20px] border border-border bg-bg-primary px-4 py-4 opacity-70">
+              <span>
+                <span className="nd-label block text-text-display">Board</span>
+                <span className="mt-2 block text-sm leading-6 text-text-secondary">
+                  Board creation is locked for an upcoming redesign.
+                </span>
+              </span>
+              <input type="checkbox" checked={false} disabled />
+            </div>
           </div>
         </section>
       )

@@ -94,9 +94,12 @@ interface CanvasProps {
   onCreateTerminal: (profileId: ShellProfileId) => void
   onCreateNote: () => void
   onCreateBrowser: () => void
-  onCreateBoard: () => void
   onCreateTimer: () => void
   onCreateFiles: () => void
+  canCreateNote: boolean
+  canCreateBrowser: boolean
+  canCreateTimer: boolean
+  canShowFilesCreation: boolean
   canCreateFiles: boolean
   onCreateGroupFromSelection: () => void | Promise<void>
   onDeleteTile: (tileId: string) => Promise<boolean>
@@ -114,9 +117,12 @@ export function Canvas({
   onCreateTerminal,
   onCreateNote,
   onCreateBrowser,
-  onCreateBoard,
   onCreateTimer,
   onCreateFiles,
+  canCreateNote,
+  canCreateBrowser,
+  canCreateTimer,
+  canShowFilesCreation,
   canCreateFiles,
   onCreateGroupFromSelection,
   onDeleteTile,
@@ -876,11 +882,10 @@ export function Canvas({
                 action: () => onCreateTerminal(p.id),
               })),
             },
-            { label: 'New Note', icon: StickyNote, action: onCreateNote },
-            { label: 'New Browser', icon: Globe, action: onCreateBrowser },
-            { label: 'New Board', icon: LayoutGrid, action: onCreateBoard },
-            { label: 'New Timer', icon: Clock, action: onCreateTimer },
-            { label: 'New Files', icon: Folder, action: onCreateFiles, disabled: !canCreateFiles },
+            ...(canCreateNote ? [{ label: 'New Note', icon: StickyNote, action: onCreateNote }] : []),
+            ...(canCreateBrowser ? [{ label: 'New Browser', icon: Globe, action: onCreateBrowser }] : []),
+            ...(canCreateTimer ? [{ label: 'New Timer', icon: Clock, action: onCreateTimer }] : []),
+            ...(canShowFilesCreation ? [{ label: 'New Files', icon: Folder, action: onCreateFiles, disabled: !canCreateFiles }] : []),
           ]}
           onClose={() => setContextMenu(null)}
         />

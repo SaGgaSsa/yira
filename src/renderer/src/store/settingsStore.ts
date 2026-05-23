@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { UserSettings, AppearanceMode, FontSize } from '@shared/types'
+import type { UserSettings, AppearanceMode, FontSize, ConfigurableTileCreationType } from '@shared/types'
 import { DEFAULT_USER_SETTINGS } from '@shared/types'
 
 export interface SettingsState extends UserSettings {
@@ -12,6 +12,7 @@ export interface SettingsState extends UserSettings {
   setSnapToGrid: (snap: boolean) => void
   setGridSize: (size: number) => void
   setBrowserHomeUrl: (url: string) => void
+  setTileCreationAvailable: (type: ConfigurableTileCreationType, available: boolean) => void
   setGroupsEnabled: (enabled: boolean) => void
   loadSettings: () => Promise<void>
   saveSettings: () => void
@@ -30,6 +31,12 @@ function scheduleSave() {
       snapToGrid: state.snapToGrid,
       gridSize: state.gridSize,
       browser: { homeUrl: state.browser.homeUrl },
+      tiles: {
+        creationAvailability: {
+          ...DEFAULT_USER_SETTINGS.tiles.creationAvailability,
+          ...state.tiles.creationAvailability,
+        },
+      },
       groups: { enabled: state.groups.enabled },
     }
     window.electron.settings.save(settings)
@@ -70,6 +77,20 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     scheduleSave()
   },
 
+  setTileCreationAvailable: (type, available) => {
+    set((state) => ({
+      tiles: {
+        ...state.tiles,
+        creationAvailability: {
+          ...DEFAULT_USER_SETTINGS.tiles.creationAvailability,
+          ...state.tiles.creationAvailability,
+          [type]: available,
+        },
+      },
+    }))
+    scheduleSave()
+  },
+
   setGroupsEnabled: (enabled) => {
     set((state) => ({ groups: { ...state.groups, enabled } }))
     scheduleSave()
@@ -87,6 +108,12 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           gridSize: settings.gridSize ?? DEFAULT_USER_SETTINGS.gridSize,
           browser: {
             homeUrl: settings.browser?.homeUrl ?? DEFAULT_USER_SETTINGS.browser.homeUrl,
+          },
+          tiles: {
+            creationAvailability: {
+              ...DEFAULT_USER_SETTINGS.tiles.creationAvailability,
+              ...(settings.tiles?.creationAvailability ?? {}),
+            },
           },
           groups: {
             enabled: settings.groups?.enabled ?? DEFAULT_USER_SETTINGS.groups.enabled,
@@ -111,6 +138,12 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       snapToGrid: state.snapToGrid,
       gridSize: state.gridSize,
       browser: { homeUrl: state.browser.homeUrl },
+      tiles: {
+        creationAvailability: {
+          ...DEFAULT_USER_SETTINGS.tiles.creationAvailability,
+          ...state.tiles.creationAvailability,
+        },
+      },
       groups: { enabled: state.groups.enabled },
     }
     window.electron.settings.save(settings)

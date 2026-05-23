@@ -20,6 +20,14 @@ export function registerSettingsIPC(): void {
           ...DEFAULT_USER_SETTINGS.browser,
           ...(parsed.browser ?? {}),
         },
+        tiles: {
+          ...DEFAULT_USER_SETTINGS.tiles,
+          ...(parsed.tiles ?? {}),
+          creationAvailability: {
+            ...DEFAULT_USER_SETTINGS.tiles.creationAvailability,
+            ...(parsed.tiles?.creationAvailability ?? {}),
+          },
+        },
         groups: {
           ...DEFAULT_USER_SETTINGS.groups,
           ...(parsed.groups ?? {}),
@@ -37,6 +45,14 @@ export function registerSettingsIPC(): void {
       browser: {
         ...DEFAULT_USER_SETTINGS.browser,
         ...(settings.browser ?? {}),
+      },
+      tiles: {
+        ...DEFAULT_USER_SETTINGS.tiles,
+        ...(settings.tiles ?? {}),
+        creationAvailability: {
+          ...DEFAULT_USER_SETTINGS.tiles.creationAvailability,
+          ...(settings.tiles?.creationAvailability ?? {}),
+        },
       },
       groups: {
         ...DEFAULT_USER_SETTINGS.groups,

@@ -44,6 +44,10 @@ _Avoid_: File explorer without workspace
 A tile that provides a shell for the workspace.
 _Avoid_: File explorer, command runner
 
+**Tile Creation Availability**:
+The app-wide preference that controls which configurable tile types appear in normal creation surfaces.
+_Avoid_: Tile visibility, tile deletion, board migration
+
 **Workspace Initial Command**:
 The workspace-level command that runs before a terminal tile's own startup command.
 _Avoid_: Group startup command, legacy group command
@@ -66,6 +70,12 @@ _Avoid_: Workspace initial command
 - A **Files Tile** requires its **Workspace** to have a root folder
 - A **Terminal Tile** can exist without a root folder
 - A **Terminal Tile** runs the **Workspace Initial Command** before its **Terminal Startup Command**
+- **Tile Creation Availability** affects only normal tile creation
+- **Tile Creation Availability** is an app-wide preference
+- **Tile Creation Availability** can hide Note, Browser, Timer, and Files creation
+- A **Terminal Tile** is always available for normal creation
+- Board creation is locked in normal creation surfaces while existing Board tiles remain usable
+- Disabling tile creation preserves existing **Tiles**
 - A **Group** contains two or more **Tiles**
 - A **Tile** belongs to at most one **Group**
 - A **Group** belongs to exactly one **Workspace**
@@ -91,6 +101,12 @@ _Avoid_: Workspace initial command
 
 > **Dev:** "Can a Terminal Tile open without a root folder?"
 > **Domain expert:** "Yes, the Terminal can still use the shell default when the Workspace has no root folder."
+
+> **Dev:** "If Timer creation is disabled, should existing Timer Tiles disappear?"
+> **Domain expert:** "No, Tile Creation Availability controls creation only; existing Tiles remain visible and usable."
+
+> **Dev:** "Can users create Board Tiles from the normal UI?"
+> **Domain expert:** "No, Board creation is locked for an upcoming redesign, but existing Board Tiles still work."
 
 > **Dev:** "If both Workspace and Terminal define commands, which runs first?"
 > **Domain expert:** "The Workspace Initial Command runs first, then the Terminal Startup Command."
@@ -125,3 +141,4 @@ _Avoid_: Workspace initial command
 - "initial command" and "startup command" were both used for terminal launch behavior; resolved: workspace-level command runs first, tile-level command runs second.
 - "group startup command" is not part of the domain model; resolved: command behavior belongs only to **Workspace Initial Command** and **Terminal Startup Command**.
 - "groups" are not part of the default workspace experience; resolved: **Groups Capability** is disabled by default and controls their visibility.
+- "show tile type" can mean creation or existing visibility; resolved: **Tile Creation Availability** controls only normal creation surfaces.

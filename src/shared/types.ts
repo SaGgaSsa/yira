@@ -36,6 +36,9 @@ export interface Config {
 
 export type AppearanceMode = 'dark' | 'light' | 'system'
 export type FontSize = 'small' | 'medium' | 'large'
+export type ConfigurableTileCreationType = 'note' | 'browser' | 'timer' | 'files'
+
+export type TileCreationAvailability = Record<ConfigurableTileCreationType, boolean>
 
 export interface UserSettings {
   appearance: AppearanceMode
@@ -45,6 +48,9 @@ export interface UserSettings {
   gridSize: number
   browser: {
     homeUrl: string
+  }
+  tiles: {
+    creationAvailability: TileCreationAvailability
   }
   groups: {
     enabled: boolean
@@ -59,6 +65,14 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   gridSize: 20,
   browser: {
     homeUrl: 'https://example.com',
+  },
+  tiles: {
+    creationAvailability: {
+      note: true,
+      browser: true,
+      timer: false,
+      files: false,
+    },
   },
   groups: {
     enabled: false,
