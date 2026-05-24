@@ -20,6 +20,7 @@ import { useFontSize } from './hooks/useFontSize'
 import { useUpdateStore } from './store/updateStore'
 import { findMergeTargetGroup, findSelectedGroup, getGroupingBlockedReason } from './utils/grouping'
 import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type CanvasState, type Workspace, type WorkspaceMetadata, type TileGroup, type ViewMode, type SplitPanelId, type SplitViewState } from '@shared/types'
+import { DEFAULT_SPLIT_ORIENTATION, toggleSplitOrientation } from './utils/splitViewState'
 import { TILE_META } from './components/TileContent'
 import { TileListItem } from './components/TileListItem'
 import { Terminal, StickyNote, Globe, Clock, Folder, ChevronDown, FolderPlus, FolderOpen, Trash2, Pencil, Lock, Unlock, Columns, RefreshCw, Download, X, Maximize2, CopyPlus, Eye, EyeOff } from 'lucide-react'
@@ -44,6 +45,7 @@ function createEmptyCanvasState(): CanvasState {
       activeLeftTileId: null,
       activeRightTileId: null,
       focusedPanel: 'left',
+      orientation: DEFAULT_SPLIT_ORIENTATION,
     },
   }
 }
@@ -78,6 +80,7 @@ function buildInitialSplitViewState(tiles: TileState[], activeTileId: string | n
       activeLeftTileId: null,
       activeRightTileId: null,
       focusedPanel: 'left',
+      orientation: DEFAULT_SPLIT_ORIENTATION,
     }
   }
 
@@ -94,6 +97,7 @@ function buildInitialSplitViewState(tiles: TileState[], activeTileId: string | n
     activeLeftTileId: leftActiveId,
     activeRightTileId: rightTileIds[0] ?? null,
     focusedPanel: 'left',
+    orientation: DEFAULT_SPLIT_ORIENTATION,
   }
 }
 
@@ -118,7 +122,10 @@ function normalizeSplitViewForTiles(
   const missingInactiveIds = missingTileIds.filter((tileId) => tileId !== missingActiveId)
 
   if (leftTileIds.length === 0 || rightTileIds.length === 0) {
-    return buildInitialSplitViewState(tiles, activeTileId)
+    return {
+      ...buildInitialSplitViewState(tiles, activeTileId),
+      orientation: splitViewState.orientation,
+    }
   }
 
   const nextLeftTileIds = missingActiveId
@@ -136,11 +143,13 @@ function normalizeSplitViewForTiles(
       ? splitViewState.activeRightTileId
       : nextRightTileIds[0] ?? null,
     focusedPanel: splitViewState.focusedPanel === 'right' ? 'right' : 'left',
+    orientation: splitViewState.orientation,
   }
 }
 
 function areSplitViewStatesEqual(a: SplitViewState, b: SplitViewState): boolean {
   return a.focusedPanel === b.focusedPanel &&
+    a.orientation === b.orientation &&
     a.activeLeftTileId === b.activeLeftTileId &&
     a.activeRightTileId === b.activeRightTileId &&
     a.leftTileIds.length === b.leftTileIds.length &&
@@ -693,6 +702,15 @@ export default function App(): React.ReactElement {
 
     if (mode === 'splitview') {
       if (tiles.length < 2) return
+
+      if (viewMode === 'splitview') {
+        setSplitViewState({
+          ...splitViewState,
+          orientation: toggleSplitOrientation(splitViewState.orientation),
+        })
+        return
+      }
+
       const activeTileId = focusedTileId && tiles.some((tile) => tile.id === focusedTileId)
         ? focusedTileId
         : fullviewActiveTileId
@@ -1357,6 +1375,7 @@ export default function App(): React.ReactElement {
           ? sourceFallback
           : splitViewState.activeRightTileId,
       focusedPanel: targetPanel,
+      orientation: splitViewState.orientation,
     })
     activateSplitTile(targetPanel, tileId)
   }, [activateSplitTile, setSplitViewState, splitViewState])
@@ -1739,6 +1758,7 @@ export default function App(): React.ReactElement {
             <TopBar
               zoom={viewport.zoom}
               viewMode={viewMode}
+              splitOrientation={splitViewState.orientation}
               canSplitView={tiles.length >= 2}
               sidebarCollapsed={sidebarCollapsed}
               onToggleSidebar={() => setSidebarCollapsed(c => !c)}
@@ -1833,6 +1853,7 @@ export default function App(): React.ReactElement {
                   viewMode={viewMode}
                   fullviewActiveTileId={fullviewActiveTileId}
                   splitViewState={splitViewState}
+                  splitOrientation={splitViewState.orientation}
                   onFocusSplitPanel={setSplitFocusedPanel}
                 />
               </div>

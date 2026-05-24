@@ -2,7 +2,7 @@ import React, { useRef, useCallback, useEffect, useMemo, useState, type ReactNod
 import { useCanvasStore } from '@/store/canvasStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { isTileInteractionLocked } from '@/utils/grouping'
-import type { TileState, ViewMode, SplitPanelId } from '@shared/types'
+import type { TileState, ViewMode, SplitPanelId, SplitOrientation } from '@shared/types'
 import { KANBAN_BOARD_FIXED_WIDTH, NOTE_COLORS, NOTE_TILE_MAX_WIDTH, NOTE_TILE_MIN_HEIGHT, NOTE_TILE_MIN_WIDTH } from '@shared/types'
 import { X, GripVertical, StickyNote, Globe, LayoutGrid, Terminal, Clock, Folder, Lock } from 'lucide-react'
 
@@ -19,6 +19,7 @@ interface Props {
   mode?: ViewMode
   isHiddenInFullview?: boolean
   splitPanel?: SplitPanelId
+  splitOrientation?: SplitOrientation
 }
 
 type ResizeDirection = 'e' | 's' | 'se' | 'w' | 'n' | 'ne' | 'sw' | 'nw'
@@ -58,6 +59,7 @@ export function TileChrome({
   mode = 'canvas',
   isHiddenInFullview = false,
   splitPanel = 'left',
+  splitOrientation = 'vertical',
 }: Props): React.ReactElement {
   const [isDragging, setIsDragging] = useState(false)
   const [isResizing, setIsResizing] = useState<ResizeDirection | null>(null)
@@ -240,15 +242,28 @@ export function TileChrome({
   }, [gridSize, isDragging, isFixedWidthKanban, isResizing, maxWidth, minHeight, minWidth, onUpdate, onUpdatePositions, snapToGrid, zoom])
 
   const cursor = isDragging ? 'grabbing' : isResizing ? `${isResizing}-resize` : 'default'
+  const splitStyle = splitOrientation === 'horizontal'
+    ? {
+        left: 0,
+        top: splitPanel === 'left' ? 0 : '50%',
+        width: '100%',
+        height: '50%',
+      }
+    : {
+        left: splitPanel === 'left' ? 0 : '50%',
+        top: 0,
+        width: '50%',
+        height: '100%',
+      }
 
   return (
     <div
       className="absolute"
       style={{
-        left: isFullview ? 0 : isSplitview ? (splitPanel === 'left' ? 0 : '50%') : tile.x,
-        top: isFixedView ? 0 : tile.y,
-        width: isFullview ? '100%' : isSplitview ? '50%' : tile.width,
-        height: isFixedView ? '100%' : tile.height,
+        left: isFullview ? 0 : isSplitview ? splitStyle.left : tile.x,
+        top: isFullview ? 0 : isSplitview ? splitStyle.top : tile.y,
+        width: isFullview ? '100%' : isSplitview ? splitStyle.width : tile.width,
+        height: isFullview ? '100%' : isSplitview ? splitStyle.height : tile.height,
         zIndex: isFixedView ? (isHiddenInFullview ? 0 : 1) : tile.zIndex,
         cursor,
         opacity: isFixedView && isHiddenInFullview ? 0 : 1,

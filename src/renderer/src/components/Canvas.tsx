@@ -6,7 +6,7 @@ import { TileContent } from '@/components/TileContent'
 import { ContextMenu } from '@/components/ContextMenu'
 import { findMergeTargetGroup, findSelectedGroup, getGroupingBlockedReason } from '@/utils/grouping'
 import { Terminal, StickyNote, Globe, LayoutGrid, Clock, Folder, Lock } from 'lucide-react'
-import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type ShellProfileId, type TileGroup, type GroupColorId, type ViewMode, type SplitViewState, type SplitPanelId } from '@shared/types'
+import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type ShellProfileId, type TileGroup, type GroupColorId, type ViewMode, type SplitViewState, type SplitPanelId, type SplitOrientation } from '@shared/types'
 
 const GROUP_FRAME_PADDING = 20
 const GROUP_TOOLBAR_GAP = 30
@@ -110,6 +110,7 @@ interface CanvasProps {
   viewMode?: ViewMode
   fullviewActiveTileId?: string | null
   splitViewState?: SplitViewState
+  splitOrientation?: SplitOrientation
   onFocusSplitPanel?: (panel: SplitPanelId) => void
 }
 
@@ -133,6 +134,7 @@ export function Canvas({
   viewMode = 'canvas',
   fullviewActiveTileId = null,
   splitViewState,
+  splitOrientation = 'vertical',
   onFocusSplitPanel,
 }: CanvasProps): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -666,6 +668,7 @@ export function Canvas({
                 mode={viewMode}
                 isHiddenInFullview={hiddenInFixedView}
                 splitPanel={splitPanel}
+                splitOrientation={splitOrientation}
                 onFocus={() => {
                   if (isSplitview && splitPanel) onFocusSplitPanel?.(splitPanel)
                   focusTile(tile.id)

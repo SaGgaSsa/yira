@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AlertCircle, Save, X } from 'lucide-react'
 import type { CanvasState, SplitViewState, ViewMode } from '@shared/types'
+import { DEFAULT_SPLIT_ORIENTATION, normalizeSplitOrientation } from '@/utils/splitViewState'
 
 interface RawJsonEditorProps {
   open: boolean
@@ -34,6 +35,7 @@ function normalizeCanvasState(state: CanvasState): CanvasState {
       ? state.splitViewState.activeRightTileId
       : rightTileIds[0] ?? null,
     focusedPanel: state.splitViewState?.focusedPanel === 'right' ? 'right' : 'left',
+    orientation: normalizeSplitOrientation(state.splitViewState?.orientation),
   }
 
   return {
@@ -65,6 +67,7 @@ export function RawJsonEditor({ open, workspaceId, canvasState, onClose, onApply
         activeLeftTileId: null,
         activeRightTileId: null,
         focusedPanel: 'left',
+        orientation: DEFAULT_SPLIT_ORIENTATION,
       },
     })
     setValue(JSON.stringify(nextState, null, 2))

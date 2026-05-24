@@ -85,6 +85,7 @@ const splitState: SplitViewState = {
   activeLeftTileId: 'terminal-1',
   activeRightTileId: 'terminal-4',
   focusedPanel: 'left',
+  orientation: 'vertical',
 }
 
 const nextSplitState = insertDuplicateIntoSplitPanel(splitState, 'left', 'terminal-2')

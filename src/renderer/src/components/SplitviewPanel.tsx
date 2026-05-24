@@ -24,6 +24,7 @@ interface SplitviewPanelProps {
 interface PanelTabStripProps {
   panel: SplitPanelId
   tiles: TileState[]
+  orientation: SplitViewState['orientation']
   activeTileId: string | null
   onActivateTile: (panel: SplitPanelId, tileId: string) => void
   onCloseTile: (panel: SplitPanelId, tileId: string) => void | Promise<void>
@@ -35,6 +36,7 @@ interface PanelTabStripProps {
 function PanelTabStrip({
   panel,
   tiles,
+  orientation,
   activeTileId,
   onActivateTile,
   onCloseTile,
@@ -46,7 +48,11 @@ function PanelTabStrip({
 
   return (
     <div
-      className="min-w-0 flex-1 border-r border-border px-4 pt-3 last:border-r-0"
+      className={`min-w-0 flex-1 border-border px-4 pt-3 ${
+        orientation === 'horizontal'
+          ? 'border-b last:border-b-0'
+          : 'border-r last:border-r-0'
+      }`}
       onMouseDown={() => onFocusPanel(panel)}
       onDragOver={(event) => {
         event.preventDefault()
@@ -191,10 +197,13 @@ export function SplitviewPanel({
     : []
 
   return (
-    <div className="flex shrink-0 border-b border-border bg-bg-secondary">
+    <div className={`flex shrink-0 border-b border-border bg-bg-secondary ${
+      splitViewState.orientation === 'horizontal' ? 'flex-col' : ''
+    }`}>
       <PanelTabStrip
         panel="left"
         tiles={leftTiles}
+        orientation={splitViewState.orientation}
         activeTileId={splitViewState.activeLeftTileId}
         onActivateTile={onActivateTile}
         onCloseTile={onCloseTile}
@@ -205,6 +214,7 @@ export function SplitviewPanel({
       <PanelTabStrip
         panel="right"
         tiles={rightTiles}
+        orientation={splitViewState.orientation}
         activeTileId={splitViewState.activeRightTileId}
         onActivateTile={onActivateTile}
         onCloseTile={onCloseTile}

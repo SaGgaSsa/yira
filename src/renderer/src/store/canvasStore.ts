@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { GROUP_COLOR_ORDER, NOTE_TILE_MIN_HEIGHT, NOTE_TILE_MIN_WIDTH, type TileState, type CanvasState, type Viewport, type ShellProfileId, type TileGroup, type GroupColorId, type ViewMode, type SplitViewState, type SplitPanelId, type WorkspaceConfig } from '@shared/types'
 import { getGroupingBlockedReason } from '@/utils/grouping'
+import { DEFAULT_SPLIT_ORIENTATION, normalizeSplitOrientation } from '@/utils/splitViewState'
 
 const UNTITLED_GROUP_NAME = 'Untitled Group'
 const DEFAULT_GROUP_COLOR: GroupColorId = GROUP_COLOR_ORDER[0]
@@ -10,6 +11,7 @@ const EMPTY_SPLIT_VIEW_STATE: SplitViewState = {
   activeLeftTileId: null,
   activeRightTileId: null,
   focusedPanel: 'left',
+  orientation: DEFAULT_SPLIT_ORIENTATION,
 }
 
 function moveTileIdToFront(tileIds: string[], tileId: string | null): string[] {
@@ -68,6 +70,7 @@ function normalizeSplitViewState(
       activeLeftTileId,
       activeRightTileId,
       focusedPanel: splitViewState?.focusedPanel === 'right' ? 'right' : 'left',
+      orientation: normalizeSplitOrientation(splitViewState?.orientation),
     }
   }
 
@@ -82,6 +85,7 @@ function normalizeSplitViewState(
     activeLeftTileId: rebuiltLeftIds[0] ?? null,
     activeRightTileId: rebuiltRightIds[0] ?? null,
     focusedPanel: 'left',
+    orientation: normalizeSplitOrientation(splitViewState?.orientation),
   }
 }
 

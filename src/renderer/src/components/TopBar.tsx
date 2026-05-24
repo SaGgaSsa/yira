@@ -1,10 +1,11 @@
 import React from 'react'
-import { Settings, Crosshair, LayoutGrid, Columns, PanelLeft, SplitSquareHorizontal } from 'lucide-react'
-import type { ViewMode } from '@shared/types'
+import { Settings, Crosshair, LayoutGrid, Columns, PanelLeft, SplitSquareHorizontal, SplitSquareVertical } from 'lucide-react'
+import type { SplitOrientation, ViewMode } from '@shared/types'
 
 interface TopBarProps {
   zoom: number
   viewMode: ViewMode
+  splitOrientation: SplitOrientation
   canSplitView: boolean
   sidebarCollapsed: boolean
   onToggleSidebar: () => void
@@ -17,12 +18,14 @@ interface TopBarProps {
 function SegmentedButton({
   active,
   label,
+  title,
   icon: Icon,
   onClick,
   disabled = false,
 }: {
   active?: boolean
   label: string
+  title?: string
   icon: typeof LayoutGrid
   onClick: () => void
   disabled?: boolean
@@ -36,7 +39,7 @@ function SegmentedButton({
       } disabled:cursor-not-allowed disabled:opacity-40`}
       onClick={onClick}
       disabled={disabled}
-      title={label}
+      title={title ?? label}
     >
       <Icon size={14} />
       <span>{label}</span>
@@ -47,6 +50,7 @@ function SegmentedButton({
 export function TopBar({
   zoom,
   viewMode,
+  splitOrientation,
   canSplitView,
   sidebarCollapsed,
   onToggleSidebar,
@@ -56,6 +60,7 @@ export function TopBar({
   onOpenSettings,
 }: TopBarProps): React.ReactElement {
   const zoomPercent = Math.round(zoom * 100)
+  const SplitIcon = splitOrientation === 'horizontal' ? SplitSquareVertical : SplitSquareHorizontal
 
   return (
     <header className="nd-panel flex h-[84px] shrink-0 items-center justify-between border-x-0 border-t-0 px-6">
@@ -77,7 +82,8 @@ export function TopBar({
         <SegmentedButton
           active={viewMode === 'splitview'}
           label="Split"
-          icon={SplitSquareHorizontal}
+          title={splitOrientation === 'horizontal' ? 'Split top/bottom' : 'Split left/right'}
+          icon={SplitIcon}
           onClick={() => onSetViewMode('splitview')}
           disabled={!canSplitView}
         />

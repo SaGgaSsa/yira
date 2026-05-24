@@ -350,6 +350,7 @@ export interface CanvasState {
 export type ViewMode = 'canvas' | 'fullview' | 'splitview'
 
 export type SplitPanelId = 'left' | 'right'
+export type SplitOrientation = 'vertical' | 'horizontal'
 
 export interface SplitViewState {
   leftTileIds: string[]
@@ -357,6 +358,7 @@ export interface SplitViewState {
   activeLeftTileId: string | null
   activeRightTileId: string | null
   focusedPanel: SplitPanelId
+  orientation: SplitOrientation
 }
 
 export interface Viewport {
