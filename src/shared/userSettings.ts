@@ -1,0 +1,52 @@
+import type { UserSettings } from './types'
+import { DEFAULT_USER_SETTINGS } from './types'
+
+export const MIN_FONT_SIZE_PX = 10
+export const MAX_FONT_SIZE_PX = 36
+
+export type LegacyFontSize = 'small' | 'medium' | 'large'
+
+const LEGACY_FONT_SIZE_PX: Record<LegacyFontSize, number> = {
+  small: 14,
+  medium: 16,
+  large: 18,
+}
+
+function isLegacyFontSize(value: unknown): value is LegacyFontSize {
+  return value === 'small' || value === 'medium' || value === 'large'
+}
+
+export function clampFontSizePx(value: unknown, fallback = DEFAULT_USER_SETTINGS.interfaceFontSizePx): number {
+  const numeric = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(numeric)) return fallback
+  return Math.max(MIN_FONT_SIZE_PX, Math.min(MAX_FONT_SIZE_PX, Math.round(numeric)))
+}
+
+export function normalizeUserSettings(raw: Partial<UserSettings> & { fontSize?: unknown } = {}): UserSettings {
+  const legacyFontSize = isLegacyFontSize(raw.fontSize) ? LEGACY_FONT_SIZE_PX[raw.fontSize] : undefined
+  const fontFallback = legacyFontSize ?? DEFAULT_USER_SETTINGS.interfaceFontSizePx
+  const { fontSize: _legacyFontSize, ...settings } = raw
+
+  return {
+    ...DEFAULT_USER_SETTINGS,
+    ...settings,
+    interfaceFontSizePx: clampFontSizePx(raw.interfaceFontSizePx, fontFallback),
+    tileFontSizePx: clampFontSizePx(raw.tileFontSizePx, fontFallback),
+    browser: {
+      ...DEFAULT_USER_SETTINGS.browser,
+      ...(raw.browser ?? {}),
+    },
+    tiles: {
+      ...DEFAULT_USER_SETTINGS.tiles,
+      ...(raw.tiles ?? {}),
+      creationAvailability: {
+        ...DEFAULT_USER_SETTINGS.tiles.creationAvailability,
+        ...(raw.tiles?.creationAvailability ?? {}),
+      },
+    },
+    groups: {
+      ...DEFAULT_USER_SETTINGS.groups,
+      ...(raw.groups ?? {}),
+    },
+  }
+}

@@ -340,7 +340,7 @@ export function TileChrome({
 
             {tile.groupId && onRemoveFromGroup && (
               <button
-                className="rounded-full border border-border-visible px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display shrink-0"
+                className="rounded-full border border-border-visible px-2 py-1 text-[10px] uppercase text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display shrink-0"
                 onClick={(e) => {
                   e.stopPropagation()
                   if (isGroupLocked) return
@@ -404,7 +404,7 @@ export function TileChrome({
         )}
 
         {/* Terminal content */}
-        <div className="flex-1 min-h-0">
+        <div className="tile-font-scope flex-1 min-h-0">
           {children}
         </div>
       </div>

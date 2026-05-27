@@ -4,6 +4,7 @@ import { X, Monitor, Moon, Sun, Type, Grid3X3, Globe, Code2, Info, RefreshCw, Do
 import { useSettingsStore } from '@/store/settingsStore'
 import { useUpdateStore } from '@/store/updateStore'
 import type { UpdateState } from '@shared/types'
+import { MAX_FONT_SIZE_PX, MIN_FONT_SIZE_PX } from '@shared/userSettings'
 
 interface SettingsPanelProps {
   open: boolean
@@ -26,7 +27,7 @@ const SETTINGS_SECTIONS: Array<{
   icon: typeof Monitor
 }> = [
   { id: 'appearance', label: 'Appearance', icon: Monitor },
-  { id: 'density', label: 'Density', icon: Type },
+  { id: 'density', label: 'Fonts', icon: Type },
   { id: 'canvas', label: 'Canvas', icon: Grid3X3 },
   { id: 'tiles', label: 'Tiles', icon: LayoutGrid },
   { id: 'browser', label: 'Browser', icon: Globe },
@@ -58,7 +59,8 @@ function getUpdateSummary(state: UpdateState): string {
 export function SettingsPanel({ open, onClose, onOpenJsonEditor }: SettingsPanelProps): React.ReactElement {
   const [activeSection, setActiveSection] = useState<SettingsSectionId>('appearance')
   const appearance = useSettingsStore((s) => s.appearance)
-  const fontSize = useSettingsStore((s) => s.fontSize)
+  const interfaceFontSizePx = useSettingsStore((s) => s.interfaceFontSizePx)
+  const tileFontSizePx = useSettingsStore((s) => s.tileFontSizePx)
   const showGrid = useSettingsStore((s) => s.showGrid)
   const snapToGrid = useSettingsStore((s) => s.snapToGrid)
   const gridSize = useSettingsStore((s) => s.gridSize)
@@ -66,7 +68,8 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor }: SettingsPanel
   const tileCreationAvailability = useSettingsStore((s) => s.tiles.creationAvailability)
   const groupsEnabled = useSettingsStore((s) => s.groups.enabled)
   const setAppearance = useSettingsStore((s) => s.setAppearance)
-  const setFontSize = useSettingsStore((s) => s.setFontSize)
+  const setInterfaceFontSizePx = useSettingsStore((s) => s.setInterfaceFontSizePx)
+  const setTileFontSizePx = useSettingsStore((s) => s.setTileFontSizePx)
   const setShowGrid = useSettingsStore((s) => s.setShowGrid)
   const setSnapToGrid = useSettingsStore((s) => s.setSnapToGrid)
   const setGridSize = useSettingsStore((s) => s.setGridSize)
@@ -158,33 +161,41 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor }: SettingsPanel
     }
 
     if (activeSection === 'density') {
+      const renderFontSlider = (
+        label: string,
+        value: number,
+        onChange: (size: number) => void,
+      ) => (
+        <label className="block rounded-[20px] border border-border-visible bg-bg-secondary px-4 py-4">
+          <span className="flex items-center justify-between gap-4">
+            <span className="nd-label text-text-display">{label}</span>
+            <span className="font-mono text-sm text-text-secondary">{value}px</span>
+          </span>
+          <input
+            className="mt-5 w-full accent-[var(--text-display)]"
+            type="range"
+            min={MIN_FONT_SIZE_PX}
+            max={MAX_FONT_SIZE_PX}
+            step={1}
+            value={value}
+            onChange={(event) => onChange(Number(event.target.value))}
+          />
+        </label>
+      )
+
       return (
         <section>
           <div className="mb-5 flex items-center gap-3">
             <ActiveSectionIcon size={16} className="text-text-secondary" />
             <div>
-              <div className="nd-label text-text-secondary">Density</div>
-              <h3 className="mt-1 text-xl text-text-display">Interface scale</h3>
+              <div className="nd-label text-text-secondary">Fonts</div>
+              <h3 className="mt-1 text-xl text-text-display">Text scale</h3>
             </div>
           </div>
 
-          <div className="grid gap-3 lg:grid-cols-3">
-            {([
-              { value: 'small' as const, label: 'Small', preview: '14PX' },
-              { value: 'medium' as const, label: 'Medium', preview: '16PX' },
-              { value: 'large' as const, label: 'Large', preview: '18PX' },
-            ]).map(({ value, label, preview }) => (
-              <button
-                key={value}
-                className={`rounded-[20px] border px-4 py-4 text-left transition-colors ${
-                  fontSize === value ? 'border-text-display bg-bg-tertiary' : 'border-border bg-bg-secondary'
-                }`}
-                onClick={() => setFontSize(value)}
-              >
-                <div className="font-mono text-lg text-text-display">{preview}</div>
-                <div className="nd-label mt-4 text-text-secondary">{label}</div>
-              </button>
-            ))}
+          <div className="space-y-3">
+            {renderFontSlider('Interface font size', interfaceFontSizePx, setInterfaceFontSizePx)}
+            {renderFontSlider('Tile content font size', tileFontSizePx, setTileFontSizePx)}
           </div>
         </section>
       )

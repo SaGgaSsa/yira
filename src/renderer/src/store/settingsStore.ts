@@ -1,13 +1,15 @@
 import { create } from 'zustand'
-import type { UserSettings, AppearanceMode, FontSize, ConfigurableTileCreationType } from '@shared/types'
+import type { UserSettings, AppearanceMode, ConfigurableTileCreationType } from '@shared/types'
 import { DEFAULT_USER_SETTINGS } from '@shared/types'
+import { clampFontSizePx, normalizeUserSettings } from '@shared/userSettings'
 
 export interface SettingsState extends UserSettings {
   loaded: boolean
 
   // Actions
   setAppearance: (mode: AppearanceMode) => void
-  setFontSize: (size: FontSize) => void
+  setInterfaceFontSizePx: (size: number) => void
+  setTileFontSizePx: (size: number) => void
   setShowGrid: (show: boolean) => void
   setSnapToGrid: (snap: boolean) => void
   setGridSize: (size: number) => void
@@ -26,7 +28,8 @@ function scheduleSave() {
     const state = useSettingsStore.getState()
     const settings: UserSettings = {
       appearance: state.appearance,
-      fontSize: state.fontSize,
+      interfaceFontSizePx: state.interfaceFontSizePx,
+      tileFontSizePx: state.tileFontSizePx,
       showGrid: state.showGrid,
       snapToGrid: state.snapToGrid,
       gridSize: state.gridSize,
@@ -52,8 +55,13 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     scheduleSave()
   },
 
-  setFontSize: (size) => {
-    set({ fontSize: size })
+  setInterfaceFontSizePx: (size) => {
+    set({ interfaceFontSizePx: clampFontSizePx(size) })
+    scheduleSave()
+  },
+
+  setTileFontSizePx: (size) => {
+    set({ tileFontSizePx: clampFontSizePx(size) })
     scheduleSave()
   },
 
@@ -100,23 +108,25 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     try {
       const settings = await window.electron.settings.load()
       if (settings) {
+        const normalized = normalizeUserSettings(settings)
         set({
-          appearance: settings.appearance ?? DEFAULT_USER_SETTINGS.appearance,
-          fontSize: settings.fontSize ?? DEFAULT_USER_SETTINGS.fontSize,
-          showGrid: settings.showGrid ?? DEFAULT_USER_SETTINGS.showGrid,
-          snapToGrid: settings.snapToGrid ?? DEFAULT_USER_SETTINGS.snapToGrid,
-          gridSize: settings.gridSize ?? DEFAULT_USER_SETTINGS.gridSize,
+          appearance: normalized.appearance,
+          interfaceFontSizePx: normalized.interfaceFontSizePx,
+          tileFontSizePx: normalized.tileFontSizePx,
+          showGrid: normalized.showGrid,
+          snapToGrid: normalized.snapToGrid,
+          gridSize: normalized.gridSize,
           browser: {
-            homeUrl: settings.browser?.homeUrl ?? DEFAULT_USER_SETTINGS.browser.homeUrl,
+            homeUrl: normalized.browser.homeUrl,
           },
           tiles: {
             creationAvailability: {
               ...DEFAULT_USER_SETTINGS.tiles.creationAvailability,
-              ...(settings.tiles?.creationAvailability ?? {}),
+              ...normalized.tiles.creationAvailability,
             },
           },
           groups: {
-            enabled: settings.groups?.enabled ?? DEFAULT_USER_SETTINGS.groups.enabled,
+            enabled: normalized.groups.enabled,
           },
           loaded: true,
         })
@@ -133,7 +143,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     const state = get()
     const settings: UserSettings = {
       appearance: state.appearance,
-      fontSize: state.fontSize,
+      interfaceFontSizePx: state.interfaceFontSizePx,
+      tileFontSizePx: state.tileFontSizePx,
       showGrid: state.showGrid,
       snapToGrid: state.snapToGrid,
       gridSize: state.gridSize,

@@ -240,7 +240,7 @@ export function NoteTile({ tile, onUpdate }: NoteTileProps): React.ReactElement 
       >
         <div className="border-b border-border px-10 pb-5 pt-8">
           <input
-            className="w-full bg-transparent font-display text-[2.1rem] leading-tight text-text-display outline-none placeholder:text-text-disabled"
+            className="note-title-text w-full bg-transparent font-display leading-tight text-text-display outline-none placeholder:text-text-disabled"
             value={title}
             onChange={handleTitleChange}
             onBlur={() => saveNow()}

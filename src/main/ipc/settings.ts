@@ -3,7 +3,7 @@ import { promises as fs } from 'fs'
 import { join } from 'path'
 import { YIRA_HOME } from '../paths'
 import type { UserSettings } from '@shared/types'
-import { DEFAULT_USER_SETTINGS } from '@shared/types'
+import { normalizeUserSettings } from '@shared/userSettings'
 
 const SETTINGS_PATH = join(YIRA_HOME, 'settings.json')
 
@@ -12,53 +12,24 @@ export function registerSettingsIPC(): void {
     try {
       const raw = await fs.readFile(SETTINGS_PATH, 'utf8')
       const parsed = JSON.parse(raw)
+      const normalized = normalizeUserSettings(parsed)
 
-      return {
-        ...DEFAULT_USER_SETTINGS,
-        ...parsed,
-        browser: {
-          ...DEFAULT_USER_SETTINGS.browser,
-          ...(parsed.browser ?? {}),
-        },
-        tiles: {
-          ...DEFAULT_USER_SETTINGS.tiles,
-          ...(parsed.tiles ?? {}),
-          creationAvailability: {
-            ...DEFAULT_USER_SETTINGS.tiles.creationAvailability,
-            ...(parsed.tiles?.creationAvailability ?? {}),
-          },
-        },
-        groups: {
-          ...DEFAULT_USER_SETTINGS.groups,
-          ...(parsed.groups ?? {}),
-        },
+      if (
+        Object.prototype.hasOwnProperty.call(parsed, 'fontSize') ||
+        !Object.prototype.hasOwnProperty.call(parsed, 'interfaceFontSizePx') ||
+        !Object.prototype.hasOwnProperty.call(parsed, 'tileFontSizePx')
+      ) {
+        await fs.writeFile(SETTINGS_PATH, JSON.stringify(normalized, null, 2))
       }
+
+      return normalized
     } catch {
       return null
     }
   })
 
   ipcMain.handle('settings:save', async (_, settings: UserSettings): Promise<void> => {
-    const normalized: UserSettings = {
-      ...DEFAULT_USER_SETTINGS,
-      ...settings,
-      browser: {
-        ...DEFAULT_USER_SETTINGS.browser,
-        ...(settings.browser ?? {}),
-      },
-      tiles: {
-        ...DEFAULT_USER_SETTINGS.tiles,
-        ...(settings.tiles ?? {}),
-        creationAvailability: {
-          ...DEFAULT_USER_SETTINGS.tiles.creationAvailability,
-          ...(settings.tiles?.creationAvailability ?? {}),
-        },
-      },
-      groups: {
-        ...DEFAULT_USER_SETTINGS.groups,
-        ...(settings.groups ?? {}),
-      },
-    }
+    const normalized = normalizeUserSettings(settings)
 
     await fs.mkdir(YIRA_HOME, { recursive: true })
     await fs.writeFile(SETTINGS_PATH, JSON.stringify(normalized, null, 2))

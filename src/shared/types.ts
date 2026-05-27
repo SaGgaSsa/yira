@@ -35,14 +35,14 @@ export interface Config {
 // ─── App Settings ──────────────────────────────────────────────────────────
 
 export type AppearanceMode = 'dark' | 'light' | 'system'
-export type FontSize = 'small' | 'medium' | 'large'
 export type ConfigurableTileCreationType = 'note' | 'browser' | 'timer' | 'files'
 
 export type TileCreationAvailability = Record<ConfigurableTileCreationType, boolean>
 
 export interface UserSettings {
   appearance: AppearanceMode
-  fontSize: FontSize
+  interfaceFontSizePx: number
+  tileFontSizePx: number
   showGrid: boolean
   snapToGrid: boolean
   gridSize: number
@@ -59,7 +59,8 @@ export interface UserSettings {
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
   appearance: 'dark',
-  fontSize: 'medium',
+  interfaceFontSizePx: 16,
+  tileFontSizePx: 16,
   showGrid: true,
   snapToGrid: true,
   gridSize: 20,

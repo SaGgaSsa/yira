@@ -1,18 +1,20 @@
 import { useEffect } from 'react'
 import { useSettingsStore } from '@/store/settingsStore'
+import { clampFontSizePx } from '@shared/userSettings'
 
-const FONT_SIZES = {
-  small: '14px',
-  medium: '16px',
-  large: '18px',
+function setPxVar(style: CSSStyleDeclaration, name: string, value: number): void {
+  style.setProperty(name, `${clampFontSizePx(value)}px`)
 }
 
 export function useFontSize() {
-  const fontSize = useSettingsStore((s) => s.fontSize)
+  const interfaceFontSizePx = useSettingsStore((s) => s.interfaceFontSizePx)
+  const tileFontSizePx = useSettingsStore((s) => s.tileFontSizePx)
 
   useEffect(() => {
-    document.documentElement.style.fontSize = FONT_SIZES[fontSize]
-  }, [fontSize])
+    const style = document.documentElement.style
+    setPxVar(style, '--interface-font-base', interfaceFontSizePx)
+    setPxVar(style, '--tile-font-base', tileFontSizePx)
+  }, [interfaceFontSizePx, tileFontSizePx])
 
-  return fontSize
+  return { interfaceFontSizePx, tileFontSizePx }
 }

@@ -77,6 +77,17 @@
   --body-sm: 14px;
   --caption: 12px;
   --label: 11px;
+  --interface-font-base: 16px;
+  --tile-font-base: 16px;
+  --font-base: var(--interface-font-base);
+  --font-xs: max(10px, calc(var(--font-base) * 0.75));
+  --font-sm: max(10px, calc(var(--font-base) * 0.875));
+  --font-lg: min(30px, calc(var(--font-base) * 1.125));
+  --font-xl: min(34px, calc(var(--font-base) * 1.25));
+  --font-5xl: min(64px, calc(var(--font-base) * 3));
+  --font-note-title: min(48px, calc(var(--font-base) * 2.1));
+  --font-label: max(9px, calc(var(--font-base) * 0.6875));
+  --font-caption: max(10px, calc(var(--font-base) * 0.75));
   --font-display: 'Doto', 'IBM Plex Mono', monospace;
   --font-body: 'Saira', 'Segoe UI', sans-serif;
   --font-mono: 'IBM Plex Mono', 'Consolas', monospace;
@@ -128,7 +139,7 @@ body,
   height: 100%;
   overflow: hidden;
   font-family: var(--font-body);
-  font-size: var(--body);
+  font-size: var(--font-base);
   color: var(--text-primary);
   background: var(--bg-primary);
   -webkit-font-smoothing: antialiased;
@@ -210,7 +221,7 @@ textarea {
 }
 
 .yira-note-editor .bn-block-content {
-  font-size: 16px;
+  font-size: var(--font-base);
   line-height: 1.72;
 }
 
@@ -247,21 +258,70 @@ textarea {
 
 .nd-label {
   font-family: var(--font-mono);
-  font-size: var(--label);
-  letter-spacing: 0.08em;
+  font-size: var(--font-label);
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
 .nd-caption {
   font-family: var(--font-mono);
-  font-size: var(--caption);
-  letter-spacing: 0.04em;
+  font-size: var(--font-caption);
+  letter-spacing: 0;
 }
 
 .nd-display {
   font-family: var(--font-display);
-  letter-spacing: -0.03em;
+  letter-spacing: 0;
   line-height: 1;
+}
+
+.tile-font-scope {
+  --font-base: var(--tile-font-base);
+  --font-xs: max(10px, calc(var(--font-base) * 0.75));
+  --font-sm: max(10px, calc(var(--font-base) * 0.875));
+  --font-lg: min(30px, calc(var(--font-base) * 1.125));
+  --font-xl: min(34px, calc(var(--font-base) * 1.25));
+  --font-5xl: min(64px, calc(var(--font-base) * 3));
+  --font-note-title: min(48px, calc(var(--font-base) * 2.1));
+  --font-label: max(9px, calc(var(--font-base) * 0.6875));
+  --font-caption: max(10px, calc(var(--font-base) * 0.75));
+  font-size: var(--font-base);
+}
+
+.text-xs {
+  font-size: var(--font-xs);
+}
+
+.text-sm {
+  font-size: var(--font-sm);
+}
+
+.text-base {
+  font-size: var(--font-base);
+}
+
+.text-lg {
+  font-size: var(--font-lg);
+}
+
+.text-xl {
+  font-size: var(--font-xl);
+}
+
+.text-5xl {
+  font-size: var(--font-5xl);
+}
+
+.text-\[10px\] {
+  font-size: max(9px, calc(var(--font-base) * 0.625));
+}
+
+.text-\[11px\] {
+  font-size: max(9px, calc(var(--font-base) * 0.6875));
+}
+
+.note-title-text {
+  font-size: var(--font-note-title);
 }
 
 .nd-dot-grid {

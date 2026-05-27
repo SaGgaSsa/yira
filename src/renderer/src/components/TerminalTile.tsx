@@ -2,17 +2,11 @@ import React, { useEffect, useRef, useState, useCallback } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
-import type { FontSize, TileState } from '@shared/types'
+import type { TileState } from '@shared/types'
 import { useCanvasStore } from '@/store/canvasStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { buildTerminalStartupCommand } from '@/utils/terminalLaunch'
 import { ContextMenu, type MenuItem } from './ContextMenu'
-
-const TERMINAL_FONT_SIZES: Record<FontSize, number> = {
-  small: 14,
-  medium: 16,
-  large: 18,
-}
 
 interface Props {
   tile: TileState
@@ -39,7 +33,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, onFoc
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
   const isFocusedRef = useRef(isFocused)
-  const fontSize = useSettingsStore((s) => s.fontSize)
+  const tileFontSizePx = useSettingsStore((s) => s.tileFontSizePx)
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number; hasSelection: boolean } | null>(null)
 
   const focusTerminal = useCallback(() => {
@@ -112,7 +106,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, onFoc
         brightWhite: '#ffffff',
       },
       fontFamily: '"IBM Plex Mono", "JetBrains Mono", "Consolas", monospace',
-      fontSize: TERMINAL_FONT_SIZES[useSettingsStore.getState().fontSize],
+      fontSize: useSettingsStore.getState().tileFontSizePx,
       lineHeight: 1.15,
       cursorBlink: true,
       allowProposedApi: true,
@@ -203,9 +197,9 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, onFoc
   useEffect(() => {
     const term = termRef.current
     if (!term) return
-    term.options.fontSize = TERMINAL_FONT_SIZES[fontSize]
+    term.options.fontSize = tileFontSizePx
     requestAnimationFrame(() => doFit())
-  }, [fontSize, doFit])
+  }, [tileFontSizePx, doFit])
 
   useEffect(() => {
     if (isFocused) {
