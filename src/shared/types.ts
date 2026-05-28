@@ -290,11 +290,48 @@ export interface TileGroup {
   locked?: boolean
 }
 
-export const NOTE_TILE_DEFAULT_WIDTH = 900
-export const NOTE_TILE_DEFAULT_HEIGHT = 760
-export const NOTE_TILE_MIN_WIDTH = 640
-export const NOTE_TILE_MIN_HEIGHT = 560
-export const NOTE_TILE_MAX_WIDTH = 900
+export interface TileSizePreset {
+  defaultWidth: number
+  defaultHeight: number
+  minWidth: number
+  minHeight: number
+}
+
+export const TILE_SIZE_PRESETS: Record<TileType, TileSizePreset> = {
+  terminal: { defaultWidth: 900, defaultHeight: 400, minWidth: 900, minHeight: 400 },
+  note: { defaultWidth: 900, defaultHeight: 800, minWidth: 900, minHeight: 800 },
+  browser: { defaultWidth: 1800, defaultHeight: 800, minWidth: 1800, minHeight: 800 },
+  kanban: { defaultWidth: 1800, defaultHeight: 800, minWidth: 1800, minHeight: 800 },
+  timer: { defaultWidth: 900, defaultHeight: 400, minWidth: 900, minHeight: 400 },
+  files: { defaultWidth: 900, defaultHeight: 400, minWidth: 900, minHeight: 400 },
+}
+
+export function getTileSizePreset(type: TileType): TileSizePreset {
+  return TILE_SIZE_PRESETS[type]
+}
+
+export function getDefaultTileSize(type: TileType): { width: number; height: number } {
+  const preset = getTileSizePreset(type)
+  return {
+    width: preset.defaultWidth,
+    height: preset.defaultHeight,
+  }
+}
+
+export function normalizeTileSize(type: TileType, size: { width: number; height: number }): { width: number; height: number } {
+  const preset = getTileSizePreset(type)
+  const width = Number.isFinite(size.width) ? size.width : preset.minWidth
+  const height = Number.isFinite(size.height) ? size.height : preset.minHeight
+  return {
+    width: Math.max(preset.minWidth, width),
+    height: Math.max(preset.minHeight, height),
+  }
+}
+
+export const NOTE_TILE_DEFAULT_WIDTH = TILE_SIZE_PRESETS.note.defaultWidth
+export const NOTE_TILE_DEFAULT_HEIGHT = TILE_SIZE_PRESETS.note.defaultHeight
+export const NOTE_TILE_MIN_WIDTH = TILE_SIZE_PRESETS.note.minWidth
+export const NOTE_TILE_MIN_HEIGHT = TILE_SIZE_PRESETS.note.minHeight
 
 export type NoteBlocks = import('@blocknote/core').PartialBlock[]
 

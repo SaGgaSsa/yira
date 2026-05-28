@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AlertCircle, Save, X } from 'lucide-react'
-import type { CanvasState, SplitViewState, ViewMode } from '@shared/types'
-import { DEFAULT_SPLIT_ORIENTATION, normalizeSplitOrientation } from '@/utils/splitViewState'
-import { clampTileToWorld, normalizeFiniteViewport } from '@/utils/canvasWorld'
+import type { CanvasState } from '@shared/types'
+import { createEmptyCanvasState, normalizeCanvasStateForJson } from '@/utils/canvasStateNormalization'
 
 interface RawJsonEditorProps {
   open: boolean
@@ -13,66 +12,13 @@ interface RawJsonEditorProps {
   onApply: (state: CanvasState) => void
 }
 
-function normalizeCanvasState(state: CanvasState): CanvasState {
-  const viewMode: ViewMode = state.viewMode === 'canvas' || state.viewMode === 'fullview' || state.viewMode === 'splitview'
-    ? state.viewMode
-    : 'fullview'
-  const tileIds = new Set(state.tiles.map((tile) => tile.id))
-  const seen = new Set<string>()
-  const cleanIds = (ids?: string[]) => (ids ?? []).filter((tileId) => {
-    if (!tileIds.has(tileId) || seen.has(tileId)) return false
-    seen.add(tileId)
-    return true
-  })
-  const leftTileIds = cleanIds(state.splitViewState?.leftTileIds)
-  const rightTileIds = cleanIds(state.splitViewState?.rightTileIds)
-  const splitViewState: SplitViewState = {
-    leftTileIds,
-    rightTileIds,
-    activeLeftTileId: state.splitViewState?.activeLeftTileId && leftTileIds.includes(state.splitViewState.activeLeftTileId)
-      ? state.splitViewState.activeLeftTileId
-      : leftTileIds[0] ?? null,
-    activeRightTileId: state.splitViewState?.activeRightTileId && rightTileIds.includes(state.splitViewState.activeRightTileId)
-      ? state.splitViewState.activeRightTileId
-      : rightTileIds[0] ?? null,
-    focusedPanel: state.splitViewState?.focusedPanel === 'right' ? 'right' : 'left',
-    orientation: normalizeSplitOrientation(state.splitViewState?.orientation),
-  }
-
-  return {
-    ...state,
-    tiles: state.tiles.map(clampTileToWorld),
-    groups: state.groups ?? [],
-    viewport: normalizeFiniteViewport(state.viewport),
-    viewMode,
-    fullviewActiveTileId: state.fullviewActiveTileId ?? state.focusedTileId ?? state.tiles[0]?.id ?? null,
-    splitViewState,
-  }
-}
-
 export function RawJsonEditor({ open, workspaceId, canvasState, onClose, onApply }: RawJsonEditorProps): React.ReactElement | null {
   const [value, setValue] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open || !workspaceId) return
-    const nextState = normalizeCanvasState(canvasState ?? {
-      tiles: [],
-      groups: [],
-      viewport: { tx: 0, ty: 0, zoom: 1 },
-      nextZIndex: 1,
-      focusedTileId: null,
-      viewMode: 'fullview',
-      fullviewActiveTileId: null,
-      splitViewState: {
-        leftTileIds: [],
-        rightTileIds: [],
-        activeLeftTileId: null,
-        activeRightTileId: null,
-        focusedPanel: 'left',
-        orientation: DEFAULT_SPLIT_ORIENTATION,
-      },
-    })
+    const nextState = normalizeCanvasStateForJson(canvasState ?? createEmptyCanvasState())
     setValue(JSON.stringify(nextState, null, 2))
     setError(null)
   }, [canvasState, open, workspaceId])
@@ -128,7 +74,7 @@ export function RawJsonEditor({ open, workspaceId, canvasState, onClose, onApply
             onClick={() => {
               try {
                 const parsed = JSON.parse(value) as CanvasState
-                const nextState = normalizeCanvasState(parsed)
+                const nextState = normalizeCanvasStateForJson(parsed)
                 onApply(nextState)
                 setError(null)
                 onClose()

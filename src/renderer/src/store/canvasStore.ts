@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { GROUP_COLOR_ORDER, NOTE_TILE_MIN_HEIGHT, NOTE_TILE_MIN_WIDTH, type TileState, type CanvasState, type Viewport, type ShellProfileId, type TileGroup, type GroupColorId, type ViewMode, type SplitViewState, type SplitPanelId, type WorkspaceConfig } from '@shared/types'
+import { GROUP_COLOR_ORDER, normalizeTileSize, type TileState, type CanvasState, type Viewport, type ShellProfileId, type TileGroup, type GroupColorId, type ViewMode, type SplitViewState, type SplitPanelId, type WorkspaceConfig } from '@shared/types'
 import { getGroupingBlockedReason } from '@/utils/grouping'
 import { DEFAULT_SPLIT_ORIENTATION, normalizeSplitOrientation } from '@/utils/splitViewState'
 import { clampTileToWorld, normalizeFiniteViewport } from '@/utils/canvasWorld'
@@ -105,10 +105,7 @@ function normalizeGroup(group: TileGroup): TileGroup {
 }
 
 function normalizeTile(tile: TileState): TileState {
-  if (tile.type !== 'note') return clampTileToWorld(tile)
-
-  const width = Math.max(NOTE_TILE_MIN_WIDTH, tile.width)
-  const height = Math.max(NOTE_TILE_MIN_HEIGHT, tile.height)
+  const { width, height } = normalizeTileSize(tile.type, tile)
   if (width === tile.width && height === tile.height) return clampTileToWorld(tile)
 
   return clampTileToWorld({

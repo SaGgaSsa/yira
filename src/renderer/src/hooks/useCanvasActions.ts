@@ -4,7 +4,7 @@ import { useSettingsStore } from '@/store/settingsStore'
 import { findSelectedGroup, getGroupAnchorTile } from '@/utils/grouping'
 import { buildDuplicateTerminalTile, insertDuplicateIntoSplitPanel } from '@/utils/duplicateTerminalTile'
 import type { ConfirmDialogOptions } from '@/components/AppDialog'
-import { NOTE_TILE_DEFAULT_HEIGHT, NOTE_TILE_DEFAULT_WIDTH } from '@shared/types'
+import { getDefaultTileSize } from '@shared/types'
 import type { TileState, ShellProfileId, NoteColor, SplitPanelId } from '@shared/types'
 
 const TILE_TYPE_LABELS: Record<TileState['type'], string> = {
@@ -126,15 +126,16 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
     (profileId: ShellProfileId) => {
       const state = useCanvasStore.getState()
       const targetGroup = groupsEnabled ? findSelectedGroup(state.groups, state.selectedTileIds) : null
-      const pos = getSpawnPos(640, 420, 40)
+      const size = getDefaultTileSize('terminal')
+      const pos = getSpawnPos(size.width, size.height, 40)
 
       const tile: TileState = {
         id: generateId(),
         type: 'terminal',
         x: pos.x,
         y: pos.y,
-        width: 640,
-        height: 420,
+        width: size.width,
+        height: size.height,
         zIndex: state.nextZIndex,
         shellProfileId: profileId,
         groupId: targetGroup?.id,
@@ -192,15 +193,16 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
 
     const state = useCanvasStore.getState()
     const targetGroup = groupsEnabled ? findSelectedGroup(state.groups, state.selectedTileIds) : null
-    const pos = getSpawnPos(720, 480, 40)
+    const size = getDefaultTileSize('browser')
+    const pos = getSpawnPos(size.width, size.height, 40)
 
     const tile: TileState = {
       id: generateId(),
       type: 'browser',
       x: pos.x,
       y: pos.y,
-      width: 720,
-      height: 480,
+      width: size.width,
+      height: size.height,
       zIndex: state.nextZIndex,
       browserUrl: browserHomeUrl,
       groupId: targetGroup?.id,
@@ -218,15 +220,16 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
 
       const state = useCanvasStore.getState()
       const targetGroup = groupsEnabled ? findSelectedGroup(state.groups, state.selectedTileIds) : null
-      const pos = getSpawnPos(NOTE_TILE_DEFAULT_WIDTH, NOTE_TILE_DEFAULT_HEIGHT, 40)
+      const size = getDefaultTileSize('note')
+      const pos = getSpawnPos(size.width, size.height, 40)
 
       const tile: TileState = {
         id: generateId(),
         type: 'note',
         x: pos.x,
         y: pos.y,
-        width: NOTE_TILE_DEFAULT_WIDTH,
-        height: NOTE_TILE_DEFAULT_HEIGHT,
+        width: size.width,
+        height: size.height,
         zIndex: state.nextZIndex,
         noteColor: color ?? 'yellow',
         noteFont: 'sans',
@@ -243,7 +246,8 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
 
     const state = useCanvasStore.getState()
     const targetGroup = groupsEnabled ? findSelectedGroup(state.groups, state.selectedTileIds) : null
-    const pos = getSpawnPos(360, 300, 40)
+    const size = getDefaultTileSize('timer')
+    const pos = getSpawnPos(size.width, size.height, 40)
     const defaultDurationMs = 25 * 60 * 1000
 
     const tile: TileState = {
@@ -251,8 +255,8 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
       type: 'timer',
       x: pos.x,
       y: pos.y,
-      width: 360,
-      height: 300,
+      width: size.width,
+      height: size.height,
       zIndex: state.nextZIndex,
       timerDurationMs: defaultDurationMs,
       timerRemainingMs: defaultDurationMs,
@@ -268,15 +272,16 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
     const state = useCanvasStore.getState()
     if (!state.activeWorkspaceConfig.rootFolderPath) return
     const targetGroup = groupsEnabled ? findSelectedGroup(state.groups, state.selectedTileIds) : null
-    const pos = getSpawnPos(420, 320, 40)
+    const size = getDefaultTileSize('files')
+    const pos = getSpawnPos(size.width, size.height, 40)
 
     const tile: TileState = {
       id: generateId(),
       type: 'files',
       x: pos.x,
       y: pos.y,
-      width: 420,
-      height: 320,
+      width: size.width,
+      height: size.height,
       zIndex: state.nextZIndex,
       groupId: targetGroup?.id,
     }

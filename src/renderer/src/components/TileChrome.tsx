@@ -3,7 +3,7 @@ import { useCanvasStore } from '@/store/canvasStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { isTileInteractionLocked } from '@/utils/grouping'
 import type { TileState, ViewMode, SplitPanelId, SplitOrientation } from '@shared/types'
-import { KANBAN_BOARD_FIXED_WIDTH, NOTE_COLORS, NOTE_TILE_MAX_WIDTH, NOTE_TILE_MIN_HEIGHT, NOTE_TILE_MIN_WIDTH } from '@shared/types'
+import { getTileSizePreset, NOTE_COLORS } from '@shared/types'
 import { X, GripVertical, StickyNote, Globe, LayoutGrid, Terminal, Clock, Folder, Lock } from 'lucide-react'
 
 interface Props {
@@ -76,11 +76,9 @@ export function TileChrome({
   const isFullview = mode === 'fullview'
   const isSplitview = mode === 'splitview'
   const isFixedView = isFullview || isSplitview
-  const isFixedWidthKanban = tile.type === 'kanban'
-  const isNote = tile.type === 'note'
-  const minWidth = isNote ? NOTE_TILE_MIN_WIDTH : 300
-  const minHeight = isNote ? NOTE_TILE_MIN_HEIGHT : 200
-  const maxWidth = isNote ? NOTE_TILE_MAX_WIDTH : null
+  const sizePreset = getTileSizePreset(tile.type)
+  const minWidth = sizePreset.minWidth
+  const minHeight = sizePreset.minHeight
   const isLocked = Boolean(tile.locked)
   const isGroupLocked = Boolean(tile.groupId && groups.find((group) => group.id === tile.groupId)?.locked)
   const isInteractionLocked = isTileInteractionLocked(tile, groups)
@@ -90,17 +88,12 @@ export function TileChrome({
   )
 
   useEffect(() => {
-    if (isFixedView || !isFixedWidthKanban || tile.width === KANBAN_BOARD_FIXED_WIDTH) return
-    onUpdate({ width: KANBAN_BOARD_FIXED_WIDTH })
-  }, [isFixedView, isFixedWidthKanban, tile.width, onUpdate])
-
-  useEffect(() => {
-    if (isFixedView || !isNote) return
-    const width = Math.min(NOTE_TILE_MAX_WIDTH, Math.max(NOTE_TILE_MIN_WIDTH, tile.width))
-    const height = Math.max(NOTE_TILE_MIN_HEIGHT, tile.height)
+    if (isFixedView) return
+    const width = Math.max(minWidth, tile.width)
+    const height = Math.max(minHeight, tile.height)
     if (width === tile.width && height === tile.height) return
     onUpdate({ width, height })
-  }, [isFixedView, isNote, tile.height, tile.width, onUpdate])
+  }, [isFixedView, minHeight, minWidth, tile.height, tile.width, onUpdate])
 
   // ─── Drag ───────────────────────────────────────────────────────────────
   const handleDragStart = useCallback(
@@ -187,8 +180,8 @@ export function TileChrome({
         let newX = resizeStartRef.current.tx
         let newY = resizeStartRef.current.ty
 
-        if (!isFixedWidthKanban && dir.includes('e')) newW = Math.max(minWidth, resizeStartRef.current.w + dx)
-        if (!isFixedWidthKanban && dir.includes('w')) {
+        if (dir.includes('e')) newW = Math.max(minWidth, resizeStartRef.current.w + dx)
+        if (dir.includes('w')) {
           newW = Math.max(minWidth, resizeStartRef.current.w - dx)
           newX = resizeStartRef.current.tx + (resizeStartRef.current.w - newW)
         }
@@ -200,21 +193,14 @@ export function TileChrome({
 
         // Snap
         if (snapToGrid) {
-          newW = isFixedWidthKanban ? KANBAN_BOARD_FIXED_WIDTH : Math.round(newW / gridSize) * gridSize
+          newW = Math.round(newW / gridSize) * gridSize
           newH = Math.round(newH / gridSize) * gridSize
-          newX = isFixedWidthKanban ? resizeStartRef.current.tx : Math.round(newX / gridSize) * gridSize
+          newX = Math.round(newX / gridSize) * gridSize
           newY = Math.round(newY / gridSize) * gridSize
-        } else if (isFixedWidthKanban) {
-          newW = KANBAN_BOARD_FIXED_WIDTH
-          newX = resizeStartRef.current.tx
         }
 
-        if (!isFixedWidthKanban && newW < minWidth) {
+        if (newW < minWidth) {
           newW = minWidth
-          if (dir.includes('w')) newX = resizeStartRef.current.tx + (resizeStartRef.current.w - newW)
-        }
-        if (maxWidth !== null && newW > maxWidth) {
-          newW = maxWidth
           if (dir.includes('w')) newX = resizeStartRef.current.tx + (resizeStartRef.current.w - newW)
         }
         if (newH < minHeight) {
@@ -239,7 +225,7 @@ export function TileChrome({
       window.removeEventListener('mousemove', handleMouseMove)
       window.removeEventListener('mouseup', handleMouseUp)
     }
-  }, [gridSize, isDragging, isFixedWidthKanban, isResizing, maxWidth, minHeight, minWidth, onUpdate, onUpdatePositions, snapToGrid, zoom])
+  }, [gridSize, isDragging, isResizing, minHeight, minWidth, onUpdate, onUpdatePositions, snapToGrid, zoom])
 
   const cursor = isDragging ? 'grabbing' : isResizing ? `${isResizing}-resize` : 'default'
   const splitStyle = splitOrientation === 'horizontal'
@@ -292,7 +278,7 @@ export function TileChrome({
                 : '1px solid var(--border)',
           borderRadius: 0,
           transition: 'border-color 0.15s ease, background 0.15s ease',
-          boxShadow: isNote && tile.noteColor
+          boxShadow: tile.type === 'note' && tile.noteColor
             ? `inset 0 3px 0 ${NOTE_COLORS[tile.noteColor]?.bg || 'var(--border-visible)'}`
             : 'none',
         }}
@@ -412,20 +398,16 @@ export function TileChrome({
       {/* Resize handles (8 directions) */}
       {!isFixedView && !isDragging && !isInteractionLocked && (
         <>
-          {!isFixedWidthKanban && (
-            <div
-              className="absolute"
-              style={{ top: 0, left: -4, width: 8, height: '100%', cursor: 'col-resize' }}
-              onMouseDown={handleResizeStart('w')}
-            />
-          )}
-          {!isFixedWidthKanban && (
-            <div
-              className="absolute"
-              style={{ top: 0, right: -4, width: 8, height: '100%', cursor: 'col-resize' }}
-              onMouseDown={handleResizeStart('e')}
-            />
-          )}
+          <div
+            className="absolute"
+            style={{ top: 0, left: -4, width: 8, height: '100%', cursor: 'col-resize' }}
+            onMouseDown={handleResizeStart('w')}
+          />
+          <div
+            className="absolute"
+            style={{ top: 0, right: -4, width: 8, height: '100%', cursor: 'col-resize' }}
+            onMouseDown={handleResizeStart('e')}
+          />
           <div
             className="absolute"
             style={{ left: 0, top: -4, height: 8, width: '100%', cursor: 'row-resize' }}
@@ -437,34 +419,26 @@ export function TileChrome({
             onMouseDown={handleResizeStart('s')}
           />
           {/* Corners */}
-          {!isFixedWidthKanban && (
-            <div
-              className="absolute"
-              style={{ top: -6, left: -6, width: 12, height: 12, cursor: 'nw-resize' }}
-              onMouseDown={handleResizeStart('nw')}
-            />
-          )}
-          {!isFixedWidthKanban && (
-            <div
-              className="absolute"
-              style={{ top: -6, right: -6, width: 12, height: 12, cursor: 'ne-resize' }}
-              onMouseDown={handleResizeStart('ne')}
-            />
-          )}
-          {!isFixedWidthKanban && (
-            <div
-              className="absolute"
-              style={{ bottom: -6, left: -6, width: 12, height: 12, cursor: 'sw-resize' }}
-              onMouseDown={handleResizeStart('sw')}
-            />
-          )}
-          {!isFixedWidthKanban && (
-            <div
-              className="absolute"
-              style={{ bottom: -6, right: -6, width: 12, height: 12, cursor: 'se-resize' }}
-              onMouseDown={handleResizeStart('se')}
-            />
-          )}
+          <div
+            className="absolute"
+            style={{ top: -6, left: -6, width: 12, height: 12, cursor: 'nw-resize' }}
+            onMouseDown={handleResizeStart('nw')}
+          />
+          <div
+            className="absolute"
+            style={{ top: -6, right: -6, width: 12, height: 12, cursor: 'ne-resize' }}
+            onMouseDown={handleResizeStart('ne')}
+          />
+          <div
+            className="absolute"
+            style={{ bottom: -6, left: -6, width: 12, height: 12, cursor: 'sw-resize' }}
+            onMouseDown={handleResizeStart('sw')}
+          />
+          <div
+            className="absolute"
+            style={{ bottom: -6, right: -6, width: 12, height: 12, cursor: 'se-resize' }}
+            onMouseDown={handleResizeStart('se')}
+          />
         </>
       )}
     </div>
