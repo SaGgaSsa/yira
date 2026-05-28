@@ -21,6 +21,7 @@ import { useUpdateStore } from './store/updateStore'
 import { findMergeTargetGroup, findSelectedGroup, getGroupingBlockedReason } from './utils/grouping'
 import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type CanvasState, type Workspace, type WorkspaceMetadata, type TileGroup, type ViewMode, type SplitPanelId, type SplitViewState } from '@shared/types'
 import { DEFAULT_SPLIT_ORIENTATION, toggleSplitOrientation } from './utils/splitViewState'
+import { getTerminalDisplayTitle, normalizeTerminalWindowTitle } from './utils/terminalDisplayTitle'
 import { TILE_META } from './components/TileContent'
 import { TileListItem } from './components/TileListItem'
 import { Terminal, StickyNote, Globe, Clock, Folder, ChevronDown, FolderPlus, FolderOpen, Trash2, Pencil, Lock, Unlock, Columns, RefreshCw, Download, X, Maximize2, CopyPlus, Eye, EyeOff } from 'lucide-react'
@@ -28,7 +29,6 @@ import { Terminal, StickyNote, Globe, Clock, Folder, ChevronDown, FolderPlus, Fo
 const GROUP_SHOW_MARGIN = 20
 const GROUP_SHOW_TOP_PADDING = 118
 const BASE_WINDOW_TITLE = 'Yira'
-const MAX_TERMINAL_WINDOW_TITLE_LENGTH = 120
 
 function createEmptyCanvasState(): CanvasState {
   return {
@@ -156,14 +156,6 @@ function areSplitViewStatesEqual(a: SplitViewState, b: SplitViewState): boolean 
     a.rightTileIds.length === b.rightTileIds.length &&
     a.leftTileIds.every((tileId, index) => tileId === b.leftTileIds[index]) &&
     a.rightTileIds.every((tileId, index) => tileId === b.rightTileIds[index])
-}
-
-function normalizeTerminalWindowTitle(title: string): string {
-  return title.trim().replace(/\s+/g, ' ').slice(0, MAX_TERMINAL_WINDOW_TITLE_LENGTH)
-}
-
-function getTerminalDisplayTitle(tile: TileState, terminalTitles: Record<string, string>): string {
-  return terminalTitles[tile.id] || tile.label || `${TILE_META.terminal.label} ${tile.id.slice(-4)}`
 }
 
 type PromptDialogState = {
@@ -1642,6 +1634,7 @@ export default function App(): React.ReactElement {
                         key={tile.id}
                         tile={tile}
                         active={isActive || isSelected}
+                        displayLabel={tile.type === 'terminal' ? getTerminalDisplayTitle(tile, terminalTitles) : undefined}
                         className="w-full transition-colors"
                         onClick={() => handleSidebarTileClick(tile.id)}
                         onDoubleClick={() => handleShowTileFromSidebar(tile.id)}

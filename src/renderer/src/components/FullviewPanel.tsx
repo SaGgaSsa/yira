@@ -2,8 +2,8 @@ import React, { useMemo, useState } from 'react'
 import { CopyPlus, Eye, EyeOff, Lock, Maximize2, Pencil, RefreshCw, Trash2, Unlock } from 'lucide-react'
 import type { TileState } from '@shared/types'
 import { useCanvasStore } from '@/store/canvasStore'
+import { getTerminalDisplayTitle } from '@/utils/terminalDisplayTitle'
 import { ContextMenu, type MenuItem } from './ContextMenu'
-import { TILE_META } from './TileContent'
 import { TileListItem } from './TileListItem'
 
 interface FullviewPanelProps {
@@ -98,7 +98,7 @@ export function FullviewPanel({
           orderedTiles.map((tile) => {
             const isActive = tile.id === activeTile?.id
             const displayLabel = tile.type === 'terminal'
-              ? terminalTitles[tile.id] || tile.label || `${TILE_META.terminal.label} ${tile.id.slice(-4)}`
+              ? getTerminalDisplayTitle(tile, terminalTitles)
               : undefined
 
             return (
