@@ -5,6 +5,7 @@ import { TileChrome } from '@/components/TileChrome'
 import { TileContent } from '@/components/TileContent'
 import { ContextMenu } from '@/components/ContextMenu'
 import { findMergeTargetGroup, findSelectedGroup, getGroupingBlockedReason } from '@/utils/grouping'
+import { clampViewportToWorld } from '@/utils/canvasWorld'
 import { Terminal, StickyNote, Globe, LayoutGrid, Clock, Folder, Lock } from 'lucide-react'
 import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type ShellProfileId, type TileGroup, type GroupColorId, type ViewMode, type SplitViewState, type SplitPanelId, type SplitOrientation } from '@shared/types'
 
@@ -167,6 +168,29 @@ export function Canvas({
   const gridSize = useSettingsStore((s) => s.gridSize)
   const snapToGrid = useSettingsStore((s) => s.snapToGrid)
 
+  const setClampedViewport = useCallback(
+    (nextViewport: { tx: number; ty: number; zoom: number }) => {
+      const rect = containerRef.current?.getBoundingClientRect()
+      const current = useCanvasStore.getState().viewport
+      if (!rect) {
+        if (current.tx !== nextViewport.tx || current.ty !== nextViewport.ty || current.zoom !== nextViewport.zoom) {
+          setViewport(nextViewport)
+        }
+        return
+      }
+
+      const clamped = clampViewportToWorld({
+        viewport: nextViewport,
+        containerWidth: rect.width,
+        containerHeight: rect.height,
+      })
+      if (current.tx !== clamped.tx || current.ty !== clamped.ty || current.zoom !== clamped.zoom) {
+        setViewport(clamped)
+      }
+    },
+    [setViewport],
+  )
+
   const groupRenderData = useMemo<GroupRenderState[]>(() => {
     return groups.flatMap((group) => {
       const members = tiles.filter((tile) => group.tileIds.includes(tile.id))
@@ -231,16 +255,16 @@ export function Canvas({
       const tileCenterY = tile.y + tile.height / 2
       const newTx = centerX - tileCenterX * viewport.zoom
       const newTy = centerY - tileCenterY * viewport.zoom
-      setViewport({ tx: newTx, ty: newTy, zoom: viewport.zoom })
+      setClampedViewport({ tx: newTx, ty: newTy, zoom: viewport.zoom })
     },
-    [tiles, viewport.zoom, setViewport],
+    [tiles, viewport.zoom, setClampedViewport],
   )
 
   const centerViewOnCanvas = useCallback(() => {
     if (!containerRef.current) return
     const rect = containerRef.current.getBoundingClientRect()
-    setViewport({ tx: rect.width / 2, ty: rect.height / 2, zoom: 1 })
-  }, [setViewport])
+    setClampedViewport({ tx: rect.width / 2, ty: rect.height / 2, zoom: 1 })
+  }, [setClampedViewport])
 
   const centerViewOnBounds = useCallback(
     ({ minX, minY, maxX, maxY }: { minX: number; minY: number; maxX: number; maxY: number }) => {
@@ -252,13 +276,13 @@ export function Canvas({
       const centerX = minX + boundsWidth / 2
       const centerY = minY + boundsHeight / 2
 
-      setViewport({
+      setClampedViewport({
         tx: rect.width / 2 - centerX * viewport.zoom,
         ty: rect.height / 2 - centerY * viewport.zoom,
         zoom: viewport.zoom,
       })
     },
-    [viewport.zoom, setViewport],
+    [viewport.zoom, setClampedViewport],
   )
 
   const fitViewToBounds = useCallback(
@@ -278,13 +302,13 @@ export function Canvas({
       const targetLeft = resolvedPadding.left + (availableWidth - boundsWidth * nextZoom) / 2
       const targetTop = resolvedPadding.top + (availableHeight - boundsHeight * nextZoom) / 2
 
-      setViewport({
+      setClampedViewport({
         tx: targetLeft - minX * nextZoom,
         ty: targetTop - minY * nextZoom,
         zoom: nextZoom,
       })
     },
-    [setViewport],
+    [setClampedViewport],
   )
 
   const fitViewToContent = useCallback(() => {
@@ -357,9 +381,9 @@ export function Canvas({
       const newTx = mx - (mx - viewport.tx) * (newZoom / viewport.zoom)
       const newTy = my - (my - viewport.ty) * (newZoom / viewport.zoom)
 
-      setViewport({ tx: newTx, ty: newTy, zoom: newZoom })
+      setClampedViewport({ tx: newTx, ty: newTy, zoom: newZoom })
     },
-    [isFixedView, viewport, setViewport],
+    [isFixedView, viewport, setClampedViewport],
   )
 
   const startGroupDrag = useCallback(
@@ -475,7 +499,7 @@ export function Canvas({
       if (drag.type === 'pan') {
         const dx = e.clientX - drag.startX
         const dy = e.clientY - drag.startY
-        setViewport({
+        setClampedViewport({
           tx: drag.initTx + dx,
           ty: drag.initTy + dy,
           zoom: viewport.zoom,
@@ -552,7 +576,23 @@ export function Canvas({
       window.removeEventListener('mousemove', handleMouseMove)
       window.removeEventListener('mouseup', handleMouseUp)
     }
-  }, [gridSize, screenToWorld, selectTiles, setViewport, snapToGrid, tiles, updateTilePositions, viewport.zoom])
+  }, [gridSize, screenToWorld, selectTiles, setClampedViewport, snapToGrid, tiles, updateTilePositions, viewport.zoom])
+
+  useEffect(() => {
+    if (isFixedView) return
+    setClampedViewport(viewport)
+  }, [isFixedView, setClampedViewport, viewport])
+
+  useEffect(() => {
+    if (isFixedView || !containerRef.current) return
+
+    const observer = new ResizeObserver(() => {
+      setClampedViewport(useCanvasStore.getState().viewport)
+    })
+    observer.observe(containerRef.current)
+
+    return () => observer.disconnect()
+  }, [isFixedView, setClampedViewport])
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {

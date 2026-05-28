@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { GROUP_COLOR_ORDER, NOTE_TILE_MIN_HEIGHT, NOTE_TILE_MIN_WIDTH, type TileState, type CanvasState, type Viewport, type ShellProfileId, type TileGroup, type GroupColorId, type ViewMode, type SplitViewState, type SplitPanelId, type WorkspaceConfig } from '@shared/types'
 import { getGroupingBlockedReason } from '@/utils/grouping'
 import { DEFAULT_SPLIT_ORIENTATION, normalizeSplitOrientation } from '@/utils/splitViewState'
+import { clampTileToWorld, normalizeFiniteViewport } from '@/utils/canvasWorld'
 
 const UNTITLED_GROUP_NAME = 'Untitled Group'
 const DEFAULT_GROUP_COLOR: GroupColorId = GROUP_COLOR_ORDER[0]
@@ -104,17 +105,42 @@ function normalizeGroup(group: TileGroup): TileGroup {
 }
 
 function normalizeTile(tile: TileState): TileState {
-  if (tile.type !== 'note') return tile
+  if (tile.type !== 'note') return clampTileToWorld(tile)
 
   const width = Math.max(NOTE_TILE_MIN_WIDTH, tile.width)
   const height = Math.max(NOTE_TILE_MIN_HEIGHT, tile.height)
-  if (width === tile.width && height === tile.height) return tile
+  if (width === tile.width && height === tile.height) return clampTileToWorld(tile)
 
-  return {
+  return clampTileToWorld({
     ...tile,
     width,
     height,
-  }
+  })
+}
+
+function warnCanvasWorldNormalization(scope: string, state: CanvasState, tiles: TileState[], viewport: Viewport): void {
+  const isDevelopment = Boolean((import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV)
+  if (!isDevelopment) return
+
+  const tileChanged = state.tiles.some((tile, index) => {
+    const next = tiles[index]
+    return !next ||
+      tile.x !== next.x ||
+      tile.y !== next.y ||
+      tile.width !== next.width ||
+      tile.height !== next.height
+  })
+  const viewportChanged =
+    state.viewport.tx !== viewport.tx ||
+    state.viewport.ty !== viewport.ty ||
+    state.viewport.zoom !== viewport.zoom
+
+  if (!tileChanged && !viewportChanged) return
+
+  console.warn(`[canvas] normalized ${scope} world state`, {
+    tiles: tileChanged,
+    viewport: viewportChanged,
+  })
 }
 
 function buildNormalizedGroupedState(
@@ -262,7 +288,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   activeWorkspaceConfig: {},
   availableProfiles: [],
 
-  setViewport: (vp) => set({ viewport: vp }),
+  setViewport: (vp) => set({ viewport: normalizeFiniteViewport(vp) }),
   setTiles: (tiles) => set((s) => {
     const normalizedTiles = tiles.map(normalizeTile)
     const nextIds = new Set(tiles.map((tile) => tile.id))
@@ -278,16 +304,18 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
 
   restoreState: (state) => set(() => {
     const normalized = buildNormalizedGroupedState(state.tiles, state.groups ?? [])
+    const viewport = normalizeFiniteViewport(state.viewport)
     const fullviewActiveTileId =
       state.fullviewActiveTileId ??
       state.focusedTileId ??
       state.tiles[0]?.id ??
       null
+    warnCanvasWorldNormalization('restore', state, normalized.tiles, viewport)
 
     return {
       tiles: normalized.tiles,
       groups: normalized.groups,
-      viewport: state.viewport,
+      viewport,
       nextZIndex: state.nextZIndex,
       focusedTileId: state.focusedTileId ?? null,
       viewMode: normalizeViewMode(state.viewMode),
@@ -365,7 +393,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     return {
       tiles: s.tiles.map((tile) => {
         const next = positionsById.get(tile.id)
-        return next ? { ...tile, x: next.x, y: next.y } : tile
+        return next ? normalizeTile({ ...tile, x: next.x, y: next.y }) : tile
       }),
     }
   }),
@@ -563,11 +591,13 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   setWorkspace: (id, name, config = {}) => set({ activeWorkspaceId: id, activeWorkspaceName: name, activeWorkspaceConfig: { ...config } }),
   restoreWorkspaceState: (id, name, config = {}, state) => set(() => {
     const normalized = buildNormalizedGroupedState(state.tiles, state.groups ?? [])
+    const viewport = normalizeFiniteViewport(state.viewport)
     const fullviewActiveTileId =
       state.fullviewActiveTileId ??
       state.focusedTileId ??
       state.tiles[0]?.id ??
       null
+    warnCanvasWorldNormalization('workspace restore', state, normalized.tiles, viewport)
 
     return {
       activeWorkspaceId: id,
@@ -575,7 +605,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       activeWorkspaceConfig: { ...config },
       tiles: normalized.tiles,
       groups: normalized.groups,
-      viewport: state.viewport,
+      viewport,
       nextZIndex: state.nextZIndex,
       focusedTileId: state.focusedTileId ?? null,
       viewMode: normalizeViewMode(state.viewMode),

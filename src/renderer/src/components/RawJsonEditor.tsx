@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { AlertCircle, Save, X } from 'lucide-react'
 import type { CanvasState, SplitViewState, ViewMode } from '@shared/types'
 import { DEFAULT_SPLIT_ORIENTATION, normalizeSplitOrientation } from '@/utils/splitViewState'
+import { clampTileToWorld, normalizeFiniteViewport } from '@/utils/canvasWorld'
 
 interface RawJsonEditorProps {
   open: boolean
@@ -40,7 +41,9 @@ function normalizeCanvasState(state: CanvasState): CanvasState {
 
   return {
     ...state,
+    tiles: state.tiles.map(clampTileToWorld),
     groups: state.groups ?? [],
+    viewport: normalizeFiniteViewport(state.viewport),
     viewMode,
     fullviewActiveTileId: state.fullviewActiveTileId ?? state.focusedTileId ?? state.tiles[0]?.id ?? null,
     splitViewState,
