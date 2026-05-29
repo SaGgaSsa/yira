@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Monitor, Moon, Sun, Type, Grid3X3, Globe, Code2, Info, RefreshCw, Download, LayoutGrid } from 'lucide-react'
+import { X, Monitor, Moon, Sun, Type, Grid3X3, Globe, Code2, Info, RefreshCw, Download, LayoutGrid, Keyboard } from 'lucide-react'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useUpdateStore } from '@/store/updateStore'
+import { SHORTCUT_CATALOG } from '@/utils/shortcutCatalog'
 import type { UpdateState } from '@shared/types'
 import { MAX_FONT_SIZE_PX, MIN_FONT_SIZE_PX } from '@shared/userSettings'
 
@@ -17,6 +18,7 @@ type SettingsSectionId =
   | 'density'
   | 'canvas'
   | 'tiles'
+  | 'shortcuts'
   | 'browser'
   | 'advanced'
   | 'about'
@@ -30,6 +32,7 @@ const SETTINGS_SECTIONS: Array<{
   { id: 'density', label: 'Fonts', icon: Type },
   { id: 'canvas', label: 'Canvas', icon: Grid3X3 },
   { id: 'tiles', label: 'Tiles', icon: LayoutGrid },
+  { id: 'shortcuts', label: 'Shortcuts', icon: Keyboard },
   { id: 'browser', label: 'Browser', icon: Globe },
   { id: 'advanced', label: 'Advanced', icon: Code2 },
   { id: 'about', label: 'About & Updates', icon: Info },
@@ -335,6 +338,38 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor }: SettingsPanel
               spellCheck={false}
             />
           </label>
+        </section>
+      )
+    }
+
+    if (activeSection === 'shortcuts') {
+      return (
+        <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
+          <div className="mb-5 flex items-center gap-3">
+            <ActiveSectionIcon size={16} className="text-text-secondary" />
+            <div>
+              <div className="nd-label text-text-secondary">Shortcuts</div>
+              <h3 className="mt-1 text-xl text-text-display">Keyboard Shortcut catalog</h3>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {SHORTCUT_CATALOG.map((group) => (
+              <div key={group.label} className="rounded-[20px] border border-border-visible bg-bg-primary px-4 py-4">
+                <div className="nd-label text-text-display">{group.label}</div>
+                <div className="mt-3 divide-y divide-border">
+                  {group.items.map((item) => (
+                    <div key={`${group.label}-${item.keys}`} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                      <span className="text-sm leading-6 text-text-secondary">{item.label}</span>
+                      <kbd className="shrink-0 rounded-full border border-border-visible bg-bg-secondary px-3 py-1 font-mono text-xs text-text-display">
+                        {item.keys}
+                      </kbd>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         </section>
       )
     }

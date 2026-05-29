@@ -543,10 +543,12 @@ export default function App(): React.ReactElement {
     focusedTileId,
     selectedTileIds,
     viewMode,
-    resetZoom,
+    fullviewActiveTileId,
+    splitViewState,
     focusTile,
     selectTiles,
-    setViewMode,
+    setFullviewActiveTileId,
+    setSplitViewState,
     onClosePicker: () => {
       setShowProfilePicker(false)
       setShowWorkspacePicker(false)

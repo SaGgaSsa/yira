@@ -115,7 +115,6 @@ app.whenReady().then(async () => {
       submenu: [
         {
           label: 'New Window',
-          accelerator: 'CmdOrCtrl+N',
           click: () => createWindow(),
         },
         { type: 'separator' },
@@ -137,15 +136,29 @@ app.whenReady().then(async () => {
     {
       label: 'View',
       submenu: [
-        { role: 'reload' },
-        { role: 'forceReload' },
+        {
+          label: 'Reload',
+          click: () => {
+            BrowserWindow.getFocusedWindow()?.reload()
+          },
+        },
+        {
+          label: 'Force Reload',
+          click: () => {
+            BrowserWindow.getFocusedWindow()?.webContents.reloadIgnoringCache()
+          },
+        },
         { role: 'toggleDevTools' },
         { type: 'separator' },
-        { role: 'resetZoom' },
-        { role: 'zoomIn' },
-        { role: 'zoomOut' },
-        { type: 'separator' },
-        { role: 'togglefullscreen' },
+        {
+          label: 'Toggle Full Screen',
+          accelerator: 'F11',
+          click: () => {
+            const focusedWindow = BrowserWindow.getFocusedWindow()
+            if (!focusedWindow) return
+            focusedWindow.setFullScreen(!focusedWindow.isFullScreen())
+          },
+        },
       ],
     },
     {

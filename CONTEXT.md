@@ -32,6 +32,18 @@ _Avoid_: Workspace, project
 The optional app capability that makes groups visible and usable.
 _Avoid_: Default grouping
 
+**Keyboard Shortcut**:
+A documented key combination that triggers a Yira action.
+_Avoid_: Hotkey, keybinding
+
+**Focus View**:
+The single-panel tile view currently labeled `Focus`.
+_Avoid_: Fullview, single view
+
+**Split View**:
+The two-panel tile view.
+_Avoid_: Splitview, split mode
+
 **Tile**:
 A workspace item that represents one tool or piece of working state.
 _Avoid_: Window, panel, widget
