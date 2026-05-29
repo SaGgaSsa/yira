@@ -1,5 +1,8 @@
 import { normalizeUserSettings } from './userSettings'
 
+const defaults = normalizeUserSettings({})
+if (defaults.browser.homeUrl !== 'about:blank') throw new Error('default browser home URL must be about:blank')
+
 const small = normalizeUserSettings({ fontSize: 'small' })
 if (small.interfaceFontSizePx !== 14) throw new Error('small legacy font must migrate to 14px interface font')
 if (small.tileFontSizePx !== 14) throw new Error('small legacy font must migrate to 14px tile font')

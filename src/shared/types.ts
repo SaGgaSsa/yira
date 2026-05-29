@@ -65,7 +65,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   snapToGrid: true,
   gridSize: 20,
   browser: {
-    homeUrl: 'https://example.com',
+    homeUrl: 'about:blank',
   },
   tiles: {
     creationAvailability: {

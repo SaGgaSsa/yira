@@ -15,6 +15,7 @@ import { APP_ID, APP_NAME, DEV_APP_NAME, YIRA_HOME } from './paths'
 import { registerUpdateIPC, scheduleStartupUpdateCheck } from './updater'
 
 const appDisplayName = is.dev ? DEV_APP_NAME : APP_NAME
+const REACT_DEVTOOLS_HINT = 'Download the React DevTools'
 
 function createWindow(): BrowserWindow {
   // electron-vite outputs .mjs for preload; try .mjs first, fallback to .js
@@ -67,6 +68,7 @@ function createWindow(): BrowserWindow {
     console.error('[main] did-fail-load:', code, desc, url)
   })
   win.webContents.on('console-message', (_event, _level, message) => {
+    if (message.includes(REACT_DEVTOOLS_HINT)) return
     console.log('[renderer]', message)
   })
 

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, ExternalLink, Globe, RefreshCw } from 'lucide-react'
 import { useSettingsStore } from '@/store/settingsStore'
+import { normalizeBrowserUrl } from '@/utils/browserUrl'
 import type { TileState } from '@shared/types'
 
 interface BrowserTileProps {
@@ -18,16 +19,9 @@ interface WebviewElement extends HTMLElement {
   src: string
 }
 
-function normalizeUrl(raw: string): string {
-  const value = raw.trim()
-  if (!value) return 'https://example.com'
-  if (/^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(value)) return value
-  return `https://${value}`
-}
-
 export function BrowserTile({ tile, onUpdate }: BrowserTileProps): React.ReactElement {
   const homeUrl = useSettingsStore((s) => s.browser.homeUrl)
-  const initialUrl = useMemo(() => normalizeUrl(tile.browserUrl ?? homeUrl), [tile.browserUrl, homeUrl])
+  const initialUrl = useMemo(() => normalizeBrowserUrl(tile.browserUrl ?? homeUrl), [tile.browserUrl, homeUrl])
   const webviewRef = useRef<WebviewElement | null>(null)
   const [inputUrl, setInputUrl] = useState(initialUrl)
   const [currentUrl, setCurrentUrl] = useState(initialUrl)
@@ -72,7 +66,7 @@ export function BrowserTile({ tile, onUpdate }: BrowserTileProps): React.ReactEl
   }, [currentUrl, onUpdate, tile.browserUrl])
 
   const navigate = (target: string) => {
-    const nextUrl = normalizeUrl(target)
+    const nextUrl = normalizeBrowserUrl(target)
     setCurrentUrl(nextUrl)
     setInputUrl(nextUrl)
     onUpdate({ browserUrl: nextUrl })

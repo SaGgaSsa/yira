@@ -7,6 +7,8 @@ const { autoUpdater } = electronUpdater
 
 const UPDATE_STATE_CHANNEL = 'updates:state-changed'
 const STARTUP_CHECK_DELAY_MS = 5000
+const STARTUP_CHECK_TIMEOUT_MS = 8000
+const MANUAL_CHECK_TIMEOUT_MS = 20000
 
 let updateState: UpdateState = createInitialState()
 let updaterRegistered = false
@@ -100,6 +102,15 @@ function handleUpdateError(error: unknown): void {
   })
 }
 
+function getCheckTimeoutMs(reason: 'startup' | 'manual'): number {
+  return reason === 'startup' ? STARTUP_CHECK_TIMEOUT_MS : MANUAL_CHECK_TIMEOUT_MS
+}
+
+function getCheckTimeoutMessage(reason: 'startup' | 'manual'): string {
+  if (reason === 'startup') return 'Update check timed out. Yira will keep working offline.'
+  return 'Update check timed out. Yira is still usable offline; try again later.'
+}
+
 async function runUpdateCheck(reason: 'startup' | 'manual'): Promise<UpdateState> {
   if (!app.isPackaged) {
     setUpdateState({
@@ -118,11 +129,26 @@ async function runUpdateCheck(reason: 'startup' | 'manual'): Promise<UpdateState
     ? 'Checking for updates in the background.'
     : 'Checking for updates.')
 
+  let timedOut = false
+  let timeoutId: NodeJS.Timeout | null = null
+  const timeout = new Promise<void>((resolve) => {
+    timeoutId = setTimeout(() => {
+      timedOut = true
+      setUpdateState({
+        status: 'error',
+        progressPercent: null,
+        message: getCheckTimeoutMessage(reason),
+      })
+      resolve()
+    }, getCheckTimeoutMs(reason))
+  })
+
   try {
-    await getUpdater().checkForUpdates()
+    await Promise.race([getUpdater().checkForUpdates(), timeout])
   } catch (error) {
-    handleUpdateError(error)
+    if (!timedOut) handleUpdateError(error)
   } finally {
+    if (timeoutId) clearTimeout(timeoutId)
     checkInFlight = false
   }
 
