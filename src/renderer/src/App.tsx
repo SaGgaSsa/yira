@@ -216,6 +216,7 @@ export default function App(): React.ReactElement {
   const updateMessage = useUpdateStore((s) => s.message)
   const installUpdate = useUpdateStore((s) => s.installUpdate)
   const groupsEnabled = useSettingsStore((s) => s.groups.enabled)
+  const terminalAttentionEnabled = useSettingsStore((s) => s.terminal.attentionEnabled)
   const tileCreationAvailability = useSettingsStore((s) => s.tiles.creationAvailability)
 
   // Canvas state
@@ -229,6 +230,7 @@ export default function App(): React.ReactElement {
   const fullviewActiveTileId = useCanvasStore((s) => s.fullviewActiveTileId)
   const splitViewState = useCanvasStore((s) => s.splitViewState)
   const terminalTitles = useCanvasStore((s) => s.terminalTitles)
+  const terminalAttention = useCanvasStore((s) => s.terminalAttention)
   const activeWorkspaceId = useCanvasStore((s) => s.activeWorkspaceId)
   const activeWorkspaceName = useCanvasStore((s) => s.activeWorkspaceName)
   const activeWorkspaceConfig = useCanvasStore((s) => s.activeWorkspaceConfig)
@@ -253,6 +255,8 @@ export default function App(): React.ReactElement {
   const setSplitPanelActiveTile = useCanvasStore((s) => s.setSplitPanelActiveTile)
   const setSplitFocusedPanel = useCanvasStore((s) => s.setSplitFocusedPanel)
   const clearTerminalTitle = useCanvasStore((s) => s.clearTerminalTitle)
+  const clearTerminalAttention = useCanvasStore((s) => s.clearTerminalAttention)
+  const clearAllTerminalAttention = useCanvasStore((s) => s.clearAllTerminalAttention)
 
   // Canvas actions (extracted hook)
   const [activeDialog, setActiveDialog] = useState<ActiveDialogState>(null)
@@ -294,6 +298,7 @@ export default function App(): React.ReactElement {
   const [workspaceEditor, setWorkspaceEditor] = useState<WorkspaceEditorState>(null)
   const [tileEditor, setTileEditor] = useState<TileEditorState>(null)
   const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState<string | null>(null)
+  const [windowFocused, setWindowFocused] = useState(() => document.hasFocus())
   const [tileRefreshKeys, setTileRefreshKeys] = useState<Record<string, number>>({})
   const [tileMenu, setTileMenu] = useState<{ tileId: string; x: number; y: number } | null>(null)
   const [groupMenu, setGroupMenu] = useState<{ groupId: string; x: number; y: number } | null>(null)
@@ -332,6 +337,32 @@ export default function App(): React.ReactElement {
   useEffect(() => {
     loadSettings()
   }, [loadSettings])
+
+  useEffect(() => {
+    const handleFocus = () => setWindowFocused(true)
+    const handleBlur = () => setWindowFocused(false)
+
+    window.addEventListener('focus', handleFocus)
+    window.addEventListener('blur', handleBlur)
+    return () => {
+      window.removeEventListener('focus', handleFocus)
+      window.removeEventListener('blur', handleBlur)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (terminalAttentionEnabled) return
+    clearAllTerminalAttention()
+  }, [clearAllTerminalAttention, terminalAttentionEnabled])
+
+  useEffect(() => {
+    if (!terminalAttentionEnabled || !windowFocused || !focusedTileId) return
+
+    const focusedTile = tiles.find((tile) => tile.id === focusedTileId)
+    if (focusedTile?.type === 'terminal') {
+      clearTerminalAttention(focusedTile.id)
+    }
+  }, [clearTerminalAttention, focusedTileId, terminalAttentionEnabled, tiles, windowFocused])
 
   useEffect(() => {
     void initializeUpdates()
@@ -567,6 +598,13 @@ export default function App(): React.ReactElement {
     availableProfiles.find((p) => p.id === 'zsh') ??
     availableProfiles.find((p) => p.available)
   const effectiveGroups = groupsEnabled ? groups : []
+  const terminalAttentionCounts = useMemo(() => {
+    if (!terminalAttentionEnabled) return {}
+
+    return Object.fromEntries(
+      Object.entries(terminalAttention).map(([tileId, entry]) => [tileId, entry.count]),
+    )
+  }, [terminalAttention, terminalAttentionEnabled])
   const canCreateNote = tileCreationAvailability.note
   const canCreateBrowser = tileCreationAvailability.browser
   const canCreateTimer = tileCreationAvailability.timer
@@ -1637,6 +1675,7 @@ export default function App(): React.ReactElement {
                         tile={tile}
                         active={isActive || isSelected}
                         displayLabel={tile.type === 'terminal' ? getTerminalDisplayTitle(tile, terminalTitles) : undefined}
+                        attentionCount={terminalAttentionCounts[tile.id] ?? 0}
                         className="w-full transition-colors"
                         onClick={() => handleSidebarTileClick(tile.id)}
                         onDoubleClick={() => handleShowTileFromSidebar(tile.id)}
@@ -1769,6 +1808,7 @@ export default function App(): React.ReactElement {
                   <FullviewPanel
                     tiles={sortedTiles}
                     activeTileId={fullviewActiveTileId}
+                    attentionCounts={terminalAttentionCounts}
                     onActivateTile={(tileId) => {
                       setFullviewActiveTileId(tileId)
                       handleSelectSingleTile(tileId)
@@ -1798,6 +1838,7 @@ export default function App(): React.ReactElement {
                   <SplitviewPanel
                     tiles={sortedTiles}
                     splitViewState={splitViewState}
+                    attentionCounts={terminalAttentionCounts}
                     onActivateTile={activateSplitTile}
                     onCloseTile={(panel, tileId) => {
                       void closeTileFromSplitview(panel, tileId)

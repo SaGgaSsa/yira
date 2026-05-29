@@ -9,6 +9,7 @@ import { TileListItem } from './TileListItem'
 interface FullviewPanelProps {
   tiles: TileState[]
   activeTileId: string | null
+  attentionCounts?: Record<string, number>
   onActivateTile: (tileId: string) => void
   onCloseTile: (tileId: string) => void | Promise<void>
   onEditTile: (tile: TileState) => void
@@ -22,6 +23,7 @@ interface FullviewPanelProps {
 export function FullviewPanel({
   tiles,
   activeTileId,
+  attentionCounts = {},
   onActivateTile,
   onCloseTile,
   onEditTile,
@@ -107,6 +109,7 @@ export function FullviewPanel({
                 tile={tile}
                 active={isActive}
                 displayLabel={displayLabel}
+                attentionCount={attentionCounts[tile.id] ?? 0}
                 className="min-w-[220px] max-w-[280px]"
                 onClick={() => onActivateTile(tile.id)}
                 onContextMenu={(event) => {

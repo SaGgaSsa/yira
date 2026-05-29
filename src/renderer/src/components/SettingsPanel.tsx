@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Monitor, Moon, Sun, Type, Grid3X3, Globe, Code2, Info, RefreshCw, Download, LayoutGrid, Keyboard } from 'lucide-react'
+import { X, Monitor, Moon, Sun, Type, Grid3X3, Globe, Code2, Info, RefreshCw, Download, LayoutGrid, Keyboard, Terminal } from 'lucide-react'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useUpdateStore } from '@/store/updateStore'
 import { SHORTCUT_CATALOG } from '@/utils/shortcutCatalog'
@@ -18,6 +18,7 @@ type SettingsSectionId =
   | 'density'
   | 'canvas'
   | 'tiles'
+  | 'terminal'
   | 'shortcuts'
   | 'browser'
   | 'advanced'
@@ -32,6 +33,7 @@ const SETTINGS_SECTIONS: Array<{
   { id: 'density', label: 'Fonts', icon: Type },
   { id: 'canvas', label: 'Canvas', icon: Grid3X3 },
   { id: 'tiles', label: 'Tiles', icon: LayoutGrid },
+  { id: 'terminal', label: 'Terminal', icon: Terminal },
   { id: 'shortcuts', label: 'Shortcuts', icon: Keyboard },
   { id: 'browser', label: 'Browser', icon: Globe },
   { id: 'advanced', label: 'Advanced', icon: Code2 },
@@ -68,6 +70,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor }: SettingsPanel
   const snapToGrid = useSettingsStore((s) => s.snapToGrid)
   const gridSize = useSettingsStore((s) => s.gridSize)
   const browserHomeUrl = useSettingsStore((s) => s.browser.homeUrl)
+  const terminalAttentionEnabled = useSettingsStore((s) => s.terminal.attentionEnabled)
   const tileCreationAvailability = useSettingsStore((s) => s.tiles.creationAvailability)
   const groupsEnabled = useSettingsStore((s) => s.groups.enabled)
   const setAppearance = useSettingsStore((s) => s.setAppearance)
@@ -77,6 +80,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor }: SettingsPanel
   const setSnapToGrid = useSettingsStore((s) => s.setSnapToGrid)
   const setGridSize = useSettingsStore((s) => s.setGridSize)
   const setBrowserHomeUrl = useSettingsStore((s) => s.setBrowserHomeUrl)
+  const setTerminalAttentionEnabled = useSettingsStore((s) => s.setTerminalAttentionEnabled)
   const setTileCreationAvailable = useSettingsStore((s) => s.setTileCreationAvailable)
   const setGroupsEnabled = useSettingsStore((s) => s.setGroupsEnabled)
   const currentVersion = useUpdateStore((s) => s.currentVersion)
@@ -336,6 +340,32 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor }: SettingsPanel
               value={browserHomeUrl}
               onChange={(event) => setBrowserHomeUrl(event.target.value)}
               spellCheck={false}
+            />
+          </label>
+        </section>
+      )
+    }
+
+    if (activeSection === 'terminal') {
+      return (
+        <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
+          <div className="mb-5 flex items-center gap-3">
+            <ActiveSectionIcon size={16} className="text-text-secondary" />
+            <div>
+              <div className="nd-label text-text-secondary">Terminal</div>
+              <h3 className="mt-1 text-xl text-text-display">Runtime attention</h3>
+            </div>
+          </div>
+
+          <label className="flex items-center justify-between gap-4 rounded-[20px] border border-border-visible bg-bg-primary px-4 py-4">
+            <span>
+              <span className="nd-label block text-text-display">Terminal Attention</span>
+              <span className="mt-2 block text-sm leading-6 text-text-secondary">Show output counters and request native attention while Yira is inactive.</span>
+            </span>
+            <input
+              type="checkbox"
+              checked={terminalAttentionEnabled}
+              onChange={(event) => setTerminalAttentionEnabled(event.target.checked)}
             />
           </label>
         </section>

@@ -2,6 +2,7 @@ import { normalizeUserSettings } from './userSettings'
 
 const defaults = normalizeUserSettings({})
 if (defaults.browser.homeUrl !== 'about:blank') throw new Error('default browser home URL must be about:blank')
+if (defaults.terminal.attentionEnabled !== true) throw new Error('terminal attention must default on')
 
 const small = normalizeUserSettings({ fontSize: 'small' })
 if (small.interfaceFontSizePx !== 14) throw new Error('small legacy font must migrate to 14px interface font')
@@ -23,3 +24,9 @@ if (explicit.tileFontSizePx !== 36) throw new Error('explicit tile font must win
 const clamped = normalizeUserSettings({ interfaceFontSizePx: 3, tileFontSizePx: 99 })
 if (clamped.interfaceFontSizePx !== 10) throw new Error('interface font must clamp to minimum')
 if (clamped.tileFontSizePx !== 36) throw new Error('tile font must clamp to maximum')
+
+const legacy = normalizeUserSettings({ groups: { enabled: true } })
+if (legacy.terminal.attentionEnabled !== true) throw new Error('legacy settings must migrate terminal attention on')
+
+const disabled = normalizeUserSettings({ terminal: { attentionEnabled: false } })
+if (disabled.terminal.attentionEnabled !== false) throw new Error('disabled terminal attention setting must be preserved')

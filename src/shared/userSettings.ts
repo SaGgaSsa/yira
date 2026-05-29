@@ -36,6 +36,10 @@ export function normalizeUserSettings(raw: Partial<UserSettings> & { fontSize?: 
       ...DEFAULT_USER_SETTINGS.browser,
       ...(raw.browser ?? {}),
     },
+    terminal: {
+      ...DEFAULT_USER_SETTINGS.terminal,
+      ...(raw.terminal ?? {}),
+    },
     tiles: {
       ...DEFAULT_USER_SETTINGS.tiles,
       ...(raw.tiles ?? {}),

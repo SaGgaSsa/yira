@@ -56,6 +56,10 @@ _Avoid_: File explorer without workspace
 A tile that provides a shell for the workspace.
 _Avoid_: File explorer, command runner
 
+**Terminal Attention**:
+Session-only runtime state for a Terminal Tile that receives new output while it is not being attended.
+_Avoid_: Unread Output, Needs Attention
+
 **Tile Creation Availability**:
 The app-wide preference that controls which configurable tile types appear in normal creation surfaces.
 _Avoid_: Tile visibility, tile deletion, board migration
@@ -82,6 +86,8 @@ _Avoid_: Workspace initial command
 - A **Files Tile** requires its **Workspace** to have a root folder
 - A **Terminal Tile** can exist without a root folder
 - A **Terminal Tile** runs the **Workspace Initial Command** before its **Terminal Startup Command**
+- **Terminal Attention** is session-only and is not persisted in a **Workspace**
+- **Terminal Attention** is cleared when its **Terminal Tile** is attended
 - **Tile Creation Availability** affects only normal tile creation
 - **Tile Creation Availability** is an app-wide preference
 - **Tile Creation Availability** can hide Note, Browser, Timer, and Files creation

@@ -3,6 +3,11 @@ import { GROUP_COLOR_ORDER, normalizeTileSize, type TileState, type CanvasState,
 import { getGroupingBlockedReason } from '@/utils/grouping'
 import { DEFAULT_SPLIT_ORIENTATION, normalizeSplitOrientation } from '@/utils/splitViewState'
 import { clampTileToWorld, normalizeFiniteViewport } from '@/utils/canvasWorld'
+import {
+  getNextTerminalAttentionEntry,
+  TERMINAL_ATTENTION_GRACE_MS,
+  type TerminalAttentionEntry,
+} from '@/utils/terminalAttention'
 
 const UNTITLED_GROUP_NAME = 'Untitled Group'
 const DEFAULT_GROUP_COLOR: GroupColorId = GROUP_COLOR_ORDER[0]
@@ -225,6 +230,8 @@ interface CanvasStore {
   splitViewState: SplitViewState
   selectedTileIds: string[]
   terminalTitles: Record<string, string>
+  terminalAttention: Record<string, TerminalAttentionEntry>
+  terminalAttentionGraceUntil: Record<string, number>
   activeWorkspaceId: string
   activeWorkspaceName: string
   activeWorkspaceConfig: WorkspaceConfig
@@ -247,6 +254,10 @@ interface CanvasStore {
   setSplitFocusedPanel: (panel: SplitPanelId) => void
   setTerminalTitle: (tileId: string, title: string | null) => void
   clearTerminalTitle: (tileId: string) => void
+  registerTerminalCreated: (tileId: string, now?: number) => void
+  markTerminalOutput: (tileId: string, now?: number) => boolean
+  clearTerminalAttention: (tileId: string) => void
+  clearAllTerminalAttention: () => void
   selectTiles: (tileIds: string[]) => void
   createGroup: (
     group: Pick<TileGroup, 'name' | 'colorId' | 'locked'>,
@@ -280,6 +291,8 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   splitViewState: { ...EMPTY_SPLIT_VIEW_STATE },
   selectedTileIds: [],
   terminalTitles: {},
+  terminalAttention: {},
+  terminalAttentionGraceUntil: {},
   activeWorkspaceId: '',
   activeWorkspaceName: '',
   activeWorkspaceConfig: {},
@@ -292,10 +305,18 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     const nextTerminalTitles = Object.fromEntries(
       Object.entries(s.terminalTitles).filter(([tileId]) => nextIds.has(tileId)),
     )
+    const nextTerminalAttention = Object.fromEntries(
+      Object.entries(s.terminalAttention).filter(([tileId]) => nextIds.has(tileId)),
+    )
+    const nextTerminalAttentionGraceUntil = Object.fromEntries(
+      Object.entries(s.terminalAttentionGraceUntil).filter(([tileId]) => nextIds.has(tileId)),
+    )
 
     return {
       tiles: normalizedTiles,
       terminalTitles: nextTerminalTitles,
+      terminalAttention: nextTerminalAttention,
+      terminalAttentionGraceUntil: nextTerminalAttentionGraceUntil,
     }
   }),
 
@@ -320,6 +341,8 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       splitViewState: normalizeSplitViewState(state.splitViewState, normalized.tiles, state.focusedTileId ?? null, fullviewActiveTileId),
       selectedTileIds: [],
       terminalTitles: {},
+      terminalAttention: {},
+      terminalAttentionGraceUntil: {},
     }
   }),
 
@@ -376,6 +399,12 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       selectedTileIds: s.selectedTileIds.filter(id => id !== tileId),
       terminalTitles: Object.fromEntries(
         Object.entries(s.terminalTitles).filter(([id]) => id !== tileId),
+      ),
+      terminalAttention: Object.fromEntries(
+        Object.entries(s.terminalAttention).filter(([id]) => id !== tileId),
+      ),
+      terminalAttentionGraceUntil: Object.fromEntries(
+        Object.entries(s.terminalAttentionGraceUntil).filter(([id]) => id !== tileId),
       ),
     }
   }),
@@ -443,6 +472,38 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     const { [tileId]: _removed, ...terminalTitles } = s.terminalTitles
     return { terminalTitles }
   }),
+  registerTerminalCreated: (tileId, now = Date.now()) => set((s) => ({
+    terminalAttentionGraceUntil: {
+      ...s.terminalAttentionGraceUntil,
+      [tileId]: now + TERMINAL_ATTENTION_GRACE_MS,
+    },
+  })),
+  markTerminalOutput: (tileId, now = Date.now()) => {
+    const state = get()
+    const graceUntil = state.terminalAttentionGraceUntil[tileId] ?? 0
+    if (now < graceUntil) return false
+    if (!state.tiles.some((tile) => tile.id === tileId && tile.type === 'terminal')) return false
+
+    const current = state.terminalAttention[tileId]
+    const next = getNextTerminalAttentionEntry(current, now)
+    const countChanged = next.count !== (current?.count ?? 0)
+
+    set((s) => ({
+      terminalAttention: {
+        ...s.terminalAttention,
+        [tileId]: next,
+      },
+    }))
+
+    return countChanged
+  },
+  clearTerminalAttention: (tileId) => set((s) => {
+    if (s.terminalAttention[tileId] === undefined) return {}
+
+    const { [tileId]: _removed, ...terminalAttention } = s.terminalAttention
+    return { terminalAttention }
+  }),
+  clearAllTerminalAttention: () => set({ terminalAttention: {} }),
 
   selectTiles: (tileIds) => set({ selectedTileIds: tileIds }),
 
@@ -610,6 +671,8 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       splitViewState: normalizeSplitViewState(state.splitViewState, normalized.tiles, state.focusedTileId ?? null, fullviewActiveTileId),
       selectedTileIds: [],
       terminalTitles: {},
+      terminalAttention: {},
+      terminalAttentionGraceUntil: {},
     }
   }),
   setProfiles: (profiles) => set({ availableProfiles: profiles }),

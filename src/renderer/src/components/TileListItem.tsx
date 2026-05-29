@@ -1,12 +1,14 @@
 import React from 'react'
 import { X } from 'lucide-react'
 import type { TileState } from '@shared/types'
+import { formatTerminalAttentionCount } from '@/utils/terminalAttention'
 import { TILE_META } from './TileContent'
 
 interface TileListItemProps {
   tile: TileState
   active?: boolean
   displayLabel?: string
+  attentionCount?: number
   onClick: () => void
   onDoubleClick?: () => void
   onContextMenu?: (event: React.MouseEvent) => void
@@ -22,6 +24,7 @@ export function TileListItem({
   tile,
   active = false,
   displayLabel,
+  attentionCount = 0,
   onClick,
   onDoubleClick,
   onContextMenu,
@@ -36,6 +39,7 @@ export function TileListItem({
   const Icon = meta.icon
   const fallbackLabel = tile.type === 'note' ? meta.label : `${meta.label} ${tile.id.slice(-4)}`
   const label = (displayLabel ?? tile.label)?.trim() || fallbackLabel
+  const attentionLabel = formatTerminalAttentionCount(attentionCount)
 
   return (
     <div
@@ -59,10 +63,18 @@ export function TileListItem({
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border-visible text-text-secondary">
           <Icon size={15} className="shrink-0" />
         </div>
-        <div className="min-w-0 flex-1 text-center">
-          <div className="truncate text-sm text-text-display">
+        <div className="flex min-w-0 flex-1 items-center justify-center gap-2 text-center">
+          <div className="min-w-0 truncate text-sm text-text-display">
             {label}
           </div>
+          {attentionLabel && (
+            <span
+              className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full border border-text-display px-1.5 font-mono text-[10px] leading-none text-text-display"
+              title={`${attentionCount} terminal output ${attentionCount === 1 ? 'event' : 'events'}`}
+            >
+              {attentionLabel}
+            </span>
+          )}
         </div>
       </button>
 

@@ -14,6 +14,7 @@ export interface SettingsState extends UserSettings {
   setSnapToGrid: (snap: boolean) => void
   setGridSize: (size: number) => void
   setBrowserHomeUrl: (url: string) => void
+  setTerminalAttentionEnabled: (enabled: boolean) => void
   setTileCreationAvailable: (type: ConfigurableTileCreationType, available: boolean) => void
   setGroupsEnabled: (enabled: boolean) => void
   loadSettings: () => Promise<void>
@@ -34,6 +35,7 @@ function scheduleSave() {
       snapToGrid: state.snapToGrid,
       gridSize: state.gridSize,
       browser: { homeUrl: state.browser.homeUrl },
+      terminal: { attentionEnabled: state.terminal.attentionEnabled },
       tiles: {
         creationAvailability: {
           ...DEFAULT_USER_SETTINGS.tiles.creationAvailability,
@@ -85,6 +87,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     scheduleSave()
   },
 
+  setTerminalAttentionEnabled: (enabled) => {
+    set((state) => ({ terminal: { ...state.terminal, attentionEnabled: enabled } }))
+    scheduleSave()
+  },
+
   setTileCreationAvailable: (type, available) => {
     set((state) => ({
       tiles: {
@@ -119,6 +126,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           browser: {
             homeUrl: normalized.browser.homeUrl,
           },
+          terminal: {
+            attentionEnabled: normalized.terminal.attentionEnabled,
+          },
           tiles: {
             creationAvailability: {
               ...DEFAULT_USER_SETTINGS.tiles.creationAvailability,
@@ -149,6 +159,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       snapToGrid: state.snapToGrid,
       gridSize: state.gridSize,
       browser: { homeUrl: state.browser.homeUrl },
+      terminal: { attentionEnabled: state.terminal.attentionEnabled },
       tiles: {
         creationAvailability: {
           ...DEFAULT_USER_SETTINGS.tiles.creationAvailability,

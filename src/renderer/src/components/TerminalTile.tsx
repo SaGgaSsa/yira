@@ -33,6 +33,8 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, onFoc
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
   const isFocusedRef = useRef(isFocused)
+  const attentionEnabled = useSettingsStore((s) => s.terminal.attentionEnabled)
+  const attentionEnabledRef = useRef(attentionEnabled)
   const tileFontSizePx = useSettingsStore((s) => s.tileFontSizePx)
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number; hasSelection: boolean } | null>(null)
 
@@ -75,6 +77,13 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, onFoc
   useEffect(() => {
     isFocusedRef.current = isFocused
   }, [isFocused])
+
+  useEffect(() => {
+    attentionEnabledRef.current = attentionEnabled
+    if (!attentionEnabled || !isFocused || !document.hasFocus()) return
+
+    useCanvasStore.getState().clearTerminalAttention(tile.id)
+  }, [attentionEnabled, isFocused, tile.id])
 
   // Create terminal + PTY on mount
   useEffect(() => {
@@ -150,11 +159,29 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, onFoc
       })
       .then(({ buffer }) => {
         if (cancelled) return
+        useCanvasStore.getState().registerTerminalCreated(tile.id)
         if (buffer) term.write(buffer)
 
         // Listen for PTY data
         ptyUnsub = window.electron.terminal.onData(tile.id, (data: string) => {
-          if (!cancelled) term.write(data)
+          if (cancelled) return
+
+          term.write(data)
+
+          if (!attentionEnabledRef.current) return
+
+          const isWindowFocused = document.hasFocus()
+          if (isWindowFocused && isFocusedRef.current) {
+            useCanvasStore.getState().clearTerminalAttention(tile.id)
+            return
+          }
+
+          const shouldRequestAttention = useCanvasStore.getState().markTerminalOutput(tile.id)
+          if (shouldRequestAttention && !isWindowFocused) {
+            void window.electron.notifications.requestAttention({ onlyWhenInactive: true }).catch((error: unknown) => {
+              console.error('[TerminalTile] Failed to request attention:', error)
+            })
+          }
         })
 
         // Send user input to PTY

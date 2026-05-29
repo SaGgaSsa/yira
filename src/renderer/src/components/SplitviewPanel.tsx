@@ -9,6 +9,7 @@ import { TileListItem } from './TileListItem'
 interface SplitviewPanelProps {
   tiles: TileState[]
   splitViewState: SplitViewState
+  attentionCounts?: Record<string, number>
   onActivateTile: (panel: SplitPanelId, tileId: string) => void
   onCloseTile: (panel: SplitPanelId, tileId: string) => void | Promise<void>
   onEditTile: (tile: TileState) => void
@@ -26,6 +27,7 @@ interface PanelTabStripProps {
   tiles: TileState[]
   orientation: SplitViewState['orientation']
   activeTileId: string | null
+  attentionCounts: Record<string, number>
   onActivateTile: (panel: SplitPanelId, tileId: string) => void
   onCloseTile: (panel: SplitPanelId, tileId: string) => void | Promise<void>
   onContextMenu: (tileId: string, x: number, y: number) => void
@@ -38,6 +40,7 @@ function PanelTabStrip({
   tiles,
   orientation,
   activeTileId,
+  attentionCounts,
   onActivateTile,
   onCloseTile,
   onContextMenu,
@@ -82,6 +85,7 @@ function PanelTabStrip({
                 tile={tile}
                 active={isActive}
                 displayLabel={displayLabel}
+                attentionCount={attentionCounts[tile.id] ?? 0}
                 className="min-w-[200px] max-w-[260px]"
                 draggable={tiles.length > 1}
                 onDragStart={(event) => {
@@ -117,6 +121,7 @@ function PanelTabStrip({
 export function SplitviewPanel({
   tiles,
   splitViewState,
+  attentionCounts = {},
   onActivateTile,
   onCloseTile,
   onEditTile,
@@ -205,6 +210,7 @@ export function SplitviewPanel({
         tiles={leftTiles}
         orientation={splitViewState.orientation}
         activeTileId={splitViewState.activeLeftTileId}
+        attentionCounts={attentionCounts}
         onActivateTile={onActivateTile}
         onCloseTile={onCloseTile}
         onContextMenu={(tileId, x, y) => setTabMenu({ tileId, x, y })}
@@ -216,6 +222,7 @@ export function SplitviewPanel({
         tiles={rightTiles}
         orientation={splitViewState.orientation}
         activeTileId={splitViewState.activeRightTileId}
+        attentionCounts={attentionCounts}
         onActivateTile={onActivateTile}
         onCloseTile={onCloseTile}
         onContextMenu={(tileId, x, y) => setTabMenu({ tileId, x, y })}

@@ -49,6 +49,9 @@ export interface UserSettings {
   browser: {
     homeUrl: string
   }
+  terminal: {
+    attentionEnabled: boolean
+  }
   tiles: {
     creationAvailability: TileCreationAvailability
   }
@@ -66,6 +69,9 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   gridSize: 20,
   browser: {
     homeUrl: 'about:blank',
+  },
+  terminal: {
+    attentionEnabled: true,
   },
   tiles: {
     creationAvailability: {
