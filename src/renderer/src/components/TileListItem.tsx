@@ -54,14 +54,14 @@ export function TileListItem({
       }}
     >
       <button
-        className={`flex w-full items-center gap-3 px-4 py-4 ${onClose ? 'pr-14' : ''}`}
+        className={`flex h-full w-full items-center gap-2 px-3 py-2.5 ${onClose ? 'pr-10' : ''}`}
         onClick={onClick}
         onDoubleClick={onDoubleClick}
         onContextMenu={onContextMenu}
         title={label}
       >
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border-visible text-text-secondary">
-          <Icon size={15} className="shrink-0" />
+        <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-border-visible text-text-secondary">
+          <Icon size={11} className="shrink-0" />
         </div>
         <div className="flex min-w-0 flex-1 items-center justify-center gap-2 text-center">
           <div className="min-w-0 truncate text-sm text-text-display">
@@ -80,7 +80,7 @@ export function TileListItem({
 
       {onClose && (
         <button
-          className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
+          className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
           onClick={onClose}
           title="Close tab"
         >

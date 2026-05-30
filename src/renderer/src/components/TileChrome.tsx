@@ -2,6 +2,7 @@ import React, { useRef, useCallback, useEffect, useMemo, useState, type ReactNod
 import { useCanvasStore } from '@/store/canvasStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { isTileInteractionLocked } from '@/utils/grouping'
+import { getSplitPanelFrame } from '@/utils/splitViewLayout'
 import type { TileState, ViewMode, SplitPanelId, SplitOrientation } from '@shared/types'
 import { getTileSizePreset, NOTE_COLORS } from '@shared/types'
 import { X, GripVertical, StickyNote, Globe, LayoutGrid, Terminal, Clock, Folder, Lock } from 'lucide-react'
@@ -228,19 +229,7 @@ export function TileChrome({
   }, [gridSize, isDragging, isResizing, minHeight, minWidth, onUpdate, onUpdatePositions, snapToGrid, zoom])
 
   const cursor = isDragging ? 'grabbing' : isResizing ? `${isResizing}-resize` : 'default'
-  const splitStyle = splitOrientation === 'horizontal'
-    ? {
-        left: 0,
-        top: splitPanel === 'left' ? 0 : '50%',
-        width: '100%',
-        height: '50%',
-      }
-    : {
-        left: splitPanel === 'left' ? 0 : '50%',
-        top: 0,
-        width: '50%',
-        height: '100%',
-      }
+  const splitStyle = getSplitPanelFrame(splitOrientation, splitPanel)
 
   return (
     <div

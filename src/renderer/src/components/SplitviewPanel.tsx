@@ -3,6 +3,7 @@ import { CopyPlus, Eye, EyeOff, Lock, Maximize2, Pencil, RefreshCw, Trash2, Unlo
 import type { SplitPanelId, SplitViewState, TileState } from '@shared/types'
 import { useCanvasStore } from '@/store/canvasStore'
 import { getTerminalDisplayTitle } from '@/utils/terminalDisplayTitle'
+import { SPLIT_TAB_STRIP_HEIGHT_PX } from '@/utils/splitViewLayout'
 import { ContextMenu, type MenuItem } from './ContextMenu'
 import { TileListItem } from './TileListItem'
 
@@ -48,14 +49,19 @@ function PanelTabStrip({
   onFocusPanel,
 }: PanelTabStripProps): React.ReactElement {
   const terminalTitles = useCanvasStore((s) => s.terminalTitles)
+  const horizontal = orientation === 'horizontal'
 
   return (
     <div
-      className={`min-w-0 flex-1 border-border px-4 pt-3 ${
-        orientation === 'horizontal'
-          ? 'border-b last:border-b-0'
-          : 'border-r last:border-r-0'
+      className={`min-w-0 border-border px-3 py-2 ${
+        horizontal
+          ? 'pointer-events-auto absolute left-0 right-0 z-20 border-b bg-bg-secondary'
+          : 'flex-1 border-r bg-bg-secondary last:border-r-0'
       }`}
+      style={horizontal ? {
+        height: SPLIT_TAB_STRIP_HEIGHT_PX,
+        top: panel === 'left' ? 0 : '50%',
+      } : undefined}
       onMouseDown={() => onFocusPanel(panel)}
       onDragOver={(event) => {
         event.preventDefault()
@@ -67,9 +73,9 @@ function PanelTabStrip({
         if (tileId) onMoveTile(tileId, panel)
       }}
     >
-      <div className="flex items-stretch gap-2 overflow-x-auto">
+      <div className="flex h-full items-stretch gap-2 overflow-x-auto">
         {tiles.length === 0 ? (
-          <div className="nd-panel-raised flex h-[72px] min-w-[220px] items-center px-5 text-text-secondary">
+          <div className="nd-panel-raised flex min-w-[220px] items-center px-5 text-text-secondary">
             <span className="nd-label">No items open</span>
           </div>
         ) : (
@@ -201,10 +207,13 @@ export function SplitviewPanel({
       ]
     : []
 
+  const horizontal = splitViewState.orientation === 'horizontal'
+
   return (
-    <div className={`flex shrink-0 border-b border-border bg-bg-secondary ${
-      splitViewState.orientation === 'horizontal' ? 'flex-col' : ''
-    }`}>
+    <div className={horizontal
+      ? 'pointer-events-none absolute inset-0 z-20'
+      : 'flex shrink-0 border-b border-border bg-bg-secondary'
+    }>
       <PanelTabStrip
         panel="left"
         tiles={leftTiles}
