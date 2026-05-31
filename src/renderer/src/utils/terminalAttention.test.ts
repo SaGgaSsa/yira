@@ -1,7 +1,23 @@
 import {
   formatTerminalAttentionCount,
   getNextTerminalAttentionEntry,
+  isTerminalInputAttended,
 } from './terminalAttention'
+
+const terminalInput = {} as Element
+const otherControl = {} as Element
+
+if (!isTerminalInputAttended(true, terminalInput, terminalInput)) {
+  throw new Error('active window with focused terminal input must count as attended')
+}
+
+if (isTerminalInputAttended(true, terminalInput, otherControl)) {
+  throw new Error('active window with another focused control must count as unattended')
+}
+
+if (isTerminalInputAttended(false, terminalInput, terminalInput)) {
+  throw new Error('inactive window with previously focused terminal input must count as unattended')
+}
 
 const first = getNextTerminalAttentionEntry(null, 1_000)
 if (first.count !== 1) throw new Error(`first unattended output must count 1, got ${first.count}`)

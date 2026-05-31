@@ -255,7 +255,6 @@ export default function App(): React.ReactElement {
   const setSplitPanelActiveTile = useCanvasStore((s) => s.setSplitPanelActiveTile)
   const setSplitFocusedPanel = useCanvasStore((s) => s.setSplitFocusedPanel)
   const clearTerminalTitle = useCanvasStore((s) => s.clearTerminalTitle)
-  const clearTerminalAttention = useCanvasStore((s) => s.clearTerminalAttention)
   const clearAllTerminalAttention = useCanvasStore((s) => s.clearAllTerminalAttention)
 
   // Canvas actions (extracted hook)
@@ -298,7 +297,6 @@ export default function App(): React.ReactElement {
   const [workspaceEditor, setWorkspaceEditor] = useState<WorkspaceEditorState>(null)
   const [tileEditor, setTileEditor] = useState<TileEditorState>(null)
   const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState<string | null>(null)
-  const [windowFocused, setWindowFocused] = useState(() => document.hasFocus())
   const [tileRefreshKeys, setTileRefreshKeys] = useState<Record<string, number>>({})
   const [tileMenu, setTileMenu] = useState<{ tileId: string; x: number; y: number } | null>(null)
   const [groupMenu, setGroupMenu] = useState<{ groupId: string; x: number; y: number } | null>(null)
@@ -339,30 +337,9 @@ export default function App(): React.ReactElement {
   }, [loadSettings])
 
   useEffect(() => {
-    const handleFocus = () => setWindowFocused(true)
-    const handleBlur = () => setWindowFocused(false)
-
-    window.addEventListener('focus', handleFocus)
-    window.addEventListener('blur', handleBlur)
-    return () => {
-      window.removeEventListener('focus', handleFocus)
-      window.removeEventListener('blur', handleBlur)
-    }
-  }, [])
-
-  useEffect(() => {
     if (terminalAttentionEnabled) return
     clearAllTerminalAttention()
   }, [clearAllTerminalAttention, terminalAttentionEnabled])
-
-  useEffect(() => {
-    if (!terminalAttentionEnabled || !windowFocused || !focusedTileId) return
-
-    const focusedTile = tiles.find((tile) => tile.id === focusedTileId)
-    if (focusedTile?.type === 'terminal') {
-      clearTerminalAttention(focusedTile.id)
-    }
-  }, [clearTerminalAttention, focusedTileId, terminalAttentionEnabled, tiles, windowFocused])
 
   useEffect(() => {
     void initializeUpdates()

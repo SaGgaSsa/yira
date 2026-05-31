@@ -6,6 +6,14 @@ export interface TerminalAttentionEntry {
   lastOutputAt: number
 }
 
+export function isTerminalInputAttended(
+  isWindowFocused: boolean,
+  terminalInput: Element | null | undefined,
+  activeElement: Element | null,
+): boolean {
+  return isWindowFocused && terminalInput !== undefined && terminalInput !== null && terminalInput === activeElement
+}
+
 export function getNextTerminalAttentionEntry(
   current: TerminalAttentionEntry | null | undefined,
   outputAt: number,

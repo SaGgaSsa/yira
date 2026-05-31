@@ -5,6 +5,7 @@ import '@xterm/xterm/css/xterm.css'
 import type { TileState } from '@shared/types'
 import { useCanvasStore } from '@/store/canvasStore'
 import { useSettingsStore } from '@/store/settingsStore'
+import { isTerminalInputAttended } from '@/utils/terminalAttention'
 import { buildTerminalStartupCommand } from '@/utils/terminalLaunch'
 import { ContextMenu, type MenuItem } from './ContextMenu'
 
@@ -32,17 +33,22 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, onFoc
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
-  const isFocusedRef = useRef(isFocused)
   const attentionEnabled = useSettingsStore((s) => s.terminal.attentionEnabled)
   const attentionEnabledRef = useRef(attentionEnabled)
   const tileFontSizePx = useSettingsStore((s) => s.tileFontSizePx)
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number; hasSelection: boolean } | null>(null)
 
   const focusTerminal = useCallback(() => {
-    isFocusedRef.current = true
     onFocus()
     termRef.current?.focus()
   }, [onFocus])
+
+  const clearAttentionIfAttended = useCallback(() => {
+    if (!attentionEnabledRef.current) return
+    if (!isTerminalInputAttended(document.hasFocus(), termRef.current?.textarea, document.activeElement)) return
+
+    useCanvasStore.getState().clearTerminalAttention(tile.id)
+  }, [tile.id])
 
   const copySelection = useCallback(async () => {
     const term = termRef.current
@@ -75,15 +81,10 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, onFoc
   }, [tile.id])
 
   useEffect(() => {
-    isFocusedRef.current = isFocused
-  }, [isFocused])
-
-  useEffect(() => {
     attentionEnabledRef.current = attentionEnabled
-    if (!attentionEnabled || !isFocused || !document.hasFocus()) return
-
-    useCanvasStore.getState().clearTerminalAttention(tile.id)
-  }, [attentionEnabled, isFocused, tile.id])
+    if (!attentionEnabled) return
+    clearAttentionIfAttended()
+  }, [attentionEnabled, clearAttentionIfAttended])
 
   // Create terminal + PTY on mount
   useEffect(() => {
@@ -134,6 +135,10 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, onFoc
     termRef.current = term
     fitRef.current = fitAddon
 
+    const terminalInput = term.textarea
+    terminalInput?.addEventListener('focus', clearAttentionIfAttended)
+    window.addEventListener('focus', clearAttentionIfAttended)
+
     // ResizeObserver for container size changes
     const ro = new ResizeObserver(() => doFit())
     if (containerRef.current.parentElement) {
@@ -171,7 +176,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, onFoc
           if (!attentionEnabledRef.current) return
 
           const isWindowFocused = document.hasFocus()
-          if (isWindowFocused && isFocusedRef.current) {
+          if (isTerminalInputAttended(isWindowFocused, term.textarea, document.activeElement)) {
             useCanvasStore.getState().clearTerminalAttention(tile.id)
             return
           }
@@ -201,6 +206,8 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, onFoc
     return () => {
       cancelled = true
       ro.disconnect()
+      terminalInput?.removeEventListener('focus', clearAttentionIfAttended)
+      window.removeEventListener('focus', clearAttentionIfAttended)
       ptyUnsub?.()
       inputDisposer?.dispose()
       titleDisposer.dispose()
@@ -209,7 +216,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, onFoc
       termRef.current = null
       fitRef.current = null
     }
-  }, [tile.id, tile.shellProfileId, doFit])
+  }, [tile.id, tile.shellProfileId, clearAttentionIfAttended, doFit])
 
   useEffect(() => {
     applyTerminalPadding(containerRef.current, edgeToEdge)
