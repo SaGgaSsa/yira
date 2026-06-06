@@ -109,6 +109,14 @@ app.whenReady().then(async () => {
   ipcMain.handle('clipboard:writeText', (_event, text: string) => {
     clipboard.writeText(text)
   })
+  ipcMain.handle('clipboard:writeRich', (_event, data: unknown) => {
+    const payload = data && typeof data === 'object' ? data as { text?: unknown; html?: unknown } : {}
+    const text = typeof payload.text === 'string' ? payload.text : ''
+    const html = typeof payload.html === 'string' ? payload.html : ''
+
+    if (!text.trim() && !html.trim()) return
+    clipboard.write({ text, html })
+  })
 
   // Native app menu
   const menu = Menu.buildFromTemplate([

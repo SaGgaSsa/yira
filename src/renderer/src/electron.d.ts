@@ -77,6 +77,7 @@ interface ElectronWorld {
   clipboard: {
     readText: () => Promise<string>
     writeText: (text: string) => Promise<void>
+    writeRich: (data: { text: string; html: string }) => Promise<void>
   }
   notifications: {
     requestAttention: (options?: NotificationAttentionOptions) => Promise<NotificationAttentionResult>

@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { BlockNoteSchema, defaultBlockSpecs, type PartialBlock } from '@blocknote/core'
+import { BlockNoteSchema, defaultBlockSpecs, selectedFragmentToHTML, type PartialBlock } from '@blocknote/core'
 import { useCreateBlockNote } from '@blocknote/react'
 import { BlockNoteView } from '@blocknote/mantine'
 import type { NoteBlocks, NoteColor, NoteFont, TileState } from '@shared/types'
 import { NOTE_COLORS } from '@shared/types'
+import { createElectronClipboardPayload } from '@/utils/noteClipboard'
 
 interface NoteTileProps {
   tile: TileState
@@ -86,12 +87,29 @@ function RichNoteEditor({
       headers: true,
     },
   })
+  const handleCopy = useCallback((event: React.ClipboardEvent<HTMLDivElement>) => {
+    const view = editor.prosemirrorView
+    if (view.state.selection.empty) return
+
+    try {
+      const payload = createElectronClipboardPayload(selectedFragmentToHTML(view, editor))
+      if (!payload) return
+
+      event.preventDefault()
+      event.clipboardData.setData('text/html', payload.html)
+      event.clipboardData.setData('text/plain', payload.text)
+      void window.electron.clipboard.writeRich(payload)
+    } catch (error) {
+      console.warn('[notes] Failed to write rich clipboard data', error)
+    }
+  }, [editor])
 
   return (
     <BlockNoteView
       className="yira-note-editor"
       editor={editor}
       theme="dark"
+      onCopy={handleCopy}
       onChange={() => {
         onChange(editor.document as NoteBlocks, blocksToSummary(editor))
       }}

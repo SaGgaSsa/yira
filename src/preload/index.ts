@@ -86,6 +86,7 @@ contextBridge.exposeInMainWorld('electron', {
   clipboard: {
     readText: () => ipcRenderer.invoke('clipboard:readText'),
     writeText: (text: string) => ipcRenderer.invoke('clipboard:writeText', text),
+    writeRich: (data: { text: string; html: string }) => ipcRenderer.invoke('clipboard:writeRich', data),
   },
 
   notifications: {
