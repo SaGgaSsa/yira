@@ -40,6 +40,10 @@ export function normalizeUserSettings(raw: Partial<UserSettings> & { fontSize?: 
       ...DEFAULT_USER_SETTINGS.terminal,
       ...(raw.terminal ?? {}),
     },
+    notifications: {
+      ...DEFAULT_USER_SETTINGS.notifications,
+      ...(raw.notifications ?? {}),
+    },
     tiles: {
       ...DEFAULT_USER_SETTINGS.tiles,
       ...(raw.tiles ?? {}),

@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { CornerDownLeft, TerminalSquare, X } from 'lucide-react'
+import { Bell, CornerDownLeft, TerminalSquare, X } from 'lucide-react'
 import type { TileState } from '@shared/types'
 
 export interface TileEditorValue {
   label: string
   startupCommand: string
+  notificationsMuted: boolean
 }
 
 export interface TileEditorRequest {
@@ -55,6 +56,7 @@ export function TileEditorDialog({ request, onCancel, onConfirm }: TileEditorDia
         onConfirm({
           label: value.label.trim(),
           startupCommand: value.startupCommand.trim(),
+          notificationsMuted: value.notificationsMuted,
         })
       }
     }
@@ -64,6 +66,8 @@ export function TileEditorDialog({ request, onCancel, onConfirm }: TileEditorDia
   }, [onCancel, onConfirm, request, value])
 
   if (!request || !value) return null
+
+  const showNotificationsField = request.tileType === 'terminal' || request.tileType === 'timer'
 
   return createPortal(
     <div className="fixed inset-0 z-[10035] flex items-center justify-center bg-black/80">
@@ -123,6 +127,26 @@ export function TileEditorDialog({ request, onCancel, onConfirm }: TileEditorDia
               </p>
             </section>
           )}
+
+          {showNotificationsField && (
+            <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
+              <div className="mb-4 flex items-center gap-2">
+                <Bell size={14} className="text-text-secondary" />
+                <span className="nd-label text-text-secondary">Notifications</span>
+              </div>
+              <label className="flex items-center justify-between gap-4 rounded-[20px] border border-border-visible bg-bg-primary px-4 py-4">
+                <span>
+                  <span className="nd-label block text-text-display">Notifications</span>
+                  <span className="mt-2 block text-sm leading-6 text-text-secondary">Allow this tile to request attention.</span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={!value.notificationsMuted}
+                  onChange={(event) => setValue((current) => current ? { ...current, notificationsMuted: !event.target.checked } : current)}
+                />
+              </label>
+            </section>
+          )}
         </div>
 
         <div className="flex items-center justify-end gap-3 border-t border-border px-6 py-5">
@@ -137,6 +161,7 @@ export function TileEditorDialog({ request, onCancel, onConfirm }: TileEditorDia
             onClick={() => onConfirm({
               label: value.label.trim(),
               startupCommand: value.startupCommand.trim(),
+              notificationsMuted: value.notificationsMuted,
             })}
           >
             {request.confirmLabel ?? 'Save Changes'}

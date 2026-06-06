@@ -46,3 +46,14 @@ if (useCanvasStore.getState().terminalAttention.terminal) throw new Error('clear
 useCanvasStore.getState().markTerminalOutput('terminal', 9_000)
 useCanvasStore.getState().removeTile('terminal')
 if (useCanvasStore.getState().terminalAttention.terminal) throw new Error('removing a tile must remove terminal attention state')
+
+useCanvasStore.getState().restoreState({
+  ...state,
+  tiles: [
+    { id: 'terminal', type: 'terminal', x: 0, y: 0, width: 900, height: 400, zIndex: 1, notificationsMuted: true },
+  ],
+})
+useCanvasStore.getState().registerTerminalCreated('terminal', 10_000)
+const mutedMarked = useCanvasStore.getState().markTerminalOutput('terminal', 13_000)
+if (mutedMarked) throw new Error('muted terminal output must not request attention')
+if (useCanvasStore.getState().terminalAttention.terminal) throw new Error('muted terminal output must not create attention state')

@@ -71,6 +71,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor }: SettingsPanel
   const gridSize = useSettingsStore((s) => s.gridSize)
   const browserHomeUrl = useSettingsStore((s) => s.browser.homeUrl)
   const terminalAttentionEnabled = useSettingsStore((s) => s.terminal.attentionEnabled)
+  const attentionDelayEnabled = useSettingsStore((s) => s.notifications.attentionDelayEnabled)
   const tileCreationAvailability = useSettingsStore((s) => s.tiles.creationAvailability)
   const groupsEnabled = useSettingsStore((s) => s.groups.enabled)
   const setAppearance = useSettingsStore((s) => s.setAppearance)
@@ -81,6 +82,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor }: SettingsPanel
   const setGridSize = useSettingsStore((s) => s.setGridSize)
   const setBrowserHomeUrl = useSettingsStore((s) => s.setBrowserHomeUrl)
   const setTerminalAttentionEnabled = useSettingsStore((s) => s.setTerminalAttentionEnabled)
+  const setNotificationAttentionDelayEnabled = useSettingsStore((s) => s.setNotificationAttentionDelayEnabled)
   const setTileCreationAvailable = useSettingsStore((s) => s.setTileCreationAvailable)
   const setGroupsEnabled = useSettingsStore((s) => s.setGroupsEnabled)
   const currentVersion = useUpdateStore((s) => s.currentVersion)
@@ -284,11 +286,23 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor }: SettingsPanel
             <ActiveSectionIcon size={16} className="text-text-secondary" />
             <div>
               <div className="nd-label text-text-secondary">Tiles</div>
-              <h3 className="mt-1 text-xl text-text-display">Creation availability</h3>
+              <h3 className="mt-1 text-xl text-text-display">Notifications and creation</h3>
             </div>
           </div>
 
           <div className="space-y-3">
+            <label className="flex items-center justify-between gap-4 rounded-[20px] border border-border-visible bg-bg-primary px-4 py-4">
+              <span>
+                <span className="nd-label block text-text-display">Delay native attention</span>
+                <span className="mt-2 block text-sm leading-6 text-text-secondary">Wait 10 seconds before requesting native window attention.</span>
+              </span>
+              <input
+                type="checkbox"
+                checked={attentionDelayEnabled}
+                onChange={(event) => setNotificationAttentionDelayEnabled(event.target.checked)}
+              />
+            </label>
+
             {([
               { type: 'note' as const, label: 'Note' },
               { type: 'browser' as const, label: 'Browser' },

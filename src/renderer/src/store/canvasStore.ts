@@ -111,13 +111,21 @@ function normalizeGroup(group: TileGroup): TileGroup {
 
 function normalizeTile(tile: TileState): TileState {
   const { width, height } = normalizeTileSize(tile.type, tile)
-  if (width === tile.width && height === tile.height) return clampTileToWorld(tile)
+  const normalizedTile = tile.notificationsMuted === false
+    ? { ...tile, notificationsMuted: undefined }
+    : tile
+
+  if (width === normalizedTile.width && height === normalizedTile.height) return clampTileToWorld(normalizedTile)
 
   return clampTileToWorld({
-    ...tile,
+    ...normalizedTile,
     width,
     height,
   })
+}
+
+function isTerminalNotificationMuted(tile: TileState): boolean {
+  return tile.type === 'terminal' && tile.notificationsMuted === true
 }
 
 function warnCanvasWorldNormalization(scope: string, state: CanvasState, tiles: TileState[], viewport: Viewport): void {
@@ -302,11 +310,16 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   setTiles: (tiles) => set((s) => {
     const normalizedTiles = tiles.map(normalizeTile)
     const nextIds = new Set(tiles.map((tile) => tile.id))
+    const unmutedTerminalIds = new Set(
+      normalizedTiles
+        .filter((tile) => tile.type === 'terminal' && tile.notificationsMuted !== true)
+        .map((tile) => tile.id),
+    )
     const nextTerminalTitles = Object.fromEntries(
       Object.entries(s.terminalTitles).filter(([tileId]) => nextIds.has(tileId)),
     )
     const nextTerminalAttention = Object.fromEntries(
-      Object.entries(s.terminalAttention).filter(([tileId]) => nextIds.has(tileId)),
+      Object.entries(s.terminalAttention).filter(([tileId]) => unmutedTerminalIds.has(tileId)),
     )
     const nextTerminalAttentionGraceUntil = Object.fromEntries(
       Object.entries(s.terminalAttentionGraceUntil).filter(([tileId]) => nextIds.has(tileId)),
@@ -409,9 +422,17 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     }
   }),
 
-  updateTile: (tileId, patch) => set((s) => ({
-    tiles: s.tiles.map(t => t.id === tileId ? normalizeTile({ ...t, ...patch }) : t),
-  })),
+  updateTile: (tileId, patch) => set((s) => {
+    const nextTiles = s.tiles.map(t => t.id === tileId ? normalizeTile({ ...t, ...patch }) : t)
+    if (patch.notificationsMuted !== true) return { tiles: nextTiles }
+
+    return {
+      tiles: nextTiles,
+      terminalAttention: Object.fromEntries(
+        Object.entries(s.terminalAttention).filter(([id]) => id !== tileId),
+      ),
+    }
+  }),
 
   updateTilePositions: (positions) => set((s) => {
     const positionsById = new Map(positions.map((entry) => [entry.id, entry]))
@@ -482,7 +503,8 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     const state = get()
     const graceUntil = state.terminalAttentionGraceUntil[tileId] ?? 0
     if (now < graceUntil) return false
-    if (!state.tiles.some((tile) => tile.id === tileId && tile.type === 'terminal')) return false
+    const tile = state.tiles.find((entry) => entry.id === tileId)
+    if (!tile || tile.type !== 'terminal' || isTerminalNotificationMuted(tile)) return false
 
     const current = state.terminalAttention[tileId]
     const next = getNextTerminalAttentionEntry(current, now)

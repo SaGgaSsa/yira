@@ -24,7 +24,7 @@ import { DEFAULT_SPLIT_ORIENTATION, toggleSplitOrientation } from './utils/split
 import { getTerminalDisplayTitle, normalizeTerminalWindowTitle } from './utils/terminalDisplayTitle'
 import { TILE_META } from './components/TileContent'
 import { TileListItem } from './components/TileListItem'
-import { Terminal, StickyNote, Globe, Clock, Folder, ChevronDown, FolderPlus, FolderOpen, Trash2, Pencil, Lock, Unlock, Columns, RefreshCw, Download, X, Maximize2, CopyPlus, Eye, EyeOff } from 'lucide-react'
+import { Terminal, StickyNote, Globe, Clock, Folder, ChevronDown, FolderPlus, FolderOpen, Trash2, Pencil, Lock, Unlock, Columns, RefreshCw, Download, X, Maximize2, CopyPlus, Eye, EyeOff, Bell, BellOff } from 'lucide-react'
 
 const GROUP_SHOW_MARGIN = 20
 const GROUP_SHOW_TOP_PADDING = 118
@@ -895,6 +895,7 @@ export default function App(): React.ReactElement {
         value: {
           label: tile.label ?? '',
           startupCommand: tile.type === 'terminal' ? tile.startupCommand ?? '' : '',
+          notificationsMuted: tile.notificationsMuted === true,
         },
       },
     })
@@ -917,9 +918,17 @@ export default function App(): React.ReactElement {
       patch.startupCommand = value.startupCommand.trim() || undefined
     }
 
+    if (tile.type === 'terminal' || tile.type === 'timer') {
+      patch.notificationsMuted = value.notificationsMuted ? true : undefined
+    }
+
     updateTile(tile.id, patch)
     setTileEditor(null)
   }, [tileEditor, tiles, updateTile])
+
+  const toggleTileNotificationsMuted = useCallback((tile: TileState) => {
+    updateTile(tile.id, { notificationsMuted: tile.notificationsMuted ? undefined : true })
+  }, [updateTile])
 
   const focusTileInFullview = useCallback((tile: TileState) => {
     setTileMenu(null)
@@ -1181,6 +1190,13 @@ export default function App(): React.ReactElement {
           label: 'Duplicate',
           icon: CopyPlus,
           action: () => duplicateTileFromMenu(activeTileMenu),
+        }]
+      : []),
+    ...(activeTileMenu.type === 'terminal' || activeTileMenu.type === 'timer'
+      ? [{
+          label: activeTileMenu.notificationsMuted ? 'Unmute Notifications' : 'Mute Notifications',
+          icon: activeTileMenu.notificationsMuted ? Bell : BellOff,
+          action: () => toggleTileNotificationsMuted(activeTileMenu),
         }]
       : []),
     {
@@ -1800,6 +1816,7 @@ export default function App(): React.ReactElement {
                       if (duplicateId) setFullviewActiveTileId(duplicateId)
                     }}
                     onRefreshTile={handleRefreshTile}
+                    onToggleNotificationsMuted={toggleTileNotificationsMuted}
                     onToggleTitlebar={(tileId) => {
                       const tile = tiles.find((entry) => entry.id === tileId)
                       if (!tile) return
@@ -1827,6 +1844,7 @@ export default function App(): React.ReactElement {
                       if (duplicateId) setFullviewActiveTileId(duplicateId)
                     }}
                     onRefreshTile={handleRefreshTile}
+                    onToggleNotificationsMuted={toggleTileNotificationsMuted}
                     onToggleTitlebar={(tileId) => {
                       const tile = tiles.find((entry) => entry.id === tileId)
                       if (!tile) return

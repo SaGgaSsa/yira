@@ -52,6 +52,9 @@ export interface UserSettings {
   terminal: {
     attentionEnabled: boolean
   }
+  notifications: {
+    attentionDelayEnabled: boolean
+  }
   tiles: {
     creationAvailability: TileCreationAvailability
   }
@@ -72,6 +75,9 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   },
   terminal: {
     attentionEnabled: true,
+  },
+  notifications: {
+    attentionDelayEnabled: true,
   },
   tiles: {
     creationAvailability: {
@@ -136,6 +142,8 @@ export interface NotificationAttentionResult {
   marked: boolean
   reason: NotificationAttentionReason
 }
+
+export const NOTIFICATION_ATTENTION_DELAY_MS = 10_000
 
 // ─── Shell Profiles ────────────────────────────────────────────────────────
 
@@ -354,6 +362,7 @@ export interface TileState {
   label?: string
   locked?: boolean
   hideTitlebar?: boolean
+  notificationsMuted?: boolean
   radiusIndex?: number
   groupId?: string
 

@@ -3,6 +3,7 @@ import { normalizeUserSettings } from './userSettings'
 const defaults = normalizeUserSettings({})
 if (defaults.browser.homeUrl !== 'about:blank') throw new Error('default browser home URL must be about:blank')
 if (defaults.terminal.attentionEnabled !== true) throw new Error('terminal attention must default on')
+if (defaults.notifications.attentionDelayEnabled !== true) throw new Error('native attention delay must default on')
 
 const small = normalizeUserSettings({ fontSize: 'small' })
 if (small.interfaceFontSizePx !== 14) throw new Error('small legacy font must migrate to 14px interface font')
@@ -27,6 +28,10 @@ if (clamped.tileFontSizePx !== 36) throw new Error('tile font must clamp to maxi
 
 const legacy = normalizeUserSettings({ groups: { enabled: true } })
 if (legacy.terminal.attentionEnabled !== true) throw new Error('legacy settings must migrate terminal attention on')
+if (legacy.notifications.attentionDelayEnabled !== true) throw new Error('legacy settings must migrate native attention delay on')
 
 const disabled = normalizeUserSettings({ terminal: { attentionEnabled: false } })
 if (disabled.terminal.attentionEnabled !== false) throw new Error('disabled terminal attention setting must be preserved')
+
+const immediateAttention = normalizeUserSettings({ notifications: { attentionDelayEnabled: false } })
+if (immediateAttention.notifications.attentionDelayEnabled !== false) throw new Error('disabled native attention delay must be preserved')

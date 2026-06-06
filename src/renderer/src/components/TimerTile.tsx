@@ -1,9 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Play, RotateCcw, Square, TimerReset } from 'lucide-react'
 import type { TileState, TimerStatus } from '@shared/types'
+import { useSettingsStore } from '@/store/settingsStore'
+import { createNativeAttentionDelayScheduler } from '@/utils/nativeAttentionDelay'
 
 interface TimerTileProps {
   tile: TileState
+  isFocused: boolean
   onUpdate: (patch: Partial<TileState>) => void
 }
 
@@ -64,10 +67,15 @@ function buildDurationMs(hours: number, minutes: number, seconds: number): numbe
   return ((hours * 3600) + (minutes * 60) + seconds) * 1000
 }
 
-export function TimerTile({ tile, onUpdate }: TimerTileProps): React.ReactElement {
+export function TimerTile({ tile, isFocused, onUpdate }: TimerTileProps): React.ReactElement {
   const [now, setNow] = useState(() => Date.now())
   const [customTime, setCustomTime] = useState(() => splitMs(getDurationMs(tile)))
   const completionHandledRef = useRef<string | null>(null)
+  const pendingNotificationKeyRef = useRef<string | null>(null)
+  const notificationsMutedRef = useRef(tile.notificationsMuted === true)
+  const isFocusedRef = useRef(isFocused)
+  const nativeAttentionSchedulerRef = useRef(createNativeAttentionDelayScheduler())
+  const attentionDelayEnabled = useSettingsStore((s) => s.notifications.attentionDelayEnabled)
 
   const status: TimerStatus = tile.timerStatus ?? 'idle'
   const durationMs = getDurationMs(tile)
@@ -81,6 +89,22 @@ export function TimerTile({ tile, onUpdate }: TimerTileProps): React.ReactElemen
   useEffect(() => {
     setCustomTime(splitMs(getDurationMs(tile)))
   }, [tile.id, tile.timerDurationMs])
+
+  useEffect(() => {
+    notificationsMutedRef.current = tile.notificationsMuted === true
+    if (tile.notificationsMuted !== true) return
+    nativeAttentionSchedulerRef.current.cancel(tile.id)
+  }, [tile.id, tile.notificationsMuted])
+
+  useEffect(() => {
+    isFocusedRef.current = isFocused
+    if (!isFocused) return
+    nativeAttentionSchedulerRef.current.cancel(tile.id)
+  }, [isFocused, tile.id])
+
+  useEffect(() => {
+    return () => nativeAttentionSchedulerRef.current.cancel(tile.id)
+  }, [tile.id])
 
   useEffect(() => {
     if (status !== 'running') return
@@ -98,10 +122,23 @@ export function TimerTile({ tile, onUpdate }: TimerTileProps): React.ReactElemen
     const completionKey = `${tile.id}:${tile.timerEndsAt}`
     if (completionHandledRef.current === completionKey) return
     completionHandledRef.current = completionKey
+    pendingNotificationKeyRef.current = completionKey
 
     const completedAt = Date.now()
-    void window.electron.notifications.requestAttention().catch((error: unknown) => {
-      console.error('[TimerTile] Failed to request attention:', error)
+    nativeAttentionSchedulerRef.current.schedule({
+      tileId: tile.id,
+      delayEnabled: attentionDelayEnabled,
+      muted: tile.notificationsMuted === true,
+      shouldRequestAttention: () => (
+        pendingNotificationKeyRef.current === completionKey &&
+        !notificationsMutedRef.current &&
+        !isFocusedRef.current
+      ),
+      requestAttention: () => {
+        void window.electron.notifications.requestAttention().catch((error: unknown) => {
+          console.error('[TimerTile] Failed to request attention:', error)
+        })
+      },
     })
     onUpdate({
       timerStatus: 'done',
@@ -110,12 +147,14 @@ export function TimerTile({ tile, onUpdate }: TimerTileProps): React.ReactElemen
       timerCompletedAt: completedAt,
       timerNotifiedAt: completedAt,
     })
-  }, [onUpdate, remainingMs, status, tile.id, tile.timerEndsAt])
+  }, [attentionDelayEnabled, onUpdate, remainingMs, status, tile.id, tile.notificationsMuted, tile.timerEndsAt])
 
   const loadDuration = useCallback(
     (nextDurationMs: number) => {
       if (nextDurationMs <= 0) return
       setNow(Date.now())
+      pendingNotificationKeyRef.current = null
+      nativeAttentionSchedulerRef.current.cancel(tile.id)
       onUpdate({
         timerDurationMs: nextDurationMs,
         timerRemainingMs: nextDurationMs,
@@ -125,7 +164,7 @@ export function TimerTile({ tile, onUpdate }: TimerTileProps): React.ReactElemen
         timerNotifiedAt: undefined,
       })
     },
-    [onUpdate],
+    [onUpdate, tile.id],
   )
 
   const startTimer = useCallback(() => {
@@ -136,6 +175,8 @@ export function TimerTile({ tile, onUpdate }: TimerTileProps): React.ReactElemen
       : Math.max(1000, getStoredRemainingMs(tile))
 
     setNow(Date.now())
+    pendingNotificationKeyRef.current = null
+    nativeAttentionSchedulerRef.current.cancel(tile.id)
     onUpdate({
       timerDurationMs: durationMs,
       timerRemainingMs: nextRemainingMs,
@@ -161,6 +202,8 @@ export function TimerTile({ tile, onUpdate }: TimerTileProps): React.ReactElemen
   const resetTimer = useCallback(() => {
     setNow(Date.now())
     completionHandledRef.current = null
+    pendingNotificationKeyRef.current = null
+    nativeAttentionSchedulerRef.current.cancel(tile.id)
     onUpdate({
       timerRemainingMs: durationMs,
       timerStatus: 'idle',

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { CopyPlus, Eye, EyeOff, Lock, Maximize2, Pencil, RefreshCw, Trash2, Unlock } from 'lucide-react'
+import { Bell, BellOff, CopyPlus, Eye, EyeOff, Lock, Maximize2, Pencil, RefreshCw, Trash2, Unlock } from 'lucide-react'
 import type { TileState } from '@shared/types'
 import { useCanvasStore } from '@/store/canvasStore'
 import { getTerminalDisplayTitle } from '@/utils/terminalDisplayTitle'
@@ -16,6 +16,7 @@ interface FullviewPanelProps {
   onFocusTile: (tile: TileState) => void
   onDuplicateTile: (tile: TileState) => void
   onRefreshTile: (tile: TileState) => void | Promise<void>
+  onToggleNotificationsMuted: (tile: TileState) => void
   onToggleTitlebar: (tileId: string) => void
   onToggleLock: (tileId: string) => void
 }
@@ -30,6 +31,7 @@ export function FullviewPanel({
   onFocusTile,
   onDuplicateTile,
   onRefreshTile,
+  onToggleNotificationsMuted,
   onToggleTitlebar,
   onToggleLock,
 }: FullviewPanelProps): React.ReactElement {
@@ -75,6 +77,16 @@ export function FullviewPanel({
             void onRefreshTile(activeMenuTile)
           },
         },
+        ...(activeMenuTile.type === 'terminal' || activeMenuTile.type === 'timer'
+          ? [{
+              label: activeMenuTile.notificationsMuted ? 'Unmute Notifications' : 'Mute Notifications',
+              icon: activeMenuTile.notificationsMuted ? Bell : BellOff,
+              action: () => {
+                setTabMenu(null)
+                onToggleNotificationsMuted(activeMenuTile)
+              },
+            }]
+          : []),
         {
           label: activeMenuTile.hideTitlebar ? 'Show Titlebar' : 'Hide Titlebar',
           icon: activeMenuTile.hideTitlebar ? Eye : EyeOff,

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { CopyPlus, Eye, EyeOff, Lock, Maximize2, Pencil, RefreshCw, Trash2, Unlock } from 'lucide-react'
+import { Bell, BellOff, CopyPlus, Eye, EyeOff, Lock, Maximize2, Pencil, RefreshCw, Trash2, Unlock } from 'lucide-react'
 import type { SplitPanelId, SplitViewState, TileState } from '@shared/types'
 import { useCanvasStore } from '@/store/canvasStore'
 import { getTerminalDisplayTitle } from '@/utils/terminalDisplayTitle'
@@ -17,6 +17,7 @@ interface SplitviewPanelProps {
   onFocusTile: (tile: TileState) => void
   onDuplicateTile: (panel: SplitPanelId, tile: TileState) => void
   onRefreshTile: (tile: TileState) => void | Promise<void>
+  onToggleNotificationsMuted: (tile: TileState) => void
   onToggleTitlebar: (tileId: string) => void
   onToggleLock: (tileId: string) => void
   onMoveTile: (tileId: string, targetPanel: SplitPanelId) => void
@@ -134,6 +135,7 @@ export function SplitviewPanel({
   onFocusTile,
   onDuplicateTile,
   onRefreshTile,
+  onToggleNotificationsMuted,
   onToggleTitlebar,
   onToggleLock,
   onMoveTile,
@@ -193,6 +195,16 @@ export function SplitviewPanel({
             void onRefreshTile(activeMenuTile)
           },
         },
+        ...(activeMenuTile.type === 'terminal' || activeMenuTile.type === 'timer'
+          ? [{
+              label: activeMenuTile.notificationsMuted ? 'Unmute Notifications' : 'Mute Notifications',
+              icon: activeMenuTile.notificationsMuted ? Bell : BellOff,
+              action: () => {
+                setTabMenu(null)
+                onToggleNotificationsMuted(activeMenuTile)
+              },
+            }]
+          : []),
         {
           label: activeMenuTile.hideTitlebar ? 'Show Titlebar' : 'Hide Titlebar',
           icon: activeMenuTile.hideTitlebar ? Eye : EyeOff,

@@ -15,6 +15,7 @@ export interface SettingsState extends UserSettings {
   setGridSize: (size: number) => void
   setBrowserHomeUrl: (url: string) => void
   setTerminalAttentionEnabled: (enabled: boolean) => void
+  setNotificationAttentionDelayEnabled: (enabled: boolean) => void
   setTileCreationAvailable: (type: ConfigurableTileCreationType, available: boolean) => void
   setGroupsEnabled: (enabled: boolean) => void
   loadSettings: () => Promise<void>
@@ -36,6 +37,7 @@ function scheduleSave() {
       gridSize: state.gridSize,
       browser: { homeUrl: state.browser.homeUrl },
       terminal: { attentionEnabled: state.terminal.attentionEnabled },
+      notifications: { attentionDelayEnabled: state.notifications.attentionDelayEnabled },
       tiles: {
         creationAvailability: {
           ...DEFAULT_USER_SETTINGS.tiles.creationAvailability,
@@ -92,6 +94,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     scheduleSave()
   },
 
+  setNotificationAttentionDelayEnabled: (enabled) => {
+    set((state) => ({ notifications: { ...state.notifications, attentionDelayEnabled: enabled } }))
+    scheduleSave()
+  },
+
   setTileCreationAvailable: (type, available) => {
     set((state) => ({
       tiles: {
@@ -129,6 +136,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           terminal: {
             attentionEnabled: normalized.terminal.attentionEnabled,
           },
+          notifications: {
+            attentionDelayEnabled: normalized.notifications.attentionDelayEnabled,
+          },
           tiles: {
             creationAvailability: {
               ...DEFAULT_USER_SETTINGS.tiles.creationAvailability,
@@ -160,6 +170,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       gridSize: state.gridSize,
       browser: { homeUrl: state.browser.homeUrl },
       terminal: { attentionEnabled: state.terminal.attentionEnabled },
+      notifications: { attentionDelayEnabled: state.notifications.attentionDelayEnabled },
       tiles: {
         creationAvailability: {
           ...DEFAULT_USER_SETTINGS.tiles.creationAvailability,

@@ -52,7 +52,7 @@ export function TileContent({ tile, isFocused, edgeToEdge = false, onFocus, onUp
   }
 
   if (tile.type === 'timer') {
-    return <TimerTile tile={tile} onUpdate={onUpdate} />
+    return <TimerTile tile={tile} isFocused={isFocused} onUpdate={onUpdate} />
   }
 
   if (tile.type === 'files') {
