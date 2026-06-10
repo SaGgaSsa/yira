@@ -465,6 +465,7 @@ export default function App(): React.ReactElement {
             name: '',
             rootFolderPath: '',
             initialCommand: '',
+            terminalHistoryEnabled: true,
           },
         },
       })
@@ -1021,6 +1022,7 @@ export default function App(): React.ReactElement {
           name: workspace.name,
           rootFolderPath: workspace.config.rootFolderPath ?? '',
           initialCommand: workspace.config.initialCommand ?? '',
+          terminalHistoryEnabled: workspace.config.terminalHistoryEnabled !== false,
         },
       },
     })
@@ -1043,6 +1045,7 @@ export default function App(): React.ReactElement {
         name: value.name,
         rootFolderPath: value.rootFolderPath || undefined,
         initialCommand: value.initialCommand || undefined,
+        terminalHistoryEnabled: value.terminalHistoryEnabled,
       })
       await refreshWorkspaceMetadata()
       setWorkspaceEditor(null)
@@ -1055,6 +1058,7 @@ export default function App(): React.ReactElement {
       config: {
         rootFolderPath: value.rootFolderPath || undefined,
         initialCommand: value.initialCommand || undefined,
+        terminalHistoryEnabled: value.terminalHistoryEnabled,
       },
     })
     if (!updated) return
@@ -1121,6 +1125,7 @@ export default function App(): React.ReactElement {
           name: '',
           rootFolderPath: '',
           initialCommand: '',
+          terminalHistoryEnabled: true,
         },
       },
     })
@@ -1138,6 +1143,7 @@ export default function App(): React.ReactElement {
           name: '',
           rootFolderPath: '',
           initialCommand: '',
+          terminalHistoryEnabled: true,
         },
       },
     })

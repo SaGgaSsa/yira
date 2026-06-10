@@ -1,6 +1,9 @@
 import { ipcMain, WebContents } from 'electron'
+import { promises as fs } from 'fs'
 import type { ShellProfile, TerminalCreateOptions } from '@shared/types'
 import { detectShellProfiles } from '../shell-profiles'
+import { buildTerminalHistorySetup } from '../terminal-history'
+import { getWorkspacePathById } from './workspace'
 
 // node-pty must be required (not imported) due to native module ESM issues
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -53,6 +56,20 @@ export function registerTerminalIPC(): void {
     // Build spawn env
     const spawnEnv: Record<string, string> = { ...process.env as Record<string, string> }
     const spawnArgs = [...profile.args]
+    const workspacePath = options.workspaceId
+      ? await getWorkspacePathById(options.workspaceId)
+      : null
+    const historySetup = buildTerminalHistorySetup({
+      shellProfileId: profile.id,
+      workspaceId: options.workspaceId,
+      workspacePath: workspacePath ?? undefined,
+      enabled: options.terminalHistoryEnabled,
+    })
+
+    if (historySetup) {
+      await fs.mkdir(historySetup.historyDir, { recursive: true })
+      Object.assign(spawnEnv, historySetup.env)
+    }
 
     if (profile.id === 'wsl' && options.wslStartInHome) {
       spawnArgs.push('--cd', '~')
@@ -97,6 +114,10 @@ export function registerTerminalIPC(): void {
         }
       }
     })
+
+    if (historySetup?.prependCommand) {
+      term.write(`${historySetup.prependCommand}\r`)
+    }
 
     if (options.initialCommand?.trim()) {
       term.write(`${options.initialCommand.trim()}\r`)

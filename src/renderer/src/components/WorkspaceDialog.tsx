@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { FolderOpen, TerminalSquare, X } from 'lucide-react'
+import { FolderOpen, History, TerminalSquare, X } from 'lucide-react'
 
 export interface WorkspaceDialogValue {
   name: string
   rootFolderPath: string
   initialCommand: string
+  terminalHistoryEnabled: boolean
 }
 
 export interface WorkspaceDialogRequest {
@@ -28,6 +29,7 @@ function normalizeValue(value: WorkspaceDialogValue): WorkspaceDialogValue {
     name: value.name.trim(),
     rootFolderPath: value.rootFolderPath.trim(),
     initialCommand: value.initialCommand.trim(),
+    terminalHistoryEnabled: value.terminalHistoryEnabled,
   }
 }
 
@@ -152,6 +154,21 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
               placeholder="Optional command for new terminals"
               spellCheck={false}
             />
+          </section>
+
+          <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
+            <label className="flex items-center justify-between gap-4">
+              <span className="flex min-w-0 items-center gap-2">
+                <History size={14} className="shrink-0 text-text-secondary" />
+                <span className="nd-label truncate text-text-secondary">Workspace terminal history</span>
+              </span>
+              <input
+                type="checkbox"
+                className="h-5 w-5 shrink-0 accent-[var(--text-primary)]"
+                checked={value.terminalHistoryEnabled}
+                onChange={(event) => setValue((current) => current ? { ...current, terminalHistoryEnabled: event.target.checked } : current)}
+              />
+            </label>
           </section>
         </div>
 

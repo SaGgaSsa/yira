@@ -3,20 +3,11 @@ import { promises as fs, readFileSync } from 'fs'
 import { basename, join, resolve } from 'path'
 import type { Config, Workspace, AppSettings, WorkspaceConfig, WorkspaceCreateInput, WorkspaceUpdatePatch } from '@shared/types'
 import { DEFAULT_SETTINGS } from '@shared/types'
+import { normalizeWorkspaceConfig } from '@shared/workspaceConfig'
 import { YIRA_HOME, CONFIG_PATH, WORKSPACES_DIR } from '../paths'
 
 async function ensureDir(dir: string): Promise<void> {
   await fs.mkdir(dir, { recursive: true })
-}
-
-function normalizeWorkspaceConfig(config: Partial<WorkspaceConfig> | undefined): WorkspaceConfig {
-  const rootFolderPath = config?.rootFolderPath?.trim()
-  const initialCommand = config?.initialCommand?.trim()
-
-  return {
-    rootFolderPath: rootFolderPath || undefined,
-    initialCommand: initialCommand || undefined,
-  }
 }
 
 function internalWorkspacePath(id: string): string {
@@ -39,6 +30,7 @@ function normalizeWorkspace(workspace: Partial<Workspace> & { id: string; name?:
   const config = normalizeWorkspaceConfig({
     rootFolderPath: workspace.config?.rootFolderPath ?? migratedRootFolderPath,
     initialCommand: workspace.config?.initialCommand,
+    terminalHistoryEnabled: workspace.config?.terminalHistoryEnabled,
   })
 
   return {
@@ -230,7 +222,7 @@ export function registerWorkspaceIPC(): void {
       id,
       name,
       path: internalWorkspacePath(id),
-      config: { rootFolderPath: folderPath },
+      config: normalizeWorkspaceConfig({ rootFolderPath: folderPath }),
     }
     await ensureDir(workspace.path)
     config.workspaces.push(workspace)

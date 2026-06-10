@@ -68,6 +68,10 @@ _Avoid_: Tile visibility, tile deletion, board migration
 The workspace-level command that runs before a terminal tile's own startup command.
 _Avoid_: Group startup command, legacy group command
 
+**Workspace Terminal History**:
+A Workspace Configuration option that keeps command history separate per Workspace for compatible Terminal Tiles.
+_Avoid_: Terminal buffer persistence, terminal session persistence, Terminal Attention
+
 **Terminal Startup Command**:
 The terminal tile-level command that runs after the workspace initial command.
 _Avoid_: Workspace initial command
@@ -88,6 +92,9 @@ _Avoid_: Workspace initial command
 - A **Terminal Tile** runs the **Workspace Initial Command** before its **Terminal Startup Command**
 - **Terminal Attention** is session-only and is not persisted in a **Workspace**
 - **Terminal Attention** is cleared when its **Terminal Tile** is attended
+- **Workspace Terminal History** belongs to **Workspace Configuration**
+- **Workspace Terminal History** applies to new compatible **Terminal Tile** sessions
+- **Workspace Terminal History** is distinct from terminal buffer, terminal session persistence, and **Terminal Attention**
 - **Tile Creation Availability** affects only normal tile creation
 - **Tile Creation Availability** is an app-wide preference
 - **Tile Creation Availability** can hide Note, Browser, Timer, and Files creation

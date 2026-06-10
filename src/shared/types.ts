@@ -14,12 +14,14 @@ export type WorkspaceMetadata = Workspace
 export interface WorkspaceConfig {
   rootFolderPath?: string
   initialCommand?: string
+  terminalHistoryEnabled?: boolean
 }
 
 export interface WorkspaceCreateInput {
   name: string
   rootFolderPath?: string
   initialCommand?: string
+  terminalHistoryEnabled?: boolean
 }
 
 export type WorkspaceUpdatePatch = Partial<Pick<Workspace, 'name'>> & {
@@ -159,9 +161,11 @@ export interface ShellProfile {
 
 export interface TerminalCreateOptions {
   shellProfileId: ShellProfileId
+  workspaceId?: string
   workspaceDir?: string
   wslStartInHome?: boolean
   initialCommand?: string
+  terminalHistoryEnabled?: boolean
 }
 
 // ─── Files ─────────────────────────────────────────────────────────────────
