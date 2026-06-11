@@ -8,12 +8,14 @@ import { useSettingsStore } from '@/store/settingsStore'
 import { isTerminalInputAttended } from '@/utils/terminalAttention'
 import { createNativeAttentionDelayScheduler } from '@/utils/nativeAttentionDelay'
 import { buildTerminalStartupCommand } from '@/utils/terminalLaunch'
+import { createTerminalFitScheduler } from '@/utils/terminalFitScheduler'
 import { ContextMenu, type MenuItem } from './ContextMenu'
 
 interface Props {
   tile: TileState
   isFocused: boolean
   edgeToEdge?: boolean
+  isVisible?: boolean
   onFocus: () => void
   onUpdate: (patch: Partial<TileState>) => void
   onDelete: () => void
@@ -30,10 +32,12 @@ function applyTerminalPadding(container: HTMLElement | null, edgeToEdge: boolean
   xtermEl.style.paddingBottom = verticalPadding
 }
 
-export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, onFocus, onUpdate, onDelete }: Props): React.ReactElement {
+export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVisible = true, onFocus, onUpdate, onDelete }: Props): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
+  const fitSchedulerRef = useRef(createTerminalFitScheduler())
+  const isVisibleRef = useRef(isVisible)
   const attentionEnabled = useSettingsStore((s) => s.terminal.attentionEnabled)
   const attentionDelayEnabled = useSettingsStore((s) => s.notifications.attentionDelayEnabled)
   const attentionEnabledRef = useRef(attentionEnabled)
@@ -42,6 +46,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, onFoc
   const nativeAttentionSchedulerRef = useRef(createNativeAttentionDelayScheduler())
   const tileFontSizePx = useSettingsStore((s) => s.tileFontSizePx)
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number; hasSelection: boolean } | null>(null)
+  isVisibleRef.current = isVisible
 
   const focusTerminal = useCallback(() => {
     onFocus()
@@ -81,13 +86,15 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, onFoc
 
   // Fit terminal to container
   const doFit = useCallback(() => {
+    if (!isVisibleRef.current) {
+      fitSchedulerRef.current.cancelPending()
+      return
+    }
     if (!fitRef.current || !termRef.current || !containerRef.current) return
     try {
-      fitRef.current.fit()
-      const dims = fitRef.current.proposeDimensions()
-      if (dims?.cols && dims?.rows) {
-        window.electron.terminal.resize(tile.id, dims.cols, dims.rows)
-      }
+      fitSchedulerRef.current.requestFit(fitRef.current, (cols, rows) => {
+        window.electron.terminal.resize(tile.id, cols, rows)
+      })
     } catch { /* ignore */ }
   }, [tile.id])
 
@@ -154,7 +161,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, onFoc
     containerRef.current.innerHTML = ''
     term.open(containerRef.current)
 
-    applyTerminalPadding(containerRef.current, edgeToEdge)
+    if (isVisible) applyTerminalPadding(containerRef.current, edgeToEdge)
 
     termRef.current = term
     fitRef.current = fitAddon
@@ -236,7 +243,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, onFoc
         })
 
         // Initial fit
-        requestAnimationFrame(() => doFit())
+        doFit()
       })
       .catch((err: Error) => {
         if (cancelled) return
@@ -247,6 +254,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, onFoc
     return () => {
       cancelled = true
       nativeAttentionSchedulerRef.current.cancel(tile.id)
+      fitSchedulerRef.current.cancelPending()
       ro.disconnect()
       terminalInput?.removeEventListener('focus', clearAttentionIfAttended)
       window.removeEventListener('focus', cancelNativeAttention)
@@ -262,9 +270,13 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, onFoc
   }, [tile.id, tile.shellProfileId, clearAttentionIfAttended, cancelNativeAttention, doFit])
 
   useEffect(() => {
+    if (!isVisible) {
+      fitSchedulerRef.current.cancelPending()
+      return
+    }
     applyTerminalPadding(containerRef.current, edgeToEdge)
-    requestAnimationFrame(() => doFit())
-  }, [edgeToEdge, doFit])
+    doFit()
+  }, [edgeToEdge, doFit, isVisible])
 
   // Re-fit on width/height changes
   useEffect(() => {
@@ -275,7 +287,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, onFoc
     const term = termRef.current
     if (!term) return
     term.options.fontSize = tileFontSizePx
-    requestAnimationFrame(() => doFit())
+    doFit()
   }, [tileFontSizePx, doFit])
 
   useEffect(() => {

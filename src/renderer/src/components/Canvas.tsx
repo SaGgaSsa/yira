@@ -729,6 +729,7 @@ export function Canvas({
                   tile={tile}
                   isFocused={tile.id === focusedTileId}
                   edgeToEdge={isFixedView}
+                  isVisible={!(isFixedView && hiddenInFixedView)}
                   onFocus={() => {
                     if (isSplitview && splitPanel) onFocusSplitPanel?.(splitPanel)
                     focusTile(tile.id)

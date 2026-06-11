@@ -21,17 +21,19 @@ interface TileContentProps {
   tile: TileState
   isFocused: boolean
   edgeToEdge?: boolean
+  isVisible?: boolean
   onFocus: () => void
   onUpdate: (patch: Partial<TileState>) => void
 }
 
-export function TileContent({ tile, isFocused, edgeToEdge = false, onFocus, onUpdate }: TileContentProps): React.ReactElement {
+export function TileContent({ tile, isFocused, edgeToEdge = false, isVisible = true, onFocus, onUpdate }: TileContentProps): React.ReactElement {
   if (tile.type === 'terminal') {
     return (
       <TerminalTileWrapper
         tile={tile}
         isFocused={isFocused}
         edgeToEdge={edgeToEdge}
+        isVisible={isVisible}
         onFocus={onFocus}
         onUpdate={onUpdate}
         onDelete={() => {}}
