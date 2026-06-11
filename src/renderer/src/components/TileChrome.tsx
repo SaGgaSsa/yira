@@ -5,7 +5,8 @@ import { isTileInteractionLocked } from '@/utils/grouping'
 import { getSplitPanelFrame } from '@/utils/splitViewLayout'
 import type { TileState, ViewMode, SplitPanelId, SplitOrientation } from '@shared/types'
 import { getTileSizePreset, NOTE_COLORS } from '@shared/types'
-import { X, GripVertical, StickyNote, Globe, LayoutGrid, Terminal, Clock, Folder, Lock } from 'lucide-react'
+import { GripVertical, StickyNote, Globe, LayoutGrid, Terminal, Clock, Folder, Lock } from 'lucide-react'
+import { TileActionButtons } from './TileActionButtons'
 
 interface Props {
   tile: TileState
@@ -14,6 +15,8 @@ interface Props {
   onFocus: () => void
   onUpdate: (patch: Partial<TileState>) => void
   onUpdatePositions: (positions: Array<{ id: string; x: number; y: number }>) => void
+  onConfigure: (event: React.MouseEvent<HTMLButtonElement>) => void
+  onFocusView: () => void
   onDelete: () => void
   onRemoveFromGroup?: () => void
   children: ReactNode
@@ -54,6 +57,8 @@ export function TileChrome({
   onFocus,
   onUpdate,
   onUpdatePositions,
+  onConfigure,
+  onFocusView,
   onDelete,
   onRemoveFromGroup,
   children,
@@ -280,7 +285,6 @@ export function TileChrome({
               background: 'var(--surface-raised)',
               borderBottom: '1px solid var(--border)',
               cursor: isInteractionLocked ? 'default' : 'grab',
-              display: tile.hideTitlebar ? 'none' : 'flex',
             }}
             onMouseDown={handleDragStart}
           >
@@ -353,29 +357,12 @@ export function TileChrome({
               />
             )}
 
-            {/* Delete button */}
-            <button
-              className="p-1 rounded-full hover:bg-hover-bg text-text-secondary hover:text-danger transition-colors shrink-0"
-              onClick={(e) => {
-                e.stopPropagation()
-                onDelete()
-              }}
-            >
-              <X size={12} />
-            </button>
+            <TileActionButtons
+              onConfigure={onConfigure}
+              onFocus={onFocusView}
+              onClose={onDelete}
+            />
           </div>
-        )}
-
-        {!isFixedView && tile.hideTitlebar && (
-          <div
-            className="shrink-0"
-            style={{
-              height: 8,
-              cursor: isInteractionLocked ? 'default' : 'grab',
-              background: 'transparent',
-            }}
-            onMouseDown={handleDragStart}
-          />
         )}
 
         {/* Terminal content */}

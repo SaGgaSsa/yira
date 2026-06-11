@@ -5,7 +5,6 @@ import { Sidebar } from './components/Sidebar'
 import { SettingsPanel } from './components/SettingsPanel'
 import { RawJsonEditor } from './components/RawJsonEditor'
 import { ContextMenu, type MenuItem } from './components/ContextMenu'
-import { FullviewPanel } from './components/FullviewPanel'
 import { SplitviewPanel } from './components/SplitviewPanel'
 import { AppDialog, type ConfirmDialogOptions, type PromptDialogOptions } from './components/AppDialog'
 import { GroupEditorDialog, type GroupEditorRequest, type GroupEditorValue } from './components/GroupEditorDialog'
@@ -24,7 +23,8 @@ import { DEFAULT_SPLIT_ORIENTATION, toggleSplitOrientation } from './utils/split
 import { getTerminalDisplayTitle, normalizeTerminalWindowTitle } from './utils/terminalDisplayTitle'
 import { TILE_META } from './components/TileContent'
 import { TileListItem } from './components/TileListItem'
-import { Terminal, StickyNote, Globe, Clock, Folder, ChevronDown, FolderPlus, FolderOpen, Trash2, Pencil, Lock, Unlock, Columns, RefreshCw, Download, X, Maximize2, CopyPlus, Eye, EyeOff, Bell, BellOff } from 'lucide-react'
+import { buildTileConfigurationMenuItems } from './components/tileConfigurationMenu'
+import { Terminal, StickyNote, Globe, Clock, Folder, ChevronDown, FolderPlus, FolderOpen, Trash2, Pencil, Lock, Columns, Download, X } from 'lucide-react'
 
 const GROUP_SHOW_MARGIN = 20
 const GROUP_SHOW_TOP_PADDING = 118
@@ -931,6 +931,12 @@ export default function App(): React.ReactElement {
     updateTile(tile.id, { notificationsMuted: tile.notificationsMuted ? undefined : true })
   }, [updateTile])
 
+  const openTileConfigurationMenu = useCallback((tileId: string, trigger: HTMLElement) => {
+    const rect = trigger.getBoundingClientRect()
+    setGroupMenu(null)
+    setTileMenu({ tileId, x: rect.left, y: rect.bottom + 6 })
+  }, [])
+
   const focusTileInFullview = useCallback((tile: TileState) => {
     setTileMenu(null)
     focusTile(tile.id)
@@ -938,6 +944,15 @@ export default function App(): React.ReactElement {
     setFullviewActiveTileId(tile.id)
     setViewMode('fullview')
   }, [focusTile, selectTiles, setFullviewActiveTileId, setViewMode])
+
+  const handleTileActionFocus = useCallback((tile: TileState) => {
+    if (viewMode === 'fullview') {
+      handleSelectSingleTile(tile.id)
+      return
+    }
+
+    focusTileInFullview(tile)
+  }, [focusTileInFullview, handleSelectSingleTile, viewMode])
 
   const duplicateTileFromMenu = useCallback((tile: TileState) => {
     const duplicateId = duplicateTerminalTile(tile.id)
@@ -1180,57 +1195,17 @@ export default function App(): React.ReactElement {
   const activeWorkspaceMenu = workspaceItemMenu
     ? workspaceMetadata.find((workspace) => workspace.id === workspaceItemMenu.workspaceId) ?? null
     : null
-  const tileMenuItems: MenuItem[] = activeTileMenu ? [
-    {
-      label: activeTileMenu.type === 'terminal' ? 'Edit' : 'Rename',
-      icon: Pencil,
-      action: () => openTileEditor(activeTileMenu),
-    },
-    {
-      label: 'Focus',
-      icon: Maximize2,
-      action: () => focusTileInFullview(activeTileMenu),
-    },
-    ...(activeTileMenu.type === 'terminal'
-      ? [{
-          label: 'Duplicate',
-          icon: CopyPlus,
-          action: () => duplicateTileFromMenu(activeTileMenu),
-        }]
-      : []),
-    ...(activeTileMenu.type === 'terminal' || activeTileMenu.type === 'timer'
-      ? [{
-          label: activeTileMenu.notificationsMuted ? 'Unmute Notifications' : 'Mute Notifications',
-          icon: activeTileMenu.notificationsMuted ? Bell : BellOff,
-          action: () => toggleTileNotificationsMuted(activeTileMenu),
-        }]
-      : []),
-    {
-      label: 'Refresh',
-      icon: RefreshCw,
-      action: () => {
-        void handleRefreshTile(activeTileMenu)
-      },
-    },
-    {
-      label: activeTileMenu.hideTitlebar ? 'Show Titlebar' : 'Hide Titlebar',
-      icon: activeTileMenu.hideTitlebar ? Eye : EyeOff,
-      action: () => updateTile(activeTileMenu.id, { hideTitlebar: !activeTileMenu.hideTitlebar }),
-    },
-    {
-      label: activeTileMenu.locked ? 'Unlock' : 'Lock',
-      icon: activeTileMenu.locked ? Unlock : Lock,
-      action: () => updateTile(activeTileMenu.id, { locked: !activeTileMenu.locked }),
-    },
-    {
-      label: 'Close',
-      icon: Trash2,
-      danger: true,
-      action: () => {
-        void deleteTile(activeTileMenu.id)
-      },
-    },
-  ] : []
+  const tileMenuItems: MenuItem[] = activeTileMenu
+    ? buildTileConfigurationMenuItems({
+        tile: activeTileMenu,
+        onEdit: openTileEditor,
+        onDuplicate: duplicateTileFromMenu,
+        onRefresh: handleRefreshTile,
+        onToggleNotificationsMuted: toggleTileNotificationsMuted,
+        onToggleLock: (tile) => updateTile(tile.id, { locked: !tile.locked }),
+        onBeforeAction: () => setTileMenu(null),
+      })
+    : []
   const groupMenuItems: MenuItem[] = activeGroupMenu ? [
     {
       label: 'Show',
@@ -1678,10 +1653,18 @@ export default function App(): React.ReactElement {
                         className="w-full transition-colors"
                         onClick={() => handleSidebarTileClick(tile.id)}
                         onDoubleClick={() => handleShowTileFromSidebar(tile.id)}
-                        onContextMenu={(event) => {
-                          event.preventDefault()
-                          setGroupMenu(null)
-                          setTileMenu({ tileId: tile.id, x: event.clientX, y: event.clientY })
+                        onConfigure={(event) => {
+                          openTileConfigurationMenu(tile.id, event.currentTarget)
+                        }}
+                        onFocusTile={() => {
+                          handleTileActionFocus(tile)
+                        }}
+                        onClose={() => {
+                          if (viewMode === 'fullview') {
+                            void closeTileFromFullview(tile.id)
+                            return
+                          }
+                          void deleteTile(tile.id)
                         }}
                       />
                     )
@@ -1802,69 +1785,31 @@ export default function App(): React.ReactElement {
             />
 
             <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-              {(viewMode === 'fullview' || viewMode === 'splitview') && (
-                viewMode === 'fullview' ? (
-                  <FullviewPanel
-                    tiles={sortedTiles}
-                    activeTileId={fullviewActiveTileId}
-                    attentionCounts={terminalAttentionCounts}
-                    onActivateTile={(tileId) => {
-                      setFullviewActiveTileId(tileId)
-                      handleSelectSingleTile(tileId)
-                    }}
-                    onCloseTile={(tileId) => {
-                      void closeTileFromFullview(tileId)
-                    }}
-                    onEditTile={openTileEditor}
-                    onFocusTile={focusTileInFullview}
-                    onDuplicateTile={(tile) => {
-                      const duplicateId = duplicateTerminalTile(tile.id)
-                      if (duplicateId) setFullviewActiveTileId(duplicateId)
-                    }}
-                    onRefreshTile={handleRefreshTile}
-                    onToggleNotificationsMuted={toggleTileNotificationsMuted}
-                    onToggleTitlebar={(tileId) => {
-                      const tile = tiles.find((entry) => entry.id === tileId)
-                      if (!tile) return
-                      updateTile(tileId, { hideTitlebar: !tile.hideTitlebar })
-                    }}
-                    onToggleLock={(tileId) => {
-                      const tile = tiles.find((entry) => entry.id === tileId)
-                      if (!tile) return
-                      updateTile(tileId, { locked: !tile.locked })
-                    }}
-                  />
-                ) : (
-                  <SplitviewPanel
-                    tiles={sortedTiles}
-                    splitViewState={splitViewState}
-                    attentionCounts={terminalAttentionCounts}
-                    onActivateTile={activateSplitTile}
-                    onCloseTile={(panel, tileId) => {
-                      void closeTileFromSplitview(panel, tileId)
-                    }}
-                    onEditTile={openTileEditor}
-                    onFocusTile={focusTileInFullview}
-                    onDuplicateTile={(panel, tile) => {
-                      const duplicateId = duplicateTerminalTile(tile.id, { splitPanel: panel })
-                      if (duplicateId) setFullviewActiveTileId(duplicateId)
-                    }}
-                    onRefreshTile={handleRefreshTile}
-                    onToggleNotificationsMuted={toggleTileNotificationsMuted}
-                    onToggleTitlebar={(tileId) => {
-                      const tile = tiles.find((entry) => entry.id === tileId)
-                      if (!tile) return
-                      updateTile(tileId, { hideTitlebar: !tile.hideTitlebar })
-                    }}
-                    onMoveTile={moveTileToSplitPanel}
-                    onFocusPanel={setSplitFocusedPanel}
-                    onToggleLock={(tileId) => {
-                      const tile = tiles.find((entry) => entry.id === tileId)
-                      if (!tile) return
-                      updateTile(tileId, { locked: !tile.locked })
-                    }}
-                  />
-                )
+              {viewMode === 'splitview' && (
+                <SplitviewPanel
+                  tiles={sortedTiles}
+                  splitViewState={splitViewState}
+                  attentionCounts={terminalAttentionCounts}
+                  onActivateTile={activateSplitTile}
+                  onCloseTile={(panel, tileId) => {
+                    void closeTileFromSplitview(panel, tileId)
+                  }}
+                  onEditTile={openTileEditor}
+                  onFocusTile={focusTileInFullview}
+                  onDuplicateTile={(panel, tile) => {
+                    const duplicateId = duplicateTerminalTile(tile.id, { splitPanel: panel })
+                    if (duplicateId) setFullviewActiveTileId(duplicateId)
+                  }}
+                  onRefreshTile={handleRefreshTile}
+                  onToggleNotificationsMuted={toggleTileNotificationsMuted}
+                  onMoveTile={moveTileToSplitPanel}
+                  onFocusPanel={setSplitFocusedPanel}
+                  onToggleLock={(tileId) => {
+                    const tile = tiles.find((entry) => entry.id === tileId)
+                    if (!tile) return
+                    updateTile(tileId, { locked: !tile.locked })
+                  }}
+                />
               )}
 
               <div className="relative min-h-0 flex-1">
@@ -1885,6 +1830,11 @@ export default function App(): React.ReactElement {
                   }}
                   groupsEnabled={groupsEnabled}
                   onDeleteTile={deleteTile}
+                  onConfigureTile={(tile, x, y) => {
+                    setGroupMenu(null)
+                    setTileMenu({ tileId: tile.id, x, y })
+                  }}
+                  onFocusTileInView={focusTileInFullview}
                   onConfirmRemoveFromGroup={confirmRemoveTileFromGroup}
                   tileRefreshKeys={tileRefreshKeys}
                   viewMode={viewMode}

@@ -33,8 +33,9 @@ export function normalizeCanvasStateForJson(state: CanvasState): CanvasState {
     ...state,
     tiles: state.tiles.map((tile) => {
       const size = normalizeTileSize(tile.type, tile)
+      const { hideTitlebar: _hideTitlebar, ...tileWithoutTitlebar } = tile as typeof tile & { hideTitlebar?: unknown }
       return clampTileToWorld({
-        ...tile,
+        ...tileWithoutTitlebar,
         width: size.width,
         height: size.height,
       })

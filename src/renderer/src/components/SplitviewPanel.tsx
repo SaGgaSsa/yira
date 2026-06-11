@@ -1,11 +1,11 @@
 import React, { useMemo, useState } from 'react'
-import { Bell, BellOff, CopyPlus, Eye, EyeOff, Lock, Maximize2, Pencil, RefreshCw, Trash2, Unlock } from 'lucide-react'
 import type { SplitPanelId, SplitViewState, TileState } from '@shared/types'
 import { useCanvasStore } from '@/store/canvasStore'
 import { getTerminalDisplayTitle } from '@/utils/terminalDisplayTitle'
 import { SPLIT_TAB_STRIP_HEIGHT_PX } from '@/utils/splitViewLayout'
-import { ContextMenu, type MenuItem } from './ContextMenu'
+import { ContextMenu } from './ContextMenu'
 import { TileListItem } from './TileListItem'
+import { buildTileConfigurationMenuItems } from './tileConfigurationMenu'
 
 interface SplitviewPanelProps {
   tiles: TileState[]
@@ -18,7 +18,6 @@ interface SplitviewPanelProps {
   onDuplicateTile: (panel: SplitPanelId, tile: TileState) => void
   onRefreshTile: (tile: TileState) => void | Promise<void>
   onToggleNotificationsMuted: (tile: TileState) => void
-  onToggleTitlebar: (tileId: string) => void
   onToggleLock: (tileId: string) => void
   onMoveTile: (tileId: string, targetPanel: SplitPanelId) => void
   onFocusPanel: (panel: SplitPanelId) => void
@@ -32,7 +31,8 @@ interface PanelTabStripProps {
   attentionCounts: Record<string, number>
   onActivateTile: (panel: SplitPanelId, tileId: string) => void
   onCloseTile: (panel: SplitPanelId, tileId: string) => void | Promise<void>
-  onContextMenu: (tileId: string, x: number, y: number) => void
+  onConfigureTile: (tileId: string, x: number, y: number) => void
+  onFocusTile: (tile: TileState) => void
   onMoveTile: (tileId: string, targetPanel: SplitPanelId) => void
   onFocusPanel: (panel: SplitPanelId) => void
 }
@@ -45,7 +45,8 @@ function PanelTabStrip({
   attentionCounts,
   onActivateTile,
   onCloseTile,
-  onContextMenu,
+  onConfigureTile,
+  onFocusTile,
   onMoveTile,
   onFocusPanel,
 }: PanelTabStripProps): React.ReactElement {
@@ -109,9 +110,12 @@ function PanelTabStrip({
                   if (draggedTileId) onMoveTile(draggedTileId, panel)
                 }}
                 onClick={() => onActivateTile(panel, tile.id)}
-                onContextMenu={(event) => {
-                  event.preventDefault()
-                  onContextMenu(tile.id, event.clientX, event.clientY)
+                onConfigure={(event) => {
+                  const rect = event.currentTarget.getBoundingClientRect()
+                  onConfigureTile(tile.id, rect.left, rect.bottom + 6)
+                }}
+                onFocusTile={() => {
+                  onFocusTile(tile)
                 }}
                 onClose={() => {
                   void onCloseTile(panel, tile.id)
@@ -136,7 +140,6 @@ export function SplitviewPanel({
   onDuplicateTile,
   onRefreshTile,
   onToggleNotificationsMuted,
-  onToggleTitlebar,
   onToggleLock,
   onMoveTile,
   onFocusPanel,
@@ -159,64 +162,16 @@ export function SplitviewPanel({
         ? 'right'
         : null
     : null
-  const menuItems: MenuItem[] = activeMenuTile
-    ? [
-        {
-          label: activeMenuTile.type === 'terminal' ? 'Edit' : 'Rename',
-          icon: Pencil,
-          action: () => {
-            setTabMenu(null)
-            onEditTile(activeMenuTile)
-          },
-        },
-        {
-          label: 'Focus',
-          icon: Maximize2,
-          action: () => {
-            setTabMenu(null)
-            onFocusTile(activeMenuTile)
-          },
-        },
-        ...(activeMenuTile.type === 'terminal' && activeMenuPanel
-          ? [{
-              label: 'Duplicate',
-              icon: CopyPlus,
-              action: () => {
-                setTabMenu(null)
-                onDuplicateTile(activeMenuPanel, activeMenuTile)
-              },
-            }]
-          : []),
-        {
-          label: 'Refresh',
-          icon: RefreshCw,
-          action: () => {
-            setTabMenu(null)
-            void onRefreshTile(activeMenuTile)
-          },
-        },
-        ...(activeMenuTile.type === 'terminal' || activeMenuTile.type === 'timer'
-          ? [{
-              label: activeMenuTile.notificationsMuted ? 'Unmute Notifications' : 'Mute Notifications',
-              icon: activeMenuTile.notificationsMuted ? Bell : BellOff,
-              action: () => {
-                setTabMenu(null)
-                onToggleNotificationsMuted(activeMenuTile)
-              },
-            }]
-          : []),
-        {
-          label: activeMenuTile.hideTitlebar ? 'Show Titlebar' : 'Hide Titlebar',
-          icon: activeMenuTile.hideTitlebar ? Eye : EyeOff,
-          action: () => onToggleTitlebar(activeMenuTile.id),
-        },
-        {
-          label: activeMenuTile.locked ? 'Unlock' : 'Lock',
-          icon: activeMenuTile.locked ? Unlock : Lock,
-          action: () => onToggleLock(activeMenuTile.id),
-        },
-        { label: 'Close', icon: Trash2, danger: true, action: () => { if (activeMenuPanel) void onCloseTile(activeMenuPanel, activeMenuTile.id) } },
-      ]
+  const menuItems = activeMenuTile
+    ? buildTileConfigurationMenuItems({
+        tile: activeMenuTile,
+        onEdit: onEditTile,
+        onDuplicate: activeMenuPanel ? (tile) => onDuplicateTile(activeMenuPanel, tile) : undefined,
+        onRefresh: onRefreshTile,
+        onToggleNotificationsMuted,
+        onToggleLock: (tile) => onToggleLock(tile.id),
+        onBeforeAction: () => setTabMenu(null),
+      })
     : []
 
   const horizontal = splitViewState.orientation === 'horizontal'
@@ -234,7 +189,8 @@ export function SplitviewPanel({
         attentionCounts={attentionCounts}
         onActivateTile={onActivateTile}
         onCloseTile={onCloseTile}
-        onContextMenu={(tileId, x, y) => setTabMenu({ tileId, x, y })}
+        onConfigureTile={(tileId, x, y) => setTabMenu({ tileId, x, y })}
+        onFocusTile={onFocusTile}
         onMoveTile={onMoveTile}
         onFocusPanel={onFocusPanel}
       />
@@ -246,7 +202,8 @@ export function SplitviewPanel({
         attentionCounts={attentionCounts}
         onActivateTile={onActivateTile}
         onCloseTile={onCloseTile}
-        onContextMenu={(tileId, x, y) => setTabMenu({ tileId, x, y })}
+        onConfigureTile={(tileId, x, y) => setTabMenu({ tileId, x, y })}
+        onFocusTile={onFocusTile}
         onMoveTile={onMoveTile}
         onFocusPanel={onFocusPanel}
       />

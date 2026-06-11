@@ -33,7 +33,6 @@ export function buildDuplicateTerminalTile({
     shellProfileId: source.shellProfileId,
     startupCommand: source.startupCommand,
     label: source.label,
-    hideTitlebar: source.hideTitlebar,
     radiusIndex: source.radiusIndex,
     locked: false,
     groupId: targetGroupId,

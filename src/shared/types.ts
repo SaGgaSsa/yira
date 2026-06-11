@@ -365,7 +365,6 @@ export interface TileState {
   zIndex: number
   label?: string
   locked?: boolean
-  hideTitlebar?: boolean
   notificationsMuted?: boolean
   radiusIndex?: number
   groupId?: string

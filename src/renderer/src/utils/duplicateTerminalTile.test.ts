@@ -12,7 +12,6 @@ const sourceTerminal: TileState = {
   shellProfileId: 'bash',
   startupCommand: 'npm run dev',
   label: 'API',
-  hideTitlebar: true,
   radiusIndex: 2,
   locked: true,
   groupId: 'group-1',
@@ -48,7 +47,7 @@ if (duplicate.shellProfileId !== 'bash') throw new Error('duplicate must copy sh
 if (duplicate.startupCommand !== 'npm run dev') throw new Error('duplicate must copy startup command')
 if (duplicate.label !== 'API') throw new Error('duplicate must copy label')
 if (duplicate.width !== 800 || duplicate.height !== 500) throw new Error('duplicate must copy dimensions')
-if (!duplicate.hideTitlebar || duplicate.radiusIndex !== 2) throw new Error('duplicate must copy visual settings')
+if (duplicate.radiusIndex !== 2) throw new Error('duplicate must copy visual settings')
 if (duplicate.locked !== false) throw new Error('duplicate must always be unlocked')
 if (duplicate.groupId !== 'group-1') throw new Error('duplicate must stay in an unlocked group')
 

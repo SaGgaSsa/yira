@@ -1,8 +1,8 @@
 import React from 'react'
-import { X } from 'lucide-react'
 import type { TileState } from '@shared/types'
 import { formatTerminalAttentionCount } from '@/utils/terminalAttention'
 import { TILE_META } from './TileContent'
+import { TileActionButtons } from './TileActionButtons'
 
 interface TileListItemProps {
   tile: TileState
@@ -11,7 +11,8 @@ interface TileListItemProps {
   attentionCount?: number
   onClick: () => void
   onDoubleClick?: () => void
-  onContextMenu?: (event: React.MouseEvent) => void
+  onConfigure?: (event: React.MouseEvent<HTMLButtonElement>) => void
+  onFocusTile?: () => void
   onClose?: () => void
   draggable?: boolean
   onDragStart?: (event: React.DragEvent) => void
@@ -27,7 +28,8 @@ export function TileListItem({
   attentionCount = 0,
   onClick,
   onDoubleClick,
-  onContextMenu,
+  onConfigure,
+  onFocusTile,
   onClose,
   draggable = false,
   onDragStart,
@@ -40,6 +42,7 @@ export function TileListItem({
   const fallbackLabel = tile.type === 'note' ? meta.label : `${meta.label} ${tile.id.slice(-4)}`
   const label = (displayLabel ?? tile.label)?.trim() || fallbackLabel
   const attentionLabel = formatTerminalAttentionCount(attentionCount)
+  const hasActions = Boolean(onConfigure && onFocusTile && onClose)
 
   return (
     <div
@@ -54,10 +57,9 @@ export function TileListItem({
       }}
     >
       <button
-        className={`flex h-full w-full items-center gap-2 px-3 py-2.5 ${onClose ? 'pr-10' : ''}`}
+        className={`flex h-full w-full items-center gap-2 px-3 py-2.5 ${hasActions ? 'pr-[5.75rem]' : ''}`}
         onClick={onClick}
         onDoubleClick={onDoubleClick}
-        onContextMenu={onContextMenu}
         title={label}
       >
         <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-border-visible text-text-secondary">
@@ -78,14 +80,13 @@ export function TileListItem({
         </div>
       </button>
 
-      {onClose && (
-        <button
-          className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
-          onClick={onClose}
-          title="Close tab"
-        >
-          <X size={13} />
-        </button>
+      {onConfigure && onFocusTile && onClose && (
+        <TileActionButtons
+          className="absolute right-2 top-1/2 -translate-y-1/2"
+          onConfigure={onConfigure}
+          onFocus={onFocusTile}
+          onClose={onClose}
+        />
       )}
     </div>
   )

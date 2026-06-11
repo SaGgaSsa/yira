@@ -104,6 +104,8 @@ interface CanvasProps {
   canCreateFiles: boolean
   onCreateGroupFromSelection: () => void | Promise<void>
   onDeleteTile: (tileId: string) => Promise<boolean>
+  onConfigureTile: (tile: TileState, x: number, y: number) => void
+  onFocusTileInView: (tile: TileState) => void
   onConfirmRemoveFromGroup: (tile: TileState, group: TileGroup) => Promise<boolean>
   groupsEnabled: boolean
   profiles: Array<{ id: ShellProfileId; label: string; available: boolean }>
@@ -128,6 +130,8 @@ export function Canvas({
   canCreateFiles,
   onCreateGroupFromSelection,
   onDeleteTile,
+  onConfigureTile,
+  onFocusTileInView,
   onConfirmRemoveFromGroup,
   groupsEnabled,
   profiles,
@@ -717,6 +721,11 @@ export function Canvas({
                 }}
                 onUpdate={(patch) => updateTile(tile.id, patch)}
                 onUpdatePositions={updateTilePositions}
+                onConfigure={(event) => {
+                  const rect = event.currentTarget.getBoundingClientRect()
+                  onConfigureTile(tile, rect.left, rect.bottom + 6)
+                }}
+                onFocusView={() => onFocusTileInView(tile)}
                 onDelete={() => {
                   void onDeleteTile(tile.id)
                 }}

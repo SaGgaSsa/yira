@@ -3,7 +3,7 @@ import type { CanvasState } from '@shared/types'
 
 const state: CanvasState = {
   tiles: [
-    { id: 'terminal', type: 'terminal', x: 0, y: 0, width: 10, height: 20, zIndex: 1 },
+    { id: 'terminal', type: 'terminal', x: 0, y: 0, width: 10, height: 20, zIndex: 1, hideTitlebar: true } as CanvasState['tiles'][number] & { hideTitlebar: true },
     { id: 'note', type: 'note', x: 0, y: 0, width: 10, height: 20, zIndex: 2 },
     { id: 'browser', type: 'browser', x: 0, y: 0, width: 10, height: 20, zIndex: 3 },
     { id: 'kanban', type: 'kanban', x: 0, y: 0, width: 10, height: 20, zIndex: 4 },
@@ -41,5 +41,8 @@ for (const tile of normalized.tiles) {
   if (!size) throw new Error(`unexpected tile ${tile.id}`)
   if (tile.width !== size.width || tile.height !== size.height) {
     throw new Error(`${tile.id} must normalize to ${size.width}x${size.height}, got ${tile.width}x${tile.height}`)
+  }
+  if ('hideTitlebar' in tile) {
+    throw new Error(`${tile.id} must not persist hideTitlebar`)
   }
 }

@@ -111,9 +111,10 @@ function normalizeGroup(group: TileGroup): TileGroup {
 
 function normalizeTile(tile: TileState): TileState {
   const { width, height } = normalizeTileSize(tile.type, tile)
-  const normalizedTile = tile.notificationsMuted === false
-    ? { ...tile, notificationsMuted: undefined }
-    : tile
+  const { hideTitlebar: _hideTitlebar, ...tileWithoutTitlebar } = tile as TileState & { hideTitlebar?: unknown }
+  const normalizedTile = tileWithoutTitlebar.notificationsMuted === false
+    ? { ...tileWithoutTitlebar, notificationsMuted: undefined }
+    : tileWithoutTitlebar
 
   if (width === normalizedTile.width && height === normalizedTile.height) return clampTileToWorld(normalizedTile)
 
