@@ -9,6 +9,7 @@ import { SplitviewPanel } from './components/SplitviewPanel'
 import { AppDialog, type ConfirmDialogOptions, type PromptDialogOptions } from './components/AppDialog'
 import { GroupEditorDialog, type GroupEditorRequest, type GroupEditorValue } from './components/GroupEditorDialog'
 import { WorkspaceDialog, type WorkspaceDialogRequest, type WorkspaceDialogValue } from './components/WorkspaceDialog'
+import { WorkspaceManagementDialog } from './components/WorkspaceManagementDialog'
 import { TileEditorDialog, type TileEditorRequest, type TileEditorValue } from './components/TileEditorDialog'
 import { useCanvasStore } from './store/canvasStore'
 import { useSettingsStore } from './store/settingsStore'
@@ -18,13 +19,13 @@ import { useTheme } from './hooks/useTheme'
 import { useFontSize } from './hooks/useFontSize'
 import { useUpdateStore } from './store/updateStore'
 import { findMergeTargetGroup, findSelectedGroup, getGroupingBlockedReason } from './utils/grouping'
-import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type CanvasState, type Workspace, type WorkspaceMetadata, type TileGroup, type ViewMode, type SplitPanelId, type SplitViewState } from '@shared/types'
+import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type CanvasState, type Workspace, type WorkspaceMetadata, type TileGroup, type ViewMode, type SplitPanelId, type SplitViewState, type WorkspaceManagementEntry } from '@shared/types'
 import { DEFAULT_SPLIT_ORIENTATION, toggleSplitOrientation } from './utils/splitViewState'
 import { getTerminalDisplayTitle, normalizeTerminalWindowTitle } from './utils/terminalDisplayTitle'
 import { TILE_META } from './components/TileContent'
 import { TileListItem } from './components/TileListItem'
 import { buildTileConfigurationMenuItems } from './components/tileConfigurationMenu'
-import { Terminal, StickyNote, Globe, Clock, Folder, ChevronDown, FolderPlus, FolderOpen, Trash2, Pencil, Lock, Columns, Download, X } from 'lucide-react'
+import { Terminal, StickyNote, Globe, Clock, Folder, ChevronDown, SlidersHorizontal, Trash2, Pencil, Lock, Columns, Download, X } from 'lucide-react'
 
 const GROUP_SHOW_MARGIN = 20
 const GROUP_SHOW_TOP_PADDING = 118
@@ -289,6 +290,7 @@ export default function App(): React.ReactElement {
   // UI state
   const [showProfilePicker, setShowProfilePicker] = useState(false)
   const [showWorkspacePicker, setShowWorkspacePicker] = useState(false)
+  const [showWorkspaceManager, setShowWorkspaceManager] = useState(false)
   const [workspaceMetadata, setWorkspaceMetadata] = useState<WorkspaceMetadata[]>([])
   const [showSettings, setShowSettings] = useState(false)
   const [showJsonEditor, setShowJsonEditor] = useState(false)
@@ -300,7 +302,6 @@ export default function App(): React.ReactElement {
   const [tileRefreshKeys, setTileRefreshKeys] = useState<Record<string, number>>({})
   const [tileMenu, setTileMenu] = useState<{ tileId: string; x: number; y: number } | null>(null)
   const [groupMenu, setGroupMenu] = useState<{ groupId: string; x: number; y: number } | null>(null)
-  const [workspaceItemMenu, setWorkspaceItemMenu] = useState<{ workspaceId: string; x: number; y: number } | null>(null)
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const workspaceTransitionRef = useRef(0)
   const skipNextAutosaveRef = useRef(false)
@@ -484,7 +485,6 @@ export default function App(): React.ReactElement {
         return
       }
 
-      setWorkspaceItemMenu(null)
       void activateWorkspace(workspace)
     },
     [activeWorkspaceId, activateWorkspace],
@@ -532,19 +532,12 @@ export default function App(): React.ReactElement {
     const handlePointerDown = (event: MouseEvent) => {
       if (!workspaceMenuRef.current?.contains(event.target as Node)) {
         setShowWorkspacePicker(false)
-        setWorkspaceItemMenu(null)
       }
     }
 
     window.addEventListener('mousedown', handlePointerDown)
     return () => window.removeEventListener('mousedown', handlePointerDown)
   }, [showWorkspacePicker])
-
-  useEffect(() => {
-    if (!showWorkspacePicker && workspaceItemMenu) {
-      setWorkspaceItemMenu(null)
-    }
-  }, [showWorkspacePicker, workspaceItemMenu])
 
   // Keyboard shortcuts (extracted hook)
   useKeyboardShortcuts({
@@ -561,7 +554,7 @@ export default function App(): React.ReactElement {
     onClosePicker: () => {
       setShowProfilePicker(false)
       setShowWorkspacePicker(false)
-      setWorkspaceItemMenu(null)
+      setShowWorkspaceManager(false)
       setShowSettings(false)
       setTileMenu(null)
       setGroupMenu(null)
@@ -1025,24 +1018,6 @@ export default function App(): React.ReactElement {
     bumpTileRefreshKey(tile.id)
   }, [bumpTileRefreshKey, clearTerminalTitle, requestRefreshTileConfirmation])
 
-  const openWorkspaceEditor = useCallback((workspace: WorkspaceMetadata) => {
-    setWorkspaceItemMenu(null)
-    setWorkspaceEditor({
-      mode: 'edit',
-      workspaceId: workspace.id,
-      request: {
-        title: 'Edit workspace',
-        confirmLabel: 'Save Workspace',
-        value: {
-          name: workspace.name,
-          rootFolderPath: workspace.config.rootFolderPath ?? '',
-          initialCommand: workspace.config.initialCommand ?? '',
-          terminalHistoryEnabled: workspace.config.terminalHistoryEnabled !== false,
-        },
-      },
-    })
-  }, [])
-
   const handleConfirmWorkspaceEditor = useCallback(async (value: WorkspaceDialogValue) => {
     if (!workspaceEditor) return
 
@@ -1088,83 +1063,7 @@ export default function App(): React.ReactElement {
     }
   }, [activateWorkspace, activeWorkspaceId, refreshWorkspaceMetadata, saveToDisk, setWorkspace, workspaceEditor])
 
-  const deleteWorkspace = useCallback(async (workspace: WorkspaceMetadata) => {
-    setWorkspaceItemMenu(null)
-
-    const confirmation = await requestPrompt({
-      title: 'Delete workspace',
-      message: `Type "${workspace.name}" to delete this workspace. This cannot be undone.`,
-      confirmLabel: 'Delete',
-      cancelLabel: 'Keep Workspace',
-      danger: true,
-      placeholder: workspace.name,
-      requiredValue: workspace.name,
-    })
-    if (confirmation?.trim() !== workspace.name) return
-
-    const isActiveWorkspace = workspace.id === useCanvasStore.getState().activeWorkspaceId
-    if (isActiveWorkspace) {
-      if (autosaveTimerRef.current) {
-        clearTimeout(autosaveTimerRef.current)
-        autosaveTimerRef.current = null
-      }
-
-      await saveToDisk(workspace.id)
-    }
-
-    await window.electron.workspace.delete(workspace.id)
-    const list = await refreshWorkspaceMetadata()
-
-    if (!isActiveWorkspace) return
-
-    const nextActive = await window.electron.workspace.getActive()
-    if (nextActive) {
-      await activateWorkspace(nextActive, { persistCurrent: false, updateMain: false })
-      return
-    }
-
-    if (list[0]) {
-      await activateWorkspace(list[0], { persistCurrent: false })
-      return
-    }
-    setWorkspace('', '', {})
-    restoreState(createEmptyCanvasState())
-    setWorkspaceEditor({
-      mode: 'create',
-      request: {
-        title: 'Create your first workspace',
-        eyebrow: 'First Workspace Setup',
-        confirmLabel: 'Create Workspace',
-        canCancel: false,
-        value: {
-          name: '',
-          rootFolderPath: '',
-          initialCommand: '',
-          terminalHistoryEnabled: true,
-        },
-      },
-    })
-  }, [activateWorkspace, refreshWorkspaceMetadata, requestPrompt, saveToDisk, setWorkspace, restoreState])
-
-  const createWorkspace = useCallback(async () => {
-    setWorkspaceEditor({
-      mode: 'create',
-      request: {
-        title: activeWorkspaceId ? 'Create workspace' : 'Create your first workspace',
-        eyebrow: activeWorkspaceId ? 'Workspace Settings' : 'First Workspace Setup',
-        confirmLabel: 'Create Workspace',
-        canCancel: Boolean(activeWorkspaceId),
-        value: {
-          name: '',
-          rootFolderPath: '',
-          initialCommand: '',
-          terminalHistoryEnabled: true,
-        },
-      },
-    })
-  }, [activeWorkspaceId])
-
-  const openFolderAsWorkspace = useCallback(async () => {
+  const handleSaveWorkspaceManagement = useCallback(async (entries: WorkspaceManagementEntry[]) => {
     if (activeWorkspaceId) {
       if (autosaveTimerRef.current) {
         clearTimeout(autosaveTimerRef.current)
@@ -1174,12 +1073,41 @@ export default function App(): React.ReactElement {
       await saveToDisk(activeWorkspaceId)
     }
 
-    const workspace = await window.electron.workspace.openFolder()
-    if (!workspace) return
+    const result = await window.electron.workspace.commitManagementChanges({ workspaces: entries })
 
-    await refreshWorkspaceMetadata()
-    await activateWorkspace(workspace, { persistCurrent: false, updateMain: false })
-  }, [activeWorkspaceId, activateWorkspace, refreshWorkspaceMetadata, saveToDisk])
+    setWorkspaceMetadata(result.workspaces)
+    setShowWorkspaceManager(false)
+    setShowWorkspacePicker(false)
+
+    if (!result.activeWorkspace) {
+      skipNextAutosaveRef.current = true
+      setWorkspace('', '', {})
+      restoreState(createEmptyCanvasState())
+      setWorkspaceEditor({
+        mode: 'create',
+        request: {
+          title: 'Create your first workspace',
+          eyebrow: 'First Workspace Setup',
+          confirmLabel: 'Create Workspace',
+          canCancel: false,
+          value: {
+            name: '',
+            rootFolderPath: '',
+            initialCommand: '',
+            terminalHistoryEnabled: true,
+          },
+        },
+      })
+      return
+    }
+
+    if (result.activeWorkspace.id === activeWorkspaceId) {
+      setWorkspace(result.activeWorkspace.id, result.activeWorkspace.name, result.activeWorkspace.config)
+      return
+    }
+
+    await activateWorkspace(result.activeWorkspace, { persistCurrent: false, updateMain: false })
+  }, [activeWorkspaceId, activateWorkspace, restoreState, saveToDisk, setWorkspace])
 
   const createTerminalFromSidebar = useCallback(() => {
     if (availableProfiles.length <= 1 && defaultProfile) {
@@ -1192,9 +1120,6 @@ export default function App(): React.ReactElement {
 
   const activeTileMenu = tileMenu ? tiles.find((tile) => tile.id === tileMenu.tileId) ?? null : null
   const activeGroupMenu = groupsEnabled && groupMenu ? effectiveGroups.find((group) => group.id === groupMenu.groupId) ?? null : null
-  const activeWorkspaceMenu = workspaceItemMenu
-    ? workspaceMetadata.find((workspace) => workspace.id === workspaceItemMenu.workspaceId) ?? null
-    : null
   const tileMenuItems: MenuItem[] = activeTileMenu
     ? buildTileConfigurationMenuItems({
         tile: activeTileMenu,
@@ -1233,24 +1158,6 @@ export default function App(): React.ReactElement {
       },
     },
   ] : []
-  const workspaceMenuItems: MenuItem[] = activeWorkspaceMenu ? [
-    {
-      label: 'Edit Workspace',
-      icon: Pencil,
-      action: () => {
-        openWorkspaceEditor(activeWorkspaceMenu)
-      },
-    },
-    {
-      label: 'Delete Workspace',
-      icon: Trash2,
-      danger: true,
-      action: () => {
-        void deleteWorkspace(activeWorkspaceMenu)
-      },
-    },
-  ] : []
-
   const sortedTiles = useMemo(
     () => tiles.slice().sort((a, b) => b.zIndex - a.zIndex),
     [tiles],
@@ -1563,59 +1470,32 @@ export default function App(): React.ReactElement {
               >
                 <div className="max-h-56 overflow-y-auto py-2">
                   {workspaceMetadata.map((workspace) => (
-                    <div
+                    <button
                       key={workspace.id}
-                      className="flex items-center gap-2 px-2 py-1"
-                      onContextMenu={(event) => {
-                        event.preventDefault()
-                        event.stopPropagation()
-                        setWorkspaceItemMenu({
-                          workspaceId: workspace.id,
-                          x: event.clientX,
-                          y: event.clientY,
-                        })
+                      className="flex w-full min-w-0 items-center justify-between px-4 py-3 text-left transition-colors hover:bg-hover-bg"
+                      style={{
+                        color: workspace.id === activeWorkspaceId ? 'var(--text-primary)' : 'var(--text-secondary)',
                       }}
+                      onClick={() => switchWorkspace(workspace)}
                     >
-                      <button
-                        className="flex min-w-0 flex-1 items-center justify-between rounded-2xl px-3 py-2 text-left transition-colors hover:bg-hover-bg"
-                        style={{
-                          color: workspace.id === activeWorkspaceId ? 'var(--text-primary)' : 'var(--text-secondary)',
-                        }}
-                        onClick={() => switchWorkspace(workspace)}
-                      >
-                        <span className="truncate text-sm">{workspace.name}</span>
-                        {workspace.id === activeWorkspaceId && (
-                          <span className="nd-caption ml-3 shrink-0 text-text-secondary">[ ACTIVE ]</span>
-                        )}
-                      </button>
-                      <button
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border-visible text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          openWorkspaceEditor(workspace)
-                        }}
-                        title="Edit workspace"
-                      >
-                        <Pencil size={13} />
-                      </button>
-                    </div>
+                      <span className="truncate text-sm">{workspace.name}</span>
+                      {workspace.id === activeWorkspaceId && (
+                        <span className="nd-caption ml-3 shrink-0 text-text-secondary">[ ACTIVE ]</span>
+                      )}
+                    </button>
                   ))}
                 </div>
 
                 <div className="border-t border-border p-2">
                   <button
                     className="flex w-full items-center gap-2 rounded-2xl px-4 py-3 text-left text-sm text-text-primary transition-colors hover:bg-hover-bg"
-                    onClick={() => void createWorkspace()}
+                    onClick={() => {
+                      setShowWorkspacePicker(false)
+                      setShowWorkspaceManager(true)
+                    }}
                   >
-                    <FolderPlus size={14} />
-                    <span className="nd-label">New Workspace</span>
-                  </button>
-                  <button
-                    className="flex w-full items-center gap-2 rounded-2xl px-4 py-3 text-left text-sm text-text-primary transition-colors hover:bg-hover-bg"
-                    onClick={() => void openFolderAsWorkspace()}
-                  >
-                    <FolderOpen size={14} />
-                    <span className="nd-label">Open Folder</span>
+                    <SlidersHorizontal size={14} />
+                    <span className="nd-label">Manage Workspaces</span>
                   </button>
                 </div>
               </div>
@@ -1888,14 +1768,6 @@ export default function App(): React.ReactElement {
           onClose={() => setGroupMenu(null)}
         />
       )}
-      {workspaceItemMenu && activeWorkspaceMenu && (
-        <ContextMenu
-          x={workspaceItemMenu.x}
-          y={workspaceItemMenu.y}
-          items={workspaceMenuItems}
-          onClose={() => setWorkspaceItemMenu(null)}
-        />
-      )}
       <AppDialog
         request={activeDialog?.request ?? null}
         onCancel={closeActiveDialog}
@@ -1913,6 +1785,12 @@ export default function App(): React.ReactElement {
           setWorkspaceEditor(null)
         }}
         onConfirm={handleConfirmWorkspaceEditor}
+      />
+      <WorkspaceManagementDialog
+        open={showWorkspaceManager}
+        workspaces={workspaceMetadata}
+        onCancel={() => setShowWorkspaceManager(false)}
+        onSave={handleSaveWorkspaceManagement}
       />
       <TileEditorDialog
         request={tileEditor?.request ?? null}

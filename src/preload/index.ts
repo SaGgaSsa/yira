@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { FileListOptions, NotificationAttentionOptions, TerminalCreateOptions, UpdateState, WorkspaceCreateInput, WorkspaceUpdatePatch } from '@shared/types'
+import type { FileListOptions, NotificationAttentionOptions, TerminalCreateOptions, UpdateState, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceUpdatePatch } from '@shared/types'
 
 console.log('[preload] Loading...')
 
@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld('electron', {
     setActive: (id: string) => ipcRenderer.invoke('workspace:setActive', id),
     getActive: () => ipcRenderer.invoke('workspace:getActive'),
     openFolder: () => ipcRenderer.invoke('workspace:openFolder'),
+    commitManagementChanges: (input: WorkspaceManagementCommitInput) =>
+      ipcRenderer.invoke('workspace:commitManagementChanges', input),
   },
 
   // Settings

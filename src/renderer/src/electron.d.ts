@@ -4,6 +4,8 @@ import type {
   Workspace,
   WorkspaceMetadata,
   WorkspaceCreateInput,
+  WorkspaceManagementCommitInput,
+  WorkspaceManagementCommitResult,
   WorkspaceUpdatePatch,
   UserSettings,
   KanbanBoardState,
@@ -35,6 +37,7 @@ interface ElectronWorld {
     setActive: (id: string) => Promise<void>
     getActive: () => Promise<Workspace | null>
     openFolder: () => Promise<Workspace | null>
+    commitManagementChanges: (input: WorkspaceManagementCommitInput) => Promise<WorkspaceManagementCommitResult>
   }
   settings: {
     load: () => Promise<UserSettings | null>

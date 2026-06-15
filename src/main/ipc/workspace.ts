@@ -1,9 +1,10 @@
 import { ipcMain, dialog, BrowserWindow } from 'electron'
 import { promises as fs, readFileSync } from 'fs'
-import { basename, join, resolve } from 'path'
-import type { Config, Workspace, AppSettings, WorkspaceConfig, WorkspaceCreateInput, WorkspaceUpdatePatch } from '@shared/types'
+import { basename, isAbsolute, join, relative, resolve } from 'path'
+import type { Config, Workspace, AppSettings, WorkspaceConfig, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceUpdatePatch } from '@shared/types'
 import { DEFAULT_SETTINGS } from '@shared/types'
 import { normalizeWorkspaceConfig } from '@shared/workspaceConfig'
+import { applyWorkspaceManagementChanges } from '@shared/workspaceManagement'
 import { YIRA_HOME, CONFIG_PATH, WORKSPACES_DIR } from '../paths'
 
 async function ensureDir(dir: string): Promise<void> {
@@ -17,8 +18,9 @@ function internalWorkspacePath(id: string): string {
 function isInsideWorkspacesDir(path: string): boolean {
   const resolvedPath = resolve(path)
   const resolvedWorkspacesDir = resolve(WORKSPACES_DIR)
+  const relativePath = relative(resolvedWorkspacesDir, resolvedPath)
 
-  return resolvedPath === resolvedWorkspacesDir || resolvedPath.startsWith(`${resolvedWorkspacesDir}/`)
+  return relativePath === '' || (!relativePath.startsWith('..') && !isAbsolute(relativePath))
 }
 
 function normalizeWorkspace(workspace: Partial<Workspace> & { id: string; name?: string; path?: string }): Workspace {
@@ -107,7 +109,7 @@ function createWorkspaceFromInput(input: WorkspaceCreateInput): Workspace {
     throw new Error('Workspace name cannot be empty')
   }
 
-  const id = `ws-${Date.now()}`
+  const id = createWorkspaceId()
 
   return {
     id,
@@ -130,6 +132,13 @@ function updateWorkspace(workspace: Workspace, patch: WorkspaceUpdatePatch): Wor
   })
 
   return workspace
+}
+
+let workspaceIdCounter = 0
+
+function createWorkspaceId(): string {
+  workspaceIdCounter += 1
+  return `ws-${Date.now()}-${workspaceIdCounter}`
 }
 
 export function registerWorkspaceIPC(): void {
@@ -199,6 +208,42 @@ export function registerWorkspaceIPC(): void {
     await writeConfig(config)
   })
 
+  ipcMain.handle('workspace:commitManagementChanges', async (_, input: WorkspaceManagementCommitInput) => {
+    const config = await readConfig()
+    const result = applyWorkspaceManagementChanges({
+      existingWorkspaces: config.workspaces,
+      activeWorkspaceId: config.activeWorkspaceId,
+      desiredWorkspaces: Array.isArray(input?.workspaces) ? input.workspaces : [],
+      nextWorkspaceId: createWorkspaceId,
+      internalWorkspacePath,
+    })
+
+    const existingById = new Map(config.workspaces.map((workspace) => [workspace.id, workspace]))
+
+    for (const workspace of result.workspaces) {
+      if (!existingById.has(workspace.id)) {
+        await ensureDir(workspace.path)
+      }
+    }
+
+    for (const workspaceId of result.removedWorkspaceIds) {
+      const workspace = existingById.get(workspaceId)
+      if (!workspace || !isInsideWorkspacesDir(workspace.path)) continue
+
+      try {
+        await fs.rm(workspace.path, { recursive: true, force: true })
+      } catch {
+        // ignore cleanup failures for internal workspace dirs
+      }
+    }
+
+    config.workspaces = result.workspaces
+    config.activeWorkspaceId = result.activeWorkspaceId
+    await writeConfig(config)
+
+    return result
+  })
+
   ipcMain.handle('workspace:openFolder', async () => {
     const win = BrowserWindow.getFocusedWindow()
     const result = await dialog.showOpenDialog(win!, {
@@ -216,7 +261,7 @@ export function registerWorkspaceIPC(): void {
       return existing
     }
 
-    const id = `ws-${Date.now()}`
+    const id = createWorkspaceId()
     const name = basename(folderPath)
     const workspace: Workspace = {
       id,

@@ -24,6 +24,26 @@ export interface WorkspaceCreateInput {
   terminalHistoryEnabled?: boolean
 }
 
+export interface WorkspaceManagementEntry {
+  id?: string
+  name: string
+  rootFolderPath?: string
+  initialCommand?: string
+  terminalHistoryEnabled?: boolean
+}
+
+export interface WorkspaceManagementCommitInput {
+  workspaces: WorkspaceManagementEntry[]
+}
+
+export interface WorkspaceManagementCommitResult {
+  workspaces: WorkspaceMetadata[]
+  activeWorkspaceId: string
+  activeWorkspace: WorkspaceMetadata | null
+  createdWorkspaceIds: string[]
+  removedWorkspaceIds: string[]
+}
+
 export type WorkspaceUpdatePatch = Partial<Pick<Workspace, 'name'>> & {
   config?: Partial<WorkspaceConfig>
 }
