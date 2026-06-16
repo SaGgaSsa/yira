@@ -1,7 +1,7 @@
 import { ipcMain, dialog, BrowserWindow } from 'electron'
 import { promises as fs, readFileSync } from 'fs'
 import { basename, isAbsolute, join, relative, resolve } from 'path'
-import type { Config, Workspace, AppSettings, WorkspaceConfig, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceUpdatePatch } from '@shared/types'
+import type { Config, Workspace, AppSettings, WorkspaceConfig, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceOpenFolderResult, WorkspaceUpdatePatch } from '@shared/types'
 import { DEFAULT_SETTINGS } from '@shared/types'
 import { normalizeWorkspaceConfig } from '@shared/workspaceConfig'
 import { applyWorkspaceManagementChanges } from '@shared/workspaceManagement'
@@ -30,6 +30,7 @@ function normalizeWorkspace(workspace: Partial<Workspace> & { id: string; name?:
       ? workspace.path
       : undefined
   const config = normalizeWorkspaceConfig({
+    type: workspace.config?.type,
     rootFolderPath: workspace.config?.rootFolderPath ?? migratedRootFolderPath,
     initialCommand: workspace.config?.initialCommand,
     terminalHistoryEnabled: workspace.config?.terminalHistoryEnabled,
@@ -115,7 +116,12 @@ function createWorkspaceFromInput(input: WorkspaceCreateInput): Workspace {
     id,
     name: trimmedName,
     path: internalWorkspacePath(id),
-    config: normalizeWorkspaceConfig(input),
+    config: normalizeWorkspaceConfig({
+      type: input.type,
+      rootFolderPath: input.rootFolderPath,
+      initialCommand: input.initialCommand,
+      terminalHistoryEnabled: input.terminalHistoryEnabled,
+    }),
   }
 }
 
@@ -127,8 +133,10 @@ function updateWorkspace(workspace: Workspace, patch: WorkspaceUpdatePatch): Wor
 
   workspace.name = nextName
   workspace.config = normalizeWorkspaceConfig({
-    ...workspace.config,
-    ...(patch.config ?? {}),
+    type: workspace.config.type,
+    rootFolderPath: patch.config?.rootFolderPath ?? workspace.config.rootFolderPath,
+    initialCommand: patch.config?.initialCommand ?? workspace.config.initialCommand,
+    terminalHistoryEnabled: patch.config?.terminalHistoryEnabled ?? workspace.config.terminalHistoryEnabled,
   })
 
   return workspace
@@ -244,13 +252,15 @@ export function registerWorkspaceIPC(): void {
     return result
   })
 
-  ipcMain.handle('workspace:openFolder', async () => {
+  ipcMain.handle('workspace:openFolder', async (): Promise<WorkspaceOpenFolderResult> => {
     const win = BrowserWindow.getFocusedWindow()
     const result = await dialog.showOpenDialog(win!, {
       properties: ['openDirectory'],
       title: 'Open Project Folder',
     })
-    if (result.canceled || result.filePaths.length === 0) return null
+    if (result.canceled || result.filePaths.length === 0) {
+      return { workspace: null, canceled: true }
+    }
 
     const folderPath = result.filePaths[0]
     const config = await readConfig()
@@ -258,22 +268,14 @@ export function registerWorkspaceIPC(): void {
     if (existing) {
       config.activeWorkspaceId = existing.id
       await writeConfig(config)
-      return existing
+      return { workspace: existing, canceled: false }
     }
 
-    const id = createWorkspaceId()
-    const name = basename(folderPath)
-    const workspace: Workspace = {
-      id,
-      name,
-      path: internalWorkspacePath(id),
-      config: normalizeWorkspaceConfig({ rootFolderPath: folderPath }),
+    return {
+      workspace: null,
+      canceled: false,
+      error: `No Yira workspace is configured for ${basename(folderPath)}.`,
     }
-    await ensureDir(workspace.path)
-    config.workspaces.push(workspace)
-    config.activeWorkspaceId = id
-    await writeConfig(config)
-    return workspace
   })
 
   ipcMain.handle('workspace:setActive', async (_, id: string) => {

@@ -57,11 +57,6 @@ export function applyWorkspaceManagementChanges({
 
   const workspaces = desiredWorkspaces.map((entry) => {
     const name = normalizeName(entry.name)
-    const config = normalizeWorkspaceConfig({
-      rootFolderPath: entry.rootFolderPath,
-      initialCommand: entry.initialCommand,
-      terminalHistoryEnabled: entry.terminalHistoryEnabled,
-    })
 
     if (entry.id) {
       const existing = existingById.get(entry.id)
@@ -69,6 +64,12 @@ export function applyWorkspaceManagementChanges({
       if (desiredExistingIds.has(entry.id)) throw new Error('Workspace ids must be unique')
 
       desiredExistingIds.add(entry.id)
+      const config = normalizeWorkspaceConfig({
+        type: existing.config.type,
+        rootFolderPath: entry.rootFolderPath,
+        initialCommand: entry.initialCommand,
+        terminalHistoryEnabled: entry.terminalHistoryEnabled,
+      })
 
       return {
         ...existing,
@@ -76,6 +77,13 @@ export function applyWorkspaceManagementChanges({
         config,
       }
     }
+
+    const config = normalizeWorkspaceConfig({
+      type: entry.type,
+      rootFolderPath: entry.rootFolderPath,
+      initialCommand: entry.initialCommand,
+      terminalHistoryEnabled: entry.terminalHistoryEnabled,
+    })
 
     let id = nextWorkspaceId()
     while (existingById.has(id) || desiredExistingIds.has(id) || createdWorkspaceIds.includes(id)) {

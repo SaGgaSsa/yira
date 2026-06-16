@@ -1,5 +1,7 @@
 import { create } from 'zustand'
-import { GROUP_COLOR_ORDER, normalizeTileSize, type TileState, type CanvasState, type Viewport, type ShellProfileId, type TileGroup, type GroupColorId, type ViewMode, type SplitViewState, type SplitPanelId, type WorkspaceConfig } from '@shared/types'
+import { GROUP_COLOR_ORDER, normalizeTileSize, type TileState, type CanvasState, type Viewport, type ShellProfileId, type TileGroup, type GroupColorId, type ViewMode, type SplitViewState, type SplitPanelId, type WorkspaceConfig, type WorkspaceType, type GridViewState, type GridWorkspaceState } from '@shared/types'
+import { normalizeWorkspaceConfig } from '@shared/workspaceConfig'
+import { createEmptyGridWorkspaceState, insertTileIntoGridLayout, normalizeGridLayout, normalizeGridWorkspaceState, removeTileFromGridLayout } from '@shared/gridWorkspaceState'
 import { getGroupingBlockedReason } from '@/utils/grouping'
 import { DEFAULT_SPLIT_ORIENTATION, normalizeSplitOrientation } from '@/utils/splitViewState'
 import { clampTileToWorld, normalizeFiniteViewport } from '@/utils/canvasWorld'
@@ -19,6 +21,9 @@ const EMPTY_SPLIT_VIEW_STATE: SplitViewState = {
   focusedPanel: 'left',
   orientation: DEFAULT_SPLIT_ORIENTATION,
 }
+const EMPTY_GRID_VIEW_STATE: GridViewState = {
+  rootNode: null,
+}
 
 function moveTileIdToFront(tileIds: string[], tileId: string | null): string[] {
   if (!tileId) return tileIds
@@ -30,6 +35,11 @@ function normalizeViewMode(mode: CanvasState['viewMode'] | undefined): ViewMode 
   return mode === 'canvas' || mode === 'fullview' || mode === 'splitview'
     ? mode
     : 'fullview'
+}
+
+function normalizeWorkspaceViewMode(mode: ViewMode | undefined, type: WorkspaceType): ViewMode {
+  if (type === 'grid') return mode === 'fullview' ? 'fullview' : 'gridview'
+  return mode === 'canvas' || mode === 'splitview' || mode === 'fullview' ? mode : 'fullview'
 }
 
 function normalizeSplitViewState(
@@ -237,6 +247,7 @@ interface CanvasStore {
   viewMode: ViewMode
   fullviewActiveTileId: string | null
   splitViewState: SplitViewState
+  gridViewState: GridViewState
   selectedTileIds: string[]
   terminalTitles: Record<string, string>
   terminalAttention: Record<string, TerminalAttentionEntry>
@@ -259,6 +270,7 @@ interface CanvasStore {
   setViewMode: (mode: ViewMode) => void
   setFullviewActiveTileId: (tileId: string | null) => void
   setSplitViewState: (state: SplitViewState) => void
+  setGridViewState: (state: GridViewState) => void
   setSplitPanelActiveTile: (panel: SplitPanelId, tileId: string | null) => void
   setSplitFocusedPanel: (panel: SplitPanelId) => void
   setTerminalTitle: (tileId: string, title: string | null) => void
@@ -286,6 +298,7 @@ interface CanvasStore {
 
   setWorkspace: (id: string, name: string, config?: WorkspaceConfig) => void
   restoreWorkspaceState: (id: string, name: string, config: WorkspaceConfig | undefined, state: CanvasState) => void
+  restoreGridWorkspaceState: (id: string, name: string, config: WorkspaceConfig | undefined, state: GridWorkspaceState | null) => void
   setProfiles: (profiles: Array<{ id: ShellProfileId; label: string; available: boolean }>) => void
 }
 
@@ -298,13 +311,14 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   viewMode: 'fullview',
   fullviewActiveTileId: null,
   splitViewState: { ...EMPTY_SPLIT_VIEW_STATE },
+  gridViewState: { ...EMPTY_GRID_VIEW_STATE },
   selectedTileIds: [],
   terminalTitles: {},
   terminalAttention: {},
   terminalAttentionGraceUntil: {},
   activeWorkspaceId: '',
   activeWorkspaceName: '',
-  activeWorkspaceConfig: {},
+  activeWorkspaceConfig: normalizeWorkspaceConfig({}),
   availableProfiles: [],
 
   setViewport: (vp) => set({ viewport: normalizeFiniteViewport(vp) }),
@@ -353,6 +367,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       viewMode: normalizeViewMode(state.viewMode),
       fullviewActiveTileId,
       splitViewState: normalizeSplitViewState(state.splitViewState, normalized.tiles, state.focusedTileId ?? null, fullviewActiveTileId),
+      gridViewState: { ...EMPTY_GRID_VIEW_STATE },
       selectedTileIds: [],
       terminalTitles: {},
       terminalAttention: {},
@@ -361,9 +376,20 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   }),
 
   addTile: (tile) => set((s) => {
+    const normalizedTile = normalizeTile(tile)
+    if (s.activeWorkspaceConfig.type === 'grid') {
+      return {
+        tiles: [...s.tiles, normalizedTile],
+        nextZIndex: tile.zIndex + 1,
+        gridViewState: {
+          rootNode: insertTileIntoGridLayout(s.gridViewState.rootNode, tile.id),
+        },
+      }
+    }
+
     if (s.viewMode !== 'splitview' || isTileInSplitState(s.splitViewState, tile.id)) {
       return {
-        tiles: [...s.tiles, normalizeTile(tile)],
+        tiles: [...s.tiles, normalizedTile],
         nextZIndex: tile.zIndex + 1,
       }
     }
@@ -371,7 +397,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     const targetPanel = s.splitViewState.focusedPanel
 
     return {
-      tiles: [...s.tiles, normalizeTile(tile)],
+      tiles: [...s.tiles, normalizedTile],
       nextZIndex: tile.zIndex + 1,
       splitViewState: targetPanel === 'left'
         ? {
@@ -409,6 +435,9 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
         activeRightTileId: nextSplitViewState.activeRightTileId === tileId
           ? nextSplitViewState.rightTileIds[0] ?? null
           : nextSplitViewState.activeRightTileId,
+      },
+      gridViewState: {
+        rootNode: removeTileFromGridLayout(s.gridViewState.rootNode, tileId),
       },
       selectedTileIds: s.selectedTileIds.filter(id => id !== tileId),
       terminalTitles: Object.fromEntries(
@@ -450,6 +479,11 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   setViewMode: (mode) => set({ viewMode: mode }),
   setFullviewActiveTileId: (tileId) => set({ fullviewActiveTileId: tileId }),
   setSplitViewState: (splitViewState) => set({ splitViewState }),
+  setGridViewState: (gridViewState) => set((s) => ({
+    gridViewState: {
+      rootNode: normalizeGridLayout(gridViewState.rootNode, s.tiles),
+    },
+  })),
   setSplitPanelActiveTile: (panel, tileId) => set((s) => ({
     splitViewState: panel === 'left'
       ? {
@@ -669,8 +703,17 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     return nextZIndex
   },
 
-  setWorkspace: (id, name, config = {}) => set({ activeWorkspaceId: id, activeWorkspaceName: name, activeWorkspaceConfig: { ...config } }),
-  restoreWorkspaceState: (id, name, config = {}, state) => set(() => {
+  setWorkspace: (id, name, config = normalizeWorkspaceConfig({})) => set((s) => {
+    const normalizedConfig = normalizeWorkspaceConfig(config)
+    return {
+      activeWorkspaceId: id,
+      activeWorkspaceName: name,
+      activeWorkspaceConfig: normalizedConfig,
+      viewMode: normalizeWorkspaceViewMode(s.viewMode, normalizedConfig.type),
+    }
+  }),
+  restoreWorkspaceState: (id, name, config = normalizeWorkspaceConfig({}), state) => set(() => {
+    const normalizedConfig = normalizeWorkspaceConfig(config)
     const normalized = buildNormalizedGroupedState(state.tiles, state.groups ?? [])
     const viewport = normalizeFiniteViewport(state.viewport)
     const fullviewActiveTileId =
@@ -683,7 +726,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     return {
       activeWorkspaceId: id,
       activeWorkspaceName: name,
-      activeWorkspaceConfig: { ...config },
+      activeWorkspaceConfig: normalizedConfig,
       tiles: normalized.tiles,
       groups: normalized.groups,
       viewport,
@@ -692,6 +735,30 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       viewMode: normalizeViewMode(state.viewMode),
       fullviewActiveTileId,
       splitViewState: normalizeSplitViewState(state.splitViewState, normalized.tiles, state.focusedTileId ?? null, fullviewActiveTileId),
+      gridViewState: { ...EMPTY_GRID_VIEW_STATE },
+      selectedTileIds: [],
+      terminalTitles: {},
+      terminalAttention: {},
+      terminalAttentionGraceUntil: {},
+    }
+  }),
+  restoreGridWorkspaceState: (id, name, config = normalizeWorkspaceConfig({ type: 'grid' }), state) => set(() => {
+    const normalizedConfig = normalizeWorkspaceConfig({ ...config, type: 'grid' })
+    const normalized = normalizeGridWorkspaceState(state ?? createEmptyGridWorkspaceState())
+
+    return {
+      activeWorkspaceId: id,
+      activeWorkspaceName: name,
+      activeWorkspaceConfig: normalizedConfig,
+      tiles: normalized.tiles,
+      groups: [],
+      viewport: { tx: 0, ty: 0, zoom: 1 },
+      nextZIndex: normalized.nextZIndex,
+      focusedTileId: normalized.focusedTileId,
+      viewMode: normalized.viewMode,
+      fullviewActiveTileId: normalized.fullviewActiveTileId,
+      splitViewState: { ...EMPTY_SPLIT_VIEW_STATE },
+      gridViewState: normalized.gridViewState,
       selectedTileIds: [],
       terminalTitles: {},
       terminalAttention: {},

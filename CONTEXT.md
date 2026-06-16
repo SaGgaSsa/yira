@@ -12,6 +12,22 @@ _Avoid_: Project, default workspace
 The workspace-owned setup that defines one root folder and an initial command used to start work.
 _Avoid_: Group configuration
 
+**Workspace Type**:
+The read-only type chosen when a Workspace is created. Valid types are **Canvas Workspace** and **Grid Workspace**.
+_Avoid_: Workspace mode, layout preference
+
+**Canvas Workspace**:
+A Workspace Type that uses the freeform Canvas plus Focus View and Split View.
+_Avoid_: Default workspace type
+
+**Grid Workspace**:
+A Workspace Type that uses Grid View plus Focus View, with a fixed split-tree layout and no Canvas or Split View.
+_Avoid_: Canvas layout preset, toggleable grid mode
+
+**Grid View**:
+The split-tree tile layout used by Grid Workspaces. Grid View represents every Tile in the Workspace and is persisted as Grid JSON.
+_Avoid_: Canvas grid, Split View
+
 **Workspace Root Folder**:
 The user-selected folder that represents where work happens for a workspace.
 _Avoid_: Workspace storage path, workspace path
@@ -79,10 +95,17 @@ _Avoid_: Workspace initial command
 ## Relationships
 
 - A **Workspace** has one **Workspace Configuration**
+- A **Workspace** has one immutable **Workspace Type**
+- Missing or legacy **Workspace Type** values normalize to **Canvas Workspace**
+- A **Canvas Workspace** exposes Canvas, Focus View, and Split View
+- A **Grid Workspace** exposes Grid View and Focus View only
+- A **Grid Workspace** persists Grid JSON separately from Canvas JSON
+- A **Grid Workspace** can contain at most 24 **Tiles**
 - A **Workspace Configuration** has at most one root folder
 - A **Workspace Root Folder** is distinct from the workspace storage location
 - A **First Workspace Setup** creates the first **Workspace**
-- Opening a folder creates a **Workspace** named after that folder with that folder as its **Workspace Root Folder**
+- Opening a folder activates an existing **Workspace** with that **Workspace Root Folder**
+- Opening a folder that does not belong to an existing **Workspace** does not create a **Workspace**
 - A **Workspace** contains zero or more **Tiles**
 - A newly created **Workspace** can contain zero **Tiles**
 - Deleting the last **Workspace** returns the app to **First Workspace Setup**
@@ -122,7 +145,13 @@ _Avoid_: Workspace initial command
 > **Domain expert:** "No, the root folder is the user-selected working folder; storage location is separate."
 
 > **Dev:** "When opening a folder, should the user name the Workspace first?"
-> **Domain expert:** "No, use the folder name as the initial Workspace name."
+> **Domain expert:** "No. Opening a folder only switches to an existing Workspace; create a new Workspace through Workspace Setup."
+
+> **Dev:** "Can a Workspace change from Canvas to Grid later?"
+> **Domain expert:** "No, Workspace Type is chosen at creation and remains read-only."
+
+> **Dev:** "Does Grid View use Canvas positions?"
+> **Domain expert:** "No, Grid View owns a separate split tree and ignores Canvas x/y positions."
 
 > **Dev:** "Can a Terminal Tile open without a root folder?"
 > **Domain expert:** "Yes, the Terminal can still use the shell default when the Workspace has no root folder."
@@ -167,3 +196,4 @@ _Avoid_: Workspace initial command
 - "group startup command" is not part of the domain model; resolved: command behavior belongs only to **Workspace Initial Command** and **Terminal Startup Command**.
 - "groups" are not part of the default workspace experience; resolved: **Groups Capability** is disabled by default and controls their visibility.
 - "show tile type" can mean creation or existing visibility; resolved: **Tile Creation Availability** controls only normal creation surfaces.
+- "grid" can mean Canvas grid lines or **Grid View**; resolved: **Grid View** belongs only to **Grid Workspace** and is not a Canvas setting.

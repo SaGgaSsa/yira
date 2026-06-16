@@ -11,4 +11,4 @@ The app must not create a visible Default workspace automatically. The first wor
 - A workspace has one optional root folder, separate from its storage location.
 - Files tiles require a workspace root folder; terminal tiles do not.
 - Terminal launch order is workspace initial command first, then terminal startup command.
-- Opening a folder creates a workspace named after that folder and uses it as the workspace root folder.
+- Opening a folder activates an existing workspace with that root folder; workspace creation happens through workspace setup.

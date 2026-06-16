@@ -1,12 +1,13 @@
 import { applyWorkspaceManagementChanges } from './workspaceManagement'
 import type { Workspace } from './types'
 
-function workspace(id: string, name: string, rootFolderPath?: string): Workspace {
+function workspace(id: string, name: string, rootFolderPath?: string, type: Workspace['config']['type'] = 'canvas'): Workspace {
   return {
     id,
     name,
     path: `/tmp/yira/workspaces/${id}`,
     config: {
+      type,
       rootFolderPath,
       terminalHistoryEnabled: true,
     },
@@ -15,7 +16,7 @@ function workspace(id: string, name: string, rootFolderPath?: string): Workspace
 
 const existing = [
   workspace('ws-alpha', 'Alpha', '/repo/alpha'),
-  workspace('ws-beta', 'Beta', '/repo/beta'),
+  workspace('ws-beta', 'Beta', '/repo/beta', 'grid'),
   workspace('ws-gamma', 'Gamma', '/repo/gamma'),
 ]
 
@@ -42,8 +43,10 @@ if (managed.workspaces[0].name !== 'Gamma Renamed') throw new Error('existing wo
 if (managed.workspaces[0].config.rootFolderPath !== '/repo/gamma-renamed') throw new Error('existing workspace root folder must be editable')
 if (managed.workspaces[0].config.initialCommand !== 'npm test') throw new Error('initial command must be normalized')
 if (managed.workspaces[0].config.terminalHistoryEnabled !== false) throw new Error('terminal history toggle must be preserved')
+if (managed.workspaces[2].config.type !== 'grid') throw new Error('existing workspace type must be preserved by management edits')
 if (managed.removedWorkspaceIds.join(',') !== 'ws-alpha') throw new Error('omitted existing workspaces must be marked for removal')
 if (managed.createdWorkspaceIds.join(',') !== 'ws-new-1') throw new Error('new workspaces must be reported')
+if (managed.workspaces[1].config.type !== 'canvas') throw new Error('new management-created workspace must default to canvas')
 if (managed.activeWorkspaceId !== 'ws-beta') throw new Error('active workspace must be preserved when still present')
 
 const fallback = applyWorkspaceManagementChanges({

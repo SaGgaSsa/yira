@@ -1,11 +1,12 @@
 import React from 'react'
-import { Settings, Crosshair, LayoutGrid, Columns, PanelLeft, SplitSquareHorizontal, SplitSquareVertical } from 'lucide-react'
-import type { SplitOrientation, ViewMode } from '@shared/types'
+import { Settings, Crosshair, Grid3X3, LayoutGrid, Columns, PanelLeft, SplitSquareHorizontal, SplitSquareVertical } from 'lucide-react'
+import type { SplitOrientation, ViewMode, WorkspaceType } from '@shared/types'
 
 interface TopBarProps {
   zoom: number
   viewMode: ViewMode
   splitOrientation: SplitOrientation
+  workspaceType: WorkspaceType
   canSplitView: boolean
   sidebarCollapsed: boolean
   onToggleSidebar: () => void
@@ -51,6 +52,7 @@ export function TopBar({
   zoom,
   viewMode,
   splitOrientation,
+  workspaceType,
   canSplitView,
   sidebarCollapsed,
   onToggleSidebar,
@@ -61,6 +63,7 @@ export function TopBar({
 }: TopBarProps): React.ReactElement {
   const zoomPercent = Math.round(zoom * 100)
   const SplitIcon = splitOrientation === 'horizontal' ? SplitSquareVertical : SplitSquareHorizontal
+  const isGridWorkspace = workspaceType === 'grid'
 
   return (
     <header className="nd-panel flex h-[84px] shrink-0 items-center justify-between border-x-0 border-t-0 px-6">
@@ -79,44 +82,59 @@ export function TopBar({
           icon={Columns}
           onClick={() => onSetViewMode('fullview')}
         />
-        <SegmentedButton
-          active={viewMode === 'splitview'}
-          label="Split"
-          title={splitOrientation === 'horizontal' ? 'Split top/bottom' : 'Split left/right'}
-          icon={SplitIcon}
-          onClick={() => onSetViewMode('splitview')}
-          disabled={!canSplitView}
-        />
-        <SegmentedButton
-          active={viewMode === 'canvas'}
-          label="Canvas"
-          icon={LayoutGrid}
-          onClick={() => onSetViewMode('canvas')}
-        />
+        {isGridWorkspace ? (
+          <SegmentedButton
+            active={viewMode === 'gridview'}
+            label="Grid View"
+            icon={Grid3X3}
+            onClick={() => onSetViewMode('gridview')}
+          />
+        ) : (
+          <>
+            <SegmentedButton
+              active={viewMode === 'splitview'}
+              label="Split"
+              title={splitOrientation === 'horizontal' ? 'Split top/bottom' : 'Split left/right'}
+              icon={SplitIcon}
+              onClick={() => onSetViewMode('splitview')}
+              disabled={!canSplitView}
+            />
+            <SegmentedButton
+              active={viewMode === 'canvas'}
+              label="Canvas"
+              icon={LayoutGrid}
+              onClick={() => onSetViewMode('canvas')}
+            />
+          </>
+        )}
       </div>
 
       <div className="flex items-center gap-3">
-        <div className="nd-panel-raised flex items-center gap-1 rounded-full px-2 py-2">
-          <button
-            className="nd-label inline-flex h-9 items-center gap-2 rounded-full px-3 text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
-            onClick={onFitToContent}
-            disabled={viewMode !== 'canvas'}
-            title="Show all tiles"
-          >
-            <Columns size={13} />
-            <span>Show All</span>
-          </button>
-        </div>
+        {!isGridWorkspace && (
+          <>
+            <div className="nd-panel-raised flex items-center gap-1 rounded-full px-2 py-2">
+              <button
+                className="nd-label inline-flex h-9 items-center gap-2 rounded-full px-3 text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
+                onClick={onFitToContent}
+                disabled={viewMode !== 'canvas'}
+                title="Show all tiles"
+              >
+                <Columns size={13} />
+                <span>Show All</span>
+              </button>
+            </div>
 
-        <button
-          className="nd-panel-raised inline-flex h-11 items-center gap-3 rounded-full px-4 text-text-secondary transition-colors hover:text-text-primary"
-          onClick={onZoomToggle}
-          title="Toggle zoom 100%"
-        >
-          <Crosshair size={16} />
-          <span className="nd-label text-text-secondary">Zoom</span>
-          <span className="font-mono text-sm text-text-display">{zoomPercent}%</span>
-        </button>
+            <button
+              className="nd-panel-raised inline-flex h-11 items-center gap-3 rounded-full px-4 text-text-secondary transition-colors hover:text-text-primary"
+              onClick={onZoomToggle}
+              title="Toggle zoom 100%"
+            >
+              <Crosshair size={16} />
+              <span className="nd-label text-text-secondary">Zoom</span>
+              <span className="font-mono text-sm text-text-display">{zoomPercent}%</span>
+            </button>
+          </>
+        )}
 
         <button
           className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border-visible bg-bg-secondary text-text-secondary transition-colors hover:text-text-display"

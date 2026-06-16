@@ -1,27 +1,31 @@
 import React, { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AlertCircle, Save, X } from 'lucide-react'
-import type { CanvasState } from '@shared/types'
+import type { CanvasState, GridWorkspaceState, WorkspaceType } from '@shared/types'
 import { createEmptyCanvasState, normalizeCanvasStateForJson } from '@/utils/canvasStateNormalization'
+import { createEmptyGridWorkspaceState, normalizeGridWorkspaceState } from '@shared/gridWorkspaceState'
 
 interface RawJsonEditorProps {
   open: boolean
   workspaceId: string
-  canvasState: CanvasState | null
+  workspaceType: WorkspaceType
+  state: CanvasState | GridWorkspaceState | null
   onClose: () => void
-  onApply: (state: CanvasState) => void
+  onApply: (state: CanvasState | GridWorkspaceState) => void
 }
 
-export function RawJsonEditor({ open, workspaceId, canvasState, onClose, onApply }: RawJsonEditorProps): React.ReactElement | null {
+export function RawJsonEditor({ open, workspaceId, workspaceType, state, onClose, onApply }: RawJsonEditorProps): React.ReactElement | null {
   const [value, setValue] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open || !workspaceId) return
-    const nextState = normalizeCanvasStateForJson(canvasState ?? createEmptyCanvasState())
+    const nextState = workspaceType === 'grid'
+      ? normalizeGridWorkspaceState((state as GridWorkspaceState | null) ?? createEmptyGridWorkspaceState())
+      : normalizeCanvasStateForJson((state as CanvasState | null) ?? createEmptyCanvasState())
     setValue(JSON.stringify(nextState, null, 2))
     setError(null)
-  }, [canvasState, open, workspaceId])
+  }, [open, state, workspaceId, workspaceType])
 
   useEffect(() => {
     if (!open) return
@@ -40,7 +44,7 @@ export function RawJsonEditor({ open, workspaceId, canvasState, onClose, onApply
         <div className="flex items-center justify-between border-b border-border px-6 py-5">
           <div>
             <div className="nd-label text-text-secondary">Raw State</div>
-            <h2 className="mt-2 text-xl text-text-display">Canvas JSON</h2>
+            <h2 className="mt-2 text-xl text-text-display">{workspaceType === 'grid' ? 'Grid JSON' : 'Canvas JSON'}</h2>
             <p className="nd-caption mt-2 text-text-secondary">{workspaceId}</p>
           </div>
           <button
@@ -73,8 +77,10 @@ export function RawJsonEditor({ open, workspaceId, canvasState, onClose, onApply
             className="inline-flex items-center gap-2 rounded-full border border-text-display bg-text-display px-5 py-3 text-sm text-bg-primary transition-colors hover:opacity-90"
             onClick={() => {
               try {
-                const parsed = JSON.parse(value) as CanvasState
-                const nextState = normalizeCanvasStateForJson(parsed)
+                const parsed = JSON.parse(value)
+                const nextState = workspaceType === 'grid'
+                  ? normalizeGridWorkspaceState(parsed as GridWorkspaceState)
+                  : normalizeCanvasStateForJson(parsed as CanvasState)
                 onApply(nextState)
                 setError(null)
                 onClose()

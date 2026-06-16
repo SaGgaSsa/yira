@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { FolderOpen, History, TerminalSquare, X } from 'lucide-react'
+import { FolderOpen, Grid3X3, History, LayoutGrid, TerminalSquare, X } from 'lucide-react'
+import type { WorkspaceType } from '@shared/types'
 
 export interface WorkspaceDialogValue {
+  type: WorkspaceType
   name: string
   rootFolderPath: string
   initialCommand: string
@@ -15,6 +17,7 @@ export interface WorkspaceDialogRequest {
   confirmLabel?: string
   cancelLabel?: string
   canCancel?: boolean
+  typeEditable?: boolean
   value: WorkspaceDialogValue
 }
 
@@ -26,6 +29,7 @@ interface WorkspaceDialogProps {
 
 function normalizeValue(value: WorkspaceDialogValue): WorkspaceDialogValue {
   return {
+    type: value.type === 'grid' ? 'grid' : 'canvas',
     name: value.name.trim(),
     rootFolderPath: value.rootFolderPath.trim(),
     initialCommand: value.initialCommand.trim(),
@@ -74,6 +78,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
 
   const canCancel = request.canCancel !== false
   const canSubmit = Boolean(value.name.trim())
+  const typeEditable = request.typeEditable === true
 
   return createPortal(
     <div className="fixed inset-0 z-[10050] flex items-center justify-center bg-black/80">
@@ -95,6 +100,40 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
         </div>
 
         <div className="max-h-[calc(86vh-88px)] space-y-6 overflow-y-auto px-6 py-6">
+          <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
+            <div className="mb-4 flex items-center gap-2">
+              {value.type === 'grid' ? <Grid3X3 size={14} className="text-text-secondary" /> : <LayoutGrid size={14} className="text-text-secondary" />}
+              <span className="nd-label text-text-secondary">Workspace type</span>
+            </div>
+            {typeEditable ? (
+              <div className="grid grid-cols-2 gap-3">
+                {([
+                  { type: 'canvas' as const, label: 'Canvas', icon: LayoutGrid },
+                  { type: 'grid' as const, label: 'Grid', icon: Grid3X3 },
+                ]).map((option) => {
+                  const Icon = option.icon
+                  const active = value.type === option.type
+                  return (
+                    <button
+                      key={option.type}
+                      className={`flex items-center gap-3 rounded-[18px] border px-4 py-4 text-left transition-colors ${
+                        active ? 'border-text-display bg-bg-primary text-text-display' : 'border-border-visible text-text-secondary hover:bg-hover-bg hover:text-text-display'
+                      }`}
+                      onClick={() => setValue((current) => current ? { ...current, type: option.type } : current)}
+                    >
+                      <Icon size={16} />
+                      <span className="nd-label">{option.label}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="rounded-full border border-border-visible bg-bg-primary px-4 py-3 text-sm text-text-display">
+                {value.type === 'grid' ? 'Grid' : 'Canvas'}
+              </div>
+            )}
+          </section>
+
           <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
             <label className="block">
               <span className="nd-label mb-2 block text-text-secondary">Workspace name</span>

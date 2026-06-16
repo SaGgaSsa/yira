@@ -6,6 +6,7 @@ import type {
   WorkspaceCreateInput,
   WorkspaceManagementCommitInput,
   WorkspaceManagementCommitResult,
+  WorkspaceOpenFolderResult,
   WorkspaceUpdatePatch,
   UserSettings,
   KanbanBoardState,
@@ -36,7 +37,7 @@ interface ElectronWorld {
     delete: (id: string) => Promise<void>
     setActive: (id: string) => Promise<void>
     getActive: () => Promise<Workspace | null>
-    openFolder: () => Promise<Workspace | null>
+    openFolder: () => Promise<WorkspaceOpenFolderResult>
     commitManagementChanges: (input: WorkspaceManagementCommitInput) => Promise<WorkspaceManagementCommitResult>
   }
   settings: {
@@ -60,8 +61,8 @@ interface ElectronWorld {
     reveal: (rootPath: string, relativePath: string) => Promise<void>
   }
   canvas: {
-    load: (workspaceId: string) => Promise<CanvasState | null>
-    save: (workspaceId: string, state: unknown) => Promise<void>
+    load: (workspaceId: string, workspaceType?: string) => Promise<unknown | null>
+    save: (workspaceId: string, state: unknown, workspaceType?: string) => Promise<void>
   }
   terminal: {
     create: (tileId: string, options: TerminalCreateOptions) => Promise<{ cols: number; rows: number; buffer: string }>

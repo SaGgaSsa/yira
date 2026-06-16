@@ -18,6 +18,7 @@ export interface ConfirmDialogOptions {
   message: string
   confirmLabel?: string
   cancelLabel?: string
+  hideCancel?: boolean
   danger?: boolean
 }
 
@@ -144,12 +145,14 @@ export function AppDialog({ request, onCancel, onConfirm }: AppDialogProps): Rea
         </div>
 
         <div className="flex items-center justify-end gap-3 border-t border-border px-6 py-5">
-          <button
-            className="rounded-full border border-border-visible px-4 py-2 text-sm text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
-            onClick={onCancel}
-          >
-            {request.cancelLabel ?? 'Cancel'}
-          </button>
+          {!(request.mode === 'confirm' && request.hideCancel) && (
+            <button
+              className="rounded-full border border-border-visible px-4 py-2 text-sm text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
+              onClick={onCancel}
+            >
+              {request.cancelLabel ?? 'Cancel'}
+            </button>
+          )}
           <button
             ref={confirmButtonRef}
             className="rounded-full border px-4 py-2 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50"

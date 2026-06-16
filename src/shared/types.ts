@@ -1,5 +1,7 @@
 // ─── Workspace ─────────────────────────────────────────────────────────────
 
+export type WorkspaceType = 'canvas' | 'grid'
+
 export interface Workspace {
   id: string
   name: string
@@ -12,12 +14,14 @@ export interface Workspace {
 export type WorkspaceMetadata = Workspace
 
 export interface WorkspaceConfig {
+  type: WorkspaceType
   rootFolderPath?: string
   initialCommand?: string
   terminalHistoryEnabled?: boolean
 }
 
 export interface WorkspaceCreateInput {
+  type?: WorkspaceType
   name: string
   rootFolderPath?: string
   initialCommand?: string
@@ -27,6 +31,7 @@ export interface WorkspaceCreateInput {
 export interface WorkspaceManagementEntry {
   id?: string
   name: string
+  type?: WorkspaceType
   rootFolderPath?: string
   initialCommand?: string
   terminalHistoryEnabled?: boolean
@@ -42,6 +47,12 @@ export interface WorkspaceManagementCommitResult {
   activeWorkspace: WorkspaceMetadata | null
   createdWorkspaceIds: string[]
   removedWorkspaceIds: string[]
+}
+
+export interface WorkspaceOpenFolderResult {
+  workspace: WorkspaceMetadata | null
+  canceled: boolean
+  error?: string
 }
 
 export type WorkspaceUpdatePatch = Partial<Pick<Workspace, 'name'>> & {
@@ -423,7 +434,9 @@ export interface CanvasState {
   splitViewState?: SplitViewState
 }
 
-export type ViewMode = 'canvas' | 'fullview' | 'splitview'
+export type CanvasViewMode = 'canvas' | 'fullview' | 'splitview'
+export type GridViewMode = 'gridview' | 'fullview'
+export type ViewMode = CanvasViewMode | GridViewMode
 
 export type SplitPanelId = 'left' | 'right'
 export type SplitOrientation = 'vertical' | 'horizontal'
@@ -435,6 +448,37 @@ export interface SplitViewState {
   activeRightTileId: string | null
   focusedPanel: SplitPanelId
   orientation: SplitOrientation
+}
+
+export const GRID_MAX_TILES = 24
+
+export interface GridLayoutLeafNode {
+  id: string
+  type: 'leaf'
+  tileId: string
+}
+
+export interface GridLayoutSplitNode {
+  id: string
+  type: 'split'
+  direction: 'row' | 'column'
+  children: GridLayoutNode[]
+  sizes: number[]
+}
+
+export type GridLayoutNode = GridLayoutLeafNode | GridLayoutSplitNode
+
+export interface GridViewState {
+  rootNode: GridLayoutNode | null
+}
+
+export interface GridWorkspaceState {
+  tiles: TileState[]
+  nextZIndex: number
+  focusedTileId: string | null
+  fullviewActiveTileId: string | null
+  viewMode: GridViewMode
+  gridViewState: GridViewState
 }
 
 export interface Viewport {

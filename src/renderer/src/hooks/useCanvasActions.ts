@@ -4,7 +4,7 @@ import { useSettingsStore } from '@/store/settingsStore'
 import { findSelectedGroup, getGroupAnchorTile } from '@/utils/grouping'
 import { buildDuplicateTerminalTile, insertDuplicateIntoSplitPanel } from '@/utils/duplicateTerminalTile'
 import type { ConfirmDialogOptions } from '@/components/AppDialog'
-import { getDefaultTileSize } from '@shared/types'
+import { GRID_MAX_TILES, getDefaultTileSize } from '@shared/types'
 import type { TileState, ShellProfileId, NoteColor, SplitPanelId } from '@shared/types'
 
 const TILE_TYPE_LABELS: Record<TileState['type'], string> = {
@@ -40,6 +40,20 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
   const bringToFront = useCanvasStore((s) => s.bringToFront)
   const setViewport = useCanvasStore((s) => s.setViewport)
   const setSplitViewState = useCanvasStore((s) => s.setSplitViewState)
+
+  const canAddTileToActiveWorkspace = useCallback(() => {
+    const state = useCanvasStore.getState()
+    if (state.activeWorkspaceConfig.type !== 'grid') return true
+    if (state.tiles.length < GRID_MAX_TILES) return true
+
+    void requestConfirm({
+      title: 'Grid is full',
+      message: `Grid workspaces can contain at most ${GRID_MAX_TILES} tiles.`,
+      confirmLabel: 'OK',
+      hideCancel: true,
+    })
+    return false
+  }, [requestConfirm])
 
   const snapCoordinate = useCallback(
     (value: number) => (
@@ -102,6 +116,8 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
 
   const finalizeAddedTile = useCallback(
     (tile: TileState, targetGroupId?: string) => {
+      if (!canAddTileToActiveWorkspace()) return false
+
       addTile(tile)
 
       if (targetGroupId) {
@@ -118,8 +134,9 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
       }
 
       bringToFront(tile.id)
+      return true
     },
-    [addTile, addTilesToGroup, bringToFront, focusTile, selectTiles],
+    [addTile, addTilesToGroup, bringToFront, focusTile, selectTiles, canAddTileToActiveWorkspace],
   )
 
   const addTerminal = useCallback(
@@ -148,6 +165,8 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
 
   const duplicateTerminalTile = useCallback(
     (sourceTileId: string, options: { splitPanel?: SplitPanelId } = {}) => {
+      if (!canAddTileToActiveWorkspace()) return null
+
       const state = useCanvasStore.getState()
       const source = state.tiles.find((tile) => tile.id === sourceTileId)
       if (!source) return null
@@ -185,7 +204,7 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
 
       return tile.id
     },
-    [addTile, addTilesToGroup, bringToFront, focusTile, groupsEnabled, selectTiles, setSplitViewState, snapCoordinate],
+    [addTile, addTilesToGroup, bringToFront, focusTile, groupsEnabled, selectTiles, setSplitViewState, snapCoordinate, canAddTileToActiveWorkspace],
   )
 
   const addBrowser = useCallback(() => {

@@ -55,8 +55,8 @@ contextBridge.exposeInMainWorld('electron', {
 
   // Canvas persistence
   canvas: {
-    load: (workspaceId: string) => ipcRenderer.invoke('canvas:load', workspaceId),
-    save: (workspaceId: string, state: unknown) => ipcRenderer.invoke('canvas:save', workspaceId, state),
+    load: (workspaceId: string, workspaceType?: string) => ipcRenderer.invoke('canvas:load', workspaceId, workspaceType),
+    save: (workspaceId: string, state: unknown, workspaceType?: string) => ipcRenderer.invoke('canvas:save', workspaceId, state, workspaceType),
   },
 
   // Terminal

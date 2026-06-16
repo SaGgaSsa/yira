@@ -6,6 +6,7 @@ import { SettingsPanel } from './components/SettingsPanel'
 import { RawJsonEditor } from './components/RawJsonEditor'
 import { ContextMenu, type MenuItem } from './components/ContextMenu'
 import { SplitviewPanel } from './components/SplitviewPanel'
+import { GridView } from './components/GridView'
 import { AppDialog, type ConfirmDialogOptions, type PromptDialogOptions } from './components/AppDialog'
 import { GroupEditorDialog, type GroupEditorRequest, type GroupEditorValue } from './components/GroupEditorDialog'
 import { WorkspaceDialog, type WorkspaceDialogRequest, type WorkspaceDialogValue } from './components/WorkspaceDialog'
@@ -19,13 +20,14 @@ import { useTheme } from './hooks/useTheme'
 import { useFontSize } from './hooks/useFontSize'
 import { useUpdateStore } from './store/updateStore'
 import { findMergeTargetGroup, findSelectedGroup, getGroupingBlockedReason } from './utils/grouping'
-import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type CanvasState, type Workspace, type WorkspaceMetadata, type TileGroup, type ViewMode, type SplitPanelId, type SplitViewState, type WorkspaceManagementEntry } from '@shared/types'
+import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type CanvasState, type GridWorkspaceState, type Workspace, type WorkspaceMetadata, type TileGroup, type ViewMode, type SplitPanelId, type SplitViewState, type WorkspaceManagementEntry, type WorkspaceType } from '@shared/types'
+import { createEmptyGridWorkspaceState } from '@shared/gridWorkspaceState'
 import { DEFAULT_SPLIT_ORIENTATION, toggleSplitOrientation } from './utils/splitViewState'
 import { getTerminalDisplayTitle, normalizeTerminalWindowTitle } from './utils/terminalDisplayTitle'
 import { TILE_META } from './components/TileContent'
 import { TileListItem } from './components/TileListItem'
 import { buildTileConfigurationMenuItems } from './components/tileConfigurationMenu'
-import { Terminal, StickyNote, Globe, Clock, Folder, ChevronDown, SlidersHorizontal, Trash2, Pencil, Lock, Columns, Download, X } from 'lucide-react'
+import { Terminal, StickyNote, Globe, Clock, Folder, FolderOpen, ChevronDown, SlidersHorizontal, Trash2, Pencil, Lock, Columns, Download, X, Plus } from 'lucide-react'
 
 const GROUP_SHOW_MARGIN = 20
 const GROUP_SHOW_TOP_PADDING = 118
@@ -52,6 +54,7 @@ function createEmptyCanvasState(): CanvasState {
 }
 
 type CanvasSnapshotSource = Pick<ReturnType<typeof useCanvasStore.getState>, 'tiles' | 'groups' | 'viewport' | 'nextZIndex' | 'focusedTileId' | 'viewMode' | 'fullviewActiveTileId' | 'splitViewState'>
+type GridSnapshotSource = Pick<ReturnType<typeof useCanvasStore.getState>, 'tiles' | 'nextZIndex' | 'focusedTileId' | 'viewMode' | 'fullviewActiveTileId' | 'gridViewState'>
 
 function createCanvasSnapshot(source: CanvasSnapshotSource): CanvasState {
   return {
@@ -69,6 +72,19 @@ function createCanvasSnapshot(source: CanvasSnapshotSource): CanvasState {
       ...source.splitViewState,
       leftTileIds: [...source.splitViewState.leftTileIds],
       rightTileIds: [...source.splitViewState.rightTileIds],
+    },
+  }
+}
+
+function createGridSnapshot(source: GridSnapshotSource): GridWorkspaceState {
+  return {
+    tiles: source.tiles.map((tile) => ({ ...tile })),
+    nextZIndex: source.nextZIndex,
+    focusedTileId: source.focusedTileId,
+    viewMode: source.viewMode === 'fullview' ? 'fullview' : 'gridview',
+    fullviewActiveTileId: source.fullviewActiveTileId,
+    gridViewState: {
+      rootNode: source.gridViewState.rootNode ? JSON.parse(JSON.stringify(source.gridViewState.rootNode)) as GridWorkspaceState['gridViewState']['rootNode'] : null,
     },
   }
 }
@@ -230,6 +246,7 @@ export default function App(): React.ReactElement {
   const viewMode = useCanvasStore((s) => s.viewMode)
   const fullviewActiveTileId = useCanvasStore((s) => s.fullviewActiveTileId)
   const splitViewState = useCanvasStore((s) => s.splitViewState)
+  const gridViewState = useCanvasStore((s) => s.gridViewState)
   const terminalTitles = useCanvasStore((s) => s.terminalTitles)
   const terminalAttention = useCanvasStore((s) => s.terminalAttention)
   const activeWorkspaceId = useCanvasStore((s) => s.activeWorkspaceId)
@@ -249,14 +266,17 @@ export default function App(): React.ReactElement {
   const ungroup = useCanvasStore((s) => s.ungroup)
   const setWorkspace = useCanvasStore((s) => s.setWorkspace)
   const restoreWorkspaceState = useCanvasStore((s) => s.restoreWorkspaceState)
+  const restoreGridWorkspaceState = useCanvasStore((s) => s.restoreGridWorkspaceState)
   const setProfiles = useCanvasStore((s) => s.setProfiles)
   const setViewMode = useCanvasStore((s) => s.setViewMode)
   const setFullviewActiveTileId = useCanvasStore((s) => s.setFullviewActiveTileId)
   const setSplitViewState = useCanvasStore((s) => s.setSplitViewState)
+  const setGridViewState = useCanvasStore((s) => s.setGridViewState)
   const setSplitPanelActiveTile = useCanvasStore((s) => s.setSplitPanelActiveTile)
   const setSplitFocusedPanel = useCanvasStore((s) => s.setSplitFocusedPanel)
   const clearTerminalTitle = useCanvasStore((s) => s.clearTerminalTitle)
   const clearAllTerminalAttention = useCanvasStore((s) => s.clearAllTerminalAttention)
+  const activeWorkspaceType: WorkspaceType = activeWorkspaceConfig.type
 
   // Canvas actions (extracted hook)
   const [activeDialog, setActiveDialog] = useState<ActiveDialogState>(null)
@@ -384,6 +404,17 @@ export default function App(): React.ReactElement {
     }),
     [tiles, groups, viewport, nextZIndex, focusedTileId, viewMode, fullviewActiveTileId, splitViewState],
   )
+  const currentGridState = useMemo(
+    () => createGridSnapshot({
+      tiles,
+      nextZIndex,
+      focusedTileId,
+      viewMode,
+      fullviewActiveTileId,
+      gridViewState,
+    }),
+    [tiles, nextZIndex, focusedTileId, viewMode, fullviewActiveTileId, gridViewState],
+  )
 
   const refreshWorkspaceMetadata = useCallback(async (): Promise<WorkspaceMetadata[]> => {
     const list = await window.electron.workspace.list()
@@ -392,11 +423,13 @@ export default function App(): React.ReactElement {
   }, [])
 
   const saveToDisk = useCallback(
-    async (workspaceId: string) => {
+    async (workspaceId: string, workspaceType: WorkspaceType = useCanvasStore.getState().activeWorkspaceConfig.type) => {
       const stateSnapshot = useCanvasStore.getState()
-      const state = createCanvasSnapshot(stateSnapshot)
+      const state = workspaceType === 'grid'
+        ? createGridSnapshot(stateSnapshot)
+        : createCanvasSnapshot(stateSnapshot)
 
-      await window.electron.canvas.save(workspaceId, state)
+      await window.electron.canvas.save(workspaceId, state, workspaceType)
     },
     [],
   )
@@ -420,7 +453,8 @@ export default function App(): React.ReactElement {
     }
 
     // Canvas state is active-workspace-only data. Workspace list/getActive stay metadata-only.
-    const state = await window.electron.canvas.load(workspace.id)
+    const workspaceType = workspace.config.type
+    const state = await window.electron.canvas.load(workspace.id, workspaceType)
     if (transitionId !== workspaceTransitionRef.current) return
 
     if (options?.updateMain !== false) {
@@ -429,9 +463,13 @@ export default function App(): React.ReactElement {
     }
 
     skipNextAutosaveRef.current = true
-    restoreWorkspaceState(workspace.id, workspace.name, workspace.config, state ?? createEmptyCanvasState())
+    if (workspaceType === 'grid') {
+      restoreGridWorkspaceState(workspace.id, workspace.name, workspace.config, (state as GridWorkspaceState | null) ?? createEmptyGridWorkspaceState())
+    } else {
+      restoreWorkspaceState(workspace.id, workspace.name, workspace.config, (state as CanvasState | null) ?? createEmptyCanvasState())
+    }
     setShowWorkspacePicker(false)
-  }, [restoreWorkspaceState, saveToDisk])
+  }, [restoreGridWorkspaceState, restoreWorkspaceState, saveToDisk])
 
   // Load workspaces on mount
   useEffect(() => {
@@ -453,7 +491,7 @@ export default function App(): React.ReactElement {
       }
 
       skipNextAutosaveRef.current = true
-      setWorkspace('', '', {})
+      setWorkspace('', '', { type: 'canvas' })
       restoreState(createEmptyCanvasState())
       setWorkspaceEditor({
         mode: 'create',
@@ -462,8 +500,10 @@ export default function App(): React.ReactElement {
           eyebrow: 'First Workspace Setup',
           confirmLabel: 'Create Workspace',
           canCancel: false,
+          typeEditable: true,
           value: {
             name: '',
+            type: 'canvas',
             rootFolderPath: '',
             initialCommand: '',
             terminalHistoryEnabled: true,
@@ -511,7 +551,7 @@ export default function App(): React.ReactElement {
     }
 
     scheduleSave()
-  }, [tiles, groups, viewport, nextZIndex, viewMode, fullviewActiveTileId, splitViewState, activeWorkspaceId, scheduleSave])
+  }, [tiles, groups, viewport, nextZIndex, viewMode, fullviewActiveTileId, splitViewState, gridViewState, activeWorkspaceId, scheduleSave])
 
   useEffect(() => {
     if (!showProfilePicker) return
@@ -613,9 +653,9 @@ export default function App(): React.ReactElement {
   }, [focusTile, selectTiles, setFullviewActiveTileId, setSplitPanelActiveTile])
 
   const handleCenterTileFromSidebar = useCallback((tileId: string) => {
-    if (viewMode !== 'canvas') return
+    if (activeWorkspaceType !== 'canvas' || viewMode !== 'canvas') return
     getCanvasMethods()?.centerViewOnTile(tileId)
-  }, [viewMode])
+  }, [activeWorkspaceType, viewMode])
 
   const handleShowTileFromSidebar = useCallback((tileId: string) => {
     const tile = tiles.find((entry) => entry.id === tileId)
@@ -636,6 +676,11 @@ export default function App(): React.ReactElement {
       getCanvasMethods()?.fitViewToBounds(paddedBounds, { top: GROUP_SHOW_TOP_PADDING })
     }
 
+    if (activeWorkspaceType === 'grid') {
+      setViewMode('gridview')
+      return
+    }
+
     if (viewMode === 'canvas') {
       fitTileBounds()
       return
@@ -647,7 +692,7 @@ export default function App(): React.ReactElement {
         fitTileBounds()
       })
     })
-  }, [focusTile, selectTiles, setViewMode, tiles, viewMode])
+  }, [activeWorkspaceType, focusTile, selectTiles, setViewMode, tiles, viewMode])
 
   const handleSidebarTileClick = useCallback((tileId: string) => {
     if (viewMode === 'fullview') {
@@ -657,7 +702,7 @@ export default function App(): React.ReactElement {
       return
     }
 
-    if (viewMode === 'splitview') {
+    if (viewMode === 'splitview' && activeWorkspaceType === 'canvas') {
       if (splitViewState.leftTileIds.includes(tileId)) {
         activateSplitTile('left', tileId)
         return
@@ -684,10 +729,19 @@ export default function App(): React.ReactElement {
       return
     }
 
+    if (activeWorkspaceType === 'grid') {
+      focusTile(tileId)
+      selectTiles([tileId])
+      return
+    }
+
     handleCenterTileFromSidebar(tileId)
-  }, [activateSplitTile, focusTile, handleCenterTileFromSidebar, selectTiles, setFullviewActiveTileId, setSplitViewState, splitViewState, viewMode])
+  }, [activateSplitTile, activeWorkspaceType, focusTile, handleCenterTileFromSidebar, selectTiles, setFullviewActiveTileId, setSplitViewState, splitViewState, viewMode])
 
   const handleSetViewMode = useCallback((mode: ViewMode) => {
+    if (activeWorkspaceType === 'grid' && mode !== 'gridview' && mode !== 'fullview') return
+    if (activeWorkspaceType === 'canvas' && mode === 'gridview') return
+
     if (mode === 'fullview') {
       const splitActiveId = splitViewState.focusedPanel === 'left'
         ? splitViewState.activeLeftTileId
@@ -702,6 +756,13 @@ export default function App(): React.ReactElement {
 
       setFullviewActiveTileId(nextActive)
     }
+
+    if (mode === 'gridview') {
+      setViewMode('gridview')
+      return
+    }
+
+    if (activeWorkspaceType !== 'canvas') return
 
     if (mode === 'splitview') {
       if (tiles.length < 2) return
@@ -730,7 +791,7 @@ export default function App(): React.ReactElement {
     }
 
     setViewMode(mode)
-  }, [focusTile, focusedTileId, fullviewActiveTileId, selectTiles, setFullviewActiveTileId, setSplitViewState, setViewMode, splitViewState, tiles, viewMode])
+  }, [activeWorkspaceType, focusTile, focusedTileId, fullviewActiveTileId, selectTiles, setFullviewActiveTileId, setSplitViewState, setViewMode, splitViewState, tiles, viewMode])
 
   const selectedGroup = useMemo(
     () => findSelectedGroup(effectiveGroups, selectedTileIds),
@@ -1032,6 +1093,7 @@ export default function App(): React.ReactElement {
       }
 
       const created = await window.electron.workspace.create({
+        type: value.type,
         name: value.name,
         rootFolderPath: value.rootFolderPath || undefined,
         initialCommand: value.initialCommand || undefined,
@@ -1081,7 +1143,7 @@ export default function App(): React.ReactElement {
 
     if (!result.activeWorkspace) {
       skipNextAutosaveRef.current = true
-      setWorkspace('', '', {})
+      setWorkspace('', '', { type: 'canvas' })
       restoreState(createEmptyCanvasState())
       setWorkspaceEditor({
         mode: 'create',
@@ -1090,8 +1152,10 @@ export default function App(): React.ReactElement {
           eyebrow: 'First Workspace Setup',
           confirmLabel: 'Create Workspace',
           canCancel: false,
+          typeEditable: true,
           value: {
             name: '',
+            type: 'canvas',
             rootFolderPath: '',
             initialCommand: '',
             terminalHistoryEnabled: true,
@@ -1108,6 +1172,44 @@ export default function App(): React.ReactElement {
 
     await activateWorkspace(result.activeWorkspace, { persistCurrent: false, updateMain: false })
   }, [activeWorkspaceId, activateWorkspace, restoreState, saveToDisk, setWorkspace])
+
+  const openCreateWorkspaceDialog = useCallback(() => {
+    setShowWorkspacePicker(false)
+    setWorkspaceEditor({
+      mode: 'create',
+      request: {
+        title: 'Create workspace',
+        eyebrow: 'Workspace Setup',
+        confirmLabel: 'Create Workspace',
+        typeEditable: true,
+        value: {
+          type: 'canvas',
+          name: '',
+          rootFolderPath: '',
+          initialCommand: '',
+          terminalHistoryEnabled: true,
+        },
+      },
+    })
+  }, [])
+
+  const handleOpenFolderWorkspace = useCallback(async () => {
+    const result = await window.electron.workspace.openFolder()
+    if (result.canceled) return
+
+    if (result.workspace) {
+      await refreshWorkspaceMetadata()
+      await activateWorkspace(result.workspace)
+      return
+    }
+
+    await requestConfirm({
+      title: 'Folder not in Yira',
+      message: result.error ?? 'No existing Yira workspace uses that root folder.',
+      confirmLabel: 'OK',
+      hideCancel: true,
+    })
+  }, [activateWorkspace, refreshWorkspaceMetadata, requestConfirm])
 
   const createTerminalFromSidebar = useCallback(() => {
     if (availableProfiles.length <= 1 && defaultProfile) {
@@ -1178,7 +1280,18 @@ export default function App(): React.ReactElement {
   }, [tiles, sortedTiles, fullviewActiveTileId, focusedTileId, viewMode, setFullviewActiveTileId, setViewMode])
 
   useEffect(() => {
-    if (viewMode !== 'splitview') return
+    if (activeWorkspaceType === 'grid' && viewMode !== 'gridview' && viewMode !== 'fullview') {
+      setViewMode('gridview')
+      return
+    }
+
+    if (activeWorkspaceType === 'canvas' && viewMode === 'gridview') {
+      setViewMode('fullview')
+    }
+  }, [activeWorkspaceType, setViewMode, viewMode])
+
+  useEffect(() => {
+    if (activeWorkspaceType !== 'canvas' || viewMode !== 'splitview') return
 
     if (tiles.length < 2) {
       const fallback = tiles[0]?.id ?? null
@@ -1197,7 +1310,7 @@ export default function App(): React.ReactElement {
     if (!areSplitViewStatesEqual(splitViewState, normalized)) {
       setSplitViewState(normalized)
     }
-  }, [focusTile, focusedTileId, fullviewActiveTileId, selectTiles, setFullviewActiveTileId, setSplitViewState, setViewMode, sortedTiles, splitViewState, tiles, viewMode])
+  }, [activeWorkspaceType, focusTile, focusedTileId, fullviewActiveTileId, selectTiles, setFullviewActiveTileId, setSplitViewState, setViewMode, sortedTiles, splitViewState, tiles, viewMode])
 
   const closeTileFromFullview = useCallback(async (tileId: string) => {
     const ordered = tiles.slice().sort((a, b) => b.zIndex - a.zIndex)
@@ -1489,6 +1602,22 @@ export default function App(): React.ReactElement {
                 <div className="border-t border-border p-2">
                   <button
                     className="flex w-full items-center gap-2 rounded-2xl px-4 py-3 text-left text-sm text-text-primary transition-colors hover:bg-hover-bg"
+                    onClick={openCreateWorkspaceDialog}
+                  >
+                    <Plus size={14} />
+                    <span className="nd-label">New Workspace</span>
+                  </button>
+                  <button
+                    className="flex w-full items-center gap-2 rounded-2xl px-4 py-3 text-left text-sm text-text-primary transition-colors hover:bg-hover-bg"
+                    onClick={() => {
+                      void handleOpenFolderWorkspace()
+                    }}
+                  >
+                    <FolderOpen size={14} />
+                    <span className="nd-label">Open Folder</span>
+                  </button>
+                  <button
+                    className="flex w-full items-center gap-2 rounded-2xl px-4 py-3 text-left text-sm text-text-primary transition-colors hover:bg-hover-bg"
                     onClick={() => {
                       setShowWorkspacePicker(false)
                       setShowWorkspaceManager(true)
@@ -1655,6 +1784,7 @@ export default function App(): React.ReactElement {
               zoom={viewport.zoom}
               viewMode={viewMode}
               splitOrientation={splitViewState.orientation}
+              workspaceType={activeWorkspaceType}
               canSplitView={tiles.length >= 2}
               sidebarCollapsed={sidebarCollapsed}
               onToggleSidebar={() => setSidebarCollapsed(c => !c)}
@@ -1665,7 +1795,7 @@ export default function App(): React.ReactElement {
             />
 
             <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-              {viewMode === 'splitview' && (
+              {activeWorkspaceType === 'canvas' && viewMode === 'splitview' && (
                 <SplitviewPanel
                   tiles={sortedTiles}
                   splitViewState={splitViewState}
@@ -1693,36 +1823,56 @@ export default function App(): React.ReactElement {
               )}
 
               <div className="relative min-h-0 flex-1">
-                <Canvas
-                  profiles={availableProfiles}
-                  onCreateTerminal={(profileId) => addTerminal(profileId)}
-                  onCreateNote={() => addNote()}
-                  onCreateBrowser={() => addBrowser()}
-                  onCreateTimer={() => addTimer()}
-                  onCreateFiles={() => addFiles()}
-                  canCreateNote={canCreateNote}
-                  canCreateBrowser={canCreateBrowser}
-                  canCreateTimer={canCreateTimer}
-                  canShowFilesCreation={canShowFilesCreation}
-                  canCreateFiles={canCreateFiles}
-                  onCreateGroupFromSelection={() => {
-                    void handleCreateGroupFromSelection()
-                  }}
-                  groupsEnabled={groupsEnabled}
-                  onDeleteTile={deleteTile}
-                  onConfigureTile={(tile, x, y) => {
-                    setGroupMenu(null)
-                    setTileMenu({ tileId: tile.id, x, y })
-                  }}
-                  onFocusTileInView={focusTileInFullview}
-                  onConfirmRemoveFromGroup={confirmRemoveTileFromGroup}
-                  tileRefreshKeys={tileRefreshKeys}
-                  viewMode={viewMode}
-                  fullviewActiveTileId={fullviewActiveTileId}
-                  splitViewState={splitViewState}
-                  splitOrientation={splitViewState.orientation}
-                  onFocusSplitPanel={setSplitFocusedPanel}
-                />
+                {activeWorkspaceType === 'grid' && viewMode === 'gridview' ? (
+                  <GridView
+                    rootNode={gridViewState.rootNode}
+                    tiles={tiles}
+                    focusedTileId={focusedTileId}
+                    terminalTitles={terminalTitles}
+                    onFocusTile={(tileId) => {
+                      focusTile(tileId)
+                      selectTiles([tileId])
+                    }}
+                    onUpdateTile={updateTile}
+                    onSetRootNode={(rootNode) => setGridViewState({ rootNode })}
+                    onConfigureTile={(tile, trigger) => openTileConfigurationMenu(tile.id, trigger)}
+                    onFocusTileInView={focusTileInFullview}
+                    onCloseTile={(tileId) => {
+                      void deleteTile(tileId)
+                    }}
+                  />
+                ) : (
+                  <Canvas
+                    profiles={availableProfiles}
+                    onCreateTerminal={(profileId) => addTerminal(profileId)}
+                    onCreateNote={() => addNote()}
+                    onCreateBrowser={() => addBrowser()}
+                    onCreateTimer={() => addTimer()}
+                    onCreateFiles={() => addFiles()}
+                    canCreateNote={canCreateNote}
+                    canCreateBrowser={canCreateBrowser}
+                    canCreateTimer={canCreateTimer}
+                    canShowFilesCreation={canShowFilesCreation}
+                    canCreateFiles={canCreateFiles}
+                    onCreateGroupFromSelection={() => {
+                      void handleCreateGroupFromSelection()
+                    }}
+                    groupsEnabled={activeWorkspaceType === 'canvas' && groupsEnabled}
+                    onDeleteTile={deleteTile}
+                    onConfigureTile={(tile, x, y) => {
+                      setGroupMenu(null)
+                      setTileMenu({ tileId: tile.id, x, y })
+                    }}
+                    onFocusTileInView={focusTileInFullview}
+                    onConfirmRemoveFromGroup={confirmRemoveTileFromGroup}
+                    tileRefreshKeys={tileRefreshKeys}
+                    viewMode={viewMode}
+                    fullviewActiveTileId={fullviewActiveTileId}
+                    splitViewState={splitViewState}
+                    splitOrientation={splitViewState.orientation}
+                    onFocusSplitPanel={setSplitFocusedPanel}
+                  />
+                )}
               </div>
             </div>
           </>
@@ -1743,12 +1893,17 @@ export default function App(): React.ReactElement {
       <RawJsonEditor
         open={showJsonEditor}
         workspaceId={activeWorkspaceId}
-        canvasState={activeWorkspaceId ? currentCanvasState : null}
+        workspaceType={activeWorkspaceType}
+        state={activeWorkspaceId ? (activeWorkspaceType === 'grid' ? currentGridState : currentCanvasState) : null}
         onClose={() => setShowJsonEditor(false)}
         onApply={(state) => {
-          restoreState(state)
+          if (activeWorkspaceType === 'grid') {
+            restoreGridWorkspaceState(activeWorkspaceId, activeWorkspaceName, activeWorkspaceConfig, state as GridWorkspaceState)
+          } else {
+            restoreState(state as CanvasState)
+          }
           if (activeWorkspaceId) {
-            window.electron.canvas.save(activeWorkspaceId, state)
+            window.electron.canvas.save(activeWorkspaceId, state, activeWorkspaceType)
           }
         }}
       />

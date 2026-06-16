@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowDown, ArrowUp, FolderOpen, Pencil, Plus, RotateCcw, Save, Trash2, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, Grid3X3, LayoutGrid, Pencil, RotateCcw, Save, Trash2, X } from 'lucide-react'
 import type { WorkspaceManagementEntry, WorkspaceMetadata } from '@shared/types'
 import { WorkspaceDialog, type WorkspaceDialogRequest, type WorkspaceDialogValue } from './WorkspaceDialog'
 
@@ -27,6 +27,7 @@ function workspaceToDraft(workspace: WorkspaceMetadata): WorkspaceDraft {
     key: workspace.id,
     id: workspace.id,
     name: workspace.name,
+    type: workspace.config.type,
     rootFolderPath: workspace.config.rootFolderPath ?? '',
     initialCommand: workspace.config.initialCommand ?? '',
     terminalHistoryEnabled: workspace.config.terminalHistoryEnabled !== false,
@@ -37,6 +38,7 @@ function workspaceToDraft(workspace: WorkspaceMetadata): WorkspaceDraft {
 
 function draftToDialogValue(draft?: WorkspaceDraft): WorkspaceDialogValue {
   return {
+    type: draft?.type ?? 'canvas',
     name: draft?.name ?? '',
     rootFolderPath: draft?.rootFolderPath ?? '',
     initialCommand: draft?.initialCommand ?? '',
@@ -47,15 +49,11 @@ function draftToDialogValue(draft?: WorkspaceDraft): WorkspaceDialogValue {
 function dialogValueToDraftValue(value: WorkspaceDialogValue): WorkspaceManagementEntry {
   return {
     name: value.name,
+    type: value.type,
     rootFolderPath: value.rootFolderPath || undefined,
     initialCommand: value.initialCommand || undefined,
     terminalHistoryEnabled: value.terminalHistoryEnabled,
   }
-}
-
-function getFolderName(path: string): string {
-  const parts = path.split(/[\\/]+/).filter(Boolean)
-  return parts[parts.length - 1] ?? 'Workspace'
 }
 
 export function WorkspaceManagementDialog({
@@ -103,9 +101,10 @@ export function WorkspaceManagementDialog({
     setEditor({
       key: draft?.key ?? null,
       request: {
-        title: draft ? 'Edit workspace' : 'New workspace',
+        title: 'Edit workspace',
         eyebrow: 'Workspace Draft',
-        confirmLabel: draft ? 'Apply Draft' : 'Add Draft',
+        confirmLabel: 'Apply Draft',
+        typeEditable: false,
         value: draftToDialogValue(draft ?? undefined),
       },
     })
@@ -116,44 +115,12 @@ export function WorkspaceManagementDialog({
 
     const draftValue = dialogValueToDraftValue(value)
 
-    if (editor.key) {
-      setDrafts((current) => current.map((draft) => (
-        draft.key === editor.key
-          ? { ...draft, ...draftValue, markedForRemoval: false, removalText: '' }
-          : draft
-      )))
-      setEditor(null)
-      return
-    }
-
-    setDrafts((current) => [
-      ...current,
-      {
-        ...draftValue,
-        key: `draft-${Date.now()}-${current.length}`,
-        markedForRemoval: false,
-        removalText: '',
-      },
-    ])
+    setDrafts((current) => current.map((draft) => (
+      draft.key === editor.key
+        ? { ...draft, ...draftValue, type: draft.type, markedForRemoval: false, removalText: '' }
+        : draft
+    )))
     setEditor(null)
-  }
-
-  const addFolderDraft = async () => {
-    const folder = await window.electron.files.selectFolder()
-    if (!folder) return
-
-    setDrafts((current) => [
-      ...current,
-      {
-        key: `draft-${Date.now()}-${current.length}`,
-        name: folder.name || getFolderName(folder.path),
-        rootFolderPath: folder.path,
-        initialCommand: '',
-        terminalHistoryEnabled: true,
-        markedForRemoval: false,
-        removalText: '',
-      },
-    ])
   }
 
   const saveDrafts = async () => {
@@ -164,6 +131,7 @@ export function WorkspaceManagementDialog({
       await onSave(activeDrafts.map((draft) => ({
         id: draft.id,
         name: draft.name,
+        type: draft.type,
         rootFolderPath: draft.rootFolderPath || undefined,
         initialCommand: draft.initialCommand || undefined,
         terminalHistoryEnabled: draft.terminalHistoryEnabled,
@@ -192,25 +160,6 @@ export function WorkspaceManagementDialog({
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-6">
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              className="inline-flex items-center gap-2 rounded-full border border-border-visible px-4 py-2 text-sm text-text-display transition-colors hover:bg-hover-bg"
-              onClick={() => openEditor(null)}
-            >
-              <Plus size={14} />
-              <span>New Workspace</span>
-            </button>
-            <button
-              className="inline-flex items-center gap-2 rounded-full border border-border-visible px-4 py-2 text-sm text-text-display transition-colors hover:bg-hover-bg"
-              onClick={() => {
-                void addFolderDraft()
-              }}
-            >
-              <FolderOpen size={14} />
-              <span>Open Folder</span>
-            </button>
-          </div>
-
           {error && (
             <div className="rounded-[18px] border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
               {error}
@@ -255,6 +204,10 @@ export function WorkspaceManagementDialog({
                             Will remove
                           </span>
                         )}
+                        <span className="inline-flex items-center gap-1 rounded-full border border-border-visible px-2 py-1 text-xs uppercase tracking-[0.08em] text-text-secondary">
+                          {draft.type === 'grid' ? <Grid3X3 size={12} /> : <LayoutGrid size={12} />}
+                          {draft.type === 'grid' ? 'Grid' : 'Canvas'}
+                        </span>
                         {isNewDraft && !draft.markedForRemoval && (
                           <span className="rounded-full border border-border-visible px-2 py-1 text-xs uppercase tracking-[0.08em] text-text-secondary">
                             New
