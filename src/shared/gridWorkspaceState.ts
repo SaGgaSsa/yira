@@ -12,6 +12,7 @@ export { GRID_MAX_TILES } from './types'
 
 const DEFAULT_NODE_SIZE = 10
 const DEFAULT_MAX_CHILDREN = 5
+const DEFAULT_ROOT_DIRECTION: GridLayoutSplitNode['direction'] = 'row'
 
 function createNodeId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -57,10 +58,14 @@ function normalizeSplitSizes(children: GridLayoutNode[], sizes: number[] | undef
   })
 }
 
-function insertIntoLeaf(node: GridLayoutNode, tileId: string, parentDirection: GridLayoutSplitNode['direction'] = 'row'): GridLayoutNode {
+function insertIntoLeaf(
+  node: GridLayoutNode,
+  tileId: string,
+  parentDirection?: GridLayoutSplitNode['direction'],
+): GridLayoutNode {
   if (node.type === 'split') return node
 
-  const direction = reverseDirection(parentDirection)
+  const direction = parentDirection ? reverseDirection(parentDirection) : DEFAULT_ROOT_DIRECTION
   return {
     id: createNodeId('grid-split'),
     type: 'split',
@@ -70,30 +75,71 @@ function insertIntoLeaf(node: GridLayoutNode, tileId: string, parentDirection: G
   }
 }
 
-function findNextInsertTarget(node: GridLayoutNode): { nodeId: string; insertAtParent: boolean } {
-  if (node.type === 'leaf') return { nodeId: node.id, insertAtParent: false }
-  if (node.children.length < DEFAULT_MAX_CHILDREN) return { nodeId: node.id, insertAtParent: true }
+interface InsertTarget {
+  nodeId: string
+  insertAtParent: boolean
+  childIndex: number
+  depth: number
+}
 
-  const candidates = node.children
-    .slice()
-    .reverse()
-    .map((child) => findNextInsertTarget(child))
+function insertTargetScore(target: InsertTarget): number {
+  return Math.pow(target.depth, target.childIndex + DEFAULT_MAX_CHILDREN)
+}
 
-  return candidates[0] ?? { nodeId: node.id, insertAtParent: true }
+function findNextInsertTarget(node: GridLayoutNode, depth = 1): InsertTarget {
+  if (node.type === 'leaf') {
+    return {
+      nodeId: node.id,
+      insertAtParent: false,
+      childIndex: 1,
+      depth,
+    }
+  }
+
+  const candidates: InsertTarget[] = []
+  if (node.children.length < DEFAULT_MAX_CHILDREN) {
+    candidates.push({
+      nodeId: node.id,
+      insertAtParent: true,
+      childIndex: node.children.length,
+      depth,
+    })
+  }
+
+  for (const child of node.children.slice().reverse()) {
+    candidates.push(findNextInsertTarget(child, depth + 1))
+  }
+
+  return candidates.sort((a, b) => insertTargetScore(a) - insertTargetScore(b))[0] ?? {
+    nodeId: node.id,
+    insertAtParent: true,
+    childIndex: node.children.length,
+    depth,
+  }
 }
 
 function insertAtTarget(
   node: GridLayoutNode,
-  target: { nodeId: string; insertAtParent: boolean },
+  target: InsertTarget,
   tileId: string,
-  parentDirection: GridLayoutSplitNode['direction'] = 'row',
+  parentDirection?: GridLayoutSplitNode['direction'],
 ): GridLayoutNode {
   if (node.id === target.nodeId) {
     if (target.insertAtParent && node.type === 'split') {
+      const sizes = normalizeSplitSizes(node.children, node.sizes)
+      const childIndex = Math.max(0, Math.min(target.childIndex, node.children.length))
       return {
         ...node,
-        children: [...node.children, createLeaf(tileId)],
-        sizes: [...normalizeSplitSizes(node.children, node.sizes), DEFAULT_NODE_SIZE],
+        children: [
+          ...node.children.slice(0, childIndex),
+          createLeaf(tileId),
+          ...node.children.slice(childIndex),
+        ],
+        sizes: [
+          ...sizes.slice(0, childIndex),
+          DEFAULT_NODE_SIZE,
+          ...sizes.slice(childIndex),
+        ],
       }
     }
 
@@ -133,9 +179,18 @@ function cleanGridNode(
     }
   }
 
-  const children = node.children
-    .map((child) => cleanGridNode(child, validTileIds, seenTileIds))
-    .filter((child): child is GridLayoutNode => Boolean(child))
+  const childrenWithSizes = node.children
+    .map((child, index) => {
+      const cleaned = cleanGridNode(child, validTileIds, seenTileIds)
+      if (!cleaned) return null
+      const size = node.sizes?.[index]
+      return {
+        child: cleaned,
+        size: typeof size === 'number' && Number.isFinite(size) && size > 0 ? size : DEFAULT_NODE_SIZE,
+      }
+    })
+    .filter((entry): entry is { child: GridLayoutNode; size: number } => Boolean(entry))
+  const children = childrenWithSizes.map((entry) => entry.child)
 
   if (children.length === 0) return null
   if (children.length === 1) return children[0]
@@ -145,7 +200,7 @@ function cleanGridNode(
     type: 'split',
     direction: node.direction === 'column' ? 'column' : 'row',
     children,
-    sizes: normalizeSplitSizes(children, node.sizes),
+    sizes: childrenWithSizes.map((entry) => entry.size),
   }
 }
 
@@ -245,6 +300,6 @@ export function swapGridTiles(rootNode: GridLayoutNode | null, firstTileId: stri
 
 export function removeTileFromGridLayout(rootNode: GridLayoutNode | null, tileId: string): GridLayoutNode | null {
   if (!rootNode) return null
-  const remainingTileIds = collectLeafTileIds(rootNode).filter((id) => id !== tileId)
-  return remainingTileIds.reduce<GridLayoutNode | null>((nextRoot, id) => insertTileIntoGridLayout(nextRoot, id), null)
+  const remainingTileIds = new Set(collectLeafTileIds(rootNode).filter((id) => id !== tileId))
+  return cleanGridNode(rootNode, remainingTileIds, new Set())
 }

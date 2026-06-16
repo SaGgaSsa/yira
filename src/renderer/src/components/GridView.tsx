@@ -1,5 +1,5 @@
-import React, { useCallback, useMemo, useRef } from 'react'
-import { GripVertical, X } from 'lucide-react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { GripVertical } from 'lucide-react'
 import type { GridLayoutNode, GridLayoutSplitNode, TileState } from '@shared/types'
 import { resizeGridChild, swapGridTiles } from '@shared/gridWorkspaceState'
 import { TileContent, TILE_META } from './TileContent'
@@ -46,6 +46,8 @@ export function GridView({
   onCloseTile,
 }: GridViewProps): React.ReactElement {
   const resizeDragRef = useRef<ResizeDragState | null>(null)
+  const draggedTileIdRef = useRef<string | null>(null)
+  const [draggedTileId, setDraggedTileId] = useState<string | null>(null)
   const tilesById = useMemo(() => new Map(tiles.map((tile) => [tile.id, tile])), [tiles])
 
   const startResize = useCallback((event: React.PointerEvent, splitNode: GridLayoutSplitNode, childIndex: number) => {
@@ -77,6 +79,49 @@ export function GridView({
     event.currentTarget.releasePointerCapture(event.pointerId)
   }, [])
 
+  const startMove = useCallback((event: React.PointerEvent, tileId: string) => {
+    event.preventDefault()
+    event.stopPropagation()
+    draggedTileIdRef.current = tileId
+    setDraggedTileId(tileId)
+    onFocusTile(tileId)
+  }, [onFocusTile])
+
+  useEffect(() => {
+    if (!draggedTileId) return
+
+    const clearDrag = () => {
+      draggedTileIdRef.current = null
+      setDraggedTileId(null)
+    }
+
+    const handlePointerUp = (event: PointerEvent) => {
+      const sourceTileId = draggedTileIdRef.current
+      if (!sourceTileId) {
+        clearDrag()
+        return
+      }
+
+      const target = document.elementFromPoint(event.clientX, event.clientY)
+      const targetTileId = target instanceof Element
+        ? target.closest<HTMLElement>('[data-grid-tile-id]')?.dataset.gridTileId
+        : undefined
+
+      if (targetTileId && targetTileId !== sourceTileId) {
+        onSetRootNode(swapGridTiles(rootNode, sourceTileId, targetTileId))
+      }
+
+      clearDrag()
+    }
+
+    window.addEventListener('pointerup', handlePointerUp)
+    window.addEventListener('pointercancel', clearDrag)
+    return () => {
+      window.removeEventListener('pointerup', handlePointerUp)
+      window.removeEventListener('pointercancel', clearDrag)
+    }
+  }, [draggedTileId, onSetRootNode, rootNode])
+
   const renderNode = (node: GridLayoutNode): React.ReactElement | null => {
     if (node.type === 'leaf') {
       const tile = tilesById.get(node.tileId)
@@ -87,21 +132,21 @@ export function GridView({
       return (
         <section
           key={node.id}
-          className="flex min-h-[180px] min-w-[260px] flex-col overflow-hidden border border-border bg-bg-secondary"
-          draggable
-          onDragStart={(event) => {
-            event.dataTransfer.setData('application/x-yira-grid-tile', tile.id)
-          }}
-          onDragOver={(event) => event.preventDefault()}
-          onDrop={(event) => {
-            event.preventDefault()
-            const sourceTileId = event.dataTransfer.getData('application/x-yira-grid-tile')
-            if (!sourceTileId || sourceTileId === tile.id) return
-            onSetRootNode(swapGridTiles(rootNode, sourceTileId, tile.id))
-          }}
+          data-grid-tile-id={tile.id}
+          className={`flex h-full min-h-[180px] w-full min-w-[260px] flex-col overflow-hidden border bg-bg-secondary ${
+            draggedTileId === tile.id ? 'border-accent' : 'border-border'
+          }`}
           onMouseDown={() => onFocusTile(tile.id)}
         >
           <div className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-bg-tertiary px-3">
+            <button
+              type="button"
+              className="flex h-8 w-8 shrink-0 cursor-grab items-center justify-center rounded border border-border-visible text-text-secondary active:cursor-grabbing"
+              title="Move tile"
+              onPointerDown={(event) => startMove(event, tile.id)}
+            >
+              <GripVertical size={14} />
+            </button>
             <Icon size={15} className="shrink-0 text-text-secondary" />
             <div className="min-w-0 flex-1 truncate text-sm text-text-display">{title}</div>
             <TileActionButtons
@@ -109,13 +154,6 @@ export function GridView({
               onFocus={() => onFocusTileInView(tile)}
               onClose={() => onCloseTile(tile.id)}
             />
-            <button
-              className="hidden h-8 w-8 items-center justify-center rounded-full border border-border-visible text-text-secondary"
-              title="Close"
-              onClick={() => onCloseTile(tile.id)}
-            >
-              <X size={14} />
-            </button>
           </div>
           <div className="min-h-0 flex-1">
             <TileContent
@@ -133,12 +171,12 @@ export function GridView({
     return (
       <div
         key={node.id}
-        className="flex min-h-0 min-w-0 flex-1 gap-1"
+        className="flex h-full min-h-0 w-full min-w-0 flex-1 gap-1"
         style={{ flexDirection: node.direction }}
       >
         {node.children.map((child, index) => (
           <React.Fragment key={child.id}>
-            <div className="min-h-0 min-w-0" style={{ flex: `${node.sizes[index] ?? 10} 1 0` }}>
+            <div className="h-full min-h-0 min-w-0" style={{ flex: `${node.sizes[index] ?? 10} 1 0` }}>
               {renderNode(child)}
             </div>
             {index < node.children.length - 1 && (
@@ -161,7 +199,7 @@ export function GridView({
   }
 
   return (
-    <div className="h-full w-full overflow-hidden bg-bg-primary p-2">
+    <div className="flex h-full w-full overflow-hidden bg-bg-primary p-2">
       {rootNode ? (
         renderNode(rootNode)
       ) : (
