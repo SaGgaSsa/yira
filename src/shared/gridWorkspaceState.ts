@@ -14,6 +14,34 @@ const DEFAULT_NODE_SIZE = 10
 const DEFAULT_MAX_CHILDREN = 5
 const DEFAULT_ROOT_DIRECTION: GridLayoutSplitNode['direction'] = 'row'
 
+export type GridDropDirection =
+  | 'top'
+  | 'right'
+  | 'bottom'
+  | 'left'
+  | 'outer-top'
+  | 'outer-right'
+  | 'outer-bottom'
+  | 'outer-left'
+  | 'center'
+
+export interface GridDropRect {
+  left: number
+  top: number
+  width: number
+  height: number
+}
+
+export interface GridPointerPosition {
+  x: number
+  y: number
+}
+
+export type PendingGridDragAction =
+  | { type: 'none' }
+  | { type: 'swap'; sourceTileId: string; targetTileId: string }
+  | { type: 'move'; sourceTileId: string; targetTileId: string; direction: Exclude<GridDropDirection, 'center'> }
+
 function createNodeId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
@@ -49,6 +77,140 @@ function collectLeafTileIds(node: GridLayoutNode | null): string[] {
   if (!node) return []
   if (node.type === 'leaf') return [node.tileId]
   return node.children.flatMap(collectLeafTileIds)
+}
+
+function sameGridTree(first: GridLayoutNode | null, second: GridLayoutNode | null): boolean {
+  return JSON.stringify(first) === JSON.stringify(second)
+}
+
+interface LocatedLeaf {
+  node: Extract<GridLayoutNode, { type: 'leaf' }>
+  path: number[]
+  parent: GridLayoutSplitNode | null
+  parentPath: number[]
+  index: number
+}
+
+function findLeafByTileId(
+  node: GridLayoutNode | null,
+  tileId: string,
+  path: number[] = [],
+  parent: GridLayoutSplitNode | null = null,
+  parentPath: number[] = [],
+): LocatedLeaf | null {
+  if (!node) return null
+
+  if (node.type === 'leaf') {
+    if (node.tileId !== tileId) return null
+    return {
+      node,
+      path,
+      parent,
+      parentPath,
+      index: path[path.length - 1] ?? 0,
+    }
+  }
+
+  for (let index = 0; index < node.children.length; index += 1) {
+    const found = findLeafByTileId(node.children[index], tileId, [...path, index], node, path)
+    if (found) return found
+  }
+
+  return null
+}
+
+function getSplitAtPath(rootNode: GridLayoutNode, path: number[]): GridLayoutSplitNode | null {
+  let node = rootNode
+
+  for (const index of path) {
+    if (node.type !== 'split') return null
+    const child = node.children[index]
+    if (!child) return null
+    node = child
+  }
+
+  return node.type === 'split' ? node : null
+}
+
+function makeMovedLeaf(tileId: string): GridLayoutNode {
+  return createLeaf(tileId)
+}
+
+function insertChildAt(
+  splitNode: GridLayoutSplitNode,
+  index: number,
+  child: GridLayoutNode,
+  size: number,
+): GridLayoutSplitNode {
+  const boundedIndex = Math.max(0, Math.min(index, splitNode.children.length))
+  const sizes = normalizeSplitSizes(splitNode.children, splitNode.sizes)
+
+  return {
+    ...splitNode,
+    children: [
+      ...splitNode.children.slice(0, boundedIndex),
+      child,
+      ...splitNode.children.slice(boundedIndex),
+    ],
+    sizes: [
+      ...sizes.slice(0, boundedIndex),
+      Math.max(1, size),
+      ...sizes.slice(boundedIndex),
+    ],
+  }
+}
+
+function updateSplitAtPath(
+  rootNode: GridLayoutNode,
+  path: number[],
+  update: (splitNode: GridLayoutSplitNode) => GridLayoutSplitNode,
+): GridLayoutNode {
+  if (path.length === 0) {
+    if (rootNode.type !== 'split') return rootNode
+    return update(rootNode)
+  }
+
+  if (rootNode.type === 'leaf') return rootNode
+  const [nextIndex, ...remainingPath] = path
+
+  return {
+    ...rootNode,
+    children: rootNode.children.map((child, index) => {
+      if (index !== nextIndex) return child
+      return updateSplitAtPath(child, remainingPath, update)
+    }),
+    sizes: normalizeSplitSizes(rootNode.children, rootNode.sizes),
+  }
+}
+
+function replaceLeafWithSplit(
+  rootNode: GridLayoutNode,
+  targetTileId: string,
+  splitDirection: GridLayoutSplitNode['direction'],
+  movedLeaf: GridLayoutNode,
+  movedSize: number,
+  insertBefore: boolean,
+): GridLayoutNode {
+  if (rootNode.type === 'leaf') {
+    if (rootNode.tileId !== targetTileId) return rootNode
+    const children = insertBefore ? [movedLeaf, rootNode] : [rootNode, movedLeaf]
+    const sizes = insertBefore ? [movedSize, DEFAULT_NODE_SIZE] : [DEFAULT_NODE_SIZE, movedSize]
+    return {
+      id: createNodeId('grid-split'),
+      type: 'split',
+      direction: splitDirection,
+      children,
+      sizes,
+    }
+  }
+
+  return {
+    ...rootNode,
+    children: rootNode.children.map((child) => (
+      replaceLeafWithSplit(child, targetTileId, splitDirection, movedLeaf, movedSize, insertBefore)
+    )),
+    sizes: normalizeSplitSizes(rootNode.children, rootNode.sizes),
+  }
 }
 
 function normalizeSplitSizes(children: GridLayoutNode[], sizes: number[] | undefined): number[] {
@@ -255,6 +417,202 @@ export function normalizeGridWorkspaceState(state: GridWorkspaceState): GridWork
       rootNode: normalizeGridLayout(state.gridViewState?.rootNode, tiles),
     },
   }
+}
+
+function dropDirectionToSplitDirection(direction: Exclude<GridDropDirection, 'center'>): GridLayoutSplitNode['direction'] {
+  return direction === 'left' || direction === 'right' || direction === 'outer-left' || direction === 'outer-right'
+    ? 'row'
+    : 'column'
+}
+
+function dropDirectionInsertsBefore(direction: Exclude<GridDropDirection, 'center'>): boolean {
+  return direction === 'left' || direction === 'top' || direction === 'outer-left' || direction === 'outer-top'
+}
+
+function isOuterDropDirection(direction: Exclude<GridDropDirection, 'center'>): boolean {
+  return direction === 'outer-left' || direction === 'outer-right' || direction === 'outer-top' || direction === 'outer-bottom'
+}
+
+function isSameLocationMove(
+  rootNode: GridLayoutNode,
+  sourceTileId: string,
+  targetTileId: string,
+  direction: Exclude<GridDropDirection, 'center'>,
+): boolean {
+  if (isOuterDropDirection(direction)) return false
+
+  const source = findLeafByTileId(rootNode, sourceTileId)
+  const target = findLeafByTileId(rootNode, targetTileId)
+  const splitDirection = dropDirectionToSplitDirection(direction)
+  if (!source?.parent || !target?.parent || source.parent.id !== target.parent.id) return false
+  if (source.parent.direction !== splitDirection) return false
+
+  const insertsBefore = dropDirectionInsertsBefore(direction)
+  return insertsBefore
+    ? source.index === target.index - 1
+    : source.index === target.index + 1
+}
+
+interface RemoveMoveResult {
+  rootNode: GridLayoutNode | null
+  movedSize: number
+}
+
+function removeTileForMove(rootNode: GridLayoutNode, tileId: string): RemoveMoveResult {
+  let movedSize = DEFAULT_NODE_SIZE
+
+  const removeFromNode = (node: GridLayoutNode): GridLayoutNode | null => {
+    if (node.type === 'leaf') {
+      return node.tileId === tileId ? null : node
+    }
+
+    const nextChildren: GridLayoutNode[] = []
+    const nextSizes: number[] = []
+    const sizes = normalizeSplitSizes(node.children, node.sizes)
+
+    for (let index = 0; index < node.children.length; index += 1) {
+      const child = node.children[index]
+      const nextChild = removeFromNode(child)
+      if (!nextChild) {
+        if (child.type === 'leaf' && child.tileId === tileId) {
+          movedSize = sizes[index] ?? DEFAULT_NODE_SIZE
+        }
+        continue
+      }
+
+      nextChildren.push(nextChild)
+      nextSizes.push(sizes[index] ?? DEFAULT_NODE_SIZE)
+    }
+
+    if (nextChildren.length === 0) return null
+    if (nextChildren.length === 1) return nextChildren[0]
+
+    return {
+      ...node,
+      children: nextChildren,
+      sizes: nextSizes,
+    }
+  }
+
+  return {
+    rootNode: removeFromNode(rootNode),
+    movedSize,
+  }
+}
+
+function insertMovedTile(
+  rootNode: GridLayoutNode | null,
+  sourceTileId: string,
+  targetTileId: string,
+  direction: Exclude<GridDropDirection, 'center'>,
+  movedSize: number,
+): GridLayoutNode | null {
+  const movedLeaf = makeMovedLeaf(sourceTileId)
+  if (!rootNode) return movedLeaf
+
+  const target = findLeafByTileId(rootNode, targetTileId)
+  if (!target) return rootNode
+
+  const splitDirection = dropDirectionToSplitDirection(direction)
+  const insertBefore = dropDirectionInsertsBefore(direction)
+
+  if (isOuterDropDirection(direction) && target.parentPath.length > 0) {
+    const grandparentPath = target.parentPath.slice(0, -1)
+    const parentIndex = target.parentPath[target.parentPath.length - 1]
+    const grandparent = getSplitAtPath(rootNode, grandparentPath)
+    if (grandparent?.direction === splitDirection) {
+      return updateSplitAtPath(rootNode, grandparentPath, (splitNode) => (
+        insertChildAt(splitNode, insertBefore ? parentIndex : parentIndex + 1, movedLeaf, movedSize)
+      ))
+    }
+  }
+
+  if (target.parent?.direction === splitDirection) {
+    return updateSplitAtPath(rootNode, target.parentPath, (splitNode) => (
+      insertChildAt(splitNode, insertBefore ? target.index : target.index + 1, movedLeaf, movedSize)
+    ))
+  }
+
+  return replaceLeafWithSplit(rootNode, targetTileId, splitDirection, movedLeaf, movedSize, insertBefore)
+}
+
+export function determineGridDropDirection(
+  rect: GridDropRect | null | undefined,
+  pointer: GridPointerPosition | null | undefined,
+): GridDropDirection | null {
+  if (!rect || !pointer) return null
+
+  const { width, height, left, top } = rect
+  const x = pointer.x - left
+  const y = pointer.y - top
+
+  if (x < 0 || x > width || y < 0 || y > height) return null
+
+  const centerX1 = (2 * width) / 5
+  const centerX2 = (3 * width) / 5
+  const centerY1 = (2 * height) / 5
+  const centerY2 = (3 * height) / 5
+  if (x > centerX1 && x < centerX2 && y > centerY1 && y < centerY2) return 'center'
+
+  const diagonal1 = y * width - x * height
+  const diagonal2 = y * width + x * height - height * width
+  if (diagonal1 === 0 || diagonal2 === 0) return null
+
+  let directionIndex = 0
+  if (diagonal2 > 0) directionIndex += 1
+  if (diagonal1 > 0) {
+    directionIndex += 2
+    directionIndex = 5 - directionIndex
+  }
+
+  const isOuter = y < height / 5 || y > height - height / 5 || x < width / 5 || x > width - width / 5
+  const directions: GridDropDirection[] = isOuter
+    ? ['outer-top', 'outer-right', 'outer-bottom', 'outer-left']
+    : ['top', 'right', 'bottom', 'left']
+
+  return directions[directionIndex] ?? null
+}
+
+export function commitGridDragAction(
+  rootNode: GridLayoutNode | null,
+  action: PendingGridDragAction,
+): GridLayoutNode | null {
+  if (!rootNode || action.type === 'none') return rootNode
+
+  if (action.type === 'swap') {
+    return swapGridTiles(rootNode, action.sourceTileId, action.targetTileId)
+  }
+
+  if (action.sourceTileId === action.targetTileId) return rootNode
+  if (!findLeafByTileId(rootNode, action.sourceTileId) || !findLeafByTileId(rootNode, action.targetTileId)) {
+    return rootNode
+  }
+
+  const { rootNode: withoutSource, movedSize } = removeTileForMove(rootNode, action.sourceTileId)
+  return insertMovedTile(withoutSource, action.sourceTileId, action.targetTileId, action.direction, movedSize)
+}
+
+export function computeGridDragAction(
+  rootNode: GridLayoutNode | null,
+  sourceTileId: string,
+  targetTileId: string | null | undefined,
+  targetRect: GridDropRect | null | undefined,
+  pointer: GridPointerPosition | null | undefined,
+): PendingGridDragAction {
+  if (!rootNode || !targetTileId || sourceTileId === targetTileId) return { type: 'none' }
+
+  const direction = determineGridDropDirection(targetRect, pointer)
+  if (!direction) return { type: 'none' }
+
+  if (direction !== 'center' && isSameLocationMove(rootNode, sourceTileId, targetTileId, direction)) {
+    return { type: 'none' }
+  }
+
+  const action: PendingGridDragAction = direction === 'center'
+    ? { type: 'swap', sourceTileId, targetTileId }
+    : { type: 'move', sourceTileId, targetTileId, direction }
+
+  return sameGridTree(commitGridDragAction(rootNode, action), rootNode) ? { type: 'none' } : action
 }
 
 export function resizeGridChild(

@@ -1,6 +1,9 @@
 import {
   GRID_MAX_TILES,
+  commitGridDragAction,
+  computeGridDragAction,
   createEmptyGridWorkspaceState,
+  determineGridDropDirection,
   insertTileIntoGridLayout,
   normalizeGridWorkspaceState,
   removeTileFromGridLayout,
@@ -60,6 +63,145 @@ const leavesAfterSwap = JSON.stringify(swapped)
 if (!leavesAfterSwap.includes('"tileId":"six"') || !leavesAfterSwap.includes('"tileId":"one"')) {
   throw new Error('swap must preserve both swapped tile leaves')
 }
+
+const dropRect = { left: 100, top: 200, width: 500, height: 300 }
+if (determineGridDropDirection(dropRect, { x: 350, y: 350 }) !== 'center') {
+  throw new Error('center fifth must map to center drop direction')
+}
+if (determineGridDropDirection(dropRect, { x: 110, y: 350 }) !== 'outer-left') {
+  throw new Error('left outer fifth must map to outer-left drop direction')
+}
+if (determineGridDropDirection(dropRect, { x: 590, y: 350 }) !== 'outer-right') {
+  throw new Error('right outer fifth must map to outer-right drop direction')
+}
+if (determineGridDropDirection(dropRect, { x: 350, y: 210 }) !== 'outer-top') {
+  throw new Error('top outer fifth must map to outer-top drop direction')
+}
+if (determineGridDropDirection(dropRect, { x: 350, y: 490 }) !== 'outer-bottom') {
+  throw new Error('bottom outer fifth must map to outer-bottom drop direction')
+}
+if (determineGridDropDirection(dropRect, { x: 220, y: 350 }) !== 'left') {
+  throw new Error('left side must map to left drop direction')
+}
+if (determineGridDropDirection(dropRect, { x: 480, y: 350 }) !== 'right') {
+  throw new Error('right side must map to right drop direction')
+}
+if (determineGridDropDirection(dropRect, { x: 350, y: 275 }) !== 'top') {
+  throw new Error('top side must map to top drop direction')
+}
+if (determineGridDropDirection(dropRect, { x: 350, y: 425 }) !== 'bottom') {
+  throw new Error('bottom side must map to bottom drop direction')
+}
+if (determineGridDropDirection(dropRect, { x: 99, y: 350 }) !== null) {
+  throw new Error('points outside the target rect must not produce a drop direction')
+}
+
+const dragRoot: GridLayoutNode = {
+  id: 'root',
+  type: 'split',
+  direction: 'row',
+  sizes: [15, 25, 35],
+  children: [
+    { id: 'leaf-a', type: 'leaf', tileId: 'a' },
+    {
+      id: 'split-bc',
+      type: 'split',
+      direction: 'column',
+      sizes: [12, 18],
+      children: [
+        { id: 'leaf-b', type: 'leaf', tileId: 'b' },
+        { id: 'leaf-c', type: 'leaf', tileId: 'c' },
+      ],
+    },
+    { id: 'leaf-d', type: 'leaf', tileId: 'd' },
+  ],
+}
+
+const centerAction = computeGridDragAction(dragRoot, 'a', 'd', dropRect, { x: 350, y: 350 })
+if (centerAction.type !== 'swap') throw new Error('center drop must compute a swap action')
+const centerSwap = commitGridDragAction(dragRoot, centerAction)
+if (!centerSwap || centerSwap.type !== 'split') throw new Error('center swap must preserve the split root')
+if (centerSwap.children[0].type !== 'leaf' || centerSwap.children[0].tileId !== 'd') {
+  throw new Error('center swap must put the target tile in the source slot')
+}
+if (centerSwap.children[2].type !== 'leaf' || centerSwap.children[2].tileId !== 'a') {
+  throw new Error('center swap must put the source tile in the target slot')
+}
+if (centerSwap.sizes.join(',') !== '15,25,35') throw new Error('center swap must preserve layout sizes')
+
+const moveRight = commitGridDragAction(
+  dragRoot,
+  computeGridDragAction(dragRoot, 'b', 'd', dropRect, { x: 480, y: 350 }),
+)
+if (!moveRight || moveRight.type !== 'split') throw new Error('right move must keep a split root')
+if (moveRight.children.map((child) => child.type === 'leaf' ? child.tileId : child.id).join(',') !== 'a,c,d,b') {
+  throw new Error('right move must insert the source after the target in a row split')
+}
+if (moveRight.sizes.slice(0, 3).join(',') !== '15,25,35') {
+  throw new Error('right move must preserve unaffected root sibling sizes')
+}
+const prunedNested = moveRight.children[1]
+if (prunedNested.type !== 'leaf' || prunedNested.tileId !== 'c') {
+  throw new Error('moving out of a two-child split must prune the single-child split')
+}
+
+const moveLeft = commitGridDragAction(
+  dragRoot,
+  computeGridDragAction(dragRoot, 'd', 'a', dropRect, { x: 220, y: 350 }),
+)
+if (!moveLeft || moveLeft.type !== 'split') throw new Error('left move must keep a split root')
+if (moveLeft.children.map((child) => child.type === 'leaf' ? child.tileId : child.id).join(',') !== 'd,a,split-bc') {
+  throw new Error('left move must insert the source before the target in a row split')
+}
+
+const moveTop = commitGridDragAction(
+  dragRoot,
+  computeGridDragAction(dragRoot, 'd', 'a', dropRect, { x: 350, y: 275 }),
+)
+if (!moveTop || moveTop.type !== 'split') throw new Error('top move must keep a root node')
+const firstMoveTopChild = moveTop.children[0]
+if (firstMoveTopChild.type !== 'split' || firstMoveTopChild.direction !== 'column') {
+  throw new Error('top move onto a row child must create a column split')
+}
+if (firstMoveTopChild.children.map((child) => child.type === 'leaf' ? child.tileId : '').join(',') !== 'd,a') {
+  throw new Error('top move must insert the source above the target')
+}
+
+const moveBottom = commitGridDragAction(
+  dragRoot,
+  computeGridDragAction(dragRoot, 'd', 'a', dropRect, { x: 350, y: 425 }),
+)
+if (!moveBottom || moveBottom.type !== 'split') throw new Error('bottom move must keep a root node')
+const firstMoveBottomChild = moveBottom.children[0]
+if (firstMoveBottomChild.type !== 'split' || firstMoveBottomChild.direction !== 'column') {
+  throw new Error('bottom move onto a row child must create a column split')
+}
+if (firstMoveBottomChild.children.map((child) => child.type === 'leaf' ? child.tileId : '').join(',') !== 'a,d') {
+  throw new Error('bottom move must insert the source below the target')
+}
+
+const outerLeft = commitGridDragAction(
+  dragRoot,
+  computeGridDragAction(dragRoot, 'd', 'c', dropRect, { x: 110, y: 350 }),
+)
+if (!outerLeft || outerLeft.type !== 'split') throw new Error('outer-left move must keep a split root')
+if (outerLeft.children.map((child) => child.type === 'leaf' ? child.tileId : child.id).join(',') !== 'a,d,split-bc') {
+  throw new Error('outer-left move must insert before the target parent when parent/grandparent layout allows it')
+}
+
+const noopRoot: GridLayoutNode = {
+  id: 'noop-root',
+  type: 'split',
+  direction: 'row',
+  sizes: [10, 20, 30],
+  children: [
+    { id: 'noop-a', type: 'leaf', tileId: 'a' },
+    { id: 'noop-b', type: 'leaf', tileId: 'b' },
+    { id: 'noop-c', type: 'leaf', tileId: 'c' },
+  ],
+}
+const noopLeft = computeGridDragAction(noopRoot, 'a', 'b', dropRect, { x: 220, y: 350 })
+if (noopLeft.type !== 'none') throw new Error('dropping a tile immediately left of its current right neighbor must be a no-op')
 
 const dirtyState: GridWorkspaceState = {
   tiles: [tile('one', 1), tile('two', 2), tile('three', 3)],
