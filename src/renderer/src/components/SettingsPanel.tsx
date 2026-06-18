@@ -5,6 +5,8 @@ import { useSettingsStore } from '@/store/settingsStore'
 import { useUpdateStore } from '@/store/updateStore'
 import { SHORTCUT_CATALOG } from '@/utils/shortcutCatalog'
 import type { UpdateState } from '@shared/types'
+import type { TerminalThemeId } from '@shared/terminalThemes'
+import { TERMINAL_THEMES } from '@shared/terminalThemes'
 import { MAX_FONT_SIZE_PX, MIN_FONT_SIZE_PX } from '@shared/userSettings'
 
 interface SettingsPanelProps {
@@ -71,6 +73,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor }: SettingsPanel
   const gridSize = useSettingsStore((s) => s.gridSize)
   const browserHomeUrl = useSettingsStore((s) => s.browser.homeUrl)
   const terminalAttentionEnabled = useSettingsStore((s) => s.terminal.attentionEnabled)
+  const terminalThemeId = useSettingsStore((s) => s.terminal.themeId)
   const attentionDelayEnabled = useSettingsStore((s) => s.notifications.attentionDelayEnabled)
   const tileCreationAvailability = useSettingsStore((s) => s.tiles.creationAvailability)
   const groupsEnabled = useSettingsStore((s) => s.groups.enabled)
@@ -82,6 +85,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor }: SettingsPanel
   const setGridSize = useSettingsStore((s) => s.setGridSize)
   const setBrowserHomeUrl = useSettingsStore((s) => s.setBrowserHomeUrl)
   const setTerminalAttentionEnabled = useSettingsStore((s) => s.setTerminalAttentionEnabled)
+  const setTerminalThemeId = useSettingsStore((s) => s.setTerminalThemeId)
   const setNotificationAttentionDelayEnabled = useSettingsStore((s) => s.setNotificationAttentionDelayEnabled)
   const setTileCreationAvailable = useSettingsStore((s) => s.setTileCreationAvailable)
   const setGroupsEnabled = useSettingsStore((s) => s.setGroupsEnabled)
@@ -367,21 +371,56 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor }: SettingsPanel
             <ActiveSectionIcon size={16} className="text-text-secondary" />
             <div>
               <div className="nd-label text-text-secondary">Terminal</div>
-              <h3 className="mt-1 text-xl text-text-display">Runtime attention</h3>
+              <h3 className="mt-1 text-xl text-text-display">Theme and attention</h3>
             </div>
           </div>
 
-          <label className="flex items-center justify-between gap-4 rounded-[20px] border border-border-visible bg-bg-primary px-4 py-4">
-            <span>
-              <span className="nd-label block text-text-display">Terminal Attention</span>
-              <span className="mt-2 block text-sm leading-6 text-text-secondary">Show output counters and request native attention while Yira is inactive.</span>
-            </span>
-            <input
-              type="checkbox"
-              checked={terminalAttentionEnabled}
-              onChange={(event) => setTerminalAttentionEnabled(event.target.checked)}
-            />
-          </label>
+          <div className="space-y-3">
+            <div className="grid gap-3 lg:grid-cols-2">
+              {TERMINAL_THEMES.map((theme) => {
+                const isActive = terminalThemeId === theme.id
+
+                return (
+                  <button
+                    key={theme.id}
+                    className={`rounded-[20px] border px-4 py-4 text-left transition-colors ${
+                      isActive ? 'border-text-display bg-bg-primary' : 'border-border-visible bg-bg-primary hover:border-text-secondary'
+                    }`}
+                    onClick={() => setTerminalThemeId(theme.id as TerminalThemeId)}
+                  >
+                    <span className="flex items-center justify-between gap-3">
+                      <span className="nd-label text-text-display">{theme.label}</span>
+                      {isActive && <span className="nd-caption text-text-secondary">[ ACTIVE ]</span>}
+                    </span>
+                    <span
+                      className="mt-4 flex h-12 items-center gap-2 rounded-[14px] border px-3 font-mono text-sm"
+                      style={{
+                        background: theme.colors.background,
+                        borderColor: theme.colors.brightBlack,
+                        color: theme.colors.foreground,
+                      }}
+                    >
+                      <span style={{ color: theme.colors.green }}>$</span>
+                      <span>yira --theme</span>
+                      <span className="ml-auto h-4 w-2" style={{ background: theme.colors.cursor }} />
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+
+            <label className="flex items-center justify-between gap-4 rounded-[20px] border border-border-visible bg-bg-primary px-4 py-4">
+              <span>
+                <span className="nd-label block text-text-display">Terminal Attention</span>
+                <span className="mt-2 block text-sm leading-6 text-text-secondary">Show output counters and request native attention while Yira is inactive.</span>
+              </span>
+              <input
+                type="checkbox"
+                checked={terminalAttentionEnabled}
+                onChange={(event) => setTerminalAttentionEnabled(event.target.checked)}
+              />
+            </label>
+          </div>
         </section>
       )
     }

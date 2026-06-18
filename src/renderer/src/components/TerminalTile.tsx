@@ -9,6 +9,7 @@ import { isTerminalInputAttended } from '@/utils/terminalAttention'
 import { createNativeAttentionDelayScheduler } from '@/utils/nativeAttentionDelay'
 import { buildTerminalStartupCommand } from '@/utils/terminalLaunch'
 import { createTerminalFitScheduler } from '@/utils/terminalFitScheduler'
+import { getTerminalContainerBackground, getXtermTheme } from '@/utils/terminalTheme'
 import { ContextMenu, type MenuItem } from './ContextMenu'
 
 interface Props {
@@ -45,6 +46,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
   const notificationsMutedRef = useRef(tile.notificationsMuted === true)
   const nativeAttentionSchedulerRef = useRef(createNativeAttentionDelayScheduler())
   const tileFontSizePx = useSettingsStore((s) => s.tileFontSizePx)
+  const terminalThemeId = useSettingsStore((s) => s.terminal.themeId)
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number; hasSelection: boolean } | null>(null)
   isVisibleRef.current = isVisible
 
@@ -123,29 +125,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
 
     // Create xterm instance
     const term = new Terminal({
-      theme: {
-        background: '#111111',
-        foreground: '#e8e8e8',
-        cursor: '#ffffff',
-        cursorAccent: '#111111',
-        selectionBackground: 'rgba(255,255,255,0.14)',
-        black: '#000000',
-        red: '#d71921',
-        green: '#4a9e5c',
-        yellow: '#d4a843',
-        blue: '#5b9bf6',
-        magenta: '#c88cff',
-        cyan: '#7ed9d1',
-        white: '#e5e5e5',
-        brightBlack: '#666666',
-        brightRed: '#ef3f47',
-        brightGreen: '#77c989',
-        brightYellow: '#f0c461',
-        brightBlue: '#9bc0ff',
-        brightMagenta: '#e0aaff',
-        brightCyan: '#a3eee8',
-        brightWhite: '#ffffff',
-      },
+      theme: getXtermTheme(useSettingsStore.getState().terminal.themeId),
       fontFamily: '"IBM Plex Mono", "JetBrains Mono", "Consolas", monospace',
       fontSize: useSettingsStore.getState().tileFontSizePx,
       lineHeight: 1.15,
@@ -291,6 +271,12 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
   }, [tileFontSizePx, doFit])
 
   useEffect(() => {
+    const term = termRef.current
+    if (!term) return
+    term.options.theme = getXtermTheme(terminalThemeId)
+  }, [terminalThemeId])
+
+  useEffect(() => {
     if (isFocused) {
       termRef.current?.focus()
     }
@@ -330,7 +316,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
       <div
         ref={containerRef}
         className="h-full w-full"
-        style={{ background: 'var(--surface)', overflow: 'hidden' }}
+        style={{ background: getTerminalContainerBackground(terminalThemeId), overflow: 'hidden' }}
         onMouseDown={focusTerminal}
         onContextMenu={(event) => {
           event.preventDefault()

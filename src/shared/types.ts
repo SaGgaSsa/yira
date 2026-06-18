@@ -1,3 +1,5 @@
+import type { TerminalThemeId } from './terminalThemes'
+
 // ─── Workspace ─────────────────────────────────────────────────────────────
 
 export type WorkspaceType = 'canvas' | 'grid'
@@ -84,6 +86,7 @@ export interface UserSettings {
   }
   terminal: {
     attentionEnabled: boolean
+    themeId: TerminalThemeId
   }
   notifications: {
     attentionDelayEnabled: boolean
@@ -108,6 +111,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   },
   terminal: {
     attentionEnabled: true,
+    themeId: 'yira-default',
   },
   notifications: {
     attentionDelayEnabled: true,

@@ -1,10 +1,16 @@
 import type { UserSettings } from './types'
 import { DEFAULT_USER_SETTINGS } from './types'
+import { normalizeTerminalThemeId } from './terminalThemes'
 
 export const MIN_FONT_SIZE_PX = 10
 export const MAX_FONT_SIZE_PX = 36
 
 export type LegacyFontSize = 'small' | 'medium' | 'large'
+
+type RawUserSettings = Omit<Partial<UserSettings>, 'terminal'> & {
+  fontSize?: unknown
+  terminal?: Partial<UserSettings['terminal']>
+}
 
 const LEGACY_FONT_SIZE_PX: Record<LegacyFontSize, number> = {
   small: 14,
@@ -22,7 +28,7 @@ export function clampFontSizePx(value: unknown, fallback = DEFAULT_USER_SETTINGS
   return Math.max(MIN_FONT_SIZE_PX, Math.min(MAX_FONT_SIZE_PX, Math.round(numeric)))
 }
 
-export function normalizeUserSettings(raw: Partial<UserSettings> & { fontSize?: unknown } = {}): UserSettings {
+export function normalizeUserSettings(raw: RawUserSettings = {}): UserSettings {
   const legacyFontSize = isLegacyFontSize(raw.fontSize) ? LEGACY_FONT_SIZE_PX[raw.fontSize] : undefined
   const fontFallback = legacyFontSize ?? DEFAULT_USER_SETTINGS.interfaceFontSizePx
   const { fontSize: _legacyFontSize, ...settings } = raw
@@ -39,6 +45,7 @@ export function normalizeUserSettings(raw: Partial<UserSettings> & { fontSize?: 
     terminal: {
       ...DEFAULT_USER_SETTINGS.terminal,
       ...(raw.terminal ?? {}),
+      themeId: normalizeTerminalThemeId(raw.terminal?.themeId),
     },
     notifications: {
       ...DEFAULT_USER_SETTINGS.notifications,

@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { UserSettings, AppearanceMode, ConfigurableTileCreationType } from '@shared/types'
 import { DEFAULT_USER_SETTINGS } from '@shared/types'
+import type { TerminalThemeId } from '@shared/terminalThemes'
 import { clampFontSizePx, normalizeUserSettings } from '@shared/userSettings'
 
 export interface SettingsState extends UserSettings {
@@ -15,6 +16,7 @@ export interface SettingsState extends UserSettings {
   setGridSize: (size: number) => void
   setBrowserHomeUrl: (url: string) => void
   setTerminalAttentionEnabled: (enabled: boolean) => void
+  setTerminalThemeId: (themeId: TerminalThemeId) => void
   setNotificationAttentionDelayEnabled: (enabled: boolean) => void
   setTileCreationAvailable: (type: ConfigurableTileCreationType, available: boolean) => void
   setGroupsEnabled: (enabled: boolean) => void
@@ -36,7 +38,10 @@ function scheduleSave() {
       snapToGrid: state.snapToGrid,
       gridSize: state.gridSize,
       browser: { homeUrl: state.browser.homeUrl },
-      terminal: { attentionEnabled: state.terminal.attentionEnabled },
+      terminal: {
+        attentionEnabled: state.terminal.attentionEnabled,
+        themeId: state.terminal.themeId,
+      },
       notifications: { attentionDelayEnabled: state.notifications.attentionDelayEnabled },
       tiles: {
         creationAvailability: {
@@ -94,6 +99,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     scheduleSave()
   },
 
+  setTerminalThemeId: (themeId) => {
+    set((state) => ({ terminal: { ...state.terminal, themeId } }))
+    scheduleSave()
+  },
+
   setNotificationAttentionDelayEnabled: (enabled) => {
     set((state) => ({ notifications: { ...state.notifications, attentionDelayEnabled: enabled } }))
     scheduleSave()
@@ -135,6 +145,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           },
           terminal: {
             attentionEnabled: normalized.terminal.attentionEnabled,
+            themeId: normalized.terminal.themeId,
           },
           notifications: {
             attentionDelayEnabled: normalized.notifications.attentionDelayEnabled,
@@ -169,7 +180,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       snapToGrid: state.snapToGrid,
       gridSize: state.gridSize,
       browser: { homeUrl: state.browser.homeUrl },
-      terminal: { attentionEnabled: state.terminal.attentionEnabled },
+      terminal: {
+        attentionEnabled: state.terminal.attentionEnabled,
+        themeId: state.terminal.themeId,
+      },
       notifications: { attentionDelayEnabled: state.notifications.attentionDelayEnabled },
       tiles: {
         creationAvailability: {

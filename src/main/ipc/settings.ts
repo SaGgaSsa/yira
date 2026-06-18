@@ -17,7 +17,8 @@ export function registerSettingsIPC(): void {
       if (
         Object.prototype.hasOwnProperty.call(parsed, 'fontSize') ||
         !Object.prototype.hasOwnProperty.call(parsed, 'interfaceFontSizePx') ||
-        !Object.prototype.hasOwnProperty.call(parsed, 'tileFontSizePx')
+        !Object.prototype.hasOwnProperty.call(parsed, 'tileFontSizePx') ||
+        parsed?.terminal?.themeId !== normalized.terminal.themeId
       ) {
         await fs.writeFile(SETTINGS_PATH, JSON.stringify(normalized, null, 2))
       }
