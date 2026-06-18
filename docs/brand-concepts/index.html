@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Yira Brand Concepts</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0b0d0f;
+        --panel: #12161a;
+        --line: #2b343d;
+        --text: #f3f6f7;
+        --muted: #94a0aa;
+        --blue: #5da8ff;
+        --amber: #ffb23f;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: Inter, Segoe UI, Arial, sans-serif;
+      }
+
+      main {
+        width: min(1180px, calc(100vw - 40px));
+        margin: 0 auto;
+        padding: 42px 0 56px;
+      }
+
+      header {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 24px;
+        padding-bottom: 24px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      h1, h2, p {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: 28px;
+        line-height: 1.1;
+        letter-spacing: 0;
+      }
+
+      p {
+        color: var(--muted);
+        line-height: 1.55;
+      }
+
+      .note {
+        max-width: 560px;
+        font-size: 14px;
+      }
+
+      .concepts {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 34px;
+        margin-top: 34px;
+      }
+
+      .concept {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+
+      .concept-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+        padding: 18px 20px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      h2 {
+        font-size: 17px;
+        letter-spacing: 0;
+      }
+
+      .tags {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .tag {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1;
+        padding: 7px 9px;
+      }
+
+      .assets {
+        display: grid;
+        grid-template-columns: 240px 1fr;
+        gap: 22px;
+        padding: 22px;
+      }
+
+      .asset {
+        display: grid;
+        gap: 12px;
+      }
+
+      .asset-label {
+        color: var(--muted);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: .08em;
+      }
+
+      .icon-box,
+      .cover-box {
+        display: grid;
+        place-items: center;
+        min-height: 240px;
+        border: 1px solid #202830;
+        border-radius: 8px;
+        background:
+          linear-gradient(45deg, #0b0d0f 25%, transparent 25%),
+          linear-gradient(-45deg, #0b0d0f 25%, transparent 25%),
+          linear-gradient(45deg, transparent 75%, #0b0d0f 75%),
+          linear-gradient(-45deg, transparent 75%, #0b0d0f 75%);
+        background-color: #11161a;
+        background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+        background-size: 24px 24px;
+      }
+
+      .icon-box img {
+        width: 168px;
+        height: 168px;
+      }
+
+      .cover-box img {
+        width: 100%;
+        height: auto;
+        border-radius: 8px;
+        box-shadow: 0 16px 50px rgb(0 0 0 / .36);
+      }
+
+      code {
+        color: var(--text);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 12px;
+      }
+
+      a {
+        color: var(--blue);
+        text-decoration: none;
+      }
+
+      a:hover {
+        text-decoration: underline;
+      }
+
+      @media (max-width: 760px) {
+        header,
+        .concept-head,
+        .assets {
+          grid-template-columns: 1fr;
+          display: grid;
+        }
+
+        .assets {
+          gap: 18px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>Yira brand concepts</h1>
+        <p>Simple Material-style right-facing walker carrying a laptop, explored as app icon plus README cover.</p>
+        </div>
+        <p class="note">These are simplified concept assets only. They are not wired into Electron Builder or the repository README yet.</p>
+      </header>
+
+      <section class="concepts" aria-label="Brand concept variants">
+        <article class="concept">
+          <div class="concept-head">
+            <h2>01 Material Filled</h2>
+            <div class="tags">
+              <span class="tag">filled</span>
+              <span class="tag">dark icon</span>
+              <span class="tag">simple silhouette</span>
+            </div>
+          </div>
+          <div class="assets">
+            <div class="asset">
+              <span class="asset-label">Icon SVG</span>
+              <div class="icon-box"><img src="./icon-pathfinder.svg" alt="Material Filled icon concept"></div>
+              <code><a href="./icon-pathfinder.svg">icon-pathfinder.svg</a></code>
+            </div>
+            <div class="asset">
+              <span class="asset-label">README cover SVG</span>
+              <div class="cover-box"><img src="./cover-pathfinder.svg" alt="Material Filled README cover concept"></div>
+              <code><a href="./cover-pathfinder.svg">cover-pathfinder.svg</a></code>
+            </div>
+          </div>
+        </article>
+
+        <article class="concept">
+          <div class="concept-head">
+            <h2>02 Material Rounded</h2>
+            <div class="tags">
+              <span class="tag">rounded</span>
+              <span class="tag">light icon</span>
+              <span class="tag">Material-like</span>
+            </div>
+          </div>
+          <div class="assets">
+            <div class="asset">
+              <span class="asset-label">Icon SVG</span>
+              <div class="icon-box"><img src="./icon-grid-runner.svg" alt="Material Rounded icon concept"></div>
+              <code><a href="./icon-grid-runner.svg">icon-grid-runner.svg</a></code>
+            </div>
+            <div class="asset">
+              <span class="asset-label">README cover SVG</span>
+              <div class="cover-box"><img src="./cover-grid-runner.svg" alt="Material Rounded README cover concept"></div>
+              <code><a href="./cover-grid-runner.svg">cover-grid-runner.svg</a></code>
+            </div>
+          </div>
+        </article>
+
+        <article class="concept">
+          <div class="concept-head">
+            <h2>03 Material Symbol</h2>
+            <div class="tags">
+              <span class="tag">badge</span>
+              <span class="tag">compact</span>
+              <span class="tag">symbol mark</span>
+            </div>
+          </div>
+          <div class="assets">
+            <div class="asset">
+              <span class="asset-label">Icon SVG</span>
+              <div class="icon-box"><img src="./icon-sidecar.svg" alt="Material Symbol icon concept"></div>
+              <code><a href="./icon-sidecar.svg">icon-sidecar.svg</a></code>
+            </div>
+            <div class="asset">
+              <span class="asset-label">README cover SVG</span>
+              <div class="cover-box"><img src="./cover-sidecar.svg" alt="Material Symbol README cover concept"></div>
+              <code><a href="./cover-sidecar.svg">cover-sidecar.svg</a></code>
+            </div>
+          </div>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

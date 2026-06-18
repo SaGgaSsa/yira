@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Yira icon concept: Material Rounded</title>
+  <desc id="desc">Rounded Material-style icon of a right-facing person walking with a laptop.</desc>
+  <rect width="512" height="512" rx="112" fill="#f4f7f8"/>
+  <path d="M138 408h236" stroke="#c9d1d8" stroke-width="20" stroke-linecap="round"/>
+  <circle cx="268" cy="118" r="34" fill="#101418"/>
+  <path d="M238 174h51c18 0 34 10 42 26l31 64" fill="none" stroke="#101418" stroke-width="38" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M238 174l-46 96h64l-48 104" fill="none" stroke="#101418" stroke-width="38" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M288 270h42l54 102" fill="none" stroke="#101418" stroke-width="38" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M324 202c30 0 54 24 54 54" fill="none" stroke="#101418" stroke-width="30" stroke-linecap="round"/>
+  <rect x="312" y="222" width="112" height="76" rx="16" fill="#101418"/>
+  <path d="M336 260h64" stroke="#5da8ff" stroke-width="14" stroke-linecap="round"/>
+  <path d="M167 408h62M340 408h62" stroke="#ffb23f" stroke-width="18" stroke-linecap="round"/>
+</svg>

@@ -16,6 +16,7 @@ import { registerUpdateIPC, scheduleStartupUpdateCheck } from './updater'
 
 const appDisplayName = is.dev ? DEV_APP_NAME : APP_NAME
 const REACT_DEVTOOLS_HINT = 'Download the React DevTools'
+const appIconPath = is.dev ? join(__dirname, '../../resources/icon.png') : join(process.resourcesPath, 'icon.png')
 
 function createWindow(): BrowserWindow {
   // electron-vite outputs .mjs for preload; try .mjs first, fallback to .js
@@ -32,6 +33,7 @@ function createWindow(): BrowserWindow {
     show: false,
     autoHideMenuBar: true,
     backgroundColor: '#15171a',
+    icon: appIconPath,
     webPreferences: {
       preload: finalPreload,
       sandbox: false,
