@@ -171,6 +171,7 @@ export interface NotificationAttentionOptions {
 
 export type NotificationAttentionReason =
   | 'marked'
+  | 'already-marked'
   | 'cleared'
   | 'window-focused'
   | 'no-window'

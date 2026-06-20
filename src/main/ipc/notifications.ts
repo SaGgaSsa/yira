@@ -1,6 +1,9 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import type { IpcMainInvokeEvent } from 'electron'
 import type { NotificationAttentionOptions, NotificationAttentionResult } from '@shared/types'
+import { createWindowAttentionController } from '../windowAttention'
+
+const windowAttention = createWindowAttentionController()
 
 function getEventWindow(event: IpcMainInvokeEvent): BrowserWindow | null {
   const window = BrowserWindow.fromWebContents(event.sender)
@@ -9,8 +12,7 @@ function getEventWindow(event: IpcMainInvokeEvent): BrowserWindow | null {
 }
 
 export function clearWindowAttention(window: BrowserWindow): void {
-  if (window.isDestroyed()) return
-  window.flashFrame(false)
+  windowAttention.clear(window)
 }
 
 export function registerNotificationIPC(): void {
@@ -20,12 +22,8 @@ export function registerNotificationIPC(): void {
       const window = getEventWindow(event)
       if (!window) return { marked: false, reason: 'no-window' }
 
-      if (options?.onlyWhenInactive !== false && window.isFocused()) {
-        return { marked: false, reason: 'window-focused' }
-      }
-
-      window.flashFrame(true)
-      return { marked: true, reason: 'marked' }
+      const reason = windowAttention.request(window, options?.onlyWhenInactive !== false)
+      return { marked: reason === 'marked', reason }
     },
   )
 
