@@ -35,7 +35,6 @@ async function createWindow(): Promise<BrowserWindow> {
     minWidth: 800,
     minHeight: 500,
     show: false,
-    autoHideMenuBar: true,
     backgroundColor: '#15171a',
     icon: appIconPath,
     webPreferences: {
@@ -131,70 +130,8 @@ app.whenReady().then(async () => {
     clipboard.write({ text, html })
   })
 
-  // Native app menu
-  const menu = Menu.buildFromTemplate([
-    {
-      label: 'File',
-      submenu: [
-        {
-          label: 'New Window',
-          click: () => { void createWindow() },
-        },
-        { type: 'separator' },
-        { role: 'close' },
-      ],
-    },
-    {
-      label: 'Edit',
-      submenu: [
-        { role: 'undo' },
-        { role: 'redo' },
-        { type: 'separator' },
-        { role: 'cut' },
-        { role: 'copy' },
-        { role: 'paste' },
-        { role: 'selectAll' },
-      ],
-    },
-    {
-      label: 'View',
-      submenu: [
-        {
-          label: 'Reload',
-          click: () => {
-            BrowserWindow.getFocusedWindow()?.reload()
-          },
-        },
-        {
-          label: 'Force Reload',
-          click: () => {
-            BrowserWindow.getFocusedWindow()?.webContents.reloadIgnoringCache()
-          },
-        },
-        { role: 'toggleDevTools' },
-        { type: 'separator' },
-        {
-          label: 'Toggle Full Screen',
-          accelerator: 'F11',
-          click: () => {
-            const focusedWindow = BrowserWindow.getFocusedWindow()
-            if (!focusedWindow) return
-            focusedWindow.setFullScreen(!focusedWindow.isFullScreen())
-          },
-        },
-      ],
-    },
-    {
-      label: 'Window',
-      submenu: [
-        { role: 'minimize' },
-        { role: 'zoom' },
-        { type: 'separator' },
-        { role: 'front' },
-      ],
-    },
-  ])
-  Menu.setApplicationMenu(menu)
+  // Suppress Electron's native menu bar so Alt cannot reveal it on Windows.
+  Menu.setApplicationMenu(null)
 
   void createWindow()
 
