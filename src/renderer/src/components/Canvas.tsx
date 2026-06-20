@@ -6,20 +6,13 @@ import { TileContent } from '@/components/TileContent'
 import { ContextMenu } from '@/components/ContextMenu'
 import { findMergeTargetGroup, findSelectedGroup, getGroupingBlockedReason } from '@/utils/grouping'
 import { clampViewportToWorld } from '@/utils/canvasWorld'
+import { calculateCanvasFitViewport, CANVAS_FIT_MARGIN, type CanvasFitBounds, type CanvasFitPadding } from '@/utils/canvasViewportFit'
 import { Terminal, StickyNote, Globe, LayoutGrid, Clock, Folder, Lock } from 'lucide-react'
 import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type ShellProfileId, type TileGroup, type GroupColorId, type ViewMode, type SplitViewState, type SplitPanelId, type SplitOrientation } from '@shared/types'
 
 const GROUP_FRAME_PADDING = 20
 const GROUP_TOOLBAR_GAP = 30
-const FIT_PADDING = 48
-const GROUP_TOOLBAR_EXTRA_TOP_PADDING = 40
-
-interface ViewPadding {
-  top: number
-  right: number
-  bottom: number
-  left: number
-}
+const GROUP_TOOLBAR_TOP_CLEARANCE = 30
 
 interface PanDragState {
   type: 'pan'
@@ -70,25 +63,16 @@ const canvasMethodsRef = { current: null as CanvasMethods | null }
 interface CanvasMethods {
   centerViewOnTile: (tileId: string) => void
   centerViewOnCanvas: () => void
-  centerViewOnBounds: (bounds: { minX: number; minY: number; maxX: number; maxY: number }) => void
+  centerViewOnBounds: (bounds: CanvasFitBounds) => void
   fitViewToBounds: (
-    bounds: { minX: number; minY: number; maxX: number; maxY: number },
-    padding?: Partial<ViewPadding>,
+    bounds: CanvasFitBounds,
+    padding?: Partial<CanvasFitPadding>,
   ) => void
   fitViewToContent: () => void
 }
 
 export function getCanvasMethods(): CanvasMethods | null {
   return canvasMethodsRef.current
-}
-
-function resolveViewPadding(padding?: Partial<ViewPadding>): ViewPadding {
-  return {
-    top: padding?.top ?? FIT_PADDING,
-    right: padding?.right ?? FIT_PADDING,
-    bottom: padding?.bottom ?? FIT_PADDING,
-    left: padding?.left ?? FIT_PADDING,
-  }
 }
 
 interface CanvasProps {
@@ -271,7 +255,7 @@ export function Canvas({
   }, [setClampedViewport])
 
   const centerViewOnBounds = useCallback(
-    ({ minX, minY, maxX, maxY }: { minX: number; minY: number; maxX: number; maxY: number }) => {
+    ({ minX, minY, maxX, maxY }: CanvasFitBounds) => {
       if (!containerRef.current) return
 
       const rect = containerRef.current.getBoundingClientRect()
@@ -291,26 +275,17 @@ export function Canvas({
 
   const fitViewToBounds = useCallback(
     (
-      { minX, minY, maxX, maxY }: { minX: number; minY: number; maxX: number; maxY: number },
-      padding?: Partial<ViewPadding>,
+      bounds: CanvasFitBounds,
+      padding?: Partial<CanvasFitPadding>,
     ) => {
       if (!containerRef.current) return
 
       const rect = containerRef.current.getBoundingClientRect()
-      const boundsWidth = Math.max(1, maxX - minX)
-      const boundsHeight = Math.max(1, maxY - minY)
-      const resolvedPadding = resolveViewPadding(padding)
-      const availableWidth = Math.max(1, rect.width - resolvedPadding.left - resolvedPadding.right)
-      const availableHeight = Math.max(1, rect.height - resolvedPadding.top - resolvedPadding.bottom)
-      const nextZoom = Math.max(0.1, Math.min(5, Math.min(availableWidth / boundsWidth, availableHeight / boundsHeight)))
-      const targetLeft = resolvedPadding.left + (availableWidth - boundsWidth * nextZoom) / 2
-      const targetTop = resolvedPadding.top + (availableHeight - boundsHeight * nextZoom) / 2
-
-      setClampedViewport({
-        tx: targetLeft - minX * nextZoom,
-        ty: targetTop - minY * nextZoom,
-        zoom: nextZoom,
-      })
+      setClampedViewport(calculateCanvasFitViewport({
+        bounds,
+        container: { width: rect.width, height: rect.height },
+        padding,
+      }))
     },
     [setClampedViewport],
   )
@@ -347,7 +322,7 @@ export function Canvas({
     fitViewToBounds(
       { minX, minY, maxX, maxY },
       groupRenderData.length > 0
-        ? { top: FIT_PADDING + GROUP_TOOLBAR_GAP + GROUP_TOOLBAR_EXTRA_TOP_PADDING }
+        ? { top: CANVAS_FIT_MARGIN + GROUP_TOOLBAR_TOP_CLEARANCE }
         : undefined,
     )
   }, [tiles, groupRenderData, centerViewOnCanvas, fitViewToBounds])

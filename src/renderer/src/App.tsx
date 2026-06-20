@@ -29,8 +29,7 @@ import { TileListItem } from './components/TileListItem'
 import { buildTileConfigurationMenuItems } from './components/tileConfigurationMenu'
 import { Terminal, StickyNote, Globe, Clock, Folder, FolderOpen, ChevronDown, SlidersHorizontal, Trash2, Pencil, Lock, Columns, Download, X, Plus } from 'lucide-react'
 
-const GROUP_SHOW_MARGIN = 20
-const GROUP_SHOW_TOP_PADDING = 118
+const GROUP_SHOW_TOP_PADDING = 42
 const BASE_WINDOW_TITLE = 'Yira'
 
 function createEmptyCanvasState(): CanvasState {
@@ -661,11 +660,11 @@ export default function App(): React.ReactElement {
     const tile = tiles.find((entry) => entry.id === tileId)
     if (!tile) return
 
-    const paddedBounds = {
-      minX: tile.x - GROUP_SHOW_MARGIN,
-      minY: tile.y - GROUP_SHOW_MARGIN,
-      maxX: tile.x + tile.width + GROUP_SHOW_MARGIN,
-      maxY: tile.y + tile.height + GROUP_SHOW_MARGIN,
+    const bounds = {
+      minX: tile.x,
+      minY: tile.y,
+      maxX: tile.x + tile.width,
+      maxY: tile.y + tile.height,
     }
 
     setTileMenu(null)
@@ -673,7 +672,7 @@ export default function App(): React.ReactElement {
     focusTile(tile.id)
 
     const fitTileBounds = () => {
-      getCanvasMethods()?.fitViewToBounds(paddedBounds, { top: GROUP_SHOW_TOP_PADDING })
+      getCanvasMethods()?.fitViewToBounds(bounds)
     }
 
     if (activeWorkspaceType === 'grid') {
@@ -910,19 +909,12 @@ export default function App(): React.ReactElement {
     const bounds = getGroupBounds(group)
     if (!bounds) return
 
-    const paddedBounds = {
-      minX: bounds.minX - GROUP_SHOW_MARGIN,
-      minY: bounds.minY - GROUP_SHOW_MARGIN,
-      maxX: bounds.maxX + GROUP_SHOW_MARGIN,
-      maxY: bounds.maxY + GROUP_SHOW_MARGIN,
-    }
-
     setGroupMenu(null)
     selectTiles(bounds.tileIds)
     focusTile(null)
 
     const fitGroupBounds = () => {
-      getCanvasMethods()?.fitViewToBounds(paddedBounds, { top: GROUP_SHOW_TOP_PADDING })
+      getCanvasMethods()?.fitViewToBounds(bounds, { top: GROUP_SHOW_TOP_PADDING })
     }
 
     if (viewMode === 'canvas') {
