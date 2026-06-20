@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain } from 'electron'
 import electronUpdater from 'electron-updater'
 import type { AppUpdater, ProgressInfo, UpdateDownloadedEvent, UpdateInfo } from 'electron-updater'
 import type { UpdateState } from '@shared/types'
+import { getUpdateErrorMessage } from './updateErrorMessage'
 
 const { autoUpdater } = electronUpdater
 
@@ -43,11 +44,6 @@ function setUpdateState(patch: Partial<UpdateState>): void {
     currentVersion: app.getVersion(),
   }
   broadcastUpdateState()
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error && error.message.trim()) return error.message.trim()
-  return 'Unable to check for updates right now.'
 }
 
 function setCheckingState(message: string): void {
@@ -95,10 +91,11 @@ function handleUpdateDownloaded(event: UpdateDownloadedEvent): void {
 }
 
 function handleUpdateError(error: unknown): void {
+  console.error('Yira update error:', error)
   setUpdateState({
     status: 'error',
     progressPercent: null,
-    message: getErrorMessage(error),
+    message: getUpdateErrorMessage(error),
   })
 }
 
