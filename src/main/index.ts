@@ -13,12 +13,16 @@ import { clearWindowAttention, registerNotificationIPC } from './ipc/notificatio
 import { registerWindowIPC } from './ipc/window'
 import { APP_ID, APP_NAME, DEV_APP_NAME, YIRA_HOME } from './paths'
 import { registerUpdateIPC, scheduleStartupUpdateCheck } from './updater'
+import { loadWindowState, saveWindowState } from './windowState'
 
 const appDisplayName = is.dev ? DEV_APP_NAME : APP_NAME
 const REACT_DEVTOOLS_HINT = 'Download the React DevTools'
 const appIconPath = is.dev ? join(__dirname, '../../resources/icon.png') : join(process.resourcesPath, 'icon.png')
+const WINDOW_STATE_PATH = join(YIRA_HOME, 'window-state.json')
 
-function createWindow(): BrowserWindow {
+async function createWindow(): Promise<BrowserWindow> {
+  const windowState = await loadWindowState(WINDOW_STATE_PATH)
+
   // electron-vite outputs .mjs for preload; try .mjs first, fallback to .js
   const preloadPath = join(__dirname, '../preload/index.mjs')
   const finalPreload = existsSync(preloadPath) ? preloadPath : join(__dirname, '../preload/index.js')
@@ -45,7 +49,14 @@ function createWindow(): BrowserWindow {
 
   win.on('ready-to-show', () => {
     if (win.isDestroyed() || win.webContents.isDestroyed()) return
+    if (windowState.maximized) win.maximize()
     win.show()
+  })
+  win.on('maximize', () => {
+    void saveWindowState(WINDOW_STATE_PATH, { maximized: true })
+  })
+  win.on('unmaximize', () => {
+    void saveWindowState(WINDOW_STATE_PATH, { maximized: false })
   })
   win.on('focus', () => {
     clearWindowAttention(win)
@@ -127,7 +138,7 @@ app.whenReady().then(async () => {
       submenu: [
         {
           label: 'New Window',
-          click: () => createWindow(),
+          click: () => { void createWindow() },
         },
         { type: 'separator' },
         { role: 'close' },
@@ -185,10 +196,10 @@ app.whenReady().then(async () => {
   ])
   Menu.setApplicationMenu(menu)
 
-  createWindow()
+  void createWindow()
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    if (BrowserWindow.getAllWindows().length === 0) void createWindow()
   })
 })
 
