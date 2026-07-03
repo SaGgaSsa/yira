@@ -21,6 +21,7 @@ interface GridViewProps {
   onSetRootNode: (rootNode: GridLayoutNode | null) => void
   onConfigureTile: (tile: TileState, trigger: HTMLElement) => void
   onFocusTileInView: (tile: TileState) => void
+  onDetachTile: (tile: TileState) => void
   onCloseTile: (tileId: string) => void
 }
 
@@ -55,6 +56,7 @@ export function GridView({
   onSetRootNode,
   onConfigureTile,
   onFocusTileInView,
+  onDetachTile,
   onCloseTile,
 }: GridViewProps): React.ReactElement {
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -232,6 +234,7 @@ export function GridView({
             <TileActionButtons
               onConfigure={(event) => onConfigureTile(tile, event.currentTarget)}
               onFocus={() => onFocusTileInView(tile)}
+              onDetach={() => onDetachTile(tile)}
               onClose={() => onCloseTile(tile.id)}
             />
           </div>

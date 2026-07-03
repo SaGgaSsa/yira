@@ -9,6 +9,7 @@ import { clampViewportToWorld } from '@/utils/canvasWorld'
 import { calculateCanvasFitViewport, CANVAS_FIT_MARGIN, type CanvasFitBounds, type CanvasFitPadding } from '@/utils/canvasViewportFit'
 import { Terminal, StickyNote, Globe, LayoutGrid, Clock, Folder, Lock } from 'lucide-react'
 import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type ShellProfileId, type TileGroup, type GroupColorId, type ViewMode, type SplitViewState, type SplitPanelId, type SplitOrientation } from '@shared/types'
+import { getAttachedTiles } from '@shared/floatingTiles'
 
 const GROUP_FRAME_PADDING = 20
 const GROUP_TOOLBAR_GAP = 30
@@ -90,6 +91,7 @@ interface CanvasProps {
   onDeleteTile: (tileId: string) => Promise<boolean>
   onConfigureTile: (tile: TileState, x: number, y: number) => void
   onFocusTileInView: (tile: TileState) => void
+  onDetachTile: (tile: TileState) => void
   onConfirmRemoveFromGroup: (tile: TileState, group: TileGroup) => Promise<boolean>
   groupsEnabled: boolean
   profiles: Array<{ id: ShellProfileId; label: string; available: boolean }>
@@ -116,6 +118,7 @@ export function Canvas({
   onDeleteTile,
   onConfigureTile,
   onFocusTileInView,
+  onDetachTile,
   onConfirmRemoveFromGroup,
   groupsEnabled,
   profiles,
@@ -134,7 +137,8 @@ export function Canvas({
   const [marqueeRect, setMarqueeRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
   const [colorPicker, setColorPicker] = useState<{ groupId: string; x: number; y: number } | null>(null)
 
-  const tiles = useCanvasStore((s) => s.tiles)
+  const storedTiles = useCanvasStore((s) => s.tiles)
+  const tiles = useMemo(() => getAttachedTiles(storedTiles), [storedTiles])
   const storedGroups = useCanvasStore((s) => s.groups)
   const groups = groupsEnabled ? storedGroups : []
   const viewport = useCanvasStore((s) => s.viewport)
@@ -701,6 +705,7 @@ export function Canvas({
                   onConfigureTile(tile, rect.left, rect.bottom + 6)
                 }}
                 onFocusView={() => onFocusTileInView(tile)}
+                onDetach={() => onDetachTile(tile)}
                 onDelete={() => {
                   void onDeleteTile(tile.id)
                 }}

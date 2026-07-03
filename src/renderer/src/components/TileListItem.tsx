@@ -13,6 +13,8 @@ interface TileListItemProps {
   onDoubleClick?: () => void
   onConfigure?: (event: React.MouseEvent<HTMLButtonElement>) => void
   onFocusTile?: () => void
+  onDetachTile?: () => void
+  detached?: boolean
   onClose?: () => void
   draggable?: boolean
   onDragStart?: (event: React.DragEvent) => void
@@ -30,6 +32,8 @@ export function TileListItem({
   onDoubleClick,
   onConfigure,
   onFocusTile,
+  onDetachTile,
+  detached = false,
   onClose,
   draggable = false,
   onDragStart,
@@ -43,6 +47,9 @@ export function TileListItem({
   const label = (displayLabel ?? tile.label)?.trim() || fallbackLabel
   const attentionLabel = formatTerminalAttentionCount(attentionCount)
   const hasActions = Boolean(onConfigure && onFocusTile && onClose)
+  const actionPaddingClass = hasActions
+    ? onDetachTile ? 'pr-[7.75rem]' : 'pr-[5.75rem]'
+    : ''
 
   return (
     <div
@@ -57,7 +64,7 @@ export function TileListItem({
       }}
     >
       <button
-        className={`flex h-full w-full items-center gap-2 px-3 py-2.5 ${hasActions ? 'pr-[5.75rem]' : ''}`}
+        className={`flex h-full w-full items-center gap-2 px-3 py-2.5 ${actionPaddingClass}`}
         onClick={onClick}
         onDoubleClick={onDoubleClick}
         title={label}
@@ -77,6 +84,11 @@ export function TileListItem({
               {attentionLabel}
             </span>
           )}
+          {detached && (
+            <span className="nd-caption shrink-0 rounded-full border border-border-visible px-2 py-1 text-text-secondary">
+              Detached
+            </span>
+          )}
         </div>
       </button>
 
@@ -85,6 +97,8 @@ export function TileListItem({
           className="absolute right-2 top-1/2 -translate-y-1/2"
           onConfigure={onConfigure}
           onFocus={onFocusTile}
+          onDetach={onDetachTile}
+          detached={detached}
           onClose={onClose}
         />
       )}

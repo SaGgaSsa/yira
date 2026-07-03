@@ -73,6 +73,10 @@ function normalizeTile(tile: TileState): TileState {
   }
 }
 
+function isDetachedTile(tile: TileState): boolean {
+  return tile.floating?.detached === true
+}
+
 function collectLeafTileIds(node: GridLayoutNode | null): string[] {
   if (!node) return []
   if (node.type === 'leaf') return [node.tileId]
@@ -367,11 +371,12 @@ function cleanGridNode(
 }
 
 export function normalizeGridLayout(rootNode: GridLayoutNode | null | undefined, tiles: TileState[]): GridLayoutNode | null {
-  const validTileIds = new Set(tiles.map((tile) => tile.id))
+  const attachedTiles = tiles.filter((tile) => !isDetachedTile(tile))
+  const validTileIds = new Set(attachedTiles.map((tile) => tile.id))
   const seenTileIds = new Set<string>()
   let nextRoot = cleanGridNode(rootNode, validTileIds, seenTileIds)
 
-  for (const tile of tiles) {
+  for (const tile of attachedTiles) {
     if (seenTileIds.has(tile.id)) continue
     nextRoot = insertTileIntoGridLayout(nextRoot, tile.id)
     seenTileIds.add(tile.id)
@@ -399,13 +404,13 @@ export function normalizeGridWorkspaceState(state: GridWorkspaceState): GridWork
   }
 
   const tiles = state.tiles.map(normalizeTile)
-  const tileIds = new Set(tiles.map((tile) => tile.id))
-  const focusedTileId = state.focusedTileId && tileIds.has(state.focusedTileId)
+  const attachedTileIds = new Set(tiles.filter((tile) => !isDetachedTile(tile)).map((tile) => tile.id))
+  const focusedTileId = state.focusedTileId && attachedTileIds.has(state.focusedTileId)
     ? state.focusedTileId
     : null
-  const fullviewActiveTileId = state.fullviewActiveTileId && tileIds.has(state.fullviewActiveTileId)
+  const fullviewActiveTileId = state.fullviewActiveTileId && attachedTileIds.has(state.fullviewActiveTileId)
     ? state.fullviewActiveTileId
-    : focusedTileId ?? tiles[0]?.id ?? null
+    : focusedTileId ?? tiles.find((tile) => attachedTileIds.has(tile.id))?.id ?? null
 
   return {
     tiles,

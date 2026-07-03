@@ -1,7 +1,13 @@
 import { create } from 'zustand'
-import { GROUP_COLOR_ORDER, normalizeTileSize, type TileState, type CanvasState, type Viewport, type ShellProfileId, type TileGroup, type GroupColorId, type ViewMode, type SplitViewState, type SplitPanelId, type WorkspaceConfig, type WorkspaceType, type GridViewState, type GridWorkspaceState } from '@shared/types'
+import { GROUP_COLOR_ORDER, normalizeTileSize, type TileState, type CanvasState, type Viewport, type ShellProfileId, type TileGroup, type GroupColorId, type ViewMode, type SplitViewState, type SplitPanelId, type WorkspaceConfig, type WorkspaceType, type GridViewState, type GridWorkspaceState, type WindowBounds } from '@shared/types'
 import { normalizeWorkspaceConfig } from '@shared/workspaceConfig'
 import { createEmptyGridWorkspaceState, insertTileIntoGridLayout, normalizeGridLayout, normalizeGridWorkspaceState, removeTileFromGridLayout } from '@shared/gridWorkspaceState'
+import {
+  attachFloatingTile as attachFloatingTileState,
+  detachTileForFloating,
+  getAttachedTiles,
+  normalizeFloatingTileState,
+} from '@shared/floatingTiles'
 import { getGroupingBlockedReason } from '@/utils/grouping'
 import { DEFAULT_SPLIT_ORIENTATION, normalizeSplitOrientation } from '@/utils/splitViewState'
 import { clampTileToWorld, normalizeFiniteViewport } from '@/utils/canvasWorld'
@@ -48,7 +54,7 @@ function normalizeSplitViewState(
   focusedTileId: string | null,
   fullviewActiveTileId: string | null,
 ): SplitViewState {
-  const tileIds = tiles.map((tile) => tile.id)
+  const tileIds = getAttachedTiles(tiles).map((tile) => tile.id)
   const existingIds = new Set(tileIds)
   const seen = new Set<string>()
   const cleanPanelIds = (ids?: string[]) => (ids ?? []).filter((tileId) => {
@@ -125,11 +131,12 @@ function normalizeTile(tile: TileState): TileState {
   const normalizedTile = tileWithoutTitlebar.notificationsMuted === false
     ? { ...tileWithoutTitlebar, notificationsMuted: undefined }
     : tileWithoutTitlebar
+  const floatingNormalizedTile = normalizeFloatingTileState(normalizedTile)
 
-  if (width === normalizedTile.width && height === normalizedTile.height) return clampTileToWorld(normalizedTile)
+  if (width === floatingNormalizedTile.width && height === floatingNormalizedTile.height) return clampTileToWorld(floatingNormalizedTile)
 
   return clampTileToWorld({
-    ...normalizedTile,
+    ...floatingNormalizedTile,
     width,
     height,
   })
@@ -265,6 +272,8 @@ interface CanvasStore {
   addTile: (tile: TileState) => void
   removeTile: (tileId: string) => void
   updateTile: (tileId: string, patch: Partial<TileState>) => void
+  detachTileToFloating: (tileId: string, bounds?: WindowBounds) => void
+  attachFloatingTile: (tileId: string) => void
   updateTilePositions: (positions: Array<{ id: string; x: number; y: number }>) => void
   focusTile: (tileId: string | null) => void
   setViewMode: (mode: ViewMode) => void
@@ -461,6 +470,62 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       terminalAttention: Object.fromEntries(
         Object.entries(s.terminalAttention).filter(([id]) => id !== tileId),
       ),
+    }
+  }),
+
+  detachTileToFloating: (tileId, bounds) => set((s) => {
+    const detached = detachTileForFloating({
+      tiles: s.tiles,
+      tileId,
+      gridRootNode: s.activeWorkspaceConfig.type === 'grid' ? s.gridViewState.rootNode : undefined,
+      bounds,
+    })
+    const nextTiles = detached.tiles.map(normalizeTile)
+    const nextAttachedTiles = getAttachedTiles(nextTiles)
+    const nextAttachedIds = new Set(nextAttachedTiles.map((tile) => tile.id))
+    const nextFullviewActiveTileId = s.fullviewActiveTileId && nextAttachedIds.has(s.fullviewActiveTileId)
+      ? s.fullviewActiveTileId
+      : nextAttachedTiles[0]?.id ?? null
+    const nextFocusedTileId = s.focusedTileId && nextAttachedIds.has(s.focusedTileId)
+      ? s.focusedTileId
+      : null
+    const nextSplitViewState = normalizeSplitViewState(
+      s.splitViewState,
+      nextTiles,
+      nextFocusedTileId,
+      nextFullviewActiveTileId,
+    )
+
+    return {
+      tiles: nextTiles,
+      focusedTileId: nextFocusedTileId,
+      fullviewActiveTileId: nextFullviewActiveTileId,
+      splitViewState: nextSplitViewState,
+      gridViewState: detached.gridRootNode === undefined
+        ? s.gridViewState
+        : { rootNode: detached.gridRootNode },
+      selectedTileIds: s.selectedTileIds.filter((id) => id !== tileId),
+    }
+  }),
+
+  attachFloatingTile: (tileId) => set((s) => {
+    if (!s.tiles.some((tile) => tile.id === tileId)) return {}
+
+    const attached = attachFloatingTileState({
+      tiles: s.tiles,
+      tileId,
+      gridRootNode: s.activeWorkspaceConfig.type === 'grid' ? s.gridViewState.rootNode : undefined,
+    })
+    const nextTiles = attached.tiles.map(normalizeTile)
+
+    return {
+      tiles: nextTiles,
+      focusedTileId: tileId,
+      fullviewActiveTileId: tileId,
+      gridViewState: attached.gridRootNode === undefined
+        ? s.gridViewState
+        : { rootNode: attached.gridRootNode },
+      selectedTileIds: [tileId],
     }
   }),
 

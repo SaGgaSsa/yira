@@ -11,6 +11,7 @@ import { registerBoardsIPC } from './ipc/boards'
 import { registerFilesIPC } from './ipc/files'
 import { clearWindowAttention, registerNotificationIPC } from './ipc/notifications'
 import { registerWindowIPC } from './ipc/window'
+import { registerFloatingTilesIPC } from './ipc/floatingTiles'
 import { APP_ID, APP_NAME, DEV_APP_NAME, YIRA_HOME } from './paths'
 import { registerUpdateIPC, scheduleStartupUpdateCheck } from './updater'
 import { loadWindowState, saveWindowState } from './windowState'
@@ -19,6 +20,7 @@ const appDisplayName = is.dev ? DEV_APP_NAME : APP_NAME
 const REACT_DEVTOOLS_HINT = 'Download the React DevTools'
 const appIconPath = is.dev ? join(__dirname, '../../resources/icon.png') : join(process.resourcesPath, 'icon.png')
 const WINDOW_STATE_PATH = join(YIRA_HOME, 'window-state.json')
+let mainWindow: BrowserWindow | null = null
 
 async function createWindow(): Promise<BrowserWindow> {
   const windowState = await loadWindowState(WINDOW_STATE_PATH)
@@ -111,6 +113,7 @@ app.whenReady().then(async () => {
   registerFilesIPC()
   registerNotificationIPC()
   registerWindowIPC()
+  registerFloatingTilesIPC(() => mainWindow)
   registerUpdateIPC()
 
   ipcMain.handle('shell:openExternal', async (_event, url: string) => {
@@ -133,10 +136,20 @@ app.whenReady().then(async () => {
   // Suppress Electron's native menu bar so Alt cannot reveal it on Windows.
   Menu.setApplicationMenu(null)
 
-  void createWindow()
+  mainWindow = await createWindow()
+  mainWindow.on('closed', () => {
+    mainWindow = null
+  })
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) void createWindow()
+    if (BrowserWindow.getAllWindows().length === 0) {
+      void createWindow().then((window) => {
+        mainWindow = window
+        window.on('closed', () => {
+          if (mainWindow === window) mainWindow = null
+        })
+      })
+    }
   })
 })
 

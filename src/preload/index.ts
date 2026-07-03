@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { FileListOptions, NotificationAttentionOptions, TerminalCreateOptions, UpdateState, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceUpdatePatch } from '@shared/types'
+import type { FileListOptions, NotificationAttentionOptions, TerminalCreateOptions, UpdateState, WindowBounds, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceUpdatePatch } from '@shared/types'
 
 console.log('[preload] Loading...')
 
@@ -99,6 +99,48 @@ contextBridge.exposeInMainWorld('electron', {
 
   window: {
     setTitle: (title: string) => ipcRenderer.invoke('window:setTitle', title),
+  },
+
+  floating: {
+    open: (workspaceId: string, tileId: string, bounds?: WindowBounds) =>
+      ipcRenderer.invoke('floating:open', { workspaceId, tileId, bounds }),
+    focus: (tileId: string) => ipcRenderer.invoke('floating:focus', tileId),
+    close: (tileId: string, attachOnClose?: boolean) =>
+      ipcRenderer.invoke('floating:close', tileId, attachOnClose),
+    closeWorkspace: (workspaceId: string) => ipcRenderer.invoke('floating:closeWorkspace', workspaceId),
+    requestAttach: (tileId: string) => ipcRenderer.invoke('floating:requestAttach', tileId),
+    getTileSnapshot: (workspaceId: string, tileId: string) =>
+      ipcRenderer.invoke('floating:getTileSnapshot', { workspaceId, tileId }),
+    updateTile: (workspaceId: string, tileId: string, patch: unknown) =>
+      ipcRenderer.invoke('floating:updateTile', { workspaceId, tileId, patch }),
+    onAttachRequested: (callback: (event: { workspaceId: string; tileId: string; bounds?: WindowBounds }) => void) => {
+      const handler = (_event: unknown, payload: { workspaceId: string; tileId: string; bounds?: WindowBounds }) => callback(payload)
+      ipcRenderer.on('floating:attachRequested', handler)
+      return () => ipcRenderer.removeListener('floating:attachRequested', handler)
+    },
+    onBoundsChanged: (callback: (event: { workspaceId: string; tileId: string; bounds: WindowBounds }) => void) => {
+      const handler = (_event: unknown, payload: { workspaceId: string; tileId: string; bounds: WindowBounds }) => callback(payload)
+      ipcRenderer.on('floating:boundsChanged', handler)
+      return () => ipcRenderer.removeListener('floating:boundsChanged', handler)
+    },
+    onSnapshotRequest: (callback: (event: { requestId: string; workspaceId: string; tileId: string }) => unknown | Promise<unknown>) => {
+      const handler = (_event: unknown, payload: { requestId: string; workspaceId: string; tileId: string }) => {
+        Promise.resolve(callback(payload))
+          .then((snapshot) => {
+            ipcRenderer.send('floating:snapshotResponse', payload.requestId, snapshot)
+          })
+          .catch(() => {
+            ipcRenderer.send('floating:snapshotResponse', payload.requestId, null)
+          })
+      }
+      ipcRenderer.on('floating:snapshotRequest', handler)
+      return () => ipcRenderer.removeListener('floating:snapshotRequest', handler)
+    },
+    onUpdateTile: (callback: (event: { workspaceId: string; tileId: string; patch: unknown }) => void) => {
+      const handler = (_event: unknown, payload: { workspaceId: string; tileId: string; patch: unknown }) => callback(payload)
+      ipcRenderer.on('floating:updateTile', handler)
+      return () => ipcRenderer.removeListener('floating:updateTile', handler)
+    },
   },
 
   updates: {

@@ -1,10 +1,12 @@
 import React from 'react'
-import { Maximize2, Settings, X } from 'lucide-react'
+import { Maximize2, PanelBottomClose, PanelTopOpen, Settings, X } from 'lucide-react'
 
 interface TileActionButtonsProps {
   onConfigure: (event: React.MouseEvent<HTMLButtonElement>) => void
   onFocus: () => void
   onClose: () => void
+  onDetach?: () => void
+  detached?: boolean
   className?: string
 }
 
@@ -37,6 +39,8 @@ export function TileActionButtons({
   onConfigure,
   onFocus,
   onClose,
+  onDetach,
+  detached = false,
   className = '',
 }: TileActionButtonsProps): React.ReactElement {
   return (
@@ -47,6 +51,11 @@ export function TileActionButtons({
       <TileActionButton title="Focus tile" onClick={() => onFocus()}>
         <Maximize2 size={13} />
       </TileActionButton>
+      {onDetach && (
+        <TileActionButton title={detached ? 'Attach tile' : 'Detach tile'} onClick={() => onDetach()}>
+          {detached ? <PanelBottomClose size={13} /> : <PanelTopOpen size={13} />}
+        </TileActionButton>
+      )}
       <TileActionButton title="Close tile" onClick={() => onClose()}>
         <X size={13} />
       </TileActionButton>

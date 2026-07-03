@@ -7,6 +7,7 @@ import { RawJsonEditor } from './components/RawJsonEditor'
 import { ContextMenu, type MenuItem } from './components/ContextMenu'
 import { SplitviewPanel } from './components/SplitviewPanel'
 import { GridView } from './components/GridView'
+import { FloatingTileWindow } from './components/FloatingTileWindow'
 import { AppDialog, type ConfirmDialogOptions, type PromptDialogOptions } from './components/AppDialog'
 import { GroupEditorDialog, type GroupEditorRequest, type GroupEditorValue } from './components/GroupEditorDialog'
 import { WorkspaceDialog, type WorkspaceDialogRequest, type WorkspaceDialogValue } from './components/WorkspaceDialog'
@@ -22,6 +23,7 @@ import { useUpdateStore } from './store/updateStore'
 import { findMergeTargetGroup, findSelectedGroup, getGroupingBlockedReason } from './utils/grouping'
 import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type CanvasState, type GridWorkspaceState, type Workspace, type WorkspaceMetadata, type TileGroup, type ViewMode, type SplitPanelId, type SplitViewState, type WorkspaceManagementEntry, type WorkspaceType } from '@shared/types'
 import { createEmptyGridWorkspaceState } from '@shared/gridWorkspaceState'
+import { getAttachedTiles, isTileDetached, selectFloatingTileWindowOpenRequests } from '@shared/floatingTiles'
 import { DEFAULT_SPLIT_ORIENTATION, toggleSplitOrientation } from './utils/splitViewState'
 import { getTerminalDisplayTitle, normalizeTerminalWindowTitle } from './utils/terminalDisplayTitle'
 import { resolveViewModeTransition } from './utils/viewModeTransition'
@@ -222,6 +224,9 @@ function isPromptDialog(dialog: PromptDialogState | ConfirmDialogState): dialog 
 }
 
 export default function App(): React.ReactElement {
+  const rendererMode = new URLSearchParams(window.location.search).get('mode')
+  if (rendererMode === 'floating-tile') return <FloatingTileWindow />
+
   // Settings
   const loadSettings = useSettingsStore((s) => s.loadSettings)
   useTheme()
@@ -268,6 +273,8 @@ export default function App(): React.ReactElement {
   const restoreWorkspaceState = useCanvasStore((s) => s.restoreWorkspaceState)
   const restoreGridWorkspaceState = useCanvasStore((s) => s.restoreGridWorkspaceState)
   const setProfiles = useCanvasStore((s) => s.setProfiles)
+  const detachTileToFloating = useCanvasStore((s) => s.detachTileToFloating)
+  const attachFloatingTile = useCanvasStore((s) => s.attachFloatingTile)
   const setViewMode = useCanvasStore((s) => s.setViewMode)
   const setFullviewActiveTileId = useCanvasStore((s) => s.setFullviewActiveTileId)
   const setSplitViewState = useCanvasStore((s) => s.setSplitViewState)
@@ -277,6 +284,11 @@ export default function App(): React.ReactElement {
   const clearTerminalTitle = useCanvasStore((s) => s.clearTerminalTitle)
   const clearAllTerminalAttention = useCanvasStore((s) => s.clearAllTerminalAttention)
   const activeWorkspaceType: WorkspaceType = activeWorkspaceConfig.type
+  const attachedTiles = useMemo(() => getAttachedTiles(tiles), [tiles])
+  const sortedAttachedTiles = useMemo(
+    () => attachedTiles.slice().sort((a, b) => b.zIndex - a.zIndex),
+    [attachedTiles],
+  )
 
   // Canvas actions (extracted hook)
   const [activeDialog, setActiveDialog] = useState<ActiveDialogState>(null)
@@ -324,6 +336,10 @@ export default function App(): React.ReactElement {
   const [groupMenu, setGroupMenu] = useState<{ groupId: string; x: number; y: number } | null>(null)
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const workspaceTransitionRef = useRef(0)
+  const floatingRestoreRef = useRef<{ workspaceId: string | null; detachedTileIds: Set<string> }>({
+    workspaceId: null,
+    detachedTileIds: new Set(),
+  })
   const skipNextAutosaveRef = useRef(false)
   const prevZoomRef = useRef(1)
   const footerRef = useRef<HTMLDivElement | null>(null)
@@ -451,6 +467,9 @@ export default function App(): React.ReactElement {
     if (options?.persistCurrent !== false && currentWorkspaceId && currentWorkspaceId !== workspace.id) {
       await saveToDisk(currentWorkspaceId)
     }
+    if (currentWorkspaceId && currentWorkspaceId !== workspace.id) {
+      await window.electron.floating.closeWorkspace(currentWorkspaceId)
+    }
 
     // Canvas state is active-workspace-only data. Workspace list/getActive stay metadata-only.
     const workspaceType = workspace.config.type
@@ -470,6 +489,72 @@ export default function App(): React.ReactElement {
     }
     setShowWorkspacePicker(false)
   }, [restoreGridWorkspaceState, restoreWorkspaceState, saveToDisk])
+
+  useEffect(() => {
+    return window.electron.floating.onSnapshotRequest(({ workspaceId, tileId }) => {
+      const state = useCanvasStore.getState()
+      if (workspaceId !== state.activeWorkspaceId) return null
+      const tile = state.tiles.find((entry) => entry.id === tileId)
+      if (!tile) return null
+
+      return {
+        workspaceId: state.activeWorkspaceId,
+        workspaceName: state.activeWorkspaceName,
+        workspaceConfig: state.activeWorkspaceConfig,
+        tile,
+        terminalTitle: state.terminalTitles[tileId],
+      }
+    })
+  }, [])
+
+  useEffect(() => {
+    return window.electron.floating.onUpdateTile(({ workspaceId, tileId, patch }) => {
+      if (workspaceId !== useCanvasStore.getState().activeWorkspaceId) return
+      if (!patch || typeof patch !== 'object') return
+      updateTile(tileId, patch as Partial<TileState>)
+    })
+  }, [updateTile])
+
+  useEffect(() => {
+    return window.electron.floating.onBoundsChanged(({ workspaceId, tileId, bounds }) => {
+      if (workspaceId !== useCanvasStore.getState().activeWorkspaceId) return
+      const tile = useCanvasStore.getState().tiles.find((entry) => entry.id === tileId)
+      if (!tile || !isTileDetached(tile)) return
+      updateTile(tileId, {
+        floating: {
+          detached: true,
+          bounds,
+          gridPlacement: tile.floating?.gridPlacement,
+        },
+      })
+    })
+  }, [updateTile])
+
+  useEffect(() => {
+    return window.electron.floating.onAttachRequested(({ workspaceId, tileId }) => {
+      if (workspaceId !== useCanvasStore.getState().activeWorkspaceId) return
+      attachFloatingTile(tileId)
+    })
+  }, [attachFloatingTile])
+
+  useEffect(() => {
+    if (!activeWorkspaceId) return
+    const previous = floatingRestoreRef.current
+    const openRequests = selectFloatingTileWindowOpenRequests({
+      previousWorkspaceId: previous.workspaceId,
+      previousDetachedTileIds: previous.detachedTileIds,
+      workspaceId: activeWorkspaceId,
+      tiles,
+    })
+    floatingRestoreRef.current = {
+      workspaceId: activeWorkspaceId,
+      detachedTileIds: new Set(tiles.filter(isTileDetached).map((tile) => tile.id)),
+    }
+
+    for (const request of openRequests) {
+      void window.electron.floating.open(activeWorkspaceId, request.tileId, request.bounds)
+    }
+  }, [activeWorkspaceId, tiles])
 
   // Load workspaces on mount
   useEffect(() => {
@@ -581,7 +666,7 @@ export default function App(): React.ReactElement {
 
   // Keyboard shortcuts (extracted hook)
   useKeyboardShortcuts({
-    tiles,
+    tiles: attachedTiles,
     focusedTileId,
     selectedTileIds,
     viewMode,
@@ -660,6 +745,10 @@ export default function App(): React.ReactElement {
   const handleShowTileFromSidebar = useCallback((tileId: string) => {
     const tile = tiles.find((entry) => entry.id === tileId)
     if (!tile) return
+    if (isTileDetached(tile)) {
+      void window.electron.floating.focus(tile.id)
+      return
+    }
 
     const bounds = {
       minX: tile.x,
@@ -745,7 +834,7 @@ export default function App(): React.ReactElement {
       requestedMode: mode,
       focusedTileId,
       fullviewActiveTileId,
-      tiles,
+      tiles: attachedTiles,
       splitViewState,
     })
 
@@ -766,7 +855,7 @@ export default function App(): React.ReactElement {
     }
 
     if (transition.viewMode === 'splitview') {
-      if (tiles.length < 2) return
+      if (attachedTiles.length < 2) return
 
       if (viewMode === 'splitview') {
         setSplitViewState({
@@ -776,10 +865,10 @@ export default function App(): React.ReactElement {
         return
       }
 
-      const activeTileId = focusedTileId && tiles.some((tile) => tile.id === focusedTileId)
+      const activeTileId = focusedTileId && attachedTiles.some((tile) => tile.id === focusedTileId)
         ? focusedTileId
         : fullviewActiveTileId
-      const nextSplitState = normalizeSplitViewForTiles(splitViewState, tiles, activeTileId)
+      const nextSplitState = normalizeSplitViewForTiles(splitViewState, attachedTiles, activeTileId)
       setSplitViewState(nextSplitState)
       const nextActiveId = nextSplitState.focusedPanel === 'left'
         ? nextSplitState.activeLeftTileId
@@ -792,7 +881,7 @@ export default function App(): React.ReactElement {
     }
 
     setViewMode(transition.viewMode)
-  }, [activeWorkspaceType, focusTile, focusedTileId, fullviewActiveTileId, selectTiles, setFullviewActiveTileId, setSplitViewState, setViewMode, splitViewState, tiles, viewMode])
+  }, [activeWorkspaceType, attachedTiles, focusTile, focusedTileId, fullviewActiveTileId, selectTiles, setFullviewActiveTileId, setSplitViewState, setViewMode, splitViewState, viewMode])
 
   const selectedGroup = useMemo(
     () => findSelectedGroup(effectiveGroups, selectedTileIds),
@@ -800,13 +889,13 @@ export default function App(): React.ReactElement {
   )
 
   const mergeTargetGroup = useMemo(
-    () => findMergeTargetGroup(tiles, effectiveGroups, selectedTileIds),
-    [tiles, effectiveGroups, selectedTileIds],
+    () => findMergeTargetGroup(attachedTiles, effectiveGroups, selectedTileIds),
+    [attachedTiles, effectiveGroups, selectedTileIds],
   )
 
   const groupingBlockedReason = useMemo(
-    () => getGroupingBlockedReason(tiles, effectiveGroups, selectedTileIds, mergeTargetGroup?.id),
-    [tiles, effectiveGroups, selectedTileIds, mergeTargetGroup],
+    () => getGroupingBlockedReason(attachedTiles, effectiveGroups, selectedTileIds, mergeTargetGroup?.id),
+    [attachedTiles, effectiveGroups, selectedTileIds, mergeTargetGroup],
   )
 
   const handleCreateGroupFromSelection = useCallback(() => {
@@ -1001,6 +1090,27 @@ export default function App(): React.ReactElement {
 
     focusTileInFullview(tile)
   }, [focusTileInFullview, handleSelectSingleTile, viewMode])
+
+  const detachTile = useCallback((tile: TileState) => {
+    if (!activeWorkspaceId || isTileDetached(tile)) return
+    detachTileToFloating(tile.id)
+    void window.electron.floating.open(activeWorkspaceId, tile.id, tile.floating?.bounds)
+  }, [activeWorkspaceId, detachTileToFloating])
+
+  const attachTile = useCallback((tile: TileState) => {
+    if (!isTileDetached(tile)) return
+    attachFloatingTile(tile.id)
+    void window.electron.floating.close(tile.id, false)
+  }, [attachFloatingTile])
+
+  const handleSidebarTilePrimaryAction = useCallback((tile: TileState) => {
+    if (isTileDetached(tile)) {
+      void window.electron.floating.focus(tile.id)
+      return
+    }
+
+    handleSidebarTileClick(tile.id)
+  }, [handleSidebarTileClick])
 
   const duplicateTileFromMenu = useCallback((tile: TileState) => {
     const duplicateId = duplicateTerminalTile(tile.id)
@@ -1254,24 +1364,21 @@ export default function App(): React.ReactElement {
       },
     },
   ] : []
-  const sortedTiles = useMemo(
-    () => tiles.slice().sort((a, b) => b.zIndex - a.zIndex),
-    [tiles],
-  )
+  const sortedTiles = sortedAttachedTiles
 
   useEffect(() => {
-    if (tiles.length === 0) {
+    if (attachedTiles.length === 0) {
       setFullviewActiveTileId(null)
       return
     }
 
-    if (!fullviewActiveTileId || !tiles.some((tile) => tile.id === fullviewActiveTileId)) {
-      const fallback = focusedTileId && tiles.some((tile) => tile.id === focusedTileId)
+    if (!fullviewActiveTileId || !attachedTiles.some((tile) => tile.id === fullviewActiveTileId)) {
+      const fallback = focusedTileId && attachedTiles.some((tile) => tile.id === focusedTileId)
         ? focusedTileId
         : sortedTiles[0]?.id ?? null
       setFullviewActiveTileId(fallback)
     }
-  }, [tiles, sortedTiles, fullviewActiveTileId, focusedTileId, viewMode, setFullviewActiveTileId, setViewMode])
+  }, [attachedTiles, sortedTiles, fullviewActiveTileId, focusedTileId, viewMode, setFullviewActiveTileId, setViewMode])
 
   useEffect(() => {
     if (activeWorkspaceType === 'grid' && viewMode !== 'gridview' && viewMode !== 'fullview') {
@@ -1287,8 +1394,8 @@ export default function App(): React.ReactElement {
   useEffect(() => {
     if (activeWorkspaceType !== 'canvas' || viewMode !== 'splitview') return
 
-    if (tiles.length < 2) {
-      const fallback = tiles[0]?.id ?? null
+    if (attachedTiles.length < 2) {
+      const fallback = attachedTiles[0]?.id ?? null
       setFullviewActiveTileId(fallback)
       if (fallback) {
         focusTile(fallback)
@@ -1304,10 +1411,10 @@ export default function App(): React.ReactElement {
     if (!areSplitViewStatesEqual(splitViewState, normalized)) {
       setSplitViewState(normalized)
     }
-  }, [activeWorkspaceType, focusTile, focusedTileId, fullviewActiveTileId, selectTiles, setFullviewActiveTileId, setSplitViewState, setViewMode, sortedTiles, splitViewState, tiles, viewMode])
+  }, [activeWorkspaceType, attachedTiles, focusTile, focusedTileId, fullviewActiveTileId, selectTiles, setFullviewActiveTileId, setSplitViewState, setViewMode, sortedTiles, splitViewState, viewMode])
 
   const closeTileFromFullview = useCallback(async (tileId: string) => {
-    const ordered = tiles.slice().sort((a, b) => b.zIndex - a.zIndex)
+    const ordered = attachedTiles.slice().sort((a, b) => b.zIndex - a.zIndex)
     const index = ordered.findIndex((tile) => tile.id === tileId)
     const fallback =
       ordered[index + 1]?.id ??
@@ -1321,7 +1428,7 @@ export default function App(): React.ReactElement {
       setFullviewActiveTileId(fallback)
       if (!fallback) setViewMode('canvas')
     }
-  }, [tiles, fullviewActiveTileId, deleteTile, setFullviewActiveTileId, setViewMode])
+  }, [attachedTiles, fullviewActiveTileId, deleteTile, setFullviewActiveTileId, setViewMode])
 
   const closeTileFromSplitview = useCallback(async (panel: SplitPanelId, tileId: string) => {
     const panelIds = panel === 'left' ? splitViewState.leftTileIds : splitViewState.rightTileIds
@@ -1629,7 +1736,7 @@ export default function App(): React.ReactElement {
             <div className="mb-3 flex items-center justify-between px-2">
               <span className="nd-label text-text-secondary">Active Surfaces</span>
               <span className="nd-caption text-text-secondary">
-                {selectedTileIds.length > 1 ? `${selectedTileIds.length} SELECTED` : `${sortedTiles.length} TRACKED`}
+                {selectedTileIds.length > 1 ? `${selectedTileIds.length} SELECTED` : `${tiles.length} TRACKED`}
               </span>
             </div>
             {tiles.length === 0 ? (
@@ -1653,16 +1760,33 @@ export default function App(): React.ReactElement {
                         active={isActive || isSelected}
                         displayLabel={tile.type === 'terminal' ? getTerminalDisplayTitle(tile, terminalTitles) : undefined}
                         attentionCount={terminalAttentionCounts[tile.id] ?? 0}
+                        detached={isTileDetached(tile)}
                         className="w-full transition-colors"
-                        onClick={() => handleSidebarTileClick(tile.id)}
+                        onClick={() => handleSidebarTilePrimaryAction(tile)}
                         onDoubleClick={() => handleShowTileFromSidebar(tile.id)}
                         onConfigure={(event) => {
                           openTileConfigurationMenu(tile.id, event.currentTarget)
                         }}
                         onFocusTile={() => {
+                          if (isTileDetached(tile)) {
+                            void window.electron.floating.focus(tile.id)
+                            return
+                          }
                           handleTileActionFocus(tile)
                         }}
+                        onDetachTile={() => {
+                          if (isTileDetached(tile)) {
+                            attachTile(tile)
+                            return
+                          }
+                          detachTile(tile)
+                        }}
                         onClose={() => {
+                          if (isTileDetached(tile)) {
+                            void window.electron.floating.close(tile.id, false)
+                            void deleteTile(tile.id)
+                            return
+                          }
                           if (viewMode === 'fullview') {
                             void closeTileFromFullview(tile.id)
                             return
@@ -1779,7 +1903,7 @@ export default function App(): React.ReactElement {
               viewMode={viewMode}
               splitOrientation={splitViewState.orientation}
               workspaceType={activeWorkspaceType}
-              canSplitView={tiles.length >= 2}
+              canSplitView={attachedTiles.length >= 2}
               sidebarCollapsed={sidebarCollapsed}
               onToggleSidebar={() => setSidebarCollapsed(c => !c)}
               onSetViewMode={handleSetViewMode}
@@ -1820,7 +1944,7 @@ export default function App(): React.ReactElement {
                 {activeWorkspaceType === 'grid' && viewMode === 'gridview' ? (
                   <GridView
                     rootNode={gridViewState.rootNode}
-                    tiles={tiles}
+                    tiles={attachedTiles}
                     focusedTileId={focusedTileId}
                     terminalTitles={terminalTitles}
                     onFocusTile={(tileId) => {
@@ -1831,6 +1955,7 @@ export default function App(): React.ReactElement {
                     onSetRootNode={(rootNode) => setGridViewState({ rootNode })}
                     onConfigureTile={(tile, trigger) => openTileConfigurationMenu(tile.id, trigger)}
                     onFocusTileInView={focusTileInFullview}
+                    onDetachTile={detachTile}
                     onCloseTile={(tileId) => {
                       void deleteTile(tileId)
                     }}
@@ -1858,6 +1983,7 @@ export default function App(): React.ReactElement {
                       setTileMenu({ tileId: tile.id, x, y })
                     }}
                     onFocusTileInView={focusTileInFullview}
+                    onDetachTile={detachTile}
                     onConfirmRemoveFromGroup={confirmRemoveTileFromGroup}
                     tileRefreshKeys={tileRefreshKeys}
                     viewMode={viewMode}

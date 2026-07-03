@@ -391,6 +391,23 @@ export type NoteBlocks = import('@blocknote/core').PartialBlock[]
 
 // ─── Tile State ────────────────────────────────────────────────────────────
 
+export interface WindowBounds {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export interface DetachedGridPlacement {
+  rootNode?: GridLayoutNode | null
+}
+
+export interface TileFloatingState {
+  detached: true
+  bounds?: WindowBounds
+  gridPlacement?: DetachedGridPlacement
+}
+
 export interface TileState {
   id: string
   type: TileType
@@ -404,6 +421,7 @@ export interface TileState {
   notificationsMuted?: boolean
   radiusIndex?: number
   groupId?: string
+  floating?: TileFloatingState
 
   // Terminal-specific
   shellProfileId?: ShellProfileId

@@ -17,6 +17,7 @@ interface Props {
   onUpdatePositions: (positions: Array<{ id: string; x: number; y: number }>) => void
   onConfigure: (event: React.MouseEvent<HTMLButtonElement>) => void
   onFocusView: () => void
+  onDetach?: () => void
   onDelete: () => void
   onRemoveFromGroup?: () => void
   children: ReactNode
@@ -59,6 +60,7 @@ export function TileChrome({
   onUpdatePositions,
   onConfigure,
   onFocusView,
+  onDetach,
   onDelete,
   onRemoveFromGroup,
   children,
@@ -360,6 +362,7 @@ export function TileChrome({
             <TileActionButtons
               onConfigure={onConfigure}
               onFocus={onFocusView}
+              onDetach={onDetach}
               onClose={onDelete}
             />
           </div>

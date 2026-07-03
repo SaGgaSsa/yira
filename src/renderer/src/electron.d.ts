@@ -9,6 +9,7 @@ import type {
   WorkspaceOpenFolderResult,
   WorkspaceUpdatePatch,
   UserSettings,
+  WindowBounds,
   KanbanBoardState,
   TerminalCreateOptions,
   UpdateState,
@@ -89,6 +90,27 @@ interface ElectronWorld {
   }
   window: {
     setTitle: (title: string) => Promise<void>
+  }
+  floating: {
+    open: (workspaceId: string, tileId: string, bounds?: WindowBounds) => Promise<void>
+    focus: (tileId: string) => Promise<void>
+    close: (tileId: string, attachOnClose?: boolean) => Promise<void>
+    closeWorkspace: (workspaceId: string) => Promise<void>
+    requestAttach: (tileId: string) => Promise<void>
+    getTileSnapshot: (workspaceId: string, tileId: string) => Promise<unknown | null>
+    updateTile: (workspaceId: string, tileId: string, patch: unknown) => Promise<void>
+    onAttachRequested: (
+      callback: (event: { workspaceId: string; tileId: string; bounds?: WindowBounds }) => void,
+    ) => () => void
+    onBoundsChanged: (
+      callback: (event: { workspaceId: string; tileId: string; bounds: WindowBounds }) => void,
+    ) => () => void
+    onSnapshotRequest: (
+      callback: (event: { requestId: string; workspaceId: string; tileId: string }) => unknown | Promise<unknown>,
+    ) => () => void
+    onUpdateTile: (
+      callback: (event: { workspaceId: string; tileId: string; patch: unknown }) => void,
+    ) => () => void
   }
   updates: {
     getState: () => Promise<UpdateState>
