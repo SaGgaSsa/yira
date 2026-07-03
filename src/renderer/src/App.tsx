@@ -24,6 +24,7 @@ import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type CanvasState, type
 import { createEmptyGridWorkspaceState } from '@shared/gridWorkspaceState'
 import { DEFAULT_SPLIT_ORIENTATION, toggleSplitOrientation } from './utils/splitViewState'
 import { getTerminalDisplayTitle, normalizeTerminalWindowTitle } from './utils/terminalDisplayTitle'
+import { resolveViewModeTransition } from './utils/viewModeTransition'
 import { TILE_META } from './components/TileContent'
 import { TileListItem } from './components/TileListItem'
 import { buildTileConfigurationMenuItems } from './components/tileConfigurationMenu'
@@ -738,32 +739,33 @@ export default function App(): React.ReactElement {
   }, [activateSplitTile, activeWorkspaceType, focusTile, handleCenterTileFromSidebar, selectTiles, setFullviewActiveTileId, setSplitViewState, splitViewState, viewMode])
 
   const handleSetViewMode = useCallback((mode: ViewMode) => {
-    if (activeWorkspaceType === 'grid' && mode !== 'gridview' && mode !== 'fullview') return
-    if (activeWorkspaceType === 'canvas' && mode === 'gridview') return
+    const transition = resolveViewModeTransition({
+      activeWorkspaceType,
+      currentViewMode: viewMode,
+      requestedMode: mode,
+      focusedTileId,
+      fullviewActiveTileId,
+      tiles,
+      splitViewState,
+    })
 
-    if (mode === 'fullview') {
-      const splitActiveId = splitViewState.focusedPanel === 'left'
-        ? splitViewState.activeLeftTileId
-        : splitViewState.activeRightTileId
-      const nextActive = viewMode === 'splitview'
-        ? splitActiveId ?? tiles.slice().sort((a, b) => b.zIndex - a.zIndex)[0]?.id ?? null
-        : focusedTileId && tiles.some((tile) => tile.id === focusedTileId)
-          ? focusedTileId
-          : fullviewActiveTileId && tiles.some((tile) => tile.id === fullviewActiveTileId)
-            ? fullviewActiveTileId
-            : tiles.slice().sort((a, b) => b.zIndex - a.zIndex)[0]?.id ?? null
+    if (!transition) return
 
-      setFullviewActiveTileId(nextActive)
+    if (transition.fullviewActiveTileId !== undefined) {
+      setFullviewActiveTileId(transition.fullviewActiveTileId)
     }
 
-    if (mode === 'gridview') {
+    if (transition.viewMode === 'gridview') {
       setViewMode('gridview')
       return
     }
 
-    if (activeWorkspaceType !== 'canvas') return
+    if (activeWorkspaceType !== 'canvas') {
+      setViewMode(transition.viewMode)
+      return
+    }
 
-    if (mode === 'splitview') {
+    if (transition.viewMode === 'splitview') {
       if (tiles.length < 2) return
 
       if (viewMode === 'splitview') {
@@ -789,7 +791,7 @@ export default function App(): React.ReactElement {
       }
     }
 
-    setViewMode(mode)
+    setViewMode(transition.viewMode)
   }, [activeWorkspaceType, focusTile, focusedTileId, fullviewActiveTileId, selectTiles, setFullviewActiveTileId, setSplitViewState, setViewMode, splitViewState, tiles, viewMode])
 
   const selectedGroup = useMemo(
