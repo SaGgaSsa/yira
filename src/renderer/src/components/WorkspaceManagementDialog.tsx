@@ -145,13 +145,12 @@ export function WorkspaceManagementDialog({
   return createPortal(
     <div className="fixed inset-0 z-[10040] flex items-center justify-center bg-black/80">
       <div className="flex max-h-[90vh] w-[920px] max-w-[calc(100vw-32px)] flex-col overflow-hidden rounded-[24px] border border-border-visible bg-bg-secondary shadow-2xl">
-        <div className="flex items-center justify-between gap-4 border-b border-border px-6 py-5">
+        <div className="flex items-center justify-between gap-4 border-b border-border px-6 py-4">
           <div className="min-w-0">
-            <div className="nd-label text-text-secondary">Workspaces</div>
-            <h2 className="mt-2 text-xl text-text-display">Manage Workspaces</h2>
+            <h2 className="text-xl text-text-display">Manage Workspaces</h2>
           </div>
           <button
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border-visible text-text-secondary transition-colors hover:text-text-display"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border-visible text-text-secondary transition-colors hover:text-text-display"
             onClick={onCancel}
             title="Close dialog"
           >

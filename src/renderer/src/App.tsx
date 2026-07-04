@@ -1554,7 +1554,7 @@ export default function App(): React.ReactElement {
         collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed(c => !c)}
         footer={
-          <div ref={footerRef} className="relative border-t border-border bg-bg-secondary px-4 py-4">
+          <div ref={footerRef} className="relative border-t border-border bg-bg-secondary px-3 py-3">
             {showProfilePicker && (
               <div
                 className="nd-panel-raised absolute bottom-full left-4 z-[9999] mb-3 w-[260px] overflow-hidden rounded-2xl"
@@ -1594,55 +1594,55 @@ export default function App(): React.ReactElement {
 
             <div className="grid grid-cols-2 gap-2">
               <button
-                className="nd-panel-raised flex h-14 items-center justify-center gap-2 rounded-full text-text-secondary transition-colors hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
+                className="nd-panel-raised flex h-11 items-center justify-center gap-1.5 rounded-2xl px-2 text-text-secondary transition-colors hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
                 onClick={createTerminalFromSidebar}
                 title="New terminal"
               >
-                <Terminal size={16} />
+                <Terminal size={15} />
                 <span className="nd-label">Terminal</span>
               </button>
               {canCreateNote && (
                 <button
-                  className="nd-panel-raised flex h-14 items-center justify-center gap-2 rounded-full text-text-secondary transition-colors hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
+                  className="nd-panel-raised flex h-11 items-center justify-center gap-1.5 rounded-2xl px-2 text-text-secondary transition-colors hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
                   onClick={() => {
                     setShowProfilePicker(false)
                     addNote()
                   }}
                   title="New note"
                 >
-                  <StickyNote size={16} />
+                  <StickyNote size={15} />
                   <span className="nd-label">Note</span>
                 </button>
               )}
               {canCreateBrowser && (
                 <button
-                  className="nd-panel-raised flex h-14 items-center justify-center gap-2 rounded-full text-text-secondary transition-colors hover:text-text-display"
+                  className="nd-panel-raised flex h-11 items-center justify-center gap-1.5 rounded-2xl px-2 text-text-secondary transition-colors hover:text-text-display"
                   onClick={() => {
                     setShowProfilePicker(false)
                     addBrowser()
                   }}
                   title="New browser"
                 >
-                  <Globe size={16} />
+                  <Globe size={15} />
                   <span className="nd-label">Browser</span>
                 </button>
               )}
               {canCreateTimer && (
                 <button
-                  className="nd-panel-raised flex h-14 items-center justify-center gap-2 rounded-full text-text-secondary transition-colors hover:text-text-display"
+                  className="nd-panel-raised flex h-11 items-center justify-center gap-1.5 rounded-2xl px-2 text-text-secondary transition-colors hover:text-text-display"
                   onClick={() => {
                     setShowProfilePicker(false)
                     addTimer()
                   }}
                   title="New timer"
                 >
-                  <Clock size={16} />
+                  <Clock size={15} />
                   <span className="nd-label">Timer</span>
                 </button>
               )}
               {canShowFilesCreation && (
                 <button
-                  className="nd-panel-raised flex h-14 items-center justify-center gap-2 rounded-full text-text-secondary transition-colors hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
+                  className="nd-panel-raised flex h-11 items-center justify-center gap-1.5 rounded-2xl px-2 text-text-secondary transition-colors hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
                   onClick={() => {
                     if (!canCreateFiles) return
                     setShowProfilePicker(false)
@@ -1651,7 +1651,7 @@ export default function App(): React.ReactElement {
                   disabled={!canCreateFiles}
                   title="New files"
                 >
-                  <Folder size={16} />
+                  <Folder size={15} />
                   <span className="nd-label">Files</span>
                 </button>
               )}
@@ -1660,15 +1660,14 @@ export default function App(): React.ReactElement {
         }
       >
         <div className="flex h-full flex-col bg-bg-secondary">
-          <div ref={workspaceMenuRef} className="relative border-b border-border px-5 py-4">
+          <div ref={workspaceMenuRef} className="relative border-b border-border px-4 py-3">
             <button
-              className="flex w-full items-center justify-between rounded-2xl border border-border-visible bg-bg-tertiary px-4 py-4 text-left transition-colors hover:border-text-secondary"
+              className="flex min-h-12 w-full items-center justify-between rounded-2xl border border-border-visible bg-bg-tertiary px-3 py-3 text-left transition-colors hover:border-text-secondary"
               onClick={() => setShowWorkspacePicker((v) => !v)}
               title="Workspace actions"
             >
               <span className="min-w-0">
-                <span className="nd-label block text-text-secondary">Workspace</span>
-                <span className="mt-1 block truncate text-lg text-text-display">
+                <span className="block truncate text-base text-text-display">
                   {activeWorkspaceName || 'None'}
                 </span>
               </span>
@@ -1677,7 +1676,7 @@ export default function App(): React.ReactElement {
 
             {showWorkspacePicker && (
               <div
-                className="nd-panel-raised absolute left-5 right-5 top-full z-[9998] mt-3 overflow-hidden rounded-2xl"
+                className="nd-panel-raised absolute left-4 right-4 top-full z-[9998] mt-2 overflow-hidden rounded-2xl"
                 style={{
                   backdropFilter: 'none',
                 }}
@@ -1686,7 +1685,7 @@ export default function App(): React.ReactElement {
                   {workspaceMetadata.map((workspace) => (
                     <button
                       key={workspace.id}
-                      className="flex w-full min-w-0 items-center justify-between px-4 py-3 text-left transition-colors hover:bg-hover-bg"
+                      className="flex w-full min-w-0 items-center justify-between px-4 py-2.5 text-left transition-colors hover:bg-hover-bg"
                       style={{
                         color: workspace.id === activeWorkspaceId ? 'var(--text-primary)' : 'var(--text-secondary)',
                       }}
@@ -1702,14 +1701,14 @@ export default function App(): React.ReactElement {
 
                 <div className="border-t border-border p-2">
                   <button
-                    className="flex w-full items-center gap-2 rounded-2xl px-4 py-3 text-left text-sm text-text-primary transition-colors hover:bg-hover-bg"
+                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm text-text-primary transition-colors hover:bg-hover-bg"
                     onClick={openCreateWorkspaceDialog}
                   >
                     <Plus size={14} />
                     <span className="nd-label">New Workspace</span>
                   </button>
                   <button
-                    className="flex w-full items-center gap-2 rounded-2xl px-4 py-3 text-left text-sm text-text-primary transition-colors hover:bg-hover-bg"
+                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm text-text-primary transition-colors hover:bg-hover-bg"
                     onClick={() => {
                       void handleOpenFolderWorkspace()
                     }}
@@ -1718,7 +1717,7 @@ export default function App(): React.ReactElement {
                     <span className="nd-label">Open Folder</span>
                   </button>
                   <button
-                    className="flex w-full items-center gap-2 rounded-2xl px-4 py-3 text-left text-sm text-text-primary transition-colors hover:bg-hover-bg"
+                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm text-text-primary transition-colors hover:bg-hover-bg"
                     onClick={() => {
                       setShowWorkspacePicker(false)
                       setShowWorkspaceManager(true)
