@@ -10,6 +10,11 @@ import { createNativeAttentionDelayScheduler } from '@/utils/nativeAttentionDela
 import { buildTerminalStartupCommand } from '@/utils/terminalLaunch'
 import { createTerminalFitScheduler } from '@/utils/terminalFitScheduler'
 import { getTerminalContainerBackground, getXtermTheme } from '@/utils/terminalTheme'
+import {
+  decodeOsc52ClipboardPayload,
+  getTerminalContextSelectionSnapshot,
+  isTerminalCopyShortcut,
+} from '@/utils/terminalClipboard'
 import { ContextMenu, type MenuItem } from './ContextMenu'
 
 interface Props {
@@ -47,7 +52,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
   const nativeAttentionSchedulerRef = useRef(createNativeAttentionDelayScheduler())
   const tileFontSizePx = useSettingsStore((s) => s.tileFontSizePx)
   const terminalThemeId = useSettingsStore((s) => s.terminal.themeId)
-  const [menuPosition, setMenuPosition] = useState<{ x: number; y: number; hasSelection: boolean } | null>(null)
+  const [menuPosition, setMenuPosition] = useState<{ x: number; y: number; selectionText: string } | null>(null)
   isVisibleRef.current = isVisible
 
   const focusTerminal = useCallback(() => {
@@ -68,12 +73,11 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
     nativeAttentionSchedulerRef.current.cancel(tile.id)
   }, [tile.id])
 
-  const copySelection = useCallback(async () => {
+  const copySelection = useCallback(async (selectionSnapshot?: string) => {
     const term = termRef.current
-    if (!term?.hasSelection()) return
-    const selection = term.getSelection()
+    const selection = selectionSnapshot ?? (term?.hasSelection() ? term.getSelection() : '')
     if (!selection) return
-    term.focus()
+    term?.focus()
     await window.electron.clipboard.writeText(selection)
   }, [])
 
@@ -146,6 +150,16 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
     termRef.current = term
     fitRef.current = fitAddon
 
+    term.attachCustomKeyEventHandler((event) => {
+      if (!isTerminalCopyShortcut(event)) return true
+
+      const selection = getTerminalContextSelectionSnapshot(term)
+      if (!selection) return true
+
+      void window.electron.clipboard.writeText(selection)
+      return false
+    })
+
     const terminalInput = term.textarea
     terminalInput?.addEventListener('focus', clearAttentionIfAttended)
     window.addEventListener('focus', cancelNativeAttention)
@@ -163,6 +177,17 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
     let inputDisposer: { dispose: () => void } | null = null
     const titleDisposer = term.onTitleChange((title) => {
       useCanvasStore.getState().setTerminalTitle(tile.id, title)
+    })
+    const osc52Disposer = term.parser.registerOscHandler(52, async (data) => {
+      const text = decodeOsc52ClipboardPayload(data)
+      if (text === null) return true
+
+      try {
+        await window.electron.clipboard.writeText(text)
+      } catch (error) {
+        console.error('[TerminalTile] Failed to write OSC 52 clipboard payload:', error)
+      }
+      return true
     })
     const { activeWorkspaceId, activeWorkspaceConfig: workspaceConfig } = useCanvasStore.getState()
     const initialCommand = buildTerminalStartupCommand(tile, workspaceConfig)
@@ -241,6 +266,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
       window.removeEventListener('focus', clearAttentionIfAttended)
       ptyUnsub?.()
       inputDisposer?.dispose()
+      osc52Disposer.dispose()
       titleDisposer.dispose()
       window.electron?.terminal?.detach?.(tile.id)
       term.dispose()
@@ -285,9 +311,9 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
   const menuItems: MenuItem[] = [
     {
       label: 'Copy',
-      disabled: !menuPosition?.hasSelection,
+      disabled: !menuPosition?.selectionText,
       action: () => {
-        void copySelection()
+        void copySelection(menuPosition?.selectionText)
       },
     },
     {
@@ -321,10 +347,11 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
         onContextMenu={(event) => {
           event.preventDefault()
           focusTerminal()
+          const selectionText = getTerminalContextSelectionSnapshot(termRef.current)
           setMenuPosition({
             x: event.clientX,
             y: event.clientY,
-            hasSelection: termRef.current?.hasSelection() ?? false,
+            selectionText,
           })
         }}
       />
