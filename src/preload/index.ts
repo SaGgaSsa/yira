@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { FileListOptions, NotificationAttentionOptions, TerminalCreateOptions, UpdateState, WindowBounds, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceUpdatePatch } from '@shared/types'
+import type { BoardTask, FileListOptions, NotificationAttentionOptions, TerminalCreateOptions, UpdateState, WindowBounds, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceUpdatePatch } from '@shared/types'
 
 console.log('[preload] Loading...')
 
@@ -33,12 +33,22 @@ contextBridge.exposeInMainWorld('electron', {
 
   // Boards
   board: {
-    save: (workspaceId: string, tileId: string, state: unknown) =>
-      ipcRenderer.invoke('board:save', workspaceId, tileId, state),
-    load: (workspaceId: string, tileId: string) =>
-      ipcRenderer.invoke('board:load', workspaceId, tileId),
-    delete: (workspaceId: string, tileId: string) =>
-      ipcRenderer.invoke('board:delete', workspaceId, tileId),
+    load: (workspaceId: string) =>
+      ipcRenderer.invoke('board:load', workspaceId),
+    enable: (workspaceId: string) =>
+      ipcRenderer.invoke('board:enable', workspaceId),
+    createUserTask: (workspaceId: string, input: Pick<BoardTask, 'title' | 'task'>) =>
+      ipcRenderer.invoke('board:createUserTask', workspaceId, input),
+    updateUserTask: (workspaceId: string, input: { taskId: string; title?: string; task?: string }) =>
+      ipcRenderer.invoke('board:updateUserTask', workspaceId, input),
+    addUserNote: (workspaceId: string, input: { taskId: string; note: string }) =>
+      ipcRenderer.invoke('board:addUserNote', workspaceId, input),
+    deleteBacklogTask: (workspaceId: string, taskId: string) =>
+      ipcRenderer.invoke('board:deleteBacklogTask', workspaceId, taskId),
+    approveReviewTask: (workspaceId: string, taskId: string) =>
+      ipcRenderer.invoke('board:approveReviewTask', workspaceId, taskId),
+    rejectReviewTask: (workspaceId: string, input: { taskId: string; note: string }) =>
+      ipcRenderer.invoke('board:rejectReviewTask', workspaceId, input),
   },
 
   // Files

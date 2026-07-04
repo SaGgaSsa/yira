@@ -28,6 +28,30 @@ _Avoid_: Canvas layout preset, toggleable grid mode
 The split-tree tile layout used by Grid Workspaces. Grid View represents every Tile in the Workspace and is persisted as Grid JSON.
 _Avoid_: Canvas grid, Split View
 
+**Board**:
+The optional workspace-level task board. A Workspace can have at most one Board.
+_Avoid_: Board Tile, Kanban Tile
+
+**Board View**:
+The workspace-level view for a Board. It is separate from Canvas, Grid View, Focus View, and Split View.
+_Avoid_: Tile view, embedded board
+
+**Task**:
+A user-captured work item on the Board with a title, task body, status, metadata, notes, and events.
+_Avoid_: Card, issue
+
+**Ready**:
+The Board status for Tasks that the MCP may propose and start.
+_Avoid_: Manually picked next
+
+**Work Session**:
+An MCP-started period of work on one Ready Task.
+_Avoid_: Sprint, timer session
+
+**History**:
+The searchable table of completed Board Tasks. Done shows only recent completions; History keeps the full closed list.
+_Avoid_: Archive
+
 **Workspace Root Folder**:
 The user-selected folder that represents where work happens for a workspace.
 _Avoid_: Workspace storage path, workspace path
@@ -99,6 +123,8 @@ _Avoid_: Workspace initial command
 - Missing or legacy **Workspace Type** values normalize to **Canvas Workspace**
 - A **Canvas Workspace** exposes Canvas, Focus View, and Split View
 - A **Grid Workspace** exposes Grid View and Focus View only
+- A **Canvas Workspace** can expose Board View when its **Board** is enabled
+- A **Grid Workspace** can expose Board View when its **Board** is enabled
 - A **Grid Workspace** persists Grid JSON separately from Canvas JSON
 - A **Grid Workspace** can contain at most 24 **Tiles**
 - A **Workspace Configuration** has at most one root folder
@@ -122,7 +148,12 @@ _Avoid_: Workspace initial command
 - **Tile Creation Availability** is an app-wide preference
 - **Tile Creation Availability** can hide Note, Browser, Timer, and Files creation
 - A **Terminal Tile** is always available for normal creation
-- Board creation is locked in normal creation surfaces while existing Board tiles remain usable
+- A **Board** is enabled from the normal creation area but is not a **Tile**
+- A **Workspace** can have at most one **Board**
+- Legacy Board Tile data is not migrated and legacy `kanban` tiles are dropped from loaded Canvas/Grid state
+- Manual Board UI can create **Tasks**, edit title/task/notes, delete only Backlog Tasks, and approve or reject Review Tasks
+- MCP Board tools can read/list Tasks, enrich metadata, propose/start a Work Session, add notes, move Tasks to Review, and read History
+- MCP Board tools cannot create or delete **Tasks**
 - Disabling tile creation preserves existing **Tiles**
 - A **Group** contains two or more **Tiles**
 - A **Tile** belongs to at most one **Group**
@@ -159,8 +190,11 @@ _Avoid_: Workspace initial command
 > **Dev:** "If Timer creation is disabled, should existing Timer Tiles disappear?"
 > **Domain expert:** "No, Tile Creation Availability controls creation only; existing Tiles remain visible and usable."
 
-> **Dev:** "Can users create Board Tiles from the normal UI?"
-> **Domain expert:** "No, Board creation is locked for an upcoming redesign, but existing Board Tiles still work."
+> **Dev:** "Is the Board a Tile?"
+> **Domain expert:** "No, each Workspace may enable one Board, and it opens through Board View."
+
+> **Dev:** "Can the MCP create Tasks?"
+> **Domain expert:** "No, users capture Tasks manually; the MCP can enrich, propose, move to work/review, add notes, and read History."
 
 > **Dev:** "If both Workspace and Terminal define commands, which runs first?"
 > **Domain expert:** "The Workspace Initial Command runs first, then the Terminal Startup Command."

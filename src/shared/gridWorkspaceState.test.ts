@@ -204,7 +204,12 @@ const noopLeft = computeGridDragAction(noopRoot, 'a', 'b', dropRect, { x: 220, y
 if (noopLeft.type !== 'none') throw new Error('dropping a tile immediately left of its current right neighbor must be a no-op')
 
 const dirtyState: GridWorkspaceState = {
-  tiles: [tile('one', 1), tile('two', 2), tile('three', 3)],
+  tiles: [
+    tile('one', 1),
+    tile('two', 2),
+    tile('three', 3),
+    { id: 'kanban', type: 'kanban', x: 0, y: 0, width: 1800, height: 800, zIndex: 4 } as unknown as TileState,
+  ],
   nextZIndex: 4,
   focusedTileId: 'missing',
   fullviewActiveTileId: 'missing',
@@ -234,6 +239,9 @@ for (const id of ['one', 'two', 'three']) {
   if (!normalizedJson.includes(`"tileId":"${id}"`)) throw new Error(`normalization must include tile ${id}`)
 }
 if (normalizedJson.includes('stale')) throw new Error('normalization must remove stale tile leaves')
+if (normalized.tiles.some((entry) => entry.id === 'kanban') || normalizedJson.includes('kanban')) {
+  throw new Error('grid normalization must drop legacy kanban tiles')
+}
 
 const tooManyTiles = Array.from({ length: GRID_MAX_TILES + 1 }, (_, index) => tile(`tile-${index}`, index + 1))
 try {

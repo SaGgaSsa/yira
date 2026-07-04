@@ -38,14 +38,14 @@ function moveTileIdToFront(tileIds: string[], tileId: string | null): string[] {
 }
 
 function normalizeViewMode(mode: CanvasState['viewMode'] | undefined): ViewMode {
-  return mode === 'canvas' || mode === 'fullview' || mode === 'splitview'
+  return mode === 'canvas' || mode === 'fullview' || mode === 'splitview' || mode === 'board'
     ? mode
     : 'fullview'
 }
 
 function normalizeWorkspaceViewMode(mode: ViewMode | undefined, type: WorkspaceType): ViewMode {
-  if (type === 'grid') return mode === 'fullview' ? 'fullview' : 'gridview'
-  return mode === 'canvas' || mode === 'splitview' || mode === 'fullview' ? mode : 'fullview'
+  if (type === 'grid') return mode === 'board' || mode === 'fullview' ? mode : 'gridview'
+  return mode === 'canvas' || mode === 'splitview' || mode === 'fullview' || mode === 'board' ? mode : 'fullview'
 }
 
 function normalizeSplitViewState(
@@ -140,6 +140,14 @@ function normalizeTile(tile: TileState): TileState {
     width,
     height,
   })
+}
+
+function isSupportedTile(tile: TileState): boolean {
+  return tile.type === 'terminal' ||
+    tile.type === 'note' ||
+    tile.type === 'browser' ||
+    tile.type === 'timer' ||
+    tile.type === 'files'
 }
 
 function isTerminalNotificationMuted(tile: TileState): boolean {
@@ -332,8 +340,8 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
 
   setViewport: (vp) => set({ viewport: normalizeFiniteViewport(vp) }),
   setTiles: (tiles) => set((s) => {
-    const normalizedTiles = tiles.map(normalizeTile)
-    const nextIds = new Set(tiles.map((tile) => tile.id))
+    const normalizedTiles = tiles.filter(isSupportedTile).map(normalizeTile)
+    const nextIds = new Set(normalizedTiles.map((tile) => tile.id))
     const unmutedTerminalIds = new Set(
       normalizedTiles
         .filter((tile) => tile.type === 'terminal' && tile.notificationsMuted !== true)
@@ -358,12 +366,13 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   }),
 
   restoreState: (state) => set(() => {
-    const normalized = buildNormalizedGroupedState(state.tiles, state.groups ?? [])
+    const inputTiles = state.tiles.filter(isSupportedTile)
+    const normalized = buildNormalizedGroupedState(inputTiles, state.groups ?? [])
     const viewport = normalizeFiniteViewport(state.viewport)
     const fullviewActiveTileId =
       state.fullviewActiveTileId ??
       state.focusedTileId ??
-      state.tiles[0]?.id ??
+      normalized.tiles[0]?.id ??
       null
     warnCanvasWorldNormalization('restore', state, normalized.tiles, viewport)
 

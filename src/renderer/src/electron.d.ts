@@ -10,7 +10,8 @@ import type {
   WorkspaceUpdatePatch,
   UserSettings,
   WindowBounds,
-  KanbanBoardState,
+  BoardState,
+  BoardTask,
   TerminalCreateOptions,
   UpdateState,
   NotificationAttentionOptions,
@@ -51,9 +52,14 @@ interface ElectronWorld {
     delete: (tileId: string) => Promise<void>
   }
   board: {
-    save: (workspaceId: string, tileId: string, state: KanbanBoardState) => Promise<void>
-    load: (workspaceId: string, tileId: string) => Promise<KanbanBoardState | null>
-    delete: (workspaceId: string, tileId: string) => Promise<void>
+    load: (workspaceId: string) => Promise<BoardState>
+    enable: (workspaceId: string) => Promise<BoardState>
+    createUserTask: (workspaceId: string, input: Pick<BoardTask, 'title' | 'task'>) => Promise<BoardState>
+    updateUserTask: (workspaceId: string, input: { taskId: string; title?: string; task?: string }) => Promise<BoardState>
+    addUserNote: (workspaceId: string, input: { taskId: string; note: string }) => Promise<BoardState>
+    deleteBacklogTask: (workspaceId: string, taskId: string) => Promise<BoardState>
+    approveReviewTask: (workspaceId: string, taskId: string) => Promise<BoardState>
+    rejectReviewTask: (workspaceId: string, input: { taskId: string; note: string }) => Promise<BoardState>
   }
   files: {
     selectFolder: (defaultPath?: string) => Promise<FileSelectFolderResult | null>

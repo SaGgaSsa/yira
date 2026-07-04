@@ -9,6 +9,9 @@
   },
   "type": "module",
   "main": "dist-electron/main/index.js",
+  "bin": {
+    "yira-board-mcp": "dist/mcp/board-mcp.js"
+  },
   "scripts": {
     "dev": "electron-vite dev",
     "build:main": "node ./scripts/electron-vite-build.mjs main",
@@ -115,7 +118,7 @@
       "category": "Development",
       "maintainer": "SaGgaSsa",
       "synopsis": "Infinite canvas terminal workspace",
-      "description": "Yira is an infinite canvas terminal workspace for organizing terminals, files, notes, browsers, timers, and kanban boards.",
+      "description": "Yira is an infinite canvas terminal workspace for organizing terminals, files, notes, browsers, timers, and workspace boards.",
       "artifactName": "${productName}-${version}-${arch}.${ext}"
     },
     "deb": {

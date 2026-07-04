@@ -73,6 +73,14 @@ function normalizeTile(tile: TileState): TileState {
   }
 }
 
+function isSupportedTile(tile: TileState): boolean {
+  return tile.type === 'terminal' ||
+    tile.type === 'note' ||
+    tile.type === 'browser' ||
+    tile.type === 'timer' ||
+    tile.type === 'files'
+}
+
 function isDetachedTile(tile: TileState): boolean {
   return tile.floating?.detached === true
 }
@@ -403,7 +411,7 @@ export function normalizeGridWorkspaceState(state: GridWorkspaceState): GridWork
     throw new Error(`Grid workspaces can contain at most ${GRID_MAX_TILES} tiles`)
   }
 
-  const tiles = state.tiles.map(normalizeTile)
+  const tiles = state.tiles.filter(isSupportedTile).map(normalizeTile)
   const attachedTileIds = new Set(tiles.filter((tile) => !isDetachedTile(tile)).map((tile) => tile.id))
   const focusedTileId = state.focusedTileId && attachedTileIds.has(state.focusedTileId)
     ? state.focusedTileId

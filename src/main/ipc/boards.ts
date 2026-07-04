@@ -1,42 +1,52 @@
 import { ipcMain } from 'electron'
-import { promises as fs } from 'fs'
-import { join } from 'path'
-import type { KanbanBoardState } from '@shared/types'
+import {
+  addBoardNote,
+  approveReviewTask,
+  createUserBoardTask,
+  deleteBacklogTask,
+  rejectReviewTask,
+  updateUserBoardTask,
+} from '@shared/board'
+import type { BoardState } from '@shared/types'
+import { enableBoardFile, loadBoardFile, saveBoardFile } from '@shared/boardStorage'
 import { YIRA_HOME } from '../paths'
 
-function assertSafeId(id: string): void {
-  if (/[\/\\]|\.\./.test(id)) throw new Error(`Unsafe ID: ${id}`)
-}
-
-function boardDataPath(workspaceId: string, tileId: string): string {
-  assertSafeId(workspaceId)
-  assertSafeId(tileId)
-  return join(YIRA_HOME, 'workspaces', workspaceId, '.yira', 'boards', `${tileId}.json`)
+async function mutateBoard(workspaceId: string, update: (state: BoardState) => BoardState): Promise<BoardState> {
+  const board = update(await loadBoardFile(YIRA_HOME, workspaceId))
+  await saveBoardFile(YIRA_HOME, workspaceId, board)
+  return board
 }
 
 export function registerBoardsIPC(): void {
-  ipcMain.handle('board:save', async (_, workspaceId: string, tileId: string, state: KanbanBoardState): Promise<void> => {
-    const path = boardDataPath(workspaceId, tileId)
-    await fs.mkdir(join(YIRA_HOME, 'workspaces', workspaceId, '.yira', 'boards'), { recursive: true })
-    await fs.writeFile(path, JSON.stringify(state, null, 2))
+  ipcMain.handle('board:load', async (_, workspaceId: string): Promise<BoardState> => {
+    return loadBoardFile(YIRA_HOME, workspaceId)
   })
 
-  ipcMain.handle('board:load', async (_, workspaceId: string, tileId: string): Promise<KanbanBoardState | null> => {
-    const path = boardDataPath(workspaceId, tileId)
-    try {
-      const raw = await fs.readFile(path, 'utf8')
-      return JSON.parse(raw)
-    } catch {
-      return null
-    }
+  ipcMain.handle('board:enable', async (_, workspaceId: string): Promise<BoardState> => {
+    return enableBoardFile(YIRA_HOME, workspaceId)
   })
 
-  ipcMain.handle('board:delete', async (_, workspaceId: string, tileId: string): Promise<void> => {
-    const path = boardDataPath(workspaceId, tileId)
-    try {
-      await fs.unlink(path)
-    } catch {
-      // ignore if file does not exist
-    }
+  ipcMain.handle('board:createUserTask', async (_, workspaceId: string, input: { title: string; task: string }): Promise<BoardState> => {
+    return mutateBoard(workspaceId, (board) => createUserBoardTask(board, input))
+  })
+
+  ipcMain.handle('board:updateUserTask', async (_, workspaceId: string, input: { taskId: string; title?: string; task?: string }): Promise<BoardState> => {
+    return mutateBoard(workspaceId, (board) => updateUserBoardTask(board, input))
+  })
+
+  ipcMain.handle('board:addUserNote', async (_, workspaceId: string, input: { taskId: string; note: string }): Promise<BoardState> => {
+    return mutateBoard(workspaceId, (board) => addBoardNote(board, input, undefined, 'human'))
+  })
+
+  ipcMain.handle('board:deleteBacklogTask', async (_, workspaceId: string, taskId: string): Promise<BoardState> => {
+    return mutateBoard(workspaceId, (board) => deleteBacklogTask(board, taskId))
+  })
+
+  ipcMain.handle('board:approveReviewTask', async (_, workspaceId: string, taskId: string): Promise<BoardState> => {
+    return mutateBoard(workspaceId, (board) => approveReviewTask(board, { taskId }))
+  })
+
+  ipcMain.handle('board:rejectReviewTask', async (_, workspaceId: string, input: { taskId: string; note: string }): Promise<BoardState> => {
+    return mutateBoard(workspaceId, (board) => rejectReviewTask(board, input))
   })
 }

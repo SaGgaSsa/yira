@@ -234,11 +234,63 @@ export interface FileSelectFolderResult {
   name: string
 }
 
+// ─── Board ─────────────────────────────────────────────────────────────────
+
+export type BoardStatus = 'backlog' | 'ready' | 'in_progress' | 'review' | 'done'
+export type BoardActor = 'human' | 'mcp'
+
+export interface BoardNote {
+  id: string
+  actor: BoardActor
+  body: string
+  createdAt: string
+  sessionId?: string
+}
+
+export type BoardEventType = 'created' | 'updated' | 'status_changed' | 'note_added' | 'metadata_enriched'
+
+export interface BoardEvent {
+  id: string
+  type: BoardEventType
+  actor: BoardActor
+  timestamp: string
+  fromStatus?: BoardStatus
+  toStatus?: BoardStatus
+  note?: string
+  sessionId?: string
+}
+
+export interface BoardTask {
+  id: string
+  title: string
+  task: string
+  status: BoardStatus
+  createdAt: string
+  updatedAt: string
+  completedAt?: string
+  type?: string
+  context?: string
+  relatedTaskIds?: string[]
+  notes: BoardNote[]
+  events: BoardEvent[]
+}
+
+export interface BoardState {
+  enabled: boolean
+  tasks: BoardTask[]
+}
+
+export const BOARD_COLUMNS: Array<{ id: BoardStatus; label: string }> = [
+  { id: 'backlog', label: 'Backlog' },
+  { id: 'ready', label: 'Ready' },
+  { id: 'in_progress', label: 'In Progress' },
+  { id: 'review', label: 'Review' },
+  { id: 'done', label: 'Done' },
+]
+
 // ─── Tile Types ────────────────────────────────────────────────────────────
 
-export type TileType = 'terminal' | 'note' | 'browser' | 'kanban' | 'timer' | 'files'
-export type KanbanColumnId = 'backlog' | 'in_development' | 'review' | 'done'
-export type KanbanCardColor = 'slate' | 'blue' | 'green' | 'amber' | 'rose'
+export type TileType = 'terminal' | 'note' | 'browser' | 'timer' | 'files'
 export type TimerStatus = 'idle' | 'running' | 'paused' | 'done'
 
 export type NoteColor = 'yellow' | 'green' | 'blue' | 'pink' | 'purple' | 'orange' | 'white' | 'dark'
@@ -261,42 +313,6 @@ export const NOTE_FONTS: Record<NoteFont, string> = {
   serif: 'Georgia, "Times New Roman", serif',
   marker: '"Caveat", "Comic Sans MS", cursive',
   handwritten: '"Dancing Script", "Pacifico", cursive',
-}
-
-export const KANBAN_COLUMNS: Array<{ id: KanbanColumnId; label: string }> = [
-  { id: 'backlog', label: 'Backlog' },
-  { id: 'in_development', label: 'In Development' },
-  { id: 'review', label: 'Review' },
-  { id: 'done', label: 'Done' },
-]
-
-export const KANBAN_COLUMN_WIDTH = 280
-export const KANBAN_COLUMN_GAP = 16
-export const KANBAN_BOARD_PADDING_X = 32
-export const KANBAN_BOARD_EDGE_ALLOWANCE = 24
-export const KANBAN_BOARD_FIXED_WIDTH =
-  KANBAN_COLUMNS.length * KANBAN_COLUMN_WIDTH +
-  (KANBAN_COLUMNS.length - 1) * KANBAN_COLUMN_GAP +
-  KANBAN_BOARD_PADDING_X +
-  KANBAN_BOARD_EDGE_ALLOWANCE
-
-export const KANBAN_CARD_COLORS: Record<KanbanCardColor, { bg: string; border: string; text: string }> = {
-  slate: { bg: '#232833', border: '#3b4556', text: '#d5d9e3' },
-  blue: { bg: '#16263a', border: '#2f5f91', text: '#cfe5ff' },
-  green: { bg: '#182d25', border: '#2f6b55', text: '#d6f5e7' },
-  amber: { bg: '#362715', border: '#926428', text: '#ffe8c2' },
-  rose: { bg: '#351c26', border: '#8e405b', text: '#ffd6e2' },
-}
-
-export interface KanbanCard {
-  id: string
-  title: string
-  description: string
-  color: KanbanCardColor
-}
-
-export interface KanbanBoardState {
-  columns: Record<KanbanColumnId, KanbanCard[]>
 }
 
 export type GroupColorId = 'blue' | 'green' | 'amber' | 'rose' | 'slate'
@@ -355,7 +371,6 @@ export const TILE_SIZE_PRESETS: Record<TileType, TileSizePreset> = {
   terminal: { defaultWidth: 900, defaultHeight: 400, minWidth: 900, minHeight: 400 },
   note: { defaultWidth: 900, defaultHeight: 800, minWidth: 900, minHeight: 800 },
   browser: { defaultWidth: 1800, defaultHeight: 800, minWidth: 1800, minHeight: 800 },
-  kanban: { defaultWidth: 1800, defaultHeight: 800, minWidth: 1800, minHeight: 800 },
   timer: { defaultWidth: 900, defaultHeight: 400, minWidth: 900, minHeight: 400 },
   files: { defaultWidth: 900, defaultHeight: 400, minWidth: 900, minHeight: 400 },
 }
@@ -457,8 +472,8 @@ export interface CanvasState {
   splitViewState?: SplitViewState
 }
 
-export type CanvasViewMode = 'canvas' | 'fullview' | 'splitview'
-export type GridViewMode = 'gridview' | 'fullview'
+export type CanvasViewMode = 'canvas' | 'fullview' | 'splitview' | 'board'
+export type GridViewMode = 'gridview' | 'fullview' | 'board'
 export type ViewMode = CanvasViewMode | GridViewMode
 
 export type SplitPanelId = 'left' | 'right'

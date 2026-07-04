@@ -6,7 +6,7 @@ const state: CanvasState = {
     { id: 'terminal', type: 'terminal', x: 0, y: 0, width: 10, height: 10, zIndex: 1 },
     { id: 'note', type: 'note', x: 0, y: 0, width: 10, height: 10, zIndex: 2 },
     { id: 'browser', type: 'browser', x: 0, y: 0, width: 10, height: 10, zIndex: 3 },
-    { id: 'kanban', type: 'kanban', x: 0, y: 0, width: 10, height: 10, zIndex: 4 },
+    { id: 'kanban', type: 'kanban', x: 0, y: 0, width: 10, height: 10, zIndex: 4 } as unknown as CanvasState['tiles'][number],
     { id: 'timer', type: 'timer', x: 0, y: 0, width: 10, height: 10, zIndex: 5 },
     { id: 'files', type: 'files', x: 0, y: 0, width: 10, height: 10, zIndex: 6 },
   ],
@@ -32,7 +32,6 @@ const expected = new Map([
   ['terminal', { width: 900, height: 400 }],
   ['note', { width: 900, height: 800 }],
   ['browser', { width: 1800, height: 800 }],
-  ['kanban', { width: 1800, height: 800 }],
   ['timer', { width: 900, height: 400 }],
   ['files', { width: 900, height: 400 }],
 ])
@@ -43,6 +42,10 @@ for (const tile of useCanvasStore.getState().tiles) {
   if (tile.width !== size.width || tile.height !== size.height) {
     throw new Error(`restored ${tile.id} must normalize to ${size.width}x${size.height}, got ${tile.width}x${tile.height}`)
   }
+}
+
+if (useCanvasStore.getState().tiles.some((tile) => tile.id === 'kanban')) {
+  throw new Error('legacy kanban tiles must be dropped when restoring canvas state')
 }
 
 useCanvasStore.getState().updateTile('note', { width: 2400, height: 1200 })

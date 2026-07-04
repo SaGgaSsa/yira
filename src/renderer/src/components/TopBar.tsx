@@ -1,5 +1,5 @@
 import React from 'react'
-import { Settings, Crosshair, Grid3X3, LayoutGrid, Columns, PanelLeft, SplitSquareHorizontal, SplitSquareVertical } from 'lucide-react'
+import { Settings, Crosshair, Grid3X3, LayoutGrid, Columns, PanelLeft, SplitSquareHorizontal, SplitSquareVertical, ClipboardList } from 'lucide-react'
 import type { SplitOrientation, ViewMode, WorkspaceType } from '@shared/types'
 
 interface TopBarProps {
@@ -7,6 +7,7 @@ interface TopBarProps {
   viewMode: ViewMode
   splitOrientation: SplitOrientation
   workspaceType: WorkspaceType
+  boardEnabled: boolean
   canSplitView: boolean
   sidebarCollapsed: boolean
   onToggleSidebar: () => void
@@ -53,6 +54,7 @@ export function TopBar({
   viewMode,
   splitOrientation,
   workspaceType,
+  boardEnabled,
   canSplitView,
   sidebarCollapsed,
   onToggleSidebar,
@@ -106,6 +108,14 @@ export function TopBar({
               onClick={() => onSetViewMode('canvas')}
             />
           </>
+        )}
+        {boardEnabled && (
+          <SegmentedButton
+            active={viewMode === 'board'}
+            label="Board"
+            icon={ClipboardList}
+            onClick={() => onSetViewMode('board')}
+          />
         )}
       </div>
 

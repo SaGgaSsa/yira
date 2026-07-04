@@ -325,16 +325,6 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor }: SettingsPanel
                 />
               </label>
             ))}
-
-            <div className="flex items-center justify-between gap-4 rounded-[20px] border border-border bg-bg-primary px-4 py-4 opacity-70">
-              <span>
-                <span className="nd-label block text-text-display">Board</span>
-                <span className="mt-2 block text-sm leading-6 text-text-secondary">
-                  Board creation is locked for an upcoming redesign.
-                </span>
-              </span>
-              <input type="checkbox" checked={false} disabled />
-            </div>
           </div>
         </section>
       )

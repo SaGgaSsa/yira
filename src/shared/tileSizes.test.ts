@@ -12,7 +12,6 @@ const expected: Record<TileType, { defaultWidth: number; defaultHeight: number; 
   terminal: { defaultWidth: 900, defaultHeight: 400, minWidth: 900, minHeight: 400 },
   note: { defaultWidth: 900, defaultHeight: 800, minWidth: 900, minHeight: 800 },
   browser: { defaultWidth: 1800, defaultHeight: 800, minWidth: 1800, minHeight: 800 },
-  kanban: { defaultWidth: 1800, defaultHeight: 800, minWidth: 1800, minHeight: 800 },
   timer: { defaultWidth: 900, defaultHeight: 400, minWidth: 900, minHeight: 400 },
   files: { defaultWidth: 900, defaultHeight: 400, minWidth: 900, minHeight: 400 },
 }
@@ -43,9 +42,4 @@ if (smallNote.width !== 900 || smallNote.height !== 800) {
 const largeNote = normalizeTileSize('note', { width: 2400, height: 1200 })
 if (largeNote.width !== 2400 || largeNote.height !== 1200) {
   throw new Error(`note size must not be capped, got ${largeNote.width}x${largeNote.height}`)
-}
-
-const smallBoard = normalizeTileSize('kanban', { width: 100, height: 100 })
-if (smallBoard.width !== 1800 || smallBoard.height !== 800) {
-  throw new Error(`board size must normalize to 1800x800, got ${smallBoard.width}x${smallBoard.height}`)
 }

@@ -7,6 +7,7 @@ import { RawJsonEditor } from './components/RawJsonEditor'
 import { ContextMenu, type MenuItem } from './components/ContextMenu'
 import { SplitviewPanel } from './components/SplitviewPanel'
 import { GridView } from './components/GridView'
+import { BoardView } from './components/BoardView'
 import { FloatingTileWindow } from './components/FloatingTileWindow'
 import { AppDialog, type ConfirmDialogOptions, type PromptDialogOptions } from './components/AppDialog'
 import { GroupEditorDialog, type GroupEditorRequest, type GroupEditorValue } from './components/GroupEditorDialog'
@@ -21,7 +22,7 @@ import { useTheme } from './hooks/useTheme'
 import { useFontSize } from './hooks/useFontSize'
 import { useUpdateStore } from './store/updateStore'
 import { findMergeTargetGroup, findSelectedGroup, getGroupingBlockedReason } from './utils/grouping'
-import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type CanvasState, type GridWorkspaceState, type Workspace, type WorkspaceMetadata, type TileGroup, type ViewMode, type SplitPanelId, type SplitViewState, type WorkspaceManagementEntry, type WorkspaceType } from '@shared/types'
+import { GROUP_COLORS, GROUP_COLOR_ORDER, type BoardState, type BoardTask, type TileState, type CanvasState, type GridWorkspaceState, type Workspace, type WorkspaceMetadata, type TileGroup, type ViewMode, type SplitPanelId, type SplitViewState, type WorkspaceManagementEntry, type WorkspaceType } from '@shared/types'
 import { createEmptyGridWorkspaceState } from '@shared/gridWorkspaceState'
 import { getAttachedTiles, isTileDetached, selectFloatingTileWindowOpenRequests } from '@shared/floatingTiles'
 import { DEFAULT_SPLIT_ORIENTATION, toggleSplitOrientation } from './utils/splitViewState'
@@ -30,10 +31,14 @@ import { resolveViewModeTransition } from './utils/viewModeTransition'
 import { TILE_META } from './components/TileContent'
 import { TileListItem } from './components/TileListItem'
 import { buildTileConfigurationMenuItems } from './components/tileConfigurationMenu'
-import { Terminal, StickyNote, Globe, Clock, Folder, FolderOpen, ChevronDown, SlidersHorizontal, Trash2, Pencil, Lock, Columns, Download, X, Plus } from 'lucide-react'
+import { Terminal, StickyNote, Globe, Clock, Folder, FolderOpen, ChevronDown, SlidersHorizontal, Trash2, Pencil, Lock, Columns, Download, X, Plus, ClipboardList } from 'lucide-react'
 
 const GROUP_SHOW_TOP_PADDING = 42
 const BASE_WINDOW_TITLE = 'Yira'
+const EMPTY_BOARD_STATE: BoardState = {
+  enabled: false,
+  tasks: [],
+}
 
 function createEmptyCanvasState(): CanvasState {
   return {
@@ -324,6 +329,7 @@ export default function App(): React.ReactElement {
   const [showWorkspacePicker, setShowWorkspacePicker] = useState(false)
   const [showWorkspaceManager, setShowWorkspaceManager] = useState(false)
   const [workspaceMetadata, setWorkspaceMetadata] = useState<WorkspaceMetadata[]>([])
+  const [boardState, setBoardState] = useState<BoardState>(EMPTY_BOARD_STATE)
   const [showSettings, setShowSettings] = useState(false)
   const [showJsonEditor, setShowJsonEditor] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -471,9 +477,12 @@ export default function App(): React.ReactElement {
       await window.electron.floating.closeWorkspace(currentWorkspaceId)
     }
 
-    // Canvas state is active-workspace-only data. Workspace list/getActive stay metadata-only.
+    // Canvas/Grid and Board state are active-workspace-only data. Workspace list/getActive stay metadata-only.
     const workspaceType = workspace.config.type
-    const state = await window.electron.canvas.load(workspace.id, workspaceType)
+    const [state, board] = await Promise.all([
+      window.electron.canvas.load(workspace.id, workspaceType),
+      window.electron.board.load(workspace.id),
+    ])
     if (transitionId !== workspaceTransitionRef.current) return
 
     if (options?.updateMain !== false) {
@@ -482,6 +491,7 @@ export default function App(): React.ReactElement {
     }
 
     skipNextAutosaveRef.current = true
+    setBoardState(board)
     if (workspaceType === 'grid') {
       restoreGridWorkspaceState(workspace.id, workspace.name, workspace.config, (state as GridWorkspaceState | null) ?? createEmptyGridWorkspaceState())
     } else {
@@ -706,6 +716,7 @@ export default function App(): React.ReactElement {
   const canCreateTimer = tileCreationAvailability.timer
   const canShowFilesCreation = tileCreationAvailability.files
   const canCreateFiles = canShowFilesCreation && Boolean(activeWorkspaceConfig.rootFolderPath)
+  const boardEnabled = boardState.enabled
 
   // Zoom toggle: switch between 100% and previous zoom
   const handleZoomToggle = useCallback(() => {
@@ -828,6 +839,11 @@ export default function App(): React.ReactElement {
   }, [activateSplitTile, activeWorkspaceType, focusTile, handleCenterTileFromSidebar, selectTiles, setFullviewActiveTileId, setSplitViewState, splitViewState, viewMode])
 
   const handleSetViewMode = useCallback((mode: ViewMode) => {
+    if (mode === 'board') {
+      if (boardState.enabled) setViewMode('board')
+      return
+    }
+
     const transition = resolveViewModeTransition({
       activeWorkspaceType,
       currentViewMode: viewMode,
@@ -881,7 +897,7 @@ export default function App(): React.ReactElement {
     }
 
     setViewMode(transition.viewMode)
-  }, [activeWorkspaceType, attachedTiles, focusTile, focusedTileId, fullviewActiveTileId, selectTiles, setFullviewActiveTileId, setSplitViewState, setViewMode, splitViewState, viewMode])
+  }, [activeWorkspaceType, attachedTiles, boardState.enabled, focusTile, focusedTileId, fullviewActiveTileId, selectTiles, setFullviewActiveTileId, setSplitViewState, setViewMode, splitViewState, viewMode])
 
   const selectedGroup = useMemo(
     () => findSelectedGroup(effectiveGroups, selectedTileIds),
@@ -1161,8 +1177,8 @@ export default function App(): React.ReactElement {
     }
 
     return requestConfirm({
-      title: 'Refresh board tile',
-      message: `Refresh "${label}"? This reloads the board from saved state and may discard recent unsaved changes.`,
+      title: 'Refresh tile',
+      message: `Refresh "${label}"? This reloads the surface from saved state and may discard recent unsaved changes.`,
       confirmLabel: 'Refresh',
       cancelLabel: 'Keep Editing',
       danger: true,
@@ -1324,6 +1340,84 @@ export default function App(): React.ReactElement {
     setShowProfilePicker((v) => !v)
   }, [availableProfiles.length, defaultProfile, addTerminal])
 
+  const handleCreateBoardTask = useCallback(async () => {
+    if (!activeWorkspaceId) return
+    const title = await requestPrompt({
+      title: 'New Task',
+      message: 'Capture the task title.',
+      confirmLabel: 'Continue',
+      placeholder: 'Title',
+    })
+    if (!title) return
+    const task = await requestPrompt({
+      title: 'Task Details',
+      message: 'Capture the work to be done.',
+      confirmLabel: 'Create Task',
+      placeholder: 'Task',
+    })
+    if (!task) return
+    const nextBoard = await window.electron.board.createUserTask(activeWorkspaceId, { title, task })
+    setBoardState(nextBoard)
+    setViewMode('board')
+  }, [activeWorkspaceId, requestPrompt, setViewMode])
+
+  const handleBoardButton = useCallback(async () => {
+    if (!activeWorkspaceId) return
+    setShowProfilePicker(false)
+    if (!boardState.enabled) {
+      const nextBoard = await window.electron.board.enable(activeWorkspaceId)
+      setBoardState(nextBoard)
+      setViewMode('board')
+      return
+    }
+    await handleCreateBoardTask()
+  }, [activeWorkspaceId, boardState.enabled, handleCreateBoardTask, setViewMode])
+
+  const updateBoardTask = useCallback((taskId: string, patch: { title?: string; task?: string }) => {
+    if (!activeWorkspaceId) return
+    window.electron.board.updateUserTask(activeWorkspaceId, { taskId, ...patch })
+      .then(setBoardState)
+      .catch((error) => console.error('[board] update task failed', error))
+  }, [activeWorkspaceId])
+
+  const addBoardNote = useCallback((taskId: string, note: string) => {
+    if (!activeWorkspaceId) return
+    window.electron.board.addUserNote(activeWorkspaceId, { taskId, note })
+      .then(setBoardState)
+      .catch((error) => console.error('[board] add note failed', error))
+  }, [activeWorkspaceId])
+
+  const deleteBacklogBoardTask = useCallback(async (task: BoardTask) => {
+    if (!activeWorkspaceId) return
+    const confirmed = await requestConfirm({
+      title: 'Delete task',
+      message: `Delete "${task.title}" from Backlog?`,
+      confirmLabel: 'Delete',
+      cancelLabel: 'Keep Task',
+      danger: true,
+    })
+    if (!confirmed) return
+    setBoardState(await window.electron.board.deleteBacklogTask(activeWorkspaceId, task.id))
+  }, [activeWorkspaceId, requestConfirm])
+
+  const approveReviewBoardTask = useCallback(async (task: BoardTask) => {
+    if (!activeWorkspaceId) return
+    setBoardState(await window.electron.board.approveReviewTask(activeWorkspaceId, task.id))
+  }, [activeWorkspaceId])
+
+  const rejectReviewBoardTask = useCallback(async (task: BoardTask) => {
+    if (!activeWorkspaceId) return
+    const note = await requestPrompt({
+      title: 'Reject task',
+      message: `Explain why "${task.title}" is returning to In Progress.`,
+      confirmLabel: 'Reject',
+      placeholder: 'Required note',
+      danger: true,
+    })
+    if (!note) return
+    setBoardState(await window.electron.board.rejectReviewTask(activeWorkspaceId, { taskId: task.id, note }))
+  }, [activeWorkspaceId, requestPrompt])
+
   const activeTileMenu = tileMenu ? tiles.find((tile) => tile.id === tileMenu.tileId) ?? null : null
   const activeGroupMenu = groupsEnabled && groupMenu ? effectiveGroups.find((group) => group.id === groupMenu.groupId) ?? null : null
   const tileMenuItems: MenuItem[] = activeTileMenu
@@ -1381,7 +1475,12 @@ export default function App(): React.ReactElement {
   }, [attachedTiles, sortedTiles, fullviewActiveTileId, focusedTileId, viewMode, setFullviewActiveTileId, setViewMode])
 
   useEffect(() => {
-    if (activeWorkspaceType === 'grid' && viewMode !== 'gridview' && viewMode !== 'fullview') {
+    if (viewMode === 'board' && !boardState.enabled) {
+      setViewMode(activeWorkspaceType === 'grid' ? 'gridview' : 'fullview')
+      return
+    }
+
+    if (activeWorkspaceType === 'grid' && viewMode !== 'gridview' && viewMode !== 'fullview' && viewMode !== 'board') {
       setViewMode('gridview')
       return
     }
@@ -1389,7 +1488,7 @@ export default function App(): React.ReactElement {
     if (activeWorkspaceType === 'canvas' && viewMode === 'gridview') {
       setViewMode('fullview')
     }
-  }, [activeWorkspaceType, setViewMode, viewMode])
+  }, [activeWorkspaceType, boardState.enabled, setViewMode, viewMode])
 
   useEffect(() => {
     if (activeWorkspaceType !== 'canvas' || viewMode !== 'splitview') return
@@ -1655,6 +1754,17 @@ export default function App(): React.ReactElement {
                   <span className="nd-label">Files</span>
                 </button>
               )}
+              <button
+                className="nd-panel-raised flex h-11 items-center justify-center gap-1.5 rounded-2xl px-2 text-text-secondary transition-colors hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
+                onClick={() => {
+                  void handleBoardButton()
+                }}
+                disabled={!activeWorkspaceId}
+                title={boardEnabled ? 'New task' : 'Enable board'}
+              >
+                <ClipboardList size={15} />
+                <span className="nd-label">Board</span>
+              </button>
             </div>
           </div>
         }
@@ -1741,7 +1851,7 @@ export default function App(): React.ReactElement {
             {tiles.length === 0 ? (
               <div className="nd-panel-raised rounded-[20px] px-5 py-8 text-center text-text-secondary">
                 <div className="nd-label">[ EMPTY ]</div>
-                <div className="mt-3 text-sm text-text-disabled">Create a terminal, note, browser, board, timer, or files tile.</div>
+                <div className="mt-3 text-sm text-text-disabled">Create a terminal, note, browser, timer, files tile, or workspace board.</div>
               </div>
             ) : (
               <div className="space-y-2">
@@ -1902,6 +2012,7 @@ export default function App(): React.ReactElement {
               viewMode={viewMode}
               splitOrientation={splitViewState.orientation}
               workspaceType={activeWorkspaceType}
+              boardEnabled={boardEnabled}
               canSplitView={attachedTiles.length >= 2}
               sidebarCollapsed={sidebarCollapsed}
               onToggleSidebar={() => setSidebarCollapsed(c => !c)}
@@ -1940,7 +2051,18 @@ export default function App(): React.ReactElement {
               )}
 
               <div className="relative min-h-0 flex-1">
-                {activeWorkspaceType === 'grid' && viewMode === 'gridview' ? (
+                {viewMode === 'board' && boardEnabled ? (
+                  <BoardView
+                    workspaceId={activeWorkspaceId}
+                    board={boardState}
+                    onCreateTask={handleCreateBoardTask}
+                    onUpdateTask={updateBoardTask}
+                    onAddNote={addBoardNote}
+                    onDeleteBacklogTask={deleteBacklogBoardTask}
+                    onApproveReviewTask={approveReviewBoardTask}
+                    onRejectReviewTask={rejectReviewBoardTask}
+                  />
+                ) : activeWorkspaceType === 'grid' && viewMode === 'gridview' ? (
                   <GridView
                     rootNode={gridViewState.rootNode}
                     tiles={attachedTiles}

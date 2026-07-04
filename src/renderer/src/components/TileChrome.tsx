@@ -5,7 +5,7 @@ import { isTileInteractionLocked } from '@/utils/grouping'
 import { getSplitPanelFrame } from '@/utils/splitViewLayout'
 import type { TileState, ViewMode, SplitPanelId, SplitOrientation } from '@shared/types'
 import { getTileSizePreset, NOTE_COLORS } from '@shared/types'
-import { GripVertical, StickyNote, Globe, LayoutGrid, Terminal, Clock, Folder, Lock } from 'lucide-react'
+import { GripVertical, StickyNote, Globe, Terminal, Clock, Folder, Lock } from 'lucide-react'
 import { TileActionButtons } from './TileActionButtons'
 
 interface Props {
@@ -33,7 +33,6 @@ const TYPE_ICONS: Record<string, typeof Terminal> = {
   terminal: Terminal,
   note: StickyNote,
   browser: Globe,
-  kanban: LayoutGrid,
   timer: Clock,
   files: Folder,
 }
@@ -42,7 +41,6 @@ const TYPE_LABELS: Record<string, string> = {
   terminal: 'Terminal',
   note: 'Note',
   browser: 'Browser',
-  kanban: 'Board',
   timer: 'Timer',
   files: 'Files',
 }

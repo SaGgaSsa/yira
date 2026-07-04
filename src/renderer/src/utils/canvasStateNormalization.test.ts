@@ -6,7 +6,7 @@ const state: CanvasState = {
     { id: 'terminal', type: 'terminal', x: 0, y: 0, width: 10, height: 20, zIndex: 1, hideTitlebar: true } as CanvasState['tiles'][number] & { hideTitlebar: true },
     { id: 'note', type: 'note', x: 0, y: 0, width: 10, height: 20, zIndex: 2 },
     { id: 'browser', type: 'browser', x: 0, y: 0, width: 10, height: 20, zIndex: 3 },
-    { id: 'kanban', type: 'kanban', x: 0, y: 0, width: 10, height: 20, zIndex: 4 },
+    { id: 'kanban', type: 'kanban', x: 0, y: 0, width: 10, height: 20, zIndex: 4 } as unknown as CanvasState['tiles'][number],
     { id: 'timer', type: 'timer', x: 0, y: 0, width: 10, height: 20, zIndex: 5 },
     { id: 'files', type: 'files', x: 0, y: 0, width: 10, height: 20, zIndex: 6 },
   ],
@@ -31,10 +31,13 @@ const expected = new Map([
   ['terminal', { width: 900, height: 400 }],
   ['note', { width: 900, height: 800 }],
   ['browser', { width: 1800, height: 800 }],
-  ['kanban', { width: 1800, height: 800 }],
   ['timer', { width: 900, height: 400 }],
   ['files', { width: 900, height: 400 }],
 ])
+
+if (normalized.tiles.some((tile) => tile.id === 'kanban')) {
+  throw new Error('legacy kanban tiles must be dropped from normalized canvas JSON')
+}
 
 for (const tile of normalized.tiles) {
   const size = expected.get(tile.id)

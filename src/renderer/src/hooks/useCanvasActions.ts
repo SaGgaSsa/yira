@@ -11,7 +11,6 @@ const TILE_TYPE_LABELS: Record<TileState['type'], string> = {
   terminal: 'Terminal',
   note: 'Note',
   browser: 'Browser',
-  kanban: 'Board',
   timer: 'Timer',
   files: 'Files',
 }
@@ -25,7 +24,6 @@ interface UseCanvasActionsOptions {
 }
 
 export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
-  const activeWorkspaceId = useCanvasStore((s) => s.activeWorkspaceId)
   const browserHomeUrl = useSettingsStore((s) => s.browser.homeUrl)
   const tileCreationAvailability = useSettingsStore((s) => s.tiles.creationAvailability)
   const groupsEnabled = useSettingsStore((s) => s.groups.enabled)
@@ -229,10 +227,6 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
     finalizeAddedTile(tile, targetGroup?.id)
   }, [browserHomeUrl, finalizeAddedTile, getSpawnPos, groupsEnabled, tileCreationAvailability.browser])
 
-  const addBoard = useCallback(() => {
-    return
-  }, [])
-
   const addNote = useCallback(
     (color?: NoteColor) => {
       if (!tileCreationAvailability.note) return
@@ -324,11 +318,10 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
 
       if (tile?.type === 'terminal') window.electron.terminal.destroy(tileId)
       if (tile?.type === 'note') window.electron.note.delete(tileId)
-      if (tile?.type === 'kanban' && activeWorkspaceId) window.electron.board.delete(activeWorkspaceId, tileId)
       removeTile(tileId)
       return true
     },
-    [activeWorkspaceId, removeTile, requestConfirm],
+    [removeTile, requestConfirm],
   )
 
   const resetZoom = useCallback(() => {
@@ -339,7 +332,6 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
     addTerminal,
     duplicateTerminalTile,
     addBrowser,
-    addBoard,
     addNote,
     addTimer,
     addFiles,

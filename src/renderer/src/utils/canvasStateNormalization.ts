@@ -3,11 +3,20 @@ import { normalizeTileSize } from '@shared/types'
 import { DEFAULT_SPLIT_ORIENTATION, normalizeSplitOrientation } from './splitViewState'
 import { clampTileToWorld, normalizeFiniteViewport } from './canvasWorld'
 
+function isSupportedTile(tile: CanvasState['tiles'][number]): boolean {
+  return tile.type === 'terminal' ||
+    tile.type === 'note' ||
+    tile.type === 'browser' ||
+    tile.type === 'timer' ||
+    tile.type === 'files'
+}
+
 export function normalizeCanvasStateForJson(state: CanvasState): CanvasState {
   const viewMode: ViewMode = state.viewMode === 'canvas' || state.viewMode === 'fullview' || state.viewMode === 'splitview'
     ? state.viewMode
     : 'fullview'
-  const tileIds = new Set(state.tiles.map((tile) => tile.id))
+  const tiles = state.tiles.filter(isSupportedTile)
+  const tileIds = new Set(tiles.map((tile) => tile.id))
   const seen = new Set<string>()
   const cleanIds = (ids?: string[]) => (ids ?? []).filter((tileId) => {
     if (!tileIds.has(tileId) || seen.has(tileId)) return false
@@ -31,7 +40,7 @@ export function normalizeCanvasStateForJson(state: CanvasState): CanvasState {
 
   return {
     ...state,
-    tiles: state.tiles.map((tile) => {
+    tiles: tiles.map((tile) => {
       const size = normalizeTileSize(tile.type, tile)
       const { hideTitlebar: _hideTitlebar, ...tileWithoutTitlebar } = tile as typeof tile & { hideTitlebar?: unknown }
       return clampTileToWorld({
@@ -43,7 +52,12 @@ export function normalizeCanvasStateForJson(state: CanvasState): CanvasState {
     groups: state.groups ?? [],
     viewport: normalizeFiniteViewport(state.viewport),
     viewMode,
-    fullviewActiveTileId: state.fullviewActiveTileId ?? state.focusedTileId ?? state.tiles[0]?.id ?? null,
+    focusedTileId: state.focusedTileId && tileIds.has(state.focusedTileId) ? state.focusedTileId : null,
+    fullviewActiveTileId: state.fullviewActiveTileId && tileIds.has(state.fullviewActiveTileId)
+      ? state.fullviewActiveTileId
+      : state.focusedTileId && tileIds.has(state.focusedTileId)
+        ? state.focusedTileId
+        : tiles[0]?.id ?? null,
     splitViewState,
   }
 }

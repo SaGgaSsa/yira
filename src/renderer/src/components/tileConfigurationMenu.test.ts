@@ -18,10 +18,10 @@ const timerTile: TileState = {
   type: 'timer',
 }
 
-const boardTile: TileState = {
+const noteTile: TileState = {
   ...terminalTile,
-  id: 'board-1',
-  type: 'kanban',
+  id: 'note-1',
+  type: 'note',
 }
 
 function labelsFor(tile: TileState): string[] {
@@ -54,7 +54,7 @@ if (!mutedTimerLabels.includes('Unmute Notifications')) {
   throw new Error('timer configuration menu must include unmute when muted')
 }
 
-const boardLabels = labelsFor(boardTile)
-if (!boardLabels.includes('Rename')) throw new Error('non-terminal configuration menu must use Rename')
-if (boardLabels.includes('Duplicate')) throw new Error('non-terminal configuration menu must not include Duplicate')
-if (boardLabels.includes('Mute Notifications')) throw new Error('non-notifying tiles must not include notification controls')
+const noteLabels = labelsFor(noteTile)
+if (!noteLabels.includes('Rename')) throw new Error('non-terminal configuration menu must use Rename')
+if (noteLabels.includes('Duplicate')) throw new Error('non-terminal configuration menu must not include Duplicate')
+if (noteLabels.includes('Mute Notifications')) throw new Error('non-notifying tiles must not include notification controls')
