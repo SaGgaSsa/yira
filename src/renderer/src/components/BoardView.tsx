@@ -152,7 +152,7 @@ export function BoardView({
   const mcpCommand = `npx -y yira-board-mcp --yira-home ~/.yira --workspace-id ${workspaceId}`
 
   return (
-    <main className="flex h-full min-h-0 flex-col bg-bg-primary">
+    <main className="flex h-full min-h-0 flex-col bg-bg-secondary">
       <div className="flex shrink-0 items-center justify-between border-b border-border px-6 py-4">
         <div className="min-w-0">
           <div className="nd-label text-text-secondary">Board View</div>
@@ -160,7 +160,7 @@ export function BoardView({
         </div>
         <div className="flex items-center gap-2">
           <button
-            className="inline-flex h-10 items-center gap-2 rounded-full border border-border-visible px-4 text-sm text-text-secondary transition-colors hover:text-text-display"
+            className="inline-flex h-10 items-center gap-2 rounded-full border border-text-display px-4 text-sm text-text-display transition-colors hover:bg-hover-bg"
             onClick={() => void window.electron.clipboard.writeText(mcpCommand)}
             title="Copy MCP config command"
           >
@@ -168,7 +168,7 @@ export function BoardView({
             <span className="nd-label">MCP</span>
           </button>
           <button
-            className="inline-flex h-10 items-center gap-2 rounded-full border border-text-display bg-text-display px-4 text-sm text-bg-primary transition-colors hover:opacity-90"
+            className="inline-flex h-10 items-center gap-2 rounded-full border border-text-display px-4 text-sm text-text-display transition-colors hover:bg-hover-bg"
             onClick={onCreateTask}
           >
             <ClipboardList size={14} />
