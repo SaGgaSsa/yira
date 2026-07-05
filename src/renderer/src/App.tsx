@@ -24,6 +24,7 @@ import { useUpdateStore } from './store/updateStore'
 import { findMergeTargetGroup, findSelectedGroup, getGroupingBlockedReason } from './utils/grouping'
 import { GROUP_COLORS, GROUP_COLOR_ORDER, type BoardState, type BoardTask, type TileState, type CanvasState, type GridWorkspaceState, type Workspace, type WorkspaceMetadata, type TileGroup, type ViewMode, type SplitPanelId, type SplitViewState, type WorkspaceManagementEntry, type WorkspaceType } from '@shared/types'
 import { createEmptyGridWorkspaceState } from '@shared/gridWorkspaceState'
+import { getBoardReviewCount } from '@shared/board'
 import { getAttachedTiles, isTileDetached, selectFloatingTileWindowOpenRequests } from '@shared/floatingTiles'
 import { DEFAULT_SPLIT_ORIENTATION, toggleSplitOrientation } from './utils/splitViewState'
 import { getTerminalDisplayTitle, normalizeTerminalWindowTitle } from './utils/terminalDisplayTitle'
@@ -717,6 +718,8 @@ export default function App(): React.ReactElement {
   const canShowFilesCreation = tileCreationAvailability.files
   const canCreateFiles = canShowFilesCreation && Boolean(activeWorkspaceConfig.rootFolderPath)
   const boardEnabled = boardState.enabled
+  const boardReviewCount = useMemo(() => getBoardReviewCount(boardState), [boardState])
+  const boardReviewLabel = boardReviewCount > 0 ? (boardReviewCount > 9 ? '9+' : String(boardReviewCount)) : null
 
   // Zoom toggle: switch between 100% and previous zoom
   const handleZoomToggle = useCallback(() => {
@@ -1764,6 +1767,14 @@ export default function App(): React.ReactElement {
               >
                 <ClipboardList size={15} />
                 <span className="nd-label">Board</span>
+                {boardReviewLabel && (
+                  <span
+                    className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full border border-text-display px-1.5 font-mono text-[10px] leading-none text-text-display"
+                    title={`${boardReviewCount} board ${boardReviewCount === 1 ? 'task' : 'tasks'} waiting for review`}
+                  >
+                    {boardReviewLabel}
+                  </span>
+                )}
               </button>
             </div>
           </div>
@@ -2013,6 +2024,7 @@ export default function App(): React.ReactElement {
               splitOrientation={splitViewState.orientation}
               workspaceType={activeWorkspaceType}
               boardEnabled={boardEnabled}
+              boardReviewCount={boardReviewCount}
               canSplitView={attachedTiles.length >= 2}
               sidebarCollapsed={sidebarCollapsed}
               onToggleSidebar={() => setSidebarCollapsed(c => !c)}

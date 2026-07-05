@@ -4,6 +4,7 @@ import {
   createEmptyBoardState,
   createUserBoardTask,
   enrichTaskMetadata,
+  getBoardReviewCount,
   getBoardHistory,
   getVisibleBoardColumns,
   moveTaskToReview,
@@ -43,6 +44,9 @@ if (!inProgress || inProgress.status !== 'in_progress') throw new Error('MCP sta
 const reviewing = moveTaskToReview(ready, { taskId: task.id, sessionId: 'session-1', note: 'Ready for human review' }, { now: '2026-07-04T12:00:00.000Z' })
 const reviewTask = reviewing.tasks.find((entry) => entry.id === task.id)
 if (!reviewTask || reviewTask.status !== 'review') throw new Error('MCP review transition must move task to review')
+
+if (getBoardReviewCount(reviewing) !== 1) throw new Error('review count must include tasks waiting for human review')
+if (getBoardReviewCount(ready) !== 0) throw new Error('review count must ignore in-progress work')
 
 const rejected = rejectReviewTask(reviewing, { taskId: task.id, note: 'Needs one fix' }, { now: '2026-07-04T13:00:00.000Z' })
 const rejectedTask = rejected.tasks.find((entry) => entry.id === task.id)

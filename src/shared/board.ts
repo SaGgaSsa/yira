@@ -373,6 +373,10 @@ export function getBoardHistory(board: BoardState, query = ''): BoardTask[] {
     .sort((a, b) => (b.completedAt ?? b.updatedAt).localeCompare(a.completedAt ?? a.updatedAt))
 }
 
+export function getBoardReviewCount(board: BoardState): number {
+  return board.tasks.filter((task) => task.status === 'review').length
+}
+
 export function proposeWorkSession(board: BoardState): BoardTask | null {
   return board.tasks.find((task) => task.status === 'ready') ?? null
 }

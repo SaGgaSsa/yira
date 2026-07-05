@@ -8,6 +8,7 @@ interface TopBarProps {
   splitOrientation: SplitOrientation
   workspaceType: WorkspaceType
   boardEnabled: boolean
+  boardReviewCount: number
   canSplitView: boolean
   sidebarCollapsed: boolean
   onToggleSidebar: () => void
@@ -22,6 +23,7 @@ function SegmentedButton({
   label,
   title,
   icon: Icon,
+  badgeCount = 0,
   onClick,
   disabled = false,
 }: {
@@ -29,9 +31,12 @@ function SegmentedButton({
   label: string
   title?: string
   icon: typeof LayoutGrid
+  badgeCount?: number
   onClick: () => void
   disabled?: boolean
 }) {
+  const badgeLabel = badgeCount > 0 ? (badgeCount > 9 ? '9+' : String(badgeCount)) : null
+
   return (
     <button
       className={`nd-label inline-flex h-8 items-center gap-1.5 rounded-full px-3 transition-colors ${
@@ -45,6 +50,14 @@ function SegmentedButton({
     >
       <Icon size={13} />
       <span>{label}</span>
+      {badgeLabel && (
+        <span
+          className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full border border-current px-1.5 font-mono text-[10px] leading-none"
+          title={`${badgeCount} board ${badgeCount === 1 ? 'task' : 'tasks'} waiting for review`}
+        >
+          {badgeLabel}
+        </span>
+      )}
     </button>
   )
 }
@@ -55,6 +68,7 @@ export function TopBar({
   splitOrientation,
   workspaceType,
   boardEnabled,
+  boardReviewCount,
   canSplitView,
   sidebarCollapsed,
   onToggleSidebar,
@@ -114,6 +128,7 @@ export function TopBar({
             active={viewMode === 'board'}
             label="Board"
             icon={ClipboardList}
+            badgeCount={boardReviewCount}
             onClick={() => onSetViewMode('board')}
           />
         )}
