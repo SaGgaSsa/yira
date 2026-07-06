@@ -2,6 +2,7 @@ import type {
   Workspace,
   WorkspaceManagementCommitResult,
   WorkspaceManagementEntry,
+  WorkspaceType,
 } from './types'
 import { normalizeWorkspaceConfig } from './workspaceConfig'
 
@@ -115,4 +116,26 @@ export function applyWorkspaceManagementChanges({
     createdWorkspaceIds,
     removedWorkspaceIds,
   }
+}
+
+export function setWorkspaceType(
+  workspaces: Workspace[],
+  workspaceId: string,
+  type: WorkspaceType,
+): Workspace[] | null {
+  let found = false
+  const nextWorkspaces = workspaces.map((workspace) => {
+    if (workspace.id !== workspaceId) return workspace
+
+    found = true
+    return {
+      ...workspace,
+      config: normalizeWorkspaceConfig({
+        ...workspace.config,
+        type,
+      }),
+    }
+  })
+
+  return found ? nextWorkspaces : null
 }

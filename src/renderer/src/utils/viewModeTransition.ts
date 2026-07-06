@@ -13,6 +13,7 @@ interface ResolveViewModeTransitionInput {
 interface ViewModeTransition {
   viewMode: ViewMode
   fullviewActiveTileId?: string | null
+  workspaceTypeSwitch?: WorkspaceType
 }
 
 function topTileId(tiles: TileState[]): string | null {
@@ -32,8 +33,21 @@ export function resolveViewModeTransition({
   tiles,
   splitViewState,
 }: ResolveViewModeTransitionInput): ViewModeTransition | null {
-  if (activeWorkspaceType === 'grid' && requestedMode !== 'gridview' && requestedMode !== 'fullview') return null
-  if (activeWorkspaceType === 'canvas' && requestedMode === 'gridview') return null
+  if (activeWorkspaceType === 'canvas' && requestedMode === 'gridview') {
+    return {
+      viewMode: 'gridview',
+      workspaceTypeSwitch: 'grid',
+    }
+  }
+
+  if (activeWorkspaceType === 'grid' && requestedMode === 'canvas') {
+    return {
+      viewMode: 'canvas',
+      workspaceTypeSwitch: 'canvas',
+    }
+  }
+
+  if (activeWorkspaceType === 'grid' && requestedMode !== 'gridview' && requestedMode !== 'fullview' && requestedMode !== 'board') return null
 
   if (requestedMode === 'fullview') {
     const splitActiveId = splitViewState.focusedPanel === 'left'

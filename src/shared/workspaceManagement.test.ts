@@ -1,4 +1,4 @@
-import { applyWorkspaceManagementChanges } from './workspaceManagement'
+import { applyWorkspaceManagementChanges, setWorkspaceType } from './workspaceManagement'
 import type { Workspace } from './types'
 
 function workspace(id: string, name: string, rootFolderPath?: string, type: Workspace['config']['type'] = 'canvas'): Workspace {
@@ -74,6 +74,14 @@ const firstWorkspace = applyWorkspaceManagementChanges({
 })
 
 if (firstWorkspace.activeWorkspaceId !== 'ws-new-2') throw new Error('first saved workspace must become active when none existed before')
+
+const typeSwitch = setWorkspaceType(existing, 'ws-alpha', 'grid')
+if (!typeSwitch) throw new Error('setWorkspaceType must return updated workspaces for an existing workspace')
+const switchedWorkspace = typeSwitch.find((entry) => entry.id === 'ws-alpha')
+if (switchedWorkspace?.config.type !== 'grid') throw new Error('setWorkspaceType must persist the requested workspace type')
+if (switchedWorkspace.config.rootFolderPath !== '/repo/alpha') throw new Error('setWorkspaceType must preserve existing workspace config')
+if (existing[0].config.type !== 'canvas') throw new Error('setWorkspaceType must not mutate the existing workspace array')
+if (setWorkspaceType(existing, 'missing', 'grid') !== null) throw new Error('setWorkspaceType must return null for missing workspaces')
 
 try {
   applyWorkspaceManagementChanges({

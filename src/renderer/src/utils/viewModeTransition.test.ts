@@ -53,3 +53,31 @@ const invalidGridMode = resolveViewModeTransition({
 if (invalidGridMode !== null) {
   throw new Error('Grid workspaces must reject canvas-only modes')
 }
+
+const canvasToGridSwitch = resolveViewModeTransition({
+  activeWorkspaceType: 'canvas',
+  currentViewMode: 'canvas',
+  requestedMode: 'gridview',
+  focusedTileId: 'second',
+  fullviewActiveTileId: null,
+  tiles: [tile('first', 1), tile('second', 2)],
+  splitViewState,
+})
+
+if (canvasToGridSwitch?.workspaceTypeSwitch !== 'grid' || canvasToGridSwitch.viewMode !== 'gridview') {
+  throw new Error('Canvas must transition to Grid through the workspace type switch path')
+}
+
+const gridToCanvasSwitch = resolveViewModeTransition({
+  activeWorkspaceType: 'grid',
+  currentViewMode: 'gridview',
+  requestedMode: 'canvas',
+  focusedTileId: 'second',
+  fullviewActiveTileId: null,
+  tiles: [tile('first', 1), tile('second', 2)],
+  splitViewState,
+})
+
+if (gridToCanvasSwitch?.workspaceTypeSwitch !== 'canvas' || gridToCanvasSwitch.viewMode !== 'canvas') {
+  throw new Error('Grid must transition to Canvas through the workspace type switch path')
+}
