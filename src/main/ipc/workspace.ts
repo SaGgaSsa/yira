@@ -1,11 +1,16 @@
 import { ipcMain, dialog, BrowserWindow } from 'electron'
 import { promises as fs, readFileSync } from 'fs'
-import { basename, isAbsolute, join, relative, resolve } from 'path'
+import { isAbsolute, join, relative, resolve } from 'path'
 import type { Config, Workspace, AppSettings, WorkspaceConfig, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceOpenFolderResult, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
 import { DEFAULT_SETTINGS } from '@shared/types'
 import { normalizeWorkspaceConfig } from '@shared/workspaceConfig'
 import { applyWorkspaceManagementChanges, setWorkspaceType } from '@shared/workspaceManagement'
 import { YIRA_HOME, CONFIG_PATH, WORKSPACES_DIR } from '../paths'
+import {
+  buildUnknownWorkspaceFolderResult,
+  canonicalizeRootFolderPath,
+  findWorkspaceByRootFolder,
+} from '../workspace-root'
 
 async function ensureDir(dir: string): Promise<void> {
   await fs.mkdir(dir, { recursive: true })
@@ -83,6 +88,11 @@ async function writeConfig(config: Config): Promise<void> {
 export async function getWorkspacePathById(workspaceId: string): Promise<string | null> {
   const config = await readConfig()
   return config.workspaces.find(w => w.id === workspaceId)?.path ?? null
+}
+
+export async function getWorkspaceRootFolderById(workspaceId: string): Promise<string | null> {
+  const config = await readConfig()
+  return config.workspaces.find(w => w.id === workspaceId)?.config.rootFolderPath ?? null
 }
 
 export async function initWorkspaces(): Promise<void> {
@@ -262,20 +272,16 @@ export function registerWorkspaceIPC(): void {
       return { workspace: null, canceled: true }
     }
 
-    const folderPath = result.filePaths[0]
+    const folderPath = await canonicalizeRootFolderPath(result.filePaths[0])
     const config = await readConfig()
-    const existing = config.workspaces.find(w => w.config.rootFolderPath === folderPath)
+    const existing = findWorkspaceByRootFolder(config.workspaces, folderPath)
     if (existing) {
       config.activeWorkspaceId = existing.id
       await writeConfig(config)
       return { workspace: existing, canceled: false }
     }
 
-    return {
-      workspace: null,
-      canceled: false,
-      error: `No Yira workspace is configured for ${basename(folderPath)}.`,
-    }
+    return buildUnknownWorkspaceFolderResult(folderPath)
   })
 
   ipcMain.handle('workspace:setActive', async (_, id: string) => {

@@ -196,8 +196,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
       .create(tile.id, {
         shellProfileId: tile.shellProfileId ?? 'bash',
         workspaceId: activeWorkspaceId || undefined,
-        workspaceDir: workspaceConfig.rootFolderPath,
-        wslStartInHome: tile.shellProfileId === 'wsl' && !workspaceConfig.rootFolderPath,
+        wslStartInHome: tile.shellProfileId === 'wsl',
         initialCommand,
         terminalHistoryEnabled: workspaceConfig.terminalHistoryEnabled !== false,
       })

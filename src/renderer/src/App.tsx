@@ -1386,13 +1386,24 @@ export default function App(): React.ReactElement {
       return
     }
 
-    await requestConfirm({
-      title: 'Folder not in Yira',
-      message: result.error ?? 'No existing Yira workspace uses that root folder.',
-      confirmLabel: 'OK',
-      hideCancel: true,
+    setShowWorkspacePicker(false)
+    setWorkspaceEditor({
+      mode: 'create',
+      request: {
+        title: 'Create workspace',
+        eyebrow: 'Workspace Setup',
+        confirmLabel: 'Create Workspace',
+        typeEditable: true,
+        value: {
+          type: 'canvas',
+          name: result.suggestedName ?? '',
+          rootFolderPath: result.selectedRootFolderPath ?? '',
+          initialCommand: '',
+          terminalHistoryEnabled: true,
+        },
+      },
     })
-  }, [activateWorkspace, refreshWorkspaceMetadata, requestConfirm])
+  }, [activateWorkspace, refreshWorkspaceMetadata])
 
   const createTerminalFromSidebar = useCallback(() => {
     if (availableProfiles.length <= 1 && defaultProfile) {

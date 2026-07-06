@@ -3,7 +3,8 @@ import { promises as fs } from 'fs'
 import type { ShellProfile, TerminalCreateOptions } from '@shared/types'
 import { detectShellProfiles } from '../shell-profiles'
 import { buildTerminalHistorySetup } from '../terminal-history'
-import { getWorkspacePathById } from './workspace'
+import { resolveTerminalWorkspaceRoot } from '../workspace-root'
+import { getWorkspacePathById, getWorkspaceRootFolderById } from './workspace'
 
 // node-pty must be required (not imported) due to native module ESM issues
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -59,6 +60,14 @@ export function registerTerminalIPC(): void {
     const workspacePath = options.workspaceId
       ? await getWorkspacePathById(options.workspaceId)
       : null
+    const workspaceRootFolderPath = options.workspaceId
+      ? await getWorkspaceRootFolderById(options.workspaceId)
+      : options.workspaceDir
+    const terminalRoot = resolveTerminalWorkspaceRoot({
+      shellProfileId: profile.id,
+      workspaceRootFolderPath: workspaceRootFolderPath ?? undefined,
+      wslStartInHome: options.wslStartInHome,
+    })
     const historySetup = buildTerminalHistorySetup({
       shellProfileId: profile.id,
       workspaceId: options.workspaceId,
@@ -71,9 +80,7 @@ export function registerTerminalIPC(): void {
       Object.assign(spawnEnv, historySetup.env)
     }
 
-    if (profile.id === 'wsl' && options.wslStartInHome) {
-      spawnArgs.push('--cd', '~')
-    }
+    spawnArgs.push(...terminalRoot.spawnArgs)
 
     let term: PtyInstance
     try {
@@ -81,7 +88,7 @@ export function registerTerminalIPC(): void {
         name: 'xterm-256color',
         cols: 80,
         rows: 24,
-        cwd: options.workspaceDir || process.cwd(),
+        cwd: terminalRoot.cwd,
         env: spawnEnv,
       })
     } catch (err) {
