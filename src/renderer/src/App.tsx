@@ -24,6 +24,10 @@ import { useUpdateStore } from './store/updateStore'
 import { findMergeTargetGroup, findSelectedGroup, getGroupingBlockedReason } from './utils/grouping'
 import { GROUP_COLORS, GROUP_COLOR_ORDER, type BoardState, type BoardTask, type TileState, type CanvasState, type GridWorkspaceState, type Workspace, type WorkspaceMetadata, type TileGroup, type ViewMode, type SplitPanelId, type SplitViewState, type WorkspaceManagementEntry, type WorkspaceType } from '@shared/types'
 import { createEmptyGridWorkspaceState } from '@shared/gridWorkspaceState'
+import {
+  reconcileCanvasStateWithSharedTiles,
+  reconcileGridStateWithSharedTiles,
+} from '@shared/workspaceTypeSwitch'
 import { getBoardReviewCount } from '@shared/board'
 import { getAttachedTiles, isTileDetached, selectFloatingTileWindowOpenRequests } from '@shared/floatingTiles'
 import { DEFAULT_SPLIT_ORIENTATION, toggleSplitOrientation } from './utils/splitViewState'
@@ -386,6 +390,12 @@ export default function App(): React.ReactElement {
   }, [clearAllTerminalAttention, terminalAttentionEnabled])
 
   useEffect(() => {
+    if (viewMode === 'fullview') {
+      setSidebarCollapsed(true)
+    }
+  }, [viewMode])
+
+  useEffect(() => {
     void initializeUpdates()
   }, [initializeUpdates])
 
@@ -626,6 +636,51 @@ export default function App(): React.ReactElement {
     [activeWorkspaceId, activateWorkspace],
   )
 
+  const switchWorkspaceType = useCallback(async (nextType: WorkspaceType, nextViewMode?: ViewMode) => {
+    const state = useCanvasStore.getState()
+    const workspaceId = state.activeWorkspaceId
+    const currentType = state.activeWorkspaceConfig.type
+    if (!workspaceId || currentType === nextType) return
+
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current)
+      autosaveTimerRef.current = null
+    }
+
+    const sharedTiles = state.tiles.map((tile) => ({ ...tile }))
+    await saveToDisk(workspaceId, currentType)
+    const targetRawState = await window.electron.canvas.load(workspaceId, nextType)
+    const updatedWorkspace = await window.electron.workspace.setType(workspaceId, nextType)
+    if (!updatedWorkspace) return
+
+    const restoredConfig = updatedWorkspace.config
+    setWorkspaceMetadata((current) => current.map((workspace) => (
+      workspace.id === updatedWorkspace.id ? updatedWorkspace : workspace
+    )))
+    skipNextAutosaveRef.current = true
+
+    if (nextType === 'grid') {
+      const nextState = reconcileGridStateWithSharedTiles(targetRawState as GridWorkspaceState | null, sharedTiles)
+      const restoredState: GridWorkspaceState = {
+        ...nextState,
+        viewMode: nextViewMode === 'fullview' ? 'fullview' : 'gridview',
+      }
+      restoreGridWorkspaceState(workspaceId, updatedWorkspace.name, restoredConfig, restoredState)
+      await window.electron.canvas.save(workspaceId, restoredState, nextType)
+      return
+    }
+
+    const nextState = reconcileCanvasStateWithSharedTiles(targetRawState as CanvasState | null, sharedTiles)
+    const restoredState: CanvasState = {
+      ...nextState,
+      viewMode: nextViewMode === 'fullview' || nextViewMode === 'splitview' || nextViewMode === 'board'
+        ? nextViewMode
+        : 'canvas',
+    }
+    restoreWorkspaceState(workspaceId, updatedWorkspace.name, restoredConfig, restoredState)
+    await window.electron.canvas.save(workspaceId, restoredState, nextType)
+  }, [restoreGridWorkspaceState, restoreWorkspaceState, saveToDisk])
+
   // Auto-save (debounced)
   const scheduleSave = useCallback(() => {
     if (!activeWorkspaceId) return
@@ -859,6 +914,11 @@ export default function App(): React.ReactElement {
 
     if (!transition) return
 
+    if (transition.workspaceTypeSwitch) {
+      void switchWorkspaceType(transition.workspaceTypeSwitch, transition.viewMode)
+      return
+    }
+
     if (transition.fullviewActiveTileId !== undefined) {
       setFullviewActiveTileId(transition.fullviewActiveTileId)
     }
@@ -900,7 +960,7 @@ export default function App(): React.ReactElement {
     }
 
     setViewMode(transition.viewMode)
-  }, [activeWorkspaceType, attachedTiles, boardState.enabled, focusTile, focusedTileId, fullviewActiveTileId, selectTiles, setFullviewActiveTileId, setSplitViewState, setViewMode, splitViewState, viewMode])
+  }, [activeWorkspaceType, attachedTiles, boardState.enabled, focusTile, focusedTileId, fullviewActiveTileId, selectTiles, setFullviewActiveTileId, setSplitViewState, setViewMode, splitViewState, switchWorkspaceType, viewMode])
 
   const selectedGroup = useMemo(
     () => findSelectedGroup(effectiveGroups, selectedTileIds),
@@ -2153,7 +2213,7 @@ export default function App(): React.ReactElement {
           if (activeWorkspaceType === 'grid') {
             restoreGridWorkspaceState(activeWorkspaceId, activeWorkspaceName, activeWorkspaceConfig, state as GridWorkspaceState)
           } else {
-            restoreState(state as CanvasState)
+            restoreWorkspaceState(activeWorkspaceId, activeWorkspaceName, activeWorkspaceConfig, state as CanvasState)
           }
           if (activeWorkspaceId) {
             window.electron.canvas.save(activeWorkspaceId, state, activeWorkspaceType)

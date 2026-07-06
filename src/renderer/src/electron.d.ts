@@ -7,6 +7,7 @@ import type {
   WorkspaceManagementCommitInput,
   WorkspaceManagementCommitResult,
   WorkspaceOpenFolderResult,
+  WorkspaceType,
   WorkspaceUpdatePatch,
   UserSettings,
   WindowBounds,
@@ -38,6 +39,7 @@ interface ElectronWorld {
     rename: (id: string, name: string) => Promise<Workspace | null>
     delete: (id: string) => Promise<void>
     setActive: (id: string) => Promise<void>
+    setType: (id: string, type: WorkspaceType) => Promise<Workspace | null>
     getActive: () => Promise<Workspace | null>
     openFolder: () => Promise<WorkspaceOpenFolderResult>
     commitManagementChanges: (input: WorkspaceManagementCommitInput) => Promise<WorkspaceManagementCommitResult>

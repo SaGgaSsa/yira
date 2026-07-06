@@ -1,10 +1,10 @@
 import { ipcMain, dialog, BrowserWindow } from 'electron'
 import { promises as fs, readFileSync } from 'fs'
 import { basename, isAbsolute, join, relative, resolve } from 'path'
-import type { Config, Workspace, AppSettings, WorkspaceConfig, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceOpenFolderResult, WorkspaceUpdatePatch } from '@shared/types'
+import type { Config, Workspace, AppSettings, WorkspaceConfig, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceOpenFolderResult, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
 import { DEFAULT_SETTINGS } from '@shared/types'
 import { normalizeWorkspaceConfig } from '@shared/workspaceConfig'
-import { applyWorkspaceManagementChanges } from '@shared/workspaceManagement'
+import { applyWorkspaceManagementChanges, setWorkspaceType } from '@shared/workspaceManagement'
 import { YIRA_HOME, CONFIG_PATH, WORKSPACES_DIR } from '../paths'
 
 async function ensureDir(dir: string): Promise<void> {
@@ -284,6 +284,16 @@ export function registerWorkspaceIPC(): void {
       config.activeWorkspaceId = id
       await writeConfig(config)
     }
+  })
+
+  ipcMain.handle('workspace:setType', async (_, id: string, type: WorkspaceType) => {
+    const config = await readConfig()
+    const workspaces = setWorkspaceType(config.workspaces, id, type)
+    if (!workspaces) return null
+
+    config.workspaces = workspaces
+    await writeConfig(config)
+    return config.workspaces.find((workspace) => workspace.id === id) ?? null
   })
 
   ipcMain.handle('settings:get', async () => {

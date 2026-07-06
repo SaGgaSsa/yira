@@ -101,9 +101,10 @@ export function TopBar({
         {isGridWorkspace ? (
           <SegmentedButton
             active={viewMode === 'gridview'}
-            label="Grid View"
+            label="Grid"
+            title={viewMode === 'gridview' ? 'Switch to Canvas' : 'Grid'}
             icon={Grid3X3}
-            onClick={() => onSetViewMode('gridview')}
+            onClick={() => onSetViewMode(viewMode === 'gridview' ? 'canvas' : 'gridview')}
           />
         ) : (
           <>
@@ -118,8 +119,9 @@ export function TopBar({
             <SegmentedButton
               active={viewMode === 'canvas'}
               label="Canvas"
+              title={viewMode === 'canvas' ? 'Switch to Grid' : 'Canvas'}
               icon={LayoutGrid}
-              onClick={() => onSetViewMode('canvas')}
+              onClick={() => onSetViewMode(viewMode === 'canvas' ? 'gridview' : 'canvas')}
             />
           </>
         )}
