@@ -1,6 +1,7 @@
 {
   "name": "yira",
-  "version": "0.1.29",
+  "version": "0.1.30",
+  "private": true,
   "productName": "Yira",
   "description": "Infinite canvas terminal workspace",
   "repository": {
@@ -27,7 +28,7 @@
   },
   "keywords": [],
   "author": "SaGgaSsa",
-  "license": "MIT",
+  "license": "UNLICENSED",
   "devDependencies": {
     "@electron-toolkit/tsconfig": "^2.0.0",
     "@electron-toolkit/utils": "^4.0.0",
@@ -85,7 +86,7 @@
       {
         "provider": "github",
         "owner": "SaGgaSsa",
-        "repo": "yira",
+        "repo": "yira-releases",
         "releaseType": "release"
       }
     ],

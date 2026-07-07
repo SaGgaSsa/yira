@@ -12,7 +12,7 @@ jobs:
     permissions:
       contents: write
     env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_TOKEN: ${{ secrets.YIRA_RELEASES_TOKEN }}
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     steps:
@@ -42,7 +42,7 @@ jobs:
     permissions:
       contents: write
     env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_TOKEN: ${{ secrets.YIRA_RELEASES_TOKEN }}
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     steps:
       - name: Checkout repository
@@ -72,14 +72,15 @@ jobs:
     permissions:
       contents: write
     env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_TOKEN: ${{ secrets.YIRA_RELEASES_TOKEN }}
+      RELEASE_REPOSITORY: SaGgaSsa/yira-releases
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     steps:
       - name: Publish draft as latest
         shell: bash
         run: |
           release_id="$(
-            gh api "repos/${GITHUB_REPOSITORY}/releases" --paginate \
+            gh api "repos/${RELEASE_REPOSITORY}/releases" --paginate \
               --jq ".[] | select(.tag_name == \"${GITHUB_REF_NAME}\") | .id" \
               | head -n 1
           )"
@@ -89,7 +90,7 @@ jobs:
             exit 1
           fi
 
-          gh api --method PATCH "repos/${GITHUB_REPOSITORY}/releases/${release_id}" \
+          gh api --method PATCH "repos/${RELEASE_REPOSITORY}/releases/${release_id}" \
             -F draft=false \
             -F prerelease=false \
             -F make_latest=true
