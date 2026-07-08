@@ -15,5 +15,7 @@ There is no committed automated test suite yet. Do not use `npm run build` as a 
 ## Commit & Pull Request Guidelines
 No top-level Git history is available in this workspace, so use concise Conventional Commit-style messages such as `feat: add workspace switcher` or `fix: persist terminal layout`. PRs should include a short summary, the user-visible impact, manual verification steps, and screenshots or screen recordings for renderer changes.
 
+Release patch notes are generated from commit subjects between tags. Commits that should appear publicly should use clear `feat:`, `fix:`, `perf:`, or `refactor:` subjects. Keep private implementation details, private links, SHAs, and file paths out of commit subjects when they should not appear in public release notes.
+
 ## Security & Configuration Tips
 Keep Node access in the renderer disabled and route privileged work through preload and IPC only. Do not commit local workspace data, generated bundles, or machine-specific shell settings.

@@ -76,6 +76,19 @@ jobs:
       RELEASE_REPOSITORY: SaGgaSsa/yira-releases
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Generate release notes
+        run: node scripts/generate-release-notes.mjs "${GITHUB_REF_NAME}" > release-notes.md
+
       - name: Publish draft as latest
         shell: bash
         run: |
@@ -93,4 +106,5 @@ jobs:
           gh api --method PATCH "repos/${RELEASE_REPOSITORY}/releases/${release_id}" \
             -F draft=false \
             -F prerelease=false \
-            -F make_latest=true
+            -F make_latest=true \
+            -F body=@release-notes.md
