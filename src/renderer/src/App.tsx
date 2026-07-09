@@ -2198,6 +2198,7 @@ export default function App(): React.ReactElement {
                   <GridView
                     rootNode={gridViewState.rootNode}
                     tiles={attachedTiles}
+                    tileRefreshKeys={tileRefreshKeys}
                     focusedTileId={focusedTileId}
                     terminalTitles={terminalTitles}
                     onFocusTile={(tileId) => {

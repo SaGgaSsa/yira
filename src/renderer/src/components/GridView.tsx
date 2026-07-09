@@ -14,6 +14,7 @@ import { getTerminalDisplayTitle } from '@/utils/terminalDisplayTitle'
 interface GridViewProps {
   rootNode: GridLayoutNode | null
   tiles: TileState[]
+  tileRefreshKeys: Record<string, number>
   focusedTileId: string | null
   terminalTitles: Record<string, string>
   onFocusTile: (tileId: string) => void
@@ -49,6 +50,7 @@ function getTileTitle(tile: TileState, terminalTitles: Record<string, string>): 
 export function GridView({
   rootNode,
   tiles,
+  tileRefreshKeys,
   focusedTileId,
   terminalTitles,
   onFocusTile,
@@ -245,6 +247,7 @@ export function GridView({
               </div>
             ) : (
               <TileContent
+                key={`${tile.id}:${tileRefreshKeys[tile.id] ?? 0}`}
                 tile={tile}
                 isFocused={focusedTileId === tile.id}
                 edgeToEdge
