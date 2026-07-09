@@ -126,9 +126,7 @@ export function GridView({
         : null
       const targetTileId = targetElement?.dataset.gridTileId
 
-      if (targetTileId === drag.sourceTileId && drag.pendingAction.type !== 'none') {
-        pendingAction = drag.pendingAction
-      } else if (targetTileId && targetTileId !== drag.sourceTileId) {
+      if (targetTileId && targetTileId !== drag.sourceTileId) {
         const targetRect = targetElement.getBoundingClientRect()
         pendingAction = computeGridDragAction(
           currentRootNode,
