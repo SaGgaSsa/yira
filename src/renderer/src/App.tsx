@@ -33,6 +33,13 @@ import { getAttachedTiles, isTileDetached, selectFloatingTileWindowOpenRequests 
 import { DEFAULT_SPLIT_ORIENTATION, toggleSplitOrientation } from './utils/splitViewState'
 import { getTerminalDisplayTitle, normalizeTerminalWindowTitle } from './utils/terminalDisplayTitle'
 import { resolveViewModeTransition } from './utils/viewModeTransition'
+import {
+  clearActivatedWorkspaceAttentionCount,
+  getWorkspaceAttentionLabel,
+  sumTerminalAttentionCounts,
+  updateActiveWorkspaceAttentionCount,
+  type WorkspaceAttentionCounts,
+} from './utils/workspaceAttention'
 import { TILE_META } from './components/TileContent'
 import { TileListItem } from './components/TileListItem'
 import { buildTileConfigurationMenuItems } from './components/tileConfigurationMenu'
@@ -334,6 +341,7 @@ export default function App(): React.ReactElement {
   const [showWorkspacePicker, setShowWorkspacePicker] = useState(false)
   const [showWorkspaceManager, setShowWorkspaceManager] = useState(false)
   const [workspaceMetadata, setWorkspaceMetadata] = useState<WorkspaceMetadata[]>([])
+  const [workspaceAttentionCounts, setWorkspaceAttentionCounts] = useState<WorkspaceAttentionCounts>({})
   const [boardState, setBoardState] = useState<BoardState>(EMPTY_BOARD_STATE)
   const [showSettings, setShowSettings] = useState(false)
   const [showJsonEditor, setShowJsonEditor] = useState(false)
@@ -480,11 +488,17 @@ export default function App(): React.ReactElement {
       autosaveTimerRef.current = null
     }
 
-    const currentWorkspaceId = useCanvasStore.getState().activeWorkspaceId
+    const currentState = useCanvasStore.getState()
+    const currentWorkspaceId = currentState.activeWorkspaceId
     if (options?.persistCurrent !== false && currentWorkspaceId && currentWorkspaceId !== workspace.id) {
       await saveToDisk(currentWorkspaceId)
     }
     if (currentWorkspaceId && currentWorkspaceId !== workspace.id) {
+      const outgoingAttentionCount = sumTerminalAttentionCounts(currentState.terminalAttention)
+      setWorkspaceAttentionCounts((current) => clearActivatedWorkspaceAttentionCount(
+        updateActiveWorkspaceAttentionCount(current, currentWorkspaceId, outgoingAttentionCount),
+        workspace.id,
+      ))
       await window.electron.floating.closeWorkspace(currentWorkspaceId)
     }
 
@@ -767,6 +781,27 @@ export default function App(): React.ReactElement {
       Object.entries(terminalAttention).map(([tileId, entry]) => [tileId, entry.count]),
     )
   }, [terminalAttention, terminalAttentionEnabled])
+  const activeWorkspaceAttentionCount = useMemo(() => {
+    if (!terminalAttentionEnabled) return 0
+    return sumTerminalAttentionCounts(terminalAttention)
+  }, [terminalAttention, terminalAttentionEnabled])
+  const activeWorkspaceAttentionLabel = activeWorkspaceId
+    ? getWorkspaceAttentionLabel(workspaceAttentionCounts, activeWorkspaceId)
+    : null
+
+  useEffect(() => {
+    if (!terminalAttentionEnabled) {
+      setWorkspaceAttentionCounts({})
+      return
+    }
+
+    setWorkspaceAttentionCounts((current) => updateActiveWorkspaceAttentionCount(
+      current,
+      activeWorkspaceId,
+      activeWorkspaceAttentionCount,
+    ))
+  }, [activeWorkspaceAttentionCount, activeWorkspaceId, terminalAttentionEnabled])
+
   const canCreateNote = tileCreationAvailability.note
   const canCreateBrowser = tileCreationAvailability.browser
   const canCreateTimer = tileCreationAvailability.timer
@@ -1848,8 +1883,18 @@ export default function App(): React.ReactElement {
               title="Workspace actions"
             >
               <span className="min-w-0">
-                <span className="block truncate text-base text-text-display">
-                  {activeWorkspaceName || 'None'}
+                <span className="flex min-w-0 items-center gap-2 text-base text-text-display">
+                  <span className="truncate">
+                    {activeWorkspaceName || 'None'}
+                  </span>
+                  {activeWorkspaceAttentionLabel && (
+                    <span
+                      className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full border border-text-display px-1.5 font-mono text-[10px] leading-none text-text-display"
+                      title={`${workspaceAttentionCounts[activeWorkspaceId] ?? 0} terminal output ${(workspaceAttentionCounts[activeWorkspaceId] ?? 0) === 1 ? 'event' : 'events'} in this workspace`}
+                    >
+                      {activeWorkspaceAttentionLabel}
+                    </span>
+                  )}
                 </span>
               </span>
               <ChevronDown size={16} className="shrink-0 text-text-secondary" />
@@ -1863,21 +1908,36 @@ export default function App(): React.ReactElement {
                 }}
               >
                 <div className="max-h-56 overflow-y-auto py-2">
-                  {workspaceMetadata.map((workspace) => (
-                    <button
-                      key={workspace.id}
-                      className="flex w-full min-w-0 items-center justify-between px-4 py-2.5 text-left transition-colors hover:bg-hover-bg"
-                      style={{
-                        color: workspace.id === activeWorkspaceId ? 'var(--text-primary)' : 'var(--text-secondary)',
-                      }}
-                      onClick={() => switchWorkspace(workspace)}
-                    >
-                      <span className="truncate text-sm">{workspace.name}</span>
-                      {workspace.id === activeWorkspaceId && (
-                        <span className="nd-caption ml-3 shrink-0 text-text-secondary">[ ACTIVE ]</span>
-                      )}
-                    </button>
-                  ))}
+                  {workspaceMetadata.map((workspace) => {
+                    const workspaceAttentionLabel = getWorkspaceAttentionLabel(workspaceAttentionCounts, workspace.id)
+                    const workspaceAttentionCount = workspaceAttentionCounts[workspace.id] ?? 0
+
+                    return (
+                      <button
+                        key={workspace.id}
+                        className="flex w-full min-w-0 items-center justify-between px-4 py-2.5 text-left transition-colors hover:bg-hover-bg"
+                        style={{
+                          color: workspace.id === activeWorkspaceId ? 'var(--text-primary)' : 'var(--text-secondary)',
+                        }}
+                        onClick={() => switchWorkspace(workspace)}
+                      >
+                        <span className="min-w-0 truncate text-sm">{workspace.name}</span>
+                        <span className="ml-3 flex shrink-0 items-center gap-2">
+                          {workspaceAttentionLabel && (
+                            <span
+                              className="inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-text-display px-1.5 font-mono text-[10px] leading-none text-text-display"
+                              title={`${workspaceAttentionCount} terminal output ${workspaceAttentionCount === 1 ? 'event' : 'events'} in this workspace`}
+                            >
+                              {workspaceAttentionLabel}
+                            </span>
+                          )}
+                          {workspace.id === activeWorkspaceId && (
+                            <span className="nd-caption shrink-0 text-text-secondary">[ ACTIVE ]</span>
+                          )}
+                        </span>
+                      </button>
+                    )
+                  })}
                 </div>
 
                 <div className="border-t border-border p-2">
