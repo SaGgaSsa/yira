@@ -161,6 +161,26 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
     [finalizeAddedTile, getSpawnPos, groupsEnabled],
   )
 
+  const addRemoteTerminal = useCallback(() => {
+    const state = useCanvasStore.getState()
+    const targetGroup = groupsEnabled ? findSelectedGroup(state.groups, state.selectedTileIds) : null
+    const size = getDefaultTileSize('terminal')
+    const pos = getSpawnPos(size.width, size.height, 40)
+
+    finalizeAddedTile({
+      id: generateId(),
+      type: 'terminal',
+      x: pos.x,
+      y: pos.y,
+      width: size.width,
+      height: size.height,
+      zIndex: state.nextZIndex,
+      shellProfileId: 'bash',
+      terminalConnection: 'remote-ssh',
+      groupId: targetGroup?.id,
+    }, targetGroup?.id)
+  }, [finalizeAddedTile, getSpawnPos, groupsEnabled])
+
   const duplicateTerminalTile = useCallback(
     (sourceTileId: string, options: { splitPanel?: SplitPanelId } = {}) => {
       if (!canAddTileToActiveWorkspace()) return null
@@ -330,6 +350,7 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
 
   return {
     addTerminal,
+    addRemoteTerminal,
     duplicateTerminalTile,
     addBrowser,
     addNote,

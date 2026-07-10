@@ -1,7 +1,20 @@
-import type { WorkspaceConfig, WorkspaceType } from './types'
+import type { RemoteTerminalConfig, WorkspaceConfig, WorkspaceType } from './types'
 
 export function normalizeWorkspaceType(type: unknown): WorkspaceType {
   return type === 'grid' ? 'grid' : 'canvas'
+}
+
+function normalizeRemoteTerminal(value: Partial<RemoteTerminalConfig> | undefined): RemoteTerminalConfig | undefined {
+  const host = typeof value?.host === 'string' ? value.host.trim() : undefined
+  const user = typeof value?.user === 'string' ? value.user.trim() : undefined
+  if (!host || !user || /\s/.test(host) || /\s/.test(user) || host.startsWith('-') || user.startsWith('-')) return undefined
+
+  const port = value?.port
+  return {
+    host,
+    user,
+    ...(typeof port === 'number' && Number.isInteger(port) && port >= 1 && port <= 65535 ? { port } : {}),
+  }
 }
 
 export function normalizeWorkspaceConfig(config: Partial<WorkspaceConfig> | undefined): WorkspaceConfig {
@@ -13,5 +26,6 @@ export function normalizeWorkspaceConfig(config: Partial<WorkspaceConfig> | unde
     rootFolderPath: rootFolderPath || undefined,
     initialCommand: initialCommand || undefined,
     terminalHistoryEnabled: config?.terminalHistoryEnabled !== false,
+    remoteTerminal: normalizeRemoteTerminal(config?.remoteTerminal),
   }
 }

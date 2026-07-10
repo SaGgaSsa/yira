@@ -39,6 +39,12 @@ function findOnPath(candidates: string[]): string | null {
   return null
 }
 
+export function detectSshClient(): string | null {
+  return isWindows
+    ? findOnPath(['ssh.exe', 'C:\\Windows\\System32\\OpenSSH\\ssh.exe'])
+    : findOnPath(['ssh'])
+}
+
 export function detectShellProfiles(): ShellProfile[] {
   if (isWindows) {
     const pwsh = findOnPath(['pwsh.exe', 'powershell.exe', 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'])

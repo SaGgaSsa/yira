@@ -190,14 +190,18 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
       return true
     })
     const { activeWorkspaceId, activeWorkspaceConfig: workspaceConfig } = useCanvasStore.getState()
-    const initialCommand = buildTerminalStartupCommand(tile, workspaceConfig)
+    const isRemoteSsh = tile.terminalConnection === 'remote-ssh'
+    const initialCommand = isRemoteSsh ? undefined : buildTerminalStartupCommand(tile, workspaceConfig)
 
     window.electron.terminal
       .create(tile.id, {
         shellProfileId: tile.shellProfileId ?? 'bash',
+        connection: isRemoteSsh ? 'remote-ssh' : undefined,
+        remoteTerminal: isRemoteSsh ? workspaceConfig.remoteTerminal : undefined,
+        remoteStartupCommand: isRemoteSsh ? tile.startupCommand : undefined,
         workspaceId: activeWorkspaceId || undefined,
-        workspaceDir: workspaceConfig.rootFolderPath,
-        wslStartInHome: tile.shellProfileId === 'wsl' && !workspaceConfig.rootFolderPath,
+        workspaceDir: isRemoteSsh ? undefined : workspaceConfig.rootFolderPath,
+        wslStartInHome: !isRemoteSsh && tile.shellProfileId === 'wsl' && !workspaceConfig.rootFolderPath,
         initialCommand,
         terminalHistoryEnabled: workspaceConfig.terminalHistoryEnabled !== false,
       })

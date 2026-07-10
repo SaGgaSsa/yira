@@ -34,6 +34,7 @@ function normalizeWorkspace(workspace: Partial<Workspace> & { id: string; name?:
     rootFolderPath: workspace.config?.rootFolderPath ?? migratedRootFolderPath,
     initialCommand: workspace.config?.initialCommand,
     terminalHistoryEnabled: workspace.config?.terminalHistoryEnabled,
+    remoteTerminal: workspace.config?.remoteTerminal,
   })
 
   return {
@@ -121,6 +122,7 @@ function createWorkspaceFromInput(input: WorkspaceCreateInput): Workspace {
       rootFolderPath: input.rootFolderPath,
       initialCommand: input.initialCommand,
       terminalHistoryEnabled: input.terminalHistoryEnabled,
+      remoteTerminal: input.remoteTerminal,
     }),
   }
 }
@@ -137,6 +139,7 @@ function updateWorkspace(workspace: Workspace, patch: WorkspaceUpdatePatch): Wor
     rootFolderPath: patch.config?.rootFolderPath ?? workspace.config.rootFolderPath,
     initialCommand: patch.config?.initialCommand ?? workspace.config.initialCommand,
     terminalHistoryEnabled: patch.config?.terminalHistoryEnabled ?? workspace.config.terminalHistoryEnabled,
+    remoteTerminal: patch.config?.remoteTerminal ?? workspace.config.remoteTerminal,
   })
 
   return workspace

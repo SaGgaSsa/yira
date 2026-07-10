@@ -79,6 +79,7 @@ interface ElectronWorld {
     resize: (tileId: string, cols: number, rows: number) => Promise<void>
     destroy: (tileId: string) => Promise<void>
     detach: (tileId: string) => Promise<void>
+    sshAvailable: () => Promise<boolean>
     onData: (tileId: string, callback: (data: string) => void) => () => void
   }
   shellProfiles: {

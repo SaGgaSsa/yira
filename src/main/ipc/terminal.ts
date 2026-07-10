@@ -1,9 +1,10 @@
 import { ipcMain, WebContents } from 'electron'
 import { promises as fs } from 'fs'
 import type { ShellProfile, TerminalCreateOptions } from '@shared/types'
-import { detectShellProfiles } from '../shell-profiles'
+import { detectShellProfiles, detectSshClient } from '../shell-profiles'
 import { buildTerminalHistorySetup } from '../terminal-history'
 import { getWorkspacePathById } from './workspace'
+import { buildRemoteSshLaunch } from '../remote-ssh'
 
 // node-pty must be required (not imported) due to native module ESM issues
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -24,6 +25,7 @@ interface TerminalSession {
 
 const terminals = new Map<string, TerminalSession>()
 let profiles: ShellProfile[] = []
+let sshClient: string | null = null
 
 function resolveProfile(shellProfileId: string): ShellProfile | undefined {
   return profiles.find(p => p.id === shellProfileId)
@@ -31,6 +33,7 @@ function resolveProfile(shellProfileId: string): ShellProfile | undefined {
 
 export function initShellProfiles(): void {
   profiles = detectShellProfiles()
+  sshClient = detectSshClient()
 }
 
 export function registerTerminalIPC(): void {
@@ -38,6 +41,8 @@ export function registerTerminalIPC(): void {
   ipcMain.handle('shellProfiles:list', async () => {
     return profiles
   })
+
+  ipcMain.handle('terminal:sshAvailable', async () => sshClient !== null)
 
   ipcMain.handle('terminal:create', async (event, tileId: string, options: TerminalCreateOptions) => {
     // Check for existing session (reattach)
@@ -47,45 +52,54 @@ export function registerTerminalIPC(): void {
       return { cols: 80, rows: 24, buffer: existing.buffer }
     }
 
-    // Resolve shell profile
-    const profile = resolveProfile(options.shellProfileId)
-    if (!profile) {
+    const isRemoteSsh = options.connection === 'remote-ssh'
+    const profile = isRemoteSsh ? undefined : resolveProfile(options.shellProfileId)
+    if (!isRemoteSsh && !profile) {
       throw new Error(`Shell profile "${options.shellProfileId}" not found or not available`)
     }
+    if (isRemoteSsh && !options.remoteTerminal) {
+      throw new Error('Remote SSH is not configured for this workspace')
+    }
+    if (isRemoteSsh && !sshClient) {
+      throw new Error('OpenSSH client is not available on this computer')
+    }
 
-    // Build spawn env
     const spawnEnv: Record<string, string> = { ...process.env as Record<string, string> }
-    const spawnArgs = [...profile.args]
-    const workspacePath = options.workspaceId
+    const spawnArgs = isRemoteSsh
+      ? buildRemoteSshLaunch(options.remoteTerminal!, options.remoteStartupCommand).args
+      : [...profile!.args]
+    const workspacePath = !isRemoteSsh && options.workspaceId
       ? await getWorkspacePathById(options.workspaceId)
       : null
-    const historySetup = buildTerminalHistorySetup({
+    const historySetup = profile ? buildTerminalHistorySetup({
       shellProfileId: profile.id,
       workspaceId: options.workspaceId,
       workspacePath: workspacePath ?? undefined,
       enabled: options.terminalHistoryEnabled,
-    })
+    }) : null
 
     if (historySetup) {
       await fs.mkdir(historySetup.historyDir, { recursive: true })
       Object.assign(spawnEnv, historySetup.env)
     }
 
-    if (profile.id === 'wsl' && options.wslStartInHome) {
+    if (profile?.id === 'wsl' && options.wslStartInHome) {
       spawnArgs.push('--cd', '~')
     }
 
+    const executable = isRemoteSsh ? sshClient! : profile!.shell
+    const label = isRemoteSsh ? 'Remote SSH' : profile!.label
     let term: PtyInstance
     try {
-      term = pty.spawn(profile.shell, spawnArgs, {
+      term = pty.spawn(executable, spawnArgs, {
         name: 'xterm-256color',
         cols: 80,
         rows: 24,
-        cwd: options.workspaceDir || process.cwd(),
+        cwd: isRemoteSsh ? process.cwd() : options.workspaceDir || process.cwd(),
         env: spawnEnv,
       })
     } catch (err) {
-      throw new Error(`Failed to spawn ${profile.label}: ${err instanceof Error ? err.message : String(err)}`)
+      throw new Error(`Failed to spawn ${label}: ${err instanceof Error ? err.message : String(err)}`)
     }
 
     const session: TerminalSession = {
@@ -119,7 +133,7 @@ export function registerTerminalIPC(): void {
       term.write(`${historySetup.prependCommand}\r`)
     }
 
-    if (options.initialCommand?.trim()) {
+    if (!isRemoteSsh && options.initialCommand?.trim()) {
       term.write(`${options.initialCommand.trim()}\r`)
     }
 

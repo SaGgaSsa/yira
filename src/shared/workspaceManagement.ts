@@ -70,6 +70,7 @@ export function applyWorkspaceManagementChanges({
         rootFolderPath: entry.rootFolderPath,
         initialCommand: entry.initialCommand,
         terminalHistoryEnabled: entry.terminalHistoryEnabled,
+        remoteTerminal: entry.remoteTerminal,
       })
 
       return {
@@ -84,6 +85,7 @@ export function applyWorkspaceManagementChanges({
       rootFolderPath: entry.rootFolderPath,
       initialCommand: entry.initialCommand,
       terminalHistoryEnabled: entry.terminalHistoryEnabled,
+      remoteTerminal: entry.remoteTerminal,
     })
 
     let id = nextWorkspaceId()

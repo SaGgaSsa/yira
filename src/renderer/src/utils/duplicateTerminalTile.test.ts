@@ -10,6 +10,7 @@ const sourceTerminal: TileState = {
   height: 500,
   zIndex: 3,
   shellProfileId: 'bash',
+  terminalConnection: 'remote-ssh',
   startupCommand: 'npm run dev',
   label: 'API',
   radiusIndex: 2,
@@ -44,6 +45,7 @@ duplicate satisfies TileState
 if (duplicate.type !== 'terminal') throw new Error('duplicate must stay a terminal')
 if (duplicate.id !== 'terminal-2') throw new Error('duplicate must use a new id')
 if (duplicate.shellProfileId !== 'bash') throw new Error('duplicate must copy shell profile')
+if (duplicate.terminalConnection !== 'remote-ssh') throw new Error('duplicate must stay remote when source is remote')
 if (duplicate.startupCommand !== 'npm run dev') throw new Error('duplicate must copy startup command')
 if (duplicate.label !== 'API') throw new Error('duplicate must copy label')
 if (duplicate.width !== 800 || duplicate.height !== 500) throw new Error('duplicate must copy dimensions')

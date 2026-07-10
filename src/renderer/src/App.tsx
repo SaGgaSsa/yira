@@ -334,10 +334,11 @@ export default function App(): React.ReactElement {
     })
   }, [])
 
-  const { addTerminal, duplicateTerminalTile, addNote, addBrowser, addTimer, addFiles, deleteTile, resetZoom } = useCanvasActions({ requestConfirm })
+  const { addTerminal, addRemoteTerminal, duplicateTerminalTile, addNote, addBrowser, addTimer, addFiles, deleteTile, resetZoom } = useCanvasActions({ requestConfirm })
 
   // UI state
   const [showProfilePicker, setShowProfilePicker] = useState(false)
+  const [remoteSshAvailable, setRemoteSshAvailable] = useState(false)
   const [showWorkspacePicker, setShowWorkspacePicker] = useState(false)
   const [showWorkspaceManager, setShowWorkspaceManager] = useState(false)
   const [workspaceMetadata, setWorkspaceMetadata] = useState<WorkspaceMetadata[]>([])
@@ -627,6 +628,7 @@ export default function App(): React.ReactElement {
             rootFolderPath: '',
             initialCommand: '',
             terminalHistoryEnabled: true,
+            remoteTerminal: { host: '', user: '' },
           },
         },
       })
@@ -635,6 +637,8 @@ export default function App(): React.ReactElement {
       console.log('[App] Shell profiles:', profiles)
       setProfiles(profiles.map((p) => ({ id: p.id, label: p.label, available: p.available })))
     }).catch((err) => console.error('[App] Error loading shell profiles:', err))
+    window.electron.terminal.sshAvailable().then(setRemoteSshAvailable)
+      .catch((err) => console.error('[App] Error checking SSH client:', err))
   }, [activateWorkspace, refreshWorkspaceMetadata, restoreState, setProfiles, setWorkspace])
 
   // Switch workspace
@@ -807,6 +811,8 @@ export default function App(): React.ReactElement {
   const canCreateTimer = tileCreationAvailability.timer
   const canShowFilesCreation = tileCreationAvailability.files
   const canCreateFiles = canShowFilesCreation && Boolean(activeWorkspaceConfig.rootFolderPath)
+  const remoteTerminalConfigured = Boolean(activeWorkspaceConfig.remoteTerminal)
+  const canCreateRemoteTerminal = remoteTerminalConfigured && remoteSshAvailable
   const boardEnabled = boardState.enabled
   const boardReviewCount = useMemo(() => getBoardReviewCount(boardState), [boardState])
   const boardReviewLabel = boardReviewCount > 0 ? (boardReviewCount > 9 ? '9+' : String(boardReviewCount)) : null
@@ -1316,6 +1322,7 @@ export default function App(): React.ReactElement {
         rootFolderPath: value.rootFolderPath || undefined,
         initialCommand: value.initialCommand || undefined,
         terminalHistoryEnabled: value.terminalHistoryEnabled,
+        remoteTerminal: value.remoteTerminal,
       })
       await refreshWorkspaceMetadata()
       setWorkspaceEditor(null)
@@ -1329,6 +1336,7 @@ export default function App(): React.ReactElement {
         rootFolderPath: value.rootFolderPath || undefined,
         initialCommand: value.initialCommand || undefined,
         terminalHistoryEnabled: value.terminalHistoryEnabled,
+        remoteTerminal: value.remoteTerminal,
       },
     })
     if (!updated) return
@@ -1377,6 +1385,7 @@ export default function App(): React.ReactElement {
             rootFolderPath: '',
             initialCommand: '',
             terminalHistoryEnabled: true,
+            remoteTerminal: { host: '', user: '' },
           },
         },
       })
@@ -1406,6 +1415,7 @@ export default function App(): React.ReactElement {
           rootFolderPath: '',
           initialCommand: '',
           terminalHistoryEnabled: true,
+          remoteTerminal: { host: '', user: '' },
         },
       },
     })
@@ -1430,13 +1440,13 @@ export default function App(): React.ReactElement {
   }, [activateWorkspace, refreshWorkspaceMetadata, requestConfirm])
 
   const createTerminalFromSidebar = useCallback(() => {
-    if (availableProfiles.length <= 1 && defaultProfile) {
+    if (availableProfiles.length <= 1 && defaultProfile && !remoteTerminalConfigured) {
       addTerminal(defaultProfile.id)
       setShowProfilePicker(false)
       return
     }
     setShowProfilePicker((v) => !v)
-  }, [availableProfiles.length, defaultProfile, addTerminal])
+  }, [availableProfiles.length, defaultProfile, addTerminal, remoteTerminalConfigured])
 
   const handleCreateBoardTask = useCallback(async () => {
     if (!activeWorkspaceId) return
@@ -1785,6 +1795,36 @@ export default function App(): React.ReactElement {
                       </span>
                     </button>
                   ))}
+                  <button
+                    className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-hover-bg"
+                    style={{
+                      color: canCreateRemoteTerminal ? 'var(--text-primary)' : 'var(--text-disabled)',
+                      cursor: canCreateRemoteTerminal ? 'pointer' : 'not-allowed',
+                    }}
+                    disabled={!canCreateRemoteTerminal}
+                    onClick={() => {
+                      if (!canCreateRemoteTerminal) return
+                      addRemoteTerminal()
+                      setShowProfilePicker(false)
+                    }}
+                    title={
+                      !remoteTerminalConfigured
+                        ? 'Configure Remote terminal in Workspace Settings first'
+                        : !remoteSshAvailable
+                          ? 'OpenSSH client is missing on this computer'
+                          : 'Create a terminal connected through SSH'
+                    }
+                  >
+                    <Terminal size={15} />
+                    <span className="flex-1 text-sm">Remote SSH</span>
+                    <span className="nd-caption text-text-secondary">
+                      {canCreateRemoteTerminal
+                        ? '[ READY ]'
+                        : remoteTerminalConfigured
+                          ? '[ OPENSSH MISSING ]'
+                          : '[ CONFIGURE ]'}
+                    </span>
+                  </button>
                 </div>
               </div>
             )}

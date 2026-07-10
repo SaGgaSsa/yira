@@ -337,12 +337,12 @@ export function TileChrome({
             )}
 
             {/* Terminal: shell profile badge */}
-            {tile.type === 'terminal' && tile.shellProfileId && (
+            {tile.type === 'terminal' && (tile.terminalConnection === 'remote-ssh' || tile.shellProfileId) && (
               <span
                 className="nd-caption rounded-full border border-border-visible px-2 py-1 shrink-0"
                 style={{ background: 'var(--surface)', color: 'var(--text-secondary)' }}
               >
-                {tile.shellProfileId}
+                {tile.terminalConnection === 'remote-ssh' ? 'remote ssh' : tile.shellProfileId}
               </span>
             )}
 

@@ -31,6 +31,7 @@ export function buildDuplicateTerminalTile({
     height: source.height,
     zIndex,
     shellProfileId: source.shellProfileId,
+    terminalConnection: source.terminalConnection,
     startupCommand: source.startupCommand,
     label: source.label,
     radiusIndex: source.radiusIndex,

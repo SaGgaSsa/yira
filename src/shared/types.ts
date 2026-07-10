@@ -4,6 +4,12 @@ import type { TerminalThemeId } from './terminalThemes'
 
 export type WorkspaceType = 'canvas' | 'grid'
 
+export interface RemoteTerminalConfig {
+  host: string
+  user: string
+  port?: number
+}
+
 export interface Workspace {
   id: string
   name: string
@@ -20,6 +26,7 @@ export interface WorkspaceConfig {
   rootFolderPath?: string
   initialCommand?: string
   terminalHistoryEnabled?: boolean
+  remoteTerminal?: RemoteTerminalConfig
 }
 
 export interface WorkspaceCreateInput {
@@ -28,6 +35,7 @@ export interface WorkspaceCreateInput {
   rootFolderPath?: string
   initialCommand?: string
   terminalHistoryEnabled?: boolean
+  remoteTerminal?: RemoteTerminalConfig
 }
 
 export interface WorkspaceManagementEntry {
@@ -37,6 +45,7 @@ export interface WorkspaceManagementEntry {
   rootFolderPath?: string
   initialCommand?: string
   terminalHistoryEnabled?: boolean
+  remoteTerminal?: RemoteTerminalConfig
 }
 
 export interface WorkspaceManagementCommitInput {
@@ -187,6 +196,8 @@ export const NOTIFICATION_ATTENTION_DELAY_MS = 10_000
 
 export type ShellProfileId = 'powershell' | 'cmd' | 'wsl' | 'bash' | 'zsh' | 'fish'
 
+export type TerminalConnectionKind = 'remote-ssh'
+
 export interface ShellProfile {
   id: ShellProfileId
   label: string
@@ -202,6 +213,9 @@ export interface TerminalCreateOptions {
   wslStartInHome?: boolean
   initialCommand?: string
   terminalHistoryEnabled?: boolean
+  connection?: TerminalConnectionKind
+  remoteTerminal?: RemoteTerminalConfig
+  remoteStartupCommand?: string
 }
 
 // ─── Files ─────────────────────────────────────────────────────────────────
@@ -440,6 +454,7 @@ export interface TileState {
 
   // Terminal-specific
   shellProfileId?: ShellProfileId
+  terminalConnection?: TerminalConnectionKind
   startupCommand?: string
 
   // Note-specific

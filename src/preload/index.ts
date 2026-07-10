@@ -79,6 +79,7 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.invoke('terminal:resize', tileId, cols, rows),
     destroy: (tileId: string) => ipcRenderer.invoke('terminal:destroy', tileId),
     detach: (tileId: string) => ipcRenderer.invoke('terminal:detach', tileId),
+    sshAvailable: () => ipcRenderer.invoke('terminal:sshAvailable'),
     onData: (tileId: string, callback: (data: string) => void) => {
       const channel = `terminal:data:${tileId}`
       const handler = (_evt: unknown, data: string) => callback(data)

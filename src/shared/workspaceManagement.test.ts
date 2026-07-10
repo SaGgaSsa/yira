@@ -28,7 +28,14 @@ const managed = applyWorkspaceManagementChanges({
   existingWorkspaces: existing,
   activeWorkspaceId: 'ws-beta',
   desiredWorkspaces: [
-    { id: 'ws-gamma', name: 'Gamma Renamed', rootFolderPath: '/repo/gamma-renamed', initialCommand: ' npm test ', terminalHistoryEnabled: false },
+    {
+      id: 'ws-gamma',
+      name: 'Gamma Renamed',
+      rootFolderPath: '/repo/gamma-renamed',
+      initialCommand: ' npm test ',
+      terminalHistoryEnabled: false,
+      remoteTerminal: { host: 'notebook.tailnet.ts.net', user: 'dev' },
+    },
     { name: 'Delta', rootFolderPath: '/repo/delta', terminalHistoryEnabled: true },
     { id: 'ws-beta', name: 'Beta', rootFolderPath: '/repo/beta' },
   ],
@@ -43,6 +50,7 @@ if (managed.workspaces[0].name !== 'Gamma Renamed') throw new Error('existing wo
 if (managed.workspaces[0].config.rootFolderPath !== '/repo/gamma-renamed') throw new Error('existing workspace root folder must be editable')
 if (managed.workspaces[0].config.initialCommand !== 'npm test') throw new Error('initial command must be normalized')
 if (managed.workspaces[0].config.terminalHistoryEnabled !== false) throw new Error('terminal history toggle must be preserved')
+if (managed.workspaces[0].config.remoteTerminal?.host !== 'notebook.tailnet.ts.net') throw new Error('remote terminal config must be preserved')
 if (managed.workspaces[2].config.type !== 'grid') throw new Error('existing workspace type must be preserved by management edits')
 if (managed.removedWorkspaceIds.join(',') !== 'ws-alpha') throw new Error('omitted existing workspaces must be marked for removal')
 if (managed.createdWorkspaceIds.join(',') !== 'ws-new-1') throw new Error('new workspaces must be reported')

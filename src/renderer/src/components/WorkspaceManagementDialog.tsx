@@ -31,6 +31,7 @@ function workspaceToDraft(workspace: WorkspaceMetadata): WorkspaceDraft {
     rootFolderPath: workspace.config.rootFolderPath ?? '',
     initialCommand: workspace.config.initialCommand ?? '',
     terminalHistoryEnabled: workspace.config.terminalHistoryEnabled !== false,
+    remoteTerminal: workspace.config.remoteTerminal,
     markedForRemoval: false,
     removalText: '',
   }
@@ -43,6 +44,7 @@ function draftToDialogValue(draft?: WorkspaceDraft): WorkspaceDialogValue {
     rootFolderPath: draft?.rootFolderPath ?? '',
     initialCommand: draft?.initialCommand ?? '',
     terminalHistoryEnabled: draft?.terminalHistoryEnabled ?? true,
+    remoteTerminal: draft?.remoteTerminal ?? { host: '', user: '' },
   }
 }
 
@@ -53,6 +55,7 @@ function dialogValueToDraftValue(value: WorkspaceDialogValue): WorkspaceManageme
     rootFolderPath: value.rootFolderPath || undefined,
     initialCommand: value.initialCommand || undefined,
     terminalHistoryEnabled: value.terminalHistoryEnabled,
+    remoteTerminal: value.remoteTerminal,
   }
 }
 
@@ -135,6 +138,7 @@ export function WorkspaceManagementDialog({
         rootFolderPath: draft.rootFolderPath || undefined,
         initialCommand: draft.initialCommand || undefined,
         terminalHistoryEnabled: draft.terminalHistoryEnabled,
+        remoteTerminal: draft.remoteTerminal,
       })))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save workspace changes')

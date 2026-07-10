@@ -19,5 +19,37 @@ if (enabled.terminalHistoryEnabled !== true) throw new Error('explicit enabled t
 const grid = normalizeWorkspaceConfig({ type: 'grid' })
 if (grid.type !== 'grid') throw new Error('grid workspace type must be preserved')
 
+const remote = normalizeWorkspaceConfig({
+  remoteTerminal: {
+    host: ' notebook.tailnet.ts.net ',
+    user: ' dev ',
+    port: 2202,
+  },
+})
+if (remote.remoteTerminal?.host !== 'notebook.tailnet.ts.net') throw new Error('remote host must be trimmed')
+if (remote.remoteTerminal?.user !== 'dev') throw new Error('remote user must be trimmed')
+if (remote.remoteTerminal?.port !== 2202) throw new Error('remote port must be preserved')
+
+const invalidRemote = normalizeWorkspaceConfig({
+  remoteTerminal: {
+    host: '   ',
+    user: 'dev',
+  },
+})
+if (invalidRemote.remoteTerminal !== undefined) throw new Error('incomplete remote terminal config must be removed')
+
+const unsafeRemote = normalizeWorkspaceConfig({
+  remoteTerminal: {
+    host: '-oProxyCommand=malicious',
+    user: 'dev user',
+  },
+})
+if (unsafeRemote.remoteTerminal !== undefined) throw new Error('unsafe SSH target tokens must be removed')
+
+const malformedRemote = normalizeWorkspaceConfig({
+  remoteTerminal: { host: 42, user: 'dev' } as unknown as NonNullable<typeof remote.remoteTerminal>,
+})
+if (malformedRemote.remoteTerminal !== undefined) throw new Error('malformed remote terminal config must be removed')
+
 const legacy = normalizeWorkspaceConfig({ type: 'legacy' as 'grid' })
 if (legacy.type !== 'canvas') throw new Error('legacy workspace type must normalize to canvas')
