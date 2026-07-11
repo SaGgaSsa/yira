@@ -1,5 +1,6 @@
 import type { TileState } from '@shared/types'
+import { getAttachedTiles } from '@shared/floatingTiles'
 
 export function shouldKeepSidebarOpenForWorkspace(tiles: TileState[]): boolean {
-  return tiles.length === 0
+  return getAttachedTiles(tiles).length === 0
 }

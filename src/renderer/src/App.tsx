@@ -303,6 +303,7 @@ export default function App(): React.ReactElement {
   const clearAllTerminalAttention = useCanvasStore((s) => s.clearAllTerminalAttention)
   const activeWorkspaceType: WorkspaceType = activeWorkspaceConfig.type
   const attachedTiles = useMemo(() => getAttachedTiles(tiles), [tiles])
+  const shouldKeepSidebarOpen = shouldKeepSidebarOpenForWorkspace(attachedTiles)
   const sortedAttachedTiles = useMemo(
     () => attachedTiles.slice().sort((a, b) => b.zIndex - a.zIndex),
     [attachedTiles],
@@ -401,9 +402,9 @@ export default function App(): React.ReactElement {
 
   useEffect(() => {
     if (viewMode === 'fullview') {
-      setSidebarCollapsed(!shouldKeepSidebarOpenForWorkspace(tiles))
+      setSidebarCollapsed(!shouldKeepSidebarOpen)
     }
-  }, [tiles, viewMode])
+  }, [shouldKeepSidebarOpen, viewMode])
 
   useEffect(() => {
     void initializeUpdates()

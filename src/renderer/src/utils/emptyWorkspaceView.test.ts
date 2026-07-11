@@ -10,3 +10,11 @@ if (shouldKeepSidebarOpenForWorkspace([{
 }])) {
   throw new Error('a workspace with a tile must retain regular fullview behavior')
 }
+
+if (!shouldKeepSidebarOpenForWorkspace([{
+  id: 'detached-terminal', type: 'terminal', x: 0, y: 0,
+  width: 900, height: 400, zIndex: 1,
+  floating: { detached: true },
+}])) {
+  throw new Error('a workspace with only detached tiles must keep the sidebar open')
+}
