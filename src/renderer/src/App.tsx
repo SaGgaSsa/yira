@@ -2214,6 +2214,17 @@ export default function App(): React.ReactElement {
                 ) : (
                   <Canvas
                     tileCreationSelectorProps={tileCreationSelectorProps}
+                    profiles={availableProfiles}
+                    onCreateTerminal={(profileId) => addTerminal(profileId)}
+                    onCreateNote={() => addNote()}
+                    onCreateBrowser={() => addBrowser()}
+                    onCreateTimer={() => addTimer()}
+                    onCreateFiles={() => addFiles()}
+                    canCreateNote={canCreateNote}
+                    canCreateBrowser={canCreateBrowser}
+                    canCreateTimer={canCreateTimer}
+                    canShowFilesCreation={canShowFilesCreation}
+                    canCreateFiles={canCreateFiles}
                     onCreateGroupFromSelection={() => {
                       void handleCreateGroupFromSelection()
                     }}
