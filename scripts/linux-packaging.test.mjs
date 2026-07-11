@@ -56,6 +56,8 @@ test('wraps the Linux launcher without changing the Electron binary contents', a
     assert.equal(await readFile(join(appOutDir, 'yira-bin'), 'utf8'), 'electron-binary')
 
     const launcher = await readFile(launcherPath, 'utf8')
+    assert.match(launcher, /LAUNCHER=\$\(readlink -f "\$0"\)/)
+    assert.match(launcher, /dirname -- "\$LAUNCHER"/)
     assert.match(launcher, /APPIMAGE/)
     assert.match(launcher, /unshare --user --map-root-user true/)
     assert.match(launcher, /Yira AppImage cannot start securely/)

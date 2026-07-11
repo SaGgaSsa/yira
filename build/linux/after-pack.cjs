@@ -4,7 +4,8 @@ const { join } = require('node:path')
 const APPIMAGE_PREFLIGHT = `#!/bin/sh
 set -eu
 
-HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+LAUNCHER=$(readlink -f "$0")
+HERE=$(CDPATH= cd -- "$(dirname -- "$LAUNCHER")" && pwd)
 
 if [ -n "\${APPIMAGE:-}" ] && ! unshare --user --map-root-user true >/dev/null 2>&1; then
   cat >&2 <<'EOF'
