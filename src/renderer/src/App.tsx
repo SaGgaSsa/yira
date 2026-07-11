@@ -33,6 +33,7 @@ import { getAttachedTiles, isTileDetached, selectFloatingTileWindowOpenRequests 
 import { DEFAULT_SPLIT_ORIENTATION, toggleSplitOrientation } from './utils/splitViewState'
 import { getTerminalDisplayTitle, normalizeTerminalWindowTitle } from './utils/terminalDisplayTitle'
 import { resolveViewModeTransition } from './utils/viewModeTransition'
+import { shouldKeepSidebarOpenForWorkspace } from './utils/emptyWorkspaceView'
 import {
   clearActivatedWorkspaceAttentionCount,
   getWorkspaceAttentionLabel,
@@ -400,9 +401,9 @@ export default function App(): React.ReactElement {
 
   useEffect(() => {
     if (viewMode === 'fullview') {
-      setSidebarCollapsed(true)
+      setSidebarCollapsed(!shouldKeepSidebarOpenForWorkspace(tiles))
     }
-  }, [viewMode])
+  }, [tiles, viewMode])
 
   useEffect(() => {
     void initializeUpdates()
