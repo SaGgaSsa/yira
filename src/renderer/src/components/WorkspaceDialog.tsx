@@ -90,8 +90,8 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
 
   return createPortal(
     <div className="fixed inset-0 z-[10050] flex items-center justify-center bg-black/80">
-      <div className="w-[640px] max-h-[86vh] max-w-[calc(100vw-32px)] overflow-hidden rounded-[24px] border border-border-visible bg-bg-secondary shadow-2xl">
-        <div className="flex items-center justify-between gap-4 border-b border-border px-6 py-5">
+      <div className="flex max-h-[calc(100vh-32px)] w-[640px] max-w-[calc(100vw-32px)] flex-col overflow-hidden rounded-[24px] border border-border-visible bg-bg-secondary shadow-2xl">
+        <header className="shrink-0 flex items-center justify-between gap-4 border-b border-border px-6 py-5">
           <div className="min-w-0">
             <div className="nd-label text-text-secondary">{request.eyebrow ?? 'Workspace Settings'}</div>
             <h2 className="mt-2 text-xl text-text-display">{request.title}</h2>
@@ -105,9 +105,9 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
               <X size={16} />
             </button>
           )}
-        </div>
+        </header>
 
-        <div className="max-h-[calc(86vh-88px)] space-y-6 overflow-y-auto px-6 py-6">
+        <div data-testid="workspace-dialog-form" className="min-h-0 flex-1 overflow-y-auto space-y-6 px-6 py-6">
           <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
             <div className="mb-4 flex items-center gap-2">
               {value.type === 'grid' ? <Grid3X3 size={14} className="text-text-secondary" /> : <LayoutGrid size={14} className="text-text-secondary" />}
@@ -281,7 +281,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
           </section>
         </div>
 
-        <div className="flex items-center justify-end gap-3 border-t border-border px-6 py-5">
+        <footer data-testid="workspace-dialog-actions" className="shrink-0 flex items-center justify-end gap-3 border-t border-border px-6 py-5">
           {canCancel && (
             <button
               className="rounded-full border border-border-visible px-4 py-2 text-sm text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
@@ -297,7 +297,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
           >
             {request.confirmLabel ?? 'Save Workspace'}
           </button>
-        </div>
+        </footer>
 
         {showRemoteHelp && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/75 p-6">
