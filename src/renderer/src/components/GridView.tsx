@@ -9,6 +9,7 @@ import {
 } from '@shared/gridWorkspaceState'
 import { TileContent, TILE_META } from './TileContent'
 import { TileActionButtons } from './TileActionButtons'
+import { TileCreationSelector, type TileCreationSelectorProps } from './TileCreationSelector'
 import { getTerminalDisplayTitle } from '@/utils/terminalDisplayTitle'
 
 interface GridViewProps {
@@ -24,6 +25,7 @@ interface GridViewProps {
   onFocusTileInView: (tile: TileState) => void
   onDetachTile: (tile: TileState) => void
   onCloseTile: (tileId: string) => void
+  tileCreationSelectorProps: TileCreationSelectorProps
 }
 
 interface ResizeDragState {
@@ -60,6 +62,7 @@ export function GridView({
   onFocusTileInView,
   onDetachTile,
   onCloseTile,
+  tileCreationSelectorProps,
 }: GridViewProps): React.ReactElement {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const resizeDragRef = useRef<ResizeDragState | null>(null)
@@ -290,33 +293,45 @@ export function GridView({
 
   return (
     <div ref={containerRef} className="relative flex h-full w-full overflow-hidden bg-bg-primary p-2">
-      {displayRootNode ? (
-        renderNode(displayRootNode)
+      {tiles.length === 0 ? (
+        <div className="flex h-full w-full items-center justify-center px-4">
+          <div className="nd-panel-raised w-full max-w-xl rounded-[20px] px-5 py-8 text-center text-text-secondary">
+            <div className="nd-label">[ EMPTY ]</div>
+            <div className="mt-3 text-sm text-text-disabled">Create a terminal, note, browser, timer, files tile, or workspace board.</div>
+            <TileCreationSelector {...tileCreationSelectorProps} className="mt-5 text-left" />
+          </div>
+        </div>
       ) : (
-        <div className="flex h-full items-center justify-center text-text-secondary">
-          <span className="nd-label">[ EMPTY GRID ]</span>
-        </div>
-      )}
-      {moveDrag && draggedTileId && tilesById.has(draggedTileId) && (
-        <div
-          className="pointer-events-none fixed z-50 flex h-20 w-64 -translate-x-3 -translate-y-3 items-center gap-3 border border-cyan-400 bg-bg-secondary/95 px-3 shadow-xl shadow-cyan-400/10"
-          style={{ left: moveDrag.pointerX, top: moveDrag.pointerY }}
-        >
-          {(() => {
-            const tile = tilesById.get(draggedTileId)
-            if (!tile) return null
-            const Icon = TILE_META[tile.type].icon
-            return (
-              <>
-                <Icon size={16} className="shrink-0 text-cyan-300" />
-                <div className="min-w-0">
-                  <div className="truncate text-sm text-text-display">{getTileTitle(tile, terminalTitles)}</div>
-                  <div className="mt-1 text-xs text-text-secondary">{TILE_META[tile.type].label}</div>
-                </div>
-              </>
-            )
-          })()}
-        </div>
+        <>
+          {displayRootNode ? (
+            renderNode(displayRootNode)
+          ) : (
+            <div className="flex h-full items-center justify-center text-text-secondary">
+              <span className="nd-label">[ EMPTY GRID ]</span>
+            </div>
+          )}
+          {moveDrag && draggedTileId && tilesById.has(draggedTileId) && (
+            <div
+              className="pointer-events-none fixed z-50 flex h-20 w-64 -translate-x-3 -translate-y-3 items-center gap-3 border border-cyan-400 bg-bg-secondary/95 px-3 shadow-xl shadow-cyan-400/10"
+              style={{ left: moveDrag.pointerX, top: moveDrag.pointerY }}
+            >
+              {(() => {
+                const tile = tilesById.get(draggedTileId)
+                if (!tile) return null
+                const Icon = TILE_META[tile.type].icon
+                return (
+                  <>
+                    <Icon size={16} className="shrink-0 text-cyan-300" />
+                    <div className="min-w-0">
+                      <div className="truncate text-sm text-text-display">{getTileTitle(tile, terminalTitles)}</div>
+                      <div className="mt-1 text-xs text-text-secondary">{TILE_META[tile.type].label}</div>
+                    </div>
+                  </>
+                )
+              })()}
+            </div>
+          )}
+        </>
       )}
     </div>
   )

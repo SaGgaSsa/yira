@@ -7,9 +7,10 @@ import { ContextMenu } from '@/components/ContextMenu'
 import { findMergeTargetGroup, findSelectedGroup, getGroupingBlockedReason } from '@/utils/grouping'
 import { clampViewportToWorld } from '@/utils/canvasWorld'
 import { calculateCanvasFitViewport, CANVAS_FIT_MARGIN, type CanvasFitBounds, type CanvasFitPadding } from '@/utils/canvasViewportFit'
-import { Terminal, StickyNote, Globe, LayoutGrid, Clock, Folder, Lock } from 'lucide-react'
-import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type ShellProfileId, type TileGroup, type GroupColorId, type ViewMode, type SplitViewState, type SplitPanelId, type SplitOrientation } from '@shared/types'
+import { LayoutGrid, Lock } from 'lucide-react'
+import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type TileGroup, type GroupColorId, type ViewMode, type SplitViewState, type SplitPanelId, type SplitOrientation } from '@shared/types'
 import { getAttachedTiles } from '@shared/floatingTiles'
+import { getTileCreationActions, TileCreationSelector, type TileCreationSelectorProps } from './TileCreationSelector'
 
 const GROUP_FRAME_PADDING = 20
 const GROUP_TOOLBAR_GAP = 30
@@ -77,16 +78,7 @@ export function getCanvasMethods(): CanvasMethods | null {
 }
 
 interface CanvasProps {
-  onCreateTerminal: (profileId: ShellProfileId) => void
-  onCreateNote: () => void
-  onCreateBrowser: () => void
-  onCreateTimer: () => void
-  onCreateFiles: () => void
-  canCreateNote: boolean
-  canCreateBrowser: boolean
-  canCreateTimer: boolean
-  canShowFilesCreation: boolean
-  canCreateFiles: boolean
+  tileCreationSelectorProps: TileCreationSelectorProps
   onCreateGroupFromSelection: () => void | Promise<void>
   onDeleteTile: (tileId: string) => Promise<boolean>
   onConfigureTile: (tile: TileState, x: number, y: number) => void
@@ -94,7 +86,6 @@ interface CanvasProps {
   onDetachTile: (tile: TileState) => void
   onConfirmRemoveFromGroup: (tile: TileState, group: TileGroup) => Promise<boolean>
   groupsEnabled: boolean
-  profiles: Array<{ id: ShellProfileId; label: string; available: boolean }>
   tileRefreshKeys?: Record<string, number>
   viewMode?: ViewMode
   fullviewActiveTileId?: string | null
@@ -104,16 +95,7 @@ interface CanvasProps {
 }
 
 export function Canvas({
-  onCreateTerminal,
-  onCreateNote,
-  onCreateBrowser,
-  onCreateTimer,
-  onCreateFiles,
-  canCreateNote,
-  canCreateBrowser,
-  canCreateTimer,
-  canShowFilesCreation,
-  canCreateFiles,
+  tileCreationSelectorProps,
   onCreateGroupFromSelection,
   onDeleteTile,
   onConfigureTile,
@@ -121,7 +103,6 @@ export function Canvas({
   onDetachTile,
   onConfirmRemoveFromGroup,
   groupsEnabled,
-  profiles,
   tileRefreshKeys = {},
   viewMode = 'canvas',
   fullviewActiveTileId = null,
@@ -613,7 +594,17 @@ export function Canvas({
         onMouseDown={handleMouseDown}
         onContextMenu={onContextMenu}
       >
-        {!isFixedView && showGrid && <GridBackground tx={viewport.tx} ty={viewport.ty} zoom={viewport.zoom} gridSize={gridSize} />}
+        {tiles.length === 0 ? (
+          <div className="absolute inset-0 flex items-center justify-center px-6">
+            <div className="nd-panel-raised w-full max-w-xl rounded-[20px] px-5 py-8 text-center text-text-secondary">
+              <div className="nd-label">[ EMPTY ]</div>
+              <div className="mt-3 text-sm text-text-disabled">Create a terminal, note, browser, timer, files tile, or workspace board.</div>
+              <TileCreationSelector {...tileCreationSelectorProps} className="mt-5 text-left" />
+            </div>
+          </div>
+        ) : (
+          <>
+            {!isFixedView && showGrid && <GridBackground tx={viewport.tx} ty={viewport.ty} zoom={viewport.zoom} gridSize={gridSize} />}
 
         {!isFixedView && marqueeRect && (
           <div
@@ -853,7 +844,7 @@ export function Canvas({
           </div>
         )}
 
-        {!isFixedView && colorPicker && (
+          {!isFixedView && colorPicker && (
           <div
             className="absolute inset-0 z-[140]"
             onMouseDown={(event) => {
@@ -893,6 +884,8 @@ export function Canvas({
               })}
             </div>
           </div>
+          )}
+          </>
         )}
       </div>
 
@@ -906,19 +899,12 @@ export function Canvas({
               { label: 'Clear Selection', action: () => selectTiles([]), disabled: selectedTileIds.length === 0 },
               { divider: true, label: '' },
             ] : []),
-            {
-              label: 'New Terminal',
-              icon: Terminal,
-              submenu: profiles.map((p) => ({
-                label: p.label,
-                disabled: !p.available,
-                action: () => onCreateTerminal(p.id),
-              })),
-            },
-            ...(canCreateNote ? [{ label: 'New Note', icon: StickyNote, action: onCreateNote }] : []),
-            ...(canCreateBrowser ? [{ label: 'New Browser', icon: Globe, action: onCreateBrowser }] : []),
-            ...(canCreateTimer ? [{ label: 'New Timer', icon: Clock, action: onCreateTimer }] : []),
-            ...(canShowFilesCreation ? [{ label: 'New Files', icon: Folder, action: onCreateFiles, disabled: !canCreateFiles }] : []),
+            ...getTileCreationActions(tileCreationSelectorProps).map((action) => ({
+              label: action.title,
+              icon: action.icon,
+              action: action.onClick,
+              disabled: action.disabled,
+            })),
           ]}
           onClose={() => setContextMenu(null)}
         />

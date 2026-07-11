@@ -1,5 +1,6 @@
 import React, { useEffect, useCallback, useMemo, useRef, useState } from 'react'
 import { Canvas, getCanvasMethods } from './components/Canvas'
+import { TileCreationSelector, type TileCreationSelectorProps } from './components/TileCreationSelector'
 import { TopBar } from './components/TopBar'
 import { Sidebar } from './components/Sidebar'
 import { SettingsPanel } from './components/SettingsPanel'
@@ -44,7 +45,7 @@ import {
 import { TILE_META } from './components/TileContent'
 import { TileListItem } from './components/TileListItem'
 import { buildTileConfigurationMenuItems } from './components/tileConfigurationMenu'
-import { Terminal, StickyNote, Globe, Clock, Folder, FolderOpen, ChevronDown, SlidersHorizontal, Trash2, Pencil, Lock, Columns, Download, X, Plus, ClipboardList } from 'lucide-react'
+import { Terminal, FolderOpen, ChevronDown, SlidersHorizontal, Trash2, Pencil, Lock, Columns, Download, X, Plus } from 'lucide-react'
 
 const GROUP_SHOW_TOP_PADDING = 42
 const BASE_WINDOW_TITLE = 'Yira'
@@ -1756,6 +1757,41 @@ export default function App(): React.ReactElement {
     }
   })()
 
+  const tileCreationSelectorProps: TileCreationSelectorProps = {
+    canCreateNote,
+    canCreateBrowser,
+    canCreateTimer,
+    canShowFilesCreation,
+    canCreateFiles,
+    canCreateBoard: Boolean(activeWorkspaceId),
+    boardEnabled,
+    onCreateTerminal: createTerminalFromSidebar,
+    onCreateNote: () => {
+      setShowProfilePicker(false)
+      addNote()
+    },
+    onCreateBrowser: () => {
+      setShowProfilePicker(false)
+      addBrowser()
+    },
+    onCreateTimer: () => {
+      setShowProfilePicker(false)
+      addTimer()
+    },
+    onCreateFiles: () => {
+      if (!canCreateFiles) return
+      setShowProfilePicker(false)
+      addFiles()
+    },
+    onCreateBoard: () => {
+      void handleBoardButton()
+    },
+    boardBadge: boardReviewLabel,
+    boardBadgeTitle: boardReviewLabel
+      ? `${boardReviewCount} board ${boardReviewCount === 1 ? 'task' : 'tasks'} waiting for review`
+      : undefined,
+  }
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-bg-primary text-text-primary">
       {/* Sidebar — goes to the very top */}
@@ -1831,89 +1867,7 @@ export default function App(): React.ReactElement {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                className="nd-panel-raised flex h-11 items-center justify-center gap-1.5 rounded-2xl px-2 text-text-secondary transition-colors hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
-                onClick={createTerminalFromSidebar}
-                title="New terminal"
-              >
-                <Terminal size={15} />
-                <span className="nd-label">Terminal</span>
-              </button>
-              {canCreateNote && (
-                <button
-                  className="nd-panel-raised flex h-11 items-center justify-center gap-1.5 rounded-2xl px-2 text-text-secondary transition-colors hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
-                  onClick={() => {
-                    setShowProfilePicker(false)
-                    addNote()
-                  }}
-                  title="New note"
-                >
-                  <StickyNote size={15} />
-                  <span className="nd-label">Note</span>
-                </button>
-              )}
-              {canCreateBrowser && (
-                <button
-                  className="nd-panel-raised flex h-11 items-center justify-center gap-1.5 rounded-2xl px-2 text-text-secondary transition-colors hover:text-text-display"
-                  onClick={() => {
-                    setShowProfilePicker(false)
-                    addBrowser()
-                  }}
-                  title="New browser"
-                >
-                  <Globe size={15} />
-                  <span className="nd-label">Browser</span>
-                </button>
-              )}
-              {canCreateTimer && (
-                <button
-                  className="nd-panel-raised flex h-11 items-center justify-center gap-1.5 rounded-2xl px-2 text-text-secondary transition-colors hover:text-text-display"
-                  onClick={() => {
-                    setShowProfilePicker(false)
-                    addTimer()
-                  }}
-                  title="New timer"
-                >
-                  <Clock size={15} />
-                  <span className="nd-label">Timer</span>
-                </button>
-              )}
-              {canShowFilesCreation && (
-                <button
-                  className="nd-panel-raised flex h-11 items-center justify-center gap-1.5 rounded-2xl px-2 text-text-secondary transition-colors hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
-                  onClick={() => {
-                    if (!canCreateFiles) return
-                    setShowProfilePicker(false)
-                    addFiles()
-                  }}
-                  disabled={!canCreateFiles}
-                  title="New files"
-                >
-                  <Folder size={15} />
-                  <span className="nd-label">Files</span>
-                </button>
-              )}
-              <button
-                className="nd-panel-raised flex h-11 items-center justify-center gap-1.5 rounded-2xl px-2 text-text-secondary transition-colors hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
-                onClick={() => {
-                  void handleBoardButton()
-                }}
-                disabled={!activeWorkspaceId}
-                title={boardEnabled ? 'New task' : 'Enable board'}
-              >
-                <ClipboardList size={15} />
-                <span className="nd-label">Board</span>
-                {boardReviewLabel && (
-                  <span
-                    className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full border border-text-display px-1.5 font-mono text-[10px] leading-none text-text-display"
-                    title={`${boardReviewCount} board ${boardReviewCount === 1 ? 'task' : 'tasks'} waiting for review`}
-                  >
-                    {boardReviewLabel}
-                  </span>
-                )}
-              </button>
-            </div>
+            <TileCreationSelector {...tileCreationSelectorProps} />
           </div>
         }
       >
@@ -2255,20 +2209,11 @@ export default function App(): React.ReactElement {
                     onCloseTile={(tileId) => {
                       void deleteTile(tileId)
                     }}
+                    tileCreationSelectorProps={tileCreationSelectorProps}
                   />
                 ) : (
                   <Canvas
-                    profiles={availableProfiles}
-                    onCreateTerminal={(profileId) => addTerminal(profileId)}
-                    onCreateNote={() => addNote()}
-                    onCreateBrowser={() => addBrowser()}
-                    onCreateTimer={() => addTimer()}
-                    onCreateFiles={() => addFiles()}
-                    canCreateNote={canCreateNote}
-                    canCreateBrowser={canCreateBrowser}
-                    canCreateTimer={canCreateTimer}
-                    canShowFilesCreation={canShowFilesCreation}
-                    canCreateFiles={canCreateFiles}
+                    tileCreationSelectorProps={tileCreationSelectorProps}
                     onCreateGroupFromSelection={() => {
                       void handleCreateGroupFromSelection()
                     }}
