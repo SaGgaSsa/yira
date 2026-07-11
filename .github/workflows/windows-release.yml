@@ -62,6 +62,9 @@ jobs:
       - name: Validate TypeScript
         run: npx tsc --noEmit
 
+      - name: Validate Linux packaging policy
+        run: node scripts/linux-packaging.test.mjs
+
       - name: Build and publish GitHub release assets
         run: npm run release:linux
 

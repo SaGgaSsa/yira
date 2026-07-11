@@ -81,6 +81,7 @@
     ],
     "asar": true,
     "icon": "resources/icon.png",
+    "afterPack": "build/linux/after-pack.cjs",
     "artifactName": "${productName}-Setup-${version}-${arch}.${ext}",
     "publish": [
       {
@@ -124,7 +125,13 @@
     },
     "deb": {
       "maintainer": "SaGgaSsa",
-      "packageCategory": "devel"
+      "packageCategory": "devel",
+      "afterInstall": "build/linux/deb-after-install.sh"
+    },
+    "appImage": {
+      "executableArgs": [
+        "--no-first-run"
+      ]
     },
     "nsis": {
       "oneClick": false,

@@ -151,6 +151,83 @@ Do not implement one until the evidence above distinguishes H1, H2, and H3.
    must check helper ownership/mode, user namespace availability, installation
    success, and a launch without sandbox-disabling flags.
 
+## Implemented package policy
+
+The next release must use a custom Debian post-install script instead of the
+electron-builder default user-namespace probe. The script always configures the
+installed helper as `root:root` with mode `4755`. This preserves the normal
+user-namespace sandbox where it works and makes the secure SUID fallback
+available where it does not.
+
+The installer validates the helper metadata and the mount containing
+`/opt/Yira`. If that mount uses `nosuid`, installation fails with a Yira-specific
+error. A `nosuid` filesystem cannot run Chromium's secure SUID fallback, so a
+successful-looking installation would be misleading.
+
+The AppImage has a different constraint: its mounted image cannot safely supply
+that SUID fallback. Its launcher now tests unprivileged user namespaces before
+starting Electron. If they are unavailable, it exits with a Yira-specific
+message recommending the `.deb`; it never uses `--no-sandbox`. If FUSE itself
+is unavailable, the AppImage runtime fails before Yira's launcher can run and
+reports the missing FUSE setup directly.
+
+## Clean-host release verification
+
+Perform these checks on fresh Ubuntu 22.04, 24.04, and 26.04 installations as
+the normal desktop user. Do not run Yira with `--no-sandbox`.
+
+### Debian package
+
+Install with APT so dependencies are resolved by the package manager:
+
+```bash
+sudo apt install ./Yira-<version>-amd64.deb
+dpkg-query -W -f='${db:Status-Abbrev} ${Package} ${Version}\n' yira
+stat -c '%a %U:%G %n' /opt/Yira/chrome-sandbox
+findmnt -no TARGET,OPTIONS -T /opt/Yira
+```
+
+Expected results:
+
+- `yira` is `ii` (installed and configured).
+- `/opt/Yira/chrome-sandbox` is `4755 root:root`.
+- The mount options do not include `nosuid`.
+
+Start `yira` from the desktop menu and from a terminal as the normal user. It
+must open without a Chromium sandbox error. Repeat the same procedure by
+installing a newer `.deb` over the existing package to validate upgrades.
+
+### AppImage
+
+Before launch, verify the two host prerequisites:
+
+```bash
+if apt-cache show libfuse2t64 >/dev/null 2>&1; then
+  dpkg-query -W -f='${db:Status-Abbrev} ${Package} ${Version}\n' libfuse2t64
+else
+  dpkg-query -W -f='${db:Status-Abbrev} ${Package} ${Version}\n' libfuse2
+fi
+test -c /dev/fuse && echo 'FUSE device: OK' || echo 'FUSE device: MISSING'
+unshare --user --map-root-user true && echo 'user namespaces: OK' || echo 'user namespaces: BLOCKED'
+```
+
+If FUSE support is absent, use the package name supplied by that Ubuntu release:
+
+```bash
+if apt-cache show libfuse2t64 >/dev/null 2>&1; then
+  sudo apt install libfuse2t64
+else
+  sudo apt install libfuse2
+fi
+```
+
+Ubuntu 22.04 uses `libfuse2`; newer releases may provide `libfuse2t64`.
+If `/dev/fuse` is missing, repair the host FUSE setup; an AppImage cannot mount
+without it. If user namespaces are blocked, launch the AppImage once and verify
+that it prints the Yira-specific secure-sandbox message and recommends the
+`.deb`. That is an expected compatibility diagnostic, not a reason to disable
+the Chromium sandbox.
+
 ## Relevant repository files
 
 - `package.json` — Electron/electron-builder versions and Linux targets.
