@@ -3,6 +3,7 @@ import type { OpenDialogOptions } from 'electron'
 import { promises as fs } from 'fs'
 import { basename, isAbsolute, relative, resolve, sep } from 'path'
 import type { FileEntry, FileListOptions, FileListResult, FileSelectFolderResult } from '@shared/types'
+import { canonicalizeRootFolderPath } from '../workspace-root'
 
 const IGNORED_NAMES = new Set([
   '.git',
@@ -163,7 +164,7 @@ export function registerFilesIPC(): void {
     const win = BrowserWindow.getFocusedWindow()
     const options: OpenDialogOptions = {
       properties: ['openDirectory'],
-      title: 'Select Files Folder',
+      title: 'Select Workspace Root Folder',
       defaultPath: defaultPath || undefined,
     }
     const result = win
@@ -171,7 +172,7 @@ export function registerFilesIPC(): void {
       : await dialog.showOpenDialog(options)
     if (result.canceled || result.filePaths.length === 0) return null
 
-    const folderPath = result.filePaths[0]
+    const folderPath = await canonicalizeRootFolderPath(result.filePaths[0])
     return {
       path: folderPath,
       name: basename(folderPath) || folderPath,

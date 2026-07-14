@@ -63,6 +63,8 @@ export interface WorkspaceManagementCommitResult {
 export interface WorkspaceOpenFolderResult {
   workspace: WorkspaceMetadata | null
   canceled: boolean
+  selectedRootFolderPath?: string
+  suggestedName?: string
   error?: string
 }
 

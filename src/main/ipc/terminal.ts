@@ -3,7 +3,8 @@ import { promises as fs } from 'fs'
 import type { ShellProfile, TerminalCreateOptions } from '@shared/types'
 import { detectShellProfiles, detectSshClient } from '../shell-profiles'
 import { buildTerminalHistorySetup } from '../terminal-history'
-import { getWorkspacePathById } from './workspace'
+import { resolveTerminalWorkspaceRoot } from '../workspace-root'
+import { getWorkspacePathById, getWorkspaceRootFolderById } from './workspace'
 import { buildRemoteSshLaunch } from '../remote-ssh'
 
 // node-pty must be required (not imported) due to native module ESM issues
@@ -71,6 +72,16 @@ export function registerTerminalIPC(): void {
     const workspacePath = !isRemoteSsh && options.workspaceId
       ? await getWorkspacePathById(options.workspaceId)
       : null
+    const workspaceRootFolderPath = !isRemoteSsh && options.workspaceId
+      ? await getWorkspaceRootFolderById(options.workspaceId)
+      : options.workspaceDir
+    const terminalRoot = profile
+      ? resolveTerminalWorkspaceRoot({
+        shellProfileId: profile.id,
+        workspaceRootFolderPath: workspaceRootFolderPath ?? undefined,
+        wslStartInHome: options.wslStartInHome,
+      })
+      : null
     const historySetup = profile ? buildTerminalHistorySetup({
       shellProfileId: profile.id,
       workspaceId: options.workspaceId,
@@ -83,9 +94,7 @@ export function registerTerminalIPC(): void {
       Object.assign(spawnEnv, historySetup.env)
     }
 
-    if (profile?.id === 'wsl' && options.wslStartInHome) {
-      spawnArgs.push('--cd', '~')
-    }
+    if (terminalRoot) spawnArgs.push(...terminalRoot.spawnArgs)
 
     const executable = isRemoteSsh ? sshClient! : profile!.shell
     const label = isRemoteSsh ? 'Remote SSH' : profile!.label
@@ -95,7 +104,7 @@ export function registerTerminalIPC(): void {
         name: 'xterm-256color',
         cols: 80,
         rows: 24,
-        cwd: isRemoteSsh ? process.cwd() : options.workspaceDir || process.cwd(),
+        cwd: terminalRoot?.cwd ?? process.cwd(),
         env: spawnEnv,
       })
     } catch (err) {
