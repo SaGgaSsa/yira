@@ -12,6 +12,7 @@ import { buildTerminalStartupCommand } from '@/utils/terminalLaunch'
 import { createTerminalFitScheduler } from '@/utils/terminalFitScheduler'
 import { getTerminalContainerBackground, getXtermTheme } from '@/utils/terminalTheme'
 import { buildTerminalContextMenuItems } from '@/utils/terminalContextMenu'
+import { shouldOpenTerminalLink } from '@/utils/terminalLinkActivation'
 import {
   decodeOsc52ClipboardPayload,
   getTerminalContextSelectionSnapshot,
@@ -145,7 +146,8 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
 
     const fitAddon = new FitAddon()
     term.loadAddon(fitAddon)
-    const webLinksAddon = new WebLinksAddon((_event, url) => {
+    const webLinksAddon = new WebLinksAddon((event, url) => {
+      if (!shouldOpenTerminalLink(event.button)) return
       void window.electron.shell.openExternal(url).catch((error: unknown) => {
         console.error('[TerminalTile] Failed to open terminal link externally:', error)
       })
