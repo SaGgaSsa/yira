@@ -23,9 +23,10 @@ interface TileContentProps {
   autoFocus?: boolean
   onFocus: () => void
   onUpdate: (patch: Partial<TileState>) => void
+  onOpenBrowserTile?: (url: string) => void
 }
 
-export function TileContent({ tile, isFocused, edgeToEdge = false, isVisible = true, autoFocus = false, onFocus, onUpdate }: TileContentProps): React.ReactElement {
+export function TileContent({ tile, isFocused, edgeToEdge = false, isVisible = true, autoFocus = false, onFocus, onUpdate, onOpenBrowserTile }: TileContentProps): React.ReactElement {
   if (tile.type === 'terminal') {
     return (
       <TerminalTileWrapper
@@ -37,6 +38,7 @@ export function TileContent({ tile, isFocused, edgeToEdge = false, isVisible = t
         onFocus={onFocus}
         onUpdate={onUpdate}
         onDelete={() => {}}
+        onOpenBrowserTile={onOpenBrowserTile}
       />
     )
   }

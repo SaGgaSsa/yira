@@ -8,17 +8,17 @@ export interface TerminalContextMenuInput {
   onPaste: () => void
   onSelectAll: () => void
   onToggleNotifications: () => void
-  onOpenBrowserTile: (url: string) => void
+  onOpenBrowserTile?: (url: string) => void
   onOpenExternal: (url: string) => void
   onCopyLink: (url: string) => void
 }
 
 export function buildTerminalContextMenuItems(input: TerminalContextMenuInput): MenuItem[] {
   const linkItems: MenuItem[] = input.linkUrl ? [
-    {
+    ...(input.onOpenBrowserTile ? [{
       label: 'Open in Browser tile',
-      action: () => input.onOpenBrowserTile(input.linkUrl!),
-    },
+      action: () => input.onOpenBrowserTile?.(input.linkUrl!),
+    }] : []),
     {
       label: 'Open externally',
       action: () => input.onOpenExternal(input.linkUrl!),

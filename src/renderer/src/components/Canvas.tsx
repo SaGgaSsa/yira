@@ -83,6 +83,7 @@ export function getCanvasMethods(): CanvasMethods | null {
 
 interface CanvasProps extends CanvasCreationMenuInput {
   tileCreationSelectorProps: TileCreationSelectorProps
+  onOpenBrowserTile: (url: string) => void
   onCreateGroupFromSelection: () => void | Promise<void>
   onDeleteTile: (tileId: string) => Promise<boolean>
   onConfigureTile: (tile: TileState, x: number, y: number) => void
@@ -100,6 +101,7 @@ interface CanvasProps extends CanvasCreationMenuInput {
 
 export function Canvas({
   tileCreationSelectorProps,
+  onOpenBrowserTile,
   onCreateTerminal,
   onCreateRichNote,
   onCreateMarkdownNote,
@@ -734,6 +736,7 @@ export function Canvas({
                     if (!isFixedView) bringToFront(tile.id)
                   }}
                   onUpdate={(patch) => updateTile(tile.id, patch)}
+                  onOpenBrowserTile={onOpenBrowserTile}
                 />
               </TileChrome>
             )

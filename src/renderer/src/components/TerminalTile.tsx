@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
 import type { TileState } from '@shared/types'
 import { useCanvasStore } from '@/store/canvasStore'
@@ -10,6 +11,7 @@ import { createNativeAttentionDelayScheduler } from '@/utils/nativeAttentionDela
 import { buildTerminalStartupCommand } from '@/utils/terminalLaunch'
 import { createTerminalFitScheduler } from '@/utils/terminalFitScheduler'
 import { getTerminalContainerBackground, getXtermTheme } from '@/utils/terminalTheme'
+import { buildTerminalContextMenuItems } from '@/utils/terminalContextMenu'
 import {
   decodeOsc52ClipboardPayload,
   getTerminalContextSelectionSnapshot,
@@ -26,6 +28,7 @@ interface Props {
   onFocus: () => void
   onUpdate: (patch: Partial<TileState>) => void
   onDelete: () => void
+  onOpenBrowserTile?: (url: string) => void
 }
 
 function applyTerminalPadding(container: HTMLElement | null, edgeToEdge: boolean): void {
@@ -39,7 +42,7 @@ function applyTerminalPadding(container: HTMLElement | null, edgeToEdge: boolean
   xtermEl.style.paddingBottom = verticalPadding
 }
 
-export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVisible = true, autoFocus = false, onFocus, onUpdate, onDelete }: Props): React.ReactElement {
+export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVisible = true, autoFocus = false, onFocus, onUpdate, onDelete, onOpenBrowserTile }: Props): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
@@ -53,7 +56,8 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
   const nativeAttentionSchedulerRef = useRef(createNativeAttentionDelayScheduler())
   const tileFontSizePx = useSettingsStore((s) => s.tileFontSizePx)
   const terminalThemeId = useSettingsStore((s) => s.terminal.themeId)
-  const [menuPosition, setMenuPosition] = useState<{ x: number; y: number; selectionText: string } | null>(null)
+  const [menuPosition, setMenuPosition] = useState<{ x: number; y: number; selectionText: string; linkUrl?: string } | null>(null)
+  const hoveredLinkUrlRef = useRef<string | null>(null)
   isVisibleRef.current = isVisible
 
   const focusTerminal = useCallback(() => {
@@ -141,6 +145,19 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
 
     const fitAddon = new FitAddon()
     term.loadAddon(fitAddon)
+    const webLinksAddon = new WebLinksAddon((_event, url) => {
+      void window.electron.shell.openExternal(url).catch((error: unknown) => {
+        console.error('[TerminalTile] Failed to open terminal link externally:', error)
+      })
+    }, {
+      hover: (_event, url) => {
+        hoveredLinkUrlRef.current = url
+      },
+      leave: () => {
+        hoveredLinkUrlRef.current = null
+      },
+    })
+    term.loadAddon(webLinksAddon)
 
     // Clear container to prevent leftover DOM from StrictMode double-mount
     containerRef.current.innerHTML = ''
@@ -319,34 +336,35 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
     }
   }, [autoFocus])
 
-  const menuItems: MenuItem[] = [
-    {
-      label: 'Copy',
-      disabled: !menuPosition?.selectionText,
-      action: () => {
-        void copySelection(menuPosition?.selectionText)
-      },
+  const menuItems: MenuItem[] = buildTerminalContextMenuItems({
+    selectedText: menuPosition?.selectionText ?? '',
+    notificationsMuted: tile.notificationsMuted === true,
+    linkUrl: menuPosition?.linkUrl,
+    onCopySelection: () => {
+      void copySelection(menuPosition?.selectionText)
     },
-    {
-      label: 'Paste',
-      action: () => {
-        void pasteClipboard()
-      },
+    onPaste: () => {
+      void pasteClipboard()
     },
-    {
-      label: 'Select All',
-      action: () => {
-        termRef.current?.focus()
-        termRef.current?.selectAll()
-      },
+    onSelectAll: () => {
+      termRef.current?.focus()
+      termRef.current?.selectAll()
     },
-    {
-      label: tile.notificationsMuted ? 'Unmute Notifications' : 'Mute Notifications',
-      action: () => {
-        onUpdate({ notificationsMuted: tile.notificationsMuted ? undefined : true })
-      },
+    onToggleNotifications: () => {
+      onUpdate({ notificationsMuted: tile.notificationsMuted ? undefined : true })
     },
-  ]
+    onOpenBrowserTile,
+    onOpenExternal: (url) => {
+      void window.electron.shell.openExternal(url).catch((error: unknown) => {
+        console.error('[TerminalTile] Failed to open terminal link externally:', error)
+      })
+    },
+    onCopyLink: (url) => {
+      void window.electron.clipboard.writeText(url).catch((error: unknown) => {
+        console.error('[TerminalTile] Failed to copy terminal link:', error)
+      })
+    },
+  })
 
   return (
     <>
@@ -363,6 +381,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
             x: event.clientX,
             y: event.clientY,
             selectionText,
+            linkUrl: hoveredLinkUrlRef.current ?? undefined,
           })
         }}
       />

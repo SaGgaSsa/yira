@@ -2241,6 +2241,7 @@ export default function App(): React.ReactElement {
                     onCloseTile={(tileId) => {
                       void deleteTile(tileId)
                     }}
+                    onOpenBrowserTile={(url) => addBrowser(url)}
                     tileCreationSelectorProps={tileCreationSelectorProps}
                   />
                 ) : (
@@ -2253,6 +2254,7 @@ export default function App(): React.ReactElement {
                     onCreateBrowser={() => addBrowser()}
                     onCreateTimer={() => addTimer()}
                     onCreateFiles={() => addFiles()}
+                    onOpenBrowserTile={(url) => addBrowser(url)}
                     canCreateNote={canCreateNote}
                     canCreateBrowser={canCreateBrowser}
                     canCreateTimer={canCreateTimer}

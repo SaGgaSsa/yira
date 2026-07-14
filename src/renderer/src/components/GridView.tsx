@@ -25,6 +25,7 @@ interface GridViewProps {
   onFocusTileInView: (tile: TileState) => void
   onDetachTile: (tile: TileState) => void
   onCloseTile: (tileId: string) => void
+  onOpenBrowserTile: (url: string) => void
   tileCreationSelectorProps: TileCreationSelectorProps
 }
 
@@ -62,6 +63,7 @@ export function GridView({
   onFocusTileInView,
   onDetachTile,
   onCloseTile,
+  onOpenBrowserTile,
   tileCreationSelectorProps,
 }: GridViewProps): React.ReactElement {
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -254,6 +256,7 @@ export function GridView({
                 edgeToEdge
                 onFocus={() => onFocusTile(tile.id)}
                 onUpdate={(patch) => onUpdateTile(tile.id, patch)}
+                onOpenBrowserTile={onOpenBrowserTile}
               />
             )}
           </div>
