@@ -27,7 +27,7 @@ export function buildTerminalContextMenuItems(input: TerminalContextMenuInput): 
       label: 'Copy URL',
       action: () => input.onCopyLink(input.linkUrl!),
     },
-    { divider: true },
+    { divider: true, label: '' },
   ] : []
 
   return [
