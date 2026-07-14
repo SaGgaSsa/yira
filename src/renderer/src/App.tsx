@@ -32,6 +32,7 @@ import {
 } from '@shared/workspaceTypeSwitch'
 import { getBoardReviewCount } from '@shared/board'
 import { getAttachedTiles, isTileDetached, selectFloatingTileWindowOpenRequests } from '@shared/floatingTiles'
+import { refreshGridTileContent } from './utils/gridTileRefresh'
 import { DEFAULT_SPLIT_ORIENTATION, toggleSplitOrientation } from './utils/splitViewState'
 import { getTerminalDisplayTitle, normalizeTerminalWindowTitle } from './utils/terminalDisplayTitle'
 import { resolveViewModeTransition } from './utils/viewModeTransition'
@@ -338,7 +339,7 @@ export default function App(): React.ReactElement {
     })
   }, [])
 
-  const { addTerminal, addRemoteTerminal, duplicateTerminalTile, addNote, addBrowser, addTimer, addFiles, deleteTile, resetZoom } = useCanvasActions({ requestConfirm })
+  const { addTerminal, addRemoteTerminal, duplicateTerminalTile, addNote, addBrowser, addTimer, addFiles, deleteTile: deleteCanvasTile, resetZoom } = useCanvasActions({ requestConfirm })
 
   // UI state
   const [showProfilePicker, setShowProfilePicker] = useState(false)
@@ -369,6 +370,16 @@ export default function App(): React.ReactElement {
   const prevZoomRef = useRef(1)
   const footerRef = useRef<HTMLDivElement | null>(null)
   const workspaceMenuRef = useRef<HTMLDivElement | null>(null)
+
+  const deleteTile = useCallback(async (tileId: string): Promise<boolean> => {
+    const isGridWorkspace = useCanvasStore.getState().activeWorkspaceConfig.type === 'grid'
+    const deleted = await deleteCanvasTile(tileId)
+    if (!deleted || !isGridWorkspace) return deleted
+
+    setTileRefreshKeys((current) => refreshGridTileContent(current, useCanvasStore.getState().tiles))
+    return true
+  }, [deleteCanvasTile])
+
   const closeActiveDialog = useCallback(() => {
     if (!activeDialog) return
 
