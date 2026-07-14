@@ -68,6 +68,8 @@
   --space-2xl: 48px;
   --space-3xl: 64px;
   --space-4xl: 96px;
+  --app-chrome-control-height: 3rem;
+  --app-chrome-row-padding: 0.75rem;
   --display-xl: 72px;
   --display-lg: 48px;
   --display-md: 36px;
@@ -303,6 +305,12 @@ textarea {
 
 .canvas-viewport {
   transition: transform 0.24s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.app-chrome-row {
+  box-sizing: content-box;
+  height: var(--app-chrome-control-height);
+  padding-block: var(--app-chrome-row-padding);
 }
 
 .nd-label {

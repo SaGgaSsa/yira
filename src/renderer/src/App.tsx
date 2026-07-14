@@ -1904,9 +1904,9 @@ export default function App(): React.ReactElement {
         }
       >
         <div className="flex h-full flex-col bg-bg-secondary">
-          <div ref={workspaceMenuRef} className="relative border-b border-border px-4 py-3">
+          <div ref={workspaceMenuRef} className="app-chrome-row relative border-b border-border px-4">
             <button
-              className="flex min-h-12 w-full items-center justify-between rounded-2xl border border-border-visible bg-bg-tertiary px-3 py-3 text-left transition-colors hover:border-text-secondary"
+              className="flex h-full w-full items-center justify-between rounded-2xl border border-border-visible bg-bg-tertiary px-3 text-left transition-colors hover:border-text-secondary"
               onClick={() => setShowWorkspacePicker((v) => !v)}
               title="Workspace actions"
             >
