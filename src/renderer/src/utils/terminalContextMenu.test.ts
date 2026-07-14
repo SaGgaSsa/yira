@@ -15,7 +15,7 @@ const items = buildTerminalContextMenuItems({
 })
 
 const labels = items.filter((item) => !item.divider).map((item) => item.label)
-if (labels.join('|') !== 'Open in Browser tile|Open externally|Copy URL|Copy|Paste|Select All|Mute Notifications') {
+if (labels.join('|') !== 'Open in Browser tile|Open externally|Copy URL') {
   throw new Error(`unexpected terminal link menu: ${labels.join('|')}`)
 }
 
