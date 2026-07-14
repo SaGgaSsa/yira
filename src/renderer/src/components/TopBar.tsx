@@ -82,7 +82,7 @@ export function TopBar({
   const isGridWorkspace = workspaceType === 'grid'
 
   return (
-    <header className="nd-panel flex shrink-0 items-center justify-between border-x-0 border-t-0 px-6 py-3">
+    <header className="nd-panel relative flex shrink-0 items-center justify-between border-x-0 border-t-0 px-6 py-3">
       <button
         className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border-visible bg-bg-secondary text-text-secondary transition-colors hover:text-text-display"
         onClick={onToggleSidebar}
@@ -91,7 +91,7 @@ export function TopBar({
         <PanelLeft size={16} />
       </button>
 
-      <div className="flex h-12 items-center gap-2 rounded-full border border-border-visible bg-bg-secondary px-1.5">
+      <div className="absolute left-1/2 top-1/2 flex h-12 -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-full border border-border-visible bg-bg-secondary px-1.5">
         <SegmentedButton
           active={viewMode === 'fullview'}
           label="Focus"
