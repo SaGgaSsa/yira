@@ -22,6 +22,7 @@ interface Props {
   isFocused: boolean
   edgeToEdge?: boolean
   isVisible?: boolean
+  autoFocus?: boolean
   onFocus: () => void
   onUpdate: (patch: Partial<TileState>) => void
   onDelete: () => void
@@ -38,7 +39,7 @@ function applyTerminalPadding(container: HTMLElement | null, edgeToEdge: boolean
   xtermEl.style.paddingBottom = verticalPadding
 }
 
-export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVisible = true, onFocus, onUpdate, onDelete }: Props): React.ReactElement {
+export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVisible = true, autoFocus = false, onFocus, onUpdate, onDelete }: Props): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
@@ -311,6 +312,12 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
       termRef.current?.focus()
     }
   }, [isFocused])
+
+  useEffect(() => {
+    if (autoFocus) {
+      termRef.current?.focus()
+    }
+  }, [autoFocus])
 
   const menuItems: MenuItem[] = [
     {

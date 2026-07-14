@@ -6,6 +6,7 @@ import type { TileState } from '@shared/types'
 
 interface BrowserTileProps {
   tile: TileState
+  autoFocus?: boolean
   onUpdate: (patch: Partial<TileState>) => void
 }
 
@@ -19,7 +20,7 @@ interface WebviewElement extends HTMLElement {
   src: string
 }
 
-export function BrowserTile({ tile, onUpdate }: BrowserTileProps): React.ReactElement {
+export function BrowserTile({ tile, autoFocus = false, onUpdate }: BrowserTileProps): React.ReactElement {
   const homeUrl = useSettingsStore((s) => s.browser.homeUrl)
   const initialUrl = useMemo(() => normalizeBrowserUrl(tile.browserUrl ?? homeUrl), [tile.browserUrl, homeUrl])
   const webviewRef = useRef<WebviewElement | null>(null)
@@ -33,6 +34,10 @@ export function BrowserTile({ tile, onUpdate }: BrowserTileProps): React.ReactEl
       onUpdate({ browserUrl: initialUrl })
     }
   }, [tile.browserUrl, initialUrl, onUpdate])
+
+  useEffect(() => {
+    if (autoFocus) webviewRef.current?.focus()
+  }, [autoFocus])
 
   useEffect(() => {
     setInputUrl(currentUrl)

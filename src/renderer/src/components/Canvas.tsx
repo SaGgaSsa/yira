@@ -10,6 +10,7 @@ import { calculateCanvasFitViewport, CANVAS_FIT_MARGIN, type CanvasFitBounds, ty
 import { LayoutGrid, Lock } from 'lucide-react'
 import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type TileGroup, type GroupColorId, type ViewMode, type SplitViewState, type SplitPanelId, type SplitOrientation } from '@shared/types'
 import { getAttachedTiles } from '@shared/floatingTiles'
+import { shouldAutoFocusTile } from '@/utils/focusView'
 import { TileCreationSelector, type TileCreationSelectorProps } from './TileCreationSelector'
 import { getCanvasCreationMenuItems, type CanvasCreationMenuInput } from './canvasCreationMenu'
 
@@ -725,6 +726,7 @@ export function Canvas({
                   isFocused={tile.id === focusedTileId}
                   edgeToEdge={isFixedView}
                   isVisible={!(isFixedView && hiddenInFixedView)}
+                  autoFocus={shouldAutoFocusTile(viewMode, tile.id, fullviewActiveTileId, !hiddenInFixedView)}
                   onFocus={() => {
                     if (isSplitview && splitPanel) onFocusSplitPanel?.(splitPanel)
                     focusTile(tile.id)

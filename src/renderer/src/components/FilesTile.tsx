@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle,
   ChevronRight,
@@ -18,6 +18,7 @@ import { ContextMenu, type MenuItem } from './ContextMenu'
 
 interface FilesTileProps {
   tile: TileState
+  autoFocus?: boolean
 }
 
 interface LocationState {
@@ -112,7 +113,7 @@ function InactiveFilesState({
   )
 }
 
-export function FilesTile({ tile }: FilesTileProps): React.ReactElement {
+export function FilesTile({ tile, autoFocus = false }: FilesTileProps): React.ReactElement {
   const rootPath = useCanvasStore((s) => s.activeWorkspaceConfig.rootFolderPath?.trim() ?? '')
   const rootLabel = useMemo(() => folderLabelFromPath(rootPath), [rootPath])
   const [location, setLocation] = useState<LocationState>({ rootPath: '', relativeDir: '' })
@@ -124,6 +125,11 @@ export function FilesTile({ tile }: FilesTileProps): React.ReactElement {
   const [notice, setNotice] = useState<Notice | null>(null)
   const [refreshVersion, setRefreshVersion] = useState(0)
   const [entryMenu, setEntryMenu] = useState<EntryMenuState | null>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (autoFocus) searchInputRef.current?.focus()
+  }, [autoFocus])
 
   useEffect(() => {
     setLocation({ rootPath, relativeDir: '' })
@@ -321,6 +327,7 @@ export function FilesTile({ tile }: FilesTileProps): React.ReactElement {
           <label className="flex min-w-0 flex-1 items-center gap-2 rounded-full border border-border-visible bg-bg-primary px-3">
             <Search size={14} className="shrink-0 text-text-secondary" />
             <input
+              ref={searchInputRef}
               className="min-w-0 flex-1 bg-transparent py-2.5 text-sm text-text-primary outline-none placeholder:text-text-disabled"
               value={query}
               onChange={(event) => setQuery(event.target.value)}

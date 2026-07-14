@@ -13,6 +13,7 @@ import { safeMarkdownUrl } from '@/utils/markdownPreview'
 
 interface NoteTileProps {
   tile: TileState
+  autoFocus?: boolean
   onUpdate: (patch: Partial<TileState>) => void
 }
 
@@ -80,9 +81,11 @@ function blocksToSummary(editor: ReturnType<typeof useCreateBlockNote>): string 
 
 function RichNoteEditor({
   initialBlocks,
+  autoFocus = false,
   onChange,
 }: {
   initialBlocks: PartialBlock[]
+  autoFocus?: boolean
   onChange: (blocks: NoteBlocks, summary: string) => void
 }): React.ReactElement {
   const editor = useCreateBlockNote({
@@ -112,6 +115,10 @@ function RichNoteEditor({
     }
   }, [editor])
 
+  useEffect(() => {
+    if (autoFocus) editor.prosemirrorView.focus()
+  }, [autoFocus, editor])
+
   return (
     <BlockNoteView
       className="yira-note-editor"
@@ -125,7 +132,7 @@ function RichNoteEditor({
   )
 }
 
-function RichNoteTile({ tile, onUpdate }: NoteTileProps): React.ReactElement {
+function RichNoteTile({ tile, autoFocus, onUpdate }: NoteTileProps): React.ReactElement {
   const [title, setTitle] = useState(titleFromTile(tile))
   const [blocks, setBlocks] = useState<PartialBlock[] | null>(null)
   const [revision, setRevision] = useState(0)
@@ -280,6 +287,7 @@ function RichNoteTile({ tile, onUpdate }: NoteTileProps): React.ReactElement {
             <RichNoteEditor
               key={`${tile.id}:${revision}`}
               initialBlocks={blocks}
+              autoFocus={autoFocus}
               onChange={handleBlocksChange}
             />
           ) : (
@@ -313,7 +321,7 @@ const MARKDOWN_VIEW_OPTIONS: Array<{ mode: MarkdownViewMode; label: string }> = 
   { mode: 'live', label: 'Split' },
 ]
 
-function MarkdownNoteTile({ tile, onUpdate }: NoteTileProps): React.ReactElement {
+function MarkdownNoteTile({ tile, autoFocus = false, onUpdate }: NoteTileProps): React.ReactElement {
   const [title, setTitle] = useState(titleFromTile(tile))
   const [markdown, setMarkdown] = useState(tile.markdown ?? '')
   const [viewMode, setViewMode] = useState<MarkdownViewMode>(normalizeMarkdownViewMode(tile.markdownView))
@@ -325,6 +333,7 @@ function MarkdownNoteTile({ tile, onUpdate }: NoteTileProps): React.ReactElement
   const hasUnsavedChangesRef = useRef(false)
   const hasEditedSinceLoadRef = useRef(false)
   const loadRequestIdRef = useRef(0)
+  const editorRef = useRef<HTMLDivElement>(null)
 
   const accentColor = useMemo(() => {
     if (!tile.noteColor) return 'var(--border-visible)'
@@ -345,6 +354,11 @@ function MarkdownNoteTile({ tile, onUpdate }: NoteTileProps): React.ReactElement
     latestTitleRef.current = nextTitle
     setTitle(nextTitle)
   }, [tile.label])
+
+  useEffect(() => {
+    if (!autoFocus) return
+    editorRef.current?.querySelector<HTMLTextAreaElement>('textarea')?.focus()
+  }, [autoFocus])
 
   const saveNow = useCallback((data?: {
     title?: string
@@ -479,7 +493,7 @@ function MarkdownNoteTile({ tile, onUpdate }: NoteTileProps): React.ReactElement
           ))}
         </div>
 
-        <div className="yira-markdown-editor min-h-[480px] flex-1 px-6 py-5">
+        <div ref={editorRef} className="yira-markdown-editor min-h-[480px] flex-1 px-6 py-5">
           <MDEditor
             key={getMarkdownEditorKey(tile.id, viewMode)}
             value={markdown}
@@ -498,8 +512,8 @@ function MarkdownNoteTile({ tile, onUpdate }: NoteTileProps): React.ReactElement
   )
 }
 
-export function NoteTile({ tile, onUpdate }: NoteTileProps): React.ReactElement {
+export function NoteTile({ tile, autoFocus = false, onUpdate }: NoteTileProps): React.ReactElement {
   return tile.noteKind === 'markdown'
-    ? <MarkdownNoteTile tile={tile} onUpdate={onUpdate} />
-    : <RichNoteTile tile={tile} onUpdate={onUpdate} />
+    ? <MarkdownNoteTile tile={tile} autoFocus={autoFocus} onUpdate={onUpdate} />
+    : <RichNoteTile tile={tile} autoFocus={autoFocus} onUpdate={onUpdate} />
 }

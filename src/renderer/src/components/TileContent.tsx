@@ -20,11 +20,12 @@ interface TileContentProps {
   isFocused: boolean
   edgeToEdge?: boolean
   isVisible?: boolean
+  autoFocus?: boolean
   onFocus: () => void
   onUpdate: (patch: Partial<TileState>) => void
 }
 
-export function TileContent({ tile, isFocused, edgeToEdge = false, isVisible = true, onFocus, onUpdate }: TileContentProps): React.ReactElement {
+export function TileContent({ tile, isFocused, edgeToEdge = false, isVisible = true, autoFocus = false, onFocus, onUpdate }: TileContentProps): React.ReactElement {
   if (tile.type === 'terminal') {
     return (
       <TerminalTileWrapper
@@ -32,6 +33,7 @@ export function TileContent({ tile, isFocused, edgeToEdge = false, isVisible = t
         isFocused={isFocused}
         edgeToEdge={edgeToEdge}
         isVisible={isVisible}
+        autoFocus={autoFocus}
         onFocus={onFocus}
         onUpdate={onUpdate}
         onDelete={() => {}}
@@ -40,11 +42,11 @@ export function TileContent({ tile, isFocused, edgeToEdge = false, isVisible = t
   }
 
   if (tile.type === 'note') {
-    return <NoteTile tile={tile} onUpdate={onUpdate} />
+    return <NoteTile tile={tile} autoFocus={autoFocus} onUpdate={onUpdate} />
   }
 
   if (tile.type === 'browser') {
-    return <BrowserTile tile={tile} onUpdate={onUpdate} />
+    return <BrowserTile tile={tile} autoFocus={autoFocus} onUpdate={onUpdate} />
   }
 
   if (tile.type === 'timer') {
@@ -52,7 +54,7 @@ export function TileContent({ tile, isFocused, edgeToEdge = false, isVisible = t
   }
 
   if (tile.type === 'files') {
-    return <FilesTile tile={tile} />
+    return <FilesTile tile={tile} autoFocus={autoFocus} />
   }
 
   const meta = TILE_META[tile.type as keyof typeof TILE_META]
