@@ -309,6 +309,16 @@ export type TimerStatus = 'idle' | 'running' | 'paused' | 'done'
 
 export type NoteColor = 'yellow' | 'green' | 'blue' | 'pink' | 'purple' | 'orange' | 'white' | 'dark'
 export type NoteFont = 'sans' | 'rounded' | 'serif' | 'marker' | 'handwritten'
+export type NoteKind = 'rich' | 'markdown'
+export type MarkdownViewMode = 'edit' | 'preview' | 'live'
+
+export function normalizeNoteKind(value: unknown): NoteKind {
+  return value === 'markdown' ? 'markdown' : 'rich'
+}
+
+export function normalizeMarkdownViewMode(value: unknown): MarkdownViewMode {
+  return value === 'edit' || value === 'preview' || value === 'live' ? value : 'live'
+}
 
 export const NOTE_COLORS: Record<NoteColor, { bg: string; text: string }> = {
   yellow: { bg: '#fef3c7', text: '#78350f' },
@@ -458,9 +468,12 @@ export interface TileState {
   startupCommand?: string
 
   // Note-specific
+  noteKind?: NoteKind
   noteColor?: NoteColor
   noteFont?: NoteFont
   noteContent?: string
+  markdown?: string
+  markdownView?: MarkdownViewMode
 
   // Browser-specific
   browserUrl?: string

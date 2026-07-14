@@ -1,5 +1,5 @@
 import type { CanvasState, SplitViewState, ViewMode } from '@shared/types'
-import { normalizeTileSize } from '@shared/types'
+import { normalizeMarkdownViewMode, normalizeNoteKind, normalizeTileSize } from '@shared/types'
 import { DEFAULT_SPLIT_ORIENTATION, normalizeSplitOrientation } from './splitViewState'
 import { clampTileToWorld, normalizeFiniteViewport } from './canvasWorld'
 
@@ -43,8 +43,20 @@ export function normalizeCanvasStateForJson(state: CanvasState): CanvasState {
     tiles: tiles.map((tile) => {
       const size = normalizeTileSize(tile.type, tile)
       const { hideTitlebar: _hideTitlebar, ...tileWithoutTitlebar } = tile as typeof tile & { hideTitlebar?: unknown }
+      const normalizedNote = tileWithoutTitlebar.type !== 'note'
+        ? tileWithoutTitlebar
+        : normalizeNoteKind(tileWithoutTitlebar.noteKind) === 'markdown'
+          ? {
+              ...tileWithoutTitlebar,
+              noteKind: 'markdown' as const,
+              markdown: typeof tileWithoutTitlebar.markdown === 'string' ? tileWithoutTitlebar.markdown : '',
+              markdownView: normalizeMarkdownViewMode(tileWithoutTitlebar.markdownView),
+            }
+          : tileWithoutTitlebar.noteKind === undefined
+            ? tileWithoutTitlebar
+            : { ...tileWithoutTitlebar, noteKind: 'rich' as const }
       return clampTileToWorld({
-        ...tileWithoutTitlebar,
+        ...normalizedNote,
         width: size.width,
         height: size.height,
       })

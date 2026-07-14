@@ -1,10 +1,12 @@
 import { normalizeCanvasStateForJson } from './canvasStateNormalization'
-import type { CanvasState } from '@shared/types'
+import { normalizeNoteKind, type CanvasState } from '@shared/types'
 
 const state: CanvasState = {
   tiles: [
     { id: 'terminal', type: 'terminal', x: 0, y: 0, width: 10, height: 20, zIndex: 1, hideTitlebar: true } as CanvasState['tiles'][number] & { hideTitlebar: true },
-    { id: 'note', type: 'note', x: 0, y: 0, width: 10, height: 20, zIndex: 2 },
+    { id: 'note', type: 'note', x: 0, y: 0, width: 10, height: 20, zIndex: 2, noteKind: 'markdown', markdown: '# Hello', markdownView: 'preview' },
+    { id: 'new-markdown', type: 'note', x: 0, y: 0, width: 10, height: 20, zIndex: 8, noteKind: 'markdown' },
+    { id: 'legacy-note', type: 'note', x: 0, y: 0, width: 10, height: 20, zIndex: 7 },
     { id: 'browser', type: 'browser', x: 0, y: 0, width: 10, height: 20, zIndex: 3 },
     { id: 'kanban', type: 'kanban', x: 0, y: 0, width: 10, height: 20, zIndex: 4 } as unknown as CanvasState['tiles'][number],
     { id: 'timer', type: 'timer', x: 0, y: 0, width: 10, height: 20, zIndex: 5 },
@@ -12,7 +14,7 @@ const state: CanvasState = {
   ],
   groups: [],
   viewport: { tx: 0, ty: 0, zoom: 1 },
-  nextZIndex: 7,
+  nextZIndex: 9,
   focusedTileId: null,
   viewMode: 'canvas',
   fullviewActiveTileId: null,
@@ -30,6 +32,8 @@ const normalized = normalizeCanvasStateForJson(state)
 const expected = new Map([
   ['terminal', { width: 900, height: 400 }],
   ['note', { width: 900, height: 800 }],
+  ['new-markdown', { width: 900, height: 800 }],
+  ['legacy-note', { width: 900, height: 800 }],
   ['browser', { width: 1800, height: 800 }],
   ['timer', { width: 900, height: 400 }],
   ['files', { width: 900, height: 400 }],
@@ -48,4 +52,19 @@ for (const tile of normalized.tiles) {
   if ('hideTitlebar' in tile) {
     throw new Error(`${tile.id} must not persist hideTitlebar`)
   }
+}
+
+const markdownNote = normalized.tiles.find((tile) => tile.id === 'note')
+if (markdownNote?.noteKind !== 'markdown' || markdownNote.markdown !== '# Hello' || markdownNote.markdownView !== 'preview') {
+  throw new Error('Markdown note data and its selected view must persist through normalization')
+}
+
+const legacyNote = normalized.tiles.find((tile) => tile.id === 'legacy-note')
+if (normalizeNoteKind(legacyNote?.noteKind) !== 'rich') {
+  throw new Error('notes without a note kind must normalize as rich notes')
+}
+
+const newMarkdownNote = normalized.tiles.find((tile) => tile.id === 'new-markdown')
+if (newMarkdownNote?.markdown !== '' || newMarkdownNote.markdownView !== 'live') {
+  throw new Error('new Markdown notes must default to an empty source and split view')
 }

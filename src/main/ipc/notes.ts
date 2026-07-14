@@ -2,7 +2,7 @@ import { ipcMain } from 'electron'
 import { promises as fs } from 'fs'
 import { join } from 'path'
 import { YIRA_HOME } from '../paths'
-import type { NoteBlocks } from '@shared/types'
+import type { MarkdownViewMode, NoteBlocks, NoteKind } from '@shared/types'
 
 function assertSafeId(id: string): void {
   if (/[\/\\]|\.\./.test(id)) throw new Error(`Unsafe ID: ${id}`)
@@ -22,6 +22,9 @@ export interface NoteData {
   color?: string
   font?: string
   content?: string
+  noteKind?: NoteKind
+  markdown?: string
+  markdownView?: MarkdownViewMode
 }
 
 export function registerNotesIPC(): void {

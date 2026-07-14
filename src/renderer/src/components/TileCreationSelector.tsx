@@ -117,7 +117,7 @@ export function TileCreationSelector({ className, ...input }: TileCreationSelect
         return (
           <button
             key={action.id}
-            className="nd-panel-raised flex h-11 items-center justify-center gap-1.5 rounded-2xl px-2 text-text-secondary transition-colors hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
+            className="nd-panel-raised flex h-11 w-full items-center justify-center gap-1.5 rounded-2xl px-2 text-text-secondary transition-colors hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
             onClick={action.onClick}
             disabled={action.disabled}
             title={action.title}

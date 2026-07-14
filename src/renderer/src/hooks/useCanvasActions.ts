@@ -5,7 +5,7 @@ import { findSelectedGroup, getGroupAnchorTile } from '@/utils/grouping'
 import { buildDuplicateTerminalTile, insertDuplicateIntoSplitPanel } from '@/utils/duplicateTerminalTile'
 import type { ConfirmDialogOptions } from '@/components/AppDialog'
 import { GRID_MAX_TILES, getDefaultTileSize } from '@shared/types'
-import type { TileState, ShellProfileId, NoteColor, SplitPanelId } from '@shared/types'
+import type { TileState, ShellProfileId, NoteColor, NoteKind, SplitPanelId } from '@shared/types'
 
 const TILE_TYPE_LABELS: Record<TileState['type'], string> = {
   terminal: 'Terminal',
@@ -248,7 +248,7 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
   }, [browserHomeUrl, finalizeAddedTile, getSpawnPos, groupsEnabled, tileCreationAvailability.browser])
 
   const addNote = useCallback(
-    (color?: NoteColor) => {
+    (kind: NoteKind, color?: NoteColor) => {
       if (!tileCreationAvailability.note) return
 
       const state = useCanvasStore.getState()
@@ -267,6 +267,8 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
         noteColor: color ?? 'yellow',
         noteFont: 'sans',
         noteContent: '',
+        noteKind: kind,
+        ...(kind === 'markdown' ? { markdown: '', markdownView: 'live' as const } : {}),
         groupId: targetGroup?.id,
       }
       finalizeAddedTile(tile, targetGroup?.id)

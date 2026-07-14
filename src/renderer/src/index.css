@@ -242,6 +242,55 @@ textarea {
   font-family: var(--font-body);
 }
 
+.yira-markdown-editor .w-md-editor {
+  height: 100% !important;
+  min-height: 480px;
+  border: 1px solid var(--border-visible);
+  border-radius: 10px;
+  background: var(--surface-raised);
+  box-shadow: none;
+  color: var(--text-primary);
+}
+
+.yira-markdown-editor .w-md-editor-toolbar {
+  border-bottom-color: var(--border);
+  background: var(--surface);
+}
+
+.yira-markdown-editor .w-md-editor-toolbar li > button {
+  color: var(--text-secondary);
+}
+
+.yira-markdown-editor .w-md-editor-toolbar li > button:hover,
+.yira-markdown-editor .w-md-editor-toolbar li > button.active {
+  color: var(--text-display);
+  background: var(--hover-bg);
+}
+
+.yira-markdown-editor .w-md-editor-text-input,
+.yira-markdown-editor .w-md-editor-text-pre,
+.yira-markdown-editor .w-md-editor-text {
+  font-family: var(--font-mono);
+  font-size: var(--font-base);
+  line-height: 1.72;
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.yira-markdown-editor .wmde-markdown {
+  font-family: var(--font-body);
+  font-size: var(--font-base);
+  line-height: 1.72;
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.yira-markdown-editor .wmde-markdown h1,
+.yira-markdown-editor .wmde-markdown h2,
+.yira-markdown-editor .wmde-markdown h3 {
+  color: var(--text-display);
+}
+
 .dragging,
 .dragging * {
   user-select: none !important;

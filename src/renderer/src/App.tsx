@@ -1,6 +1,7 @@
 import React, { useEffect, useCallback, useMemo, useRef, useState } from 'react'
 import { Canvas, getCanvasMethods } from './components/Canvas'
 import { TileCreationSelector, type TileCreationSelectorProps } from './components/TileCreationSelector'
+import { TileCreationMenu } from './components/TileCreationMenu'
 import { TopBar } from './components/TopBar'
 import { Sidebar } from './components/Sidebar'
 import { SettingsPanel } from './components/SettingsPanel'
@@ -45,7 +46,7 @@ import {
 import { TILE_META } from './components/TileContent'
 import { TileListItem } from './components/TileListItem'
 import { buildTileConfigurationMenuItems } from './components/tileConfigurationMenu'
-import { Terminal, FolderOpen, ChevronDown, SlidersHorizontal, Trash2, Pencil, Lock, Columns, Download, X, Plus } from 'lucide-react'
+import { Terminal, StickyNote, FolderOpen, ChevronDown, SlidersHorizontal, Trash2, Pencil, Lock, Columns, Download, X, Plus } from 'lucide-react'
 
 const GROUP_SHOW_TOP_PADDING = 42
 const BASE_WINDOW_TITLE = 'Yira'
@@ -341,6 +342,7 @@ export default function App(): React.ReactElement {
 
   // UI state
   const [showProfilePicker, setShowProfilePicker] = useState(false)
+  const [showNotePicker, setShowNotePicker] = useState(false)
   const [remoteSshAvailable, setRemoteSshAvailable] = useState(false)
   const [showWorkspacePicker, setShowWorkspacePicker] = useState(false)
   const [showWorkspaceManager, setShowWorkspaceManager] = useState(false)
@@ -726,17 +728,18 @@ export default function App(): React.ReactElement {
   }, [tiles, groups, viewport, nextZIndex, viewMode, fullviewActiveTileId, splitViewState, gridViewState, activeWorkspaceId, scheduleSave])
 
   useEffect(() => {
-    if (!showProfilePicker) return
+    if (!showProfilePicker && !showNotePicker) return
 
     const handlePointerDown = (event: MouseEvent) => {
       if (!footerRef.current?.contains(event.target as Node)) {
         setShowProfilePicker(false)
+        setShowNotePicker(false)
       }
     }
 
     window.addEventListener('mousedown', handlePointerDown)
     return () => window.removeEventListener('mousedown', handlePointerDown)
-  }, [showProfilePicker])
+  }, [showNotePicker, showProfilePicker])
 
   useEffect(() => {
     if (!showWorkspacePicker) return
@@ -1446,8 +1449,10 @@ export default function App(): React.ReactElement {
     if (availableProfiles.length <= 1 && defaultProfile && !remoteTerminalConfigured) {
       addTerminal(defaultProfile.id)
       setShowProfilePicker(false)
+      setShowNotePicker(false)
       return
     }
+    setShowNotePicker(false)
     setShowProfilePicker((v) => !v)
   }, [availableProfiles.length, defaultProfile, addTerminal, remoteTerminalConfigured])
 
@@ -1768,7 +1773,7 @@ export default function App(): React.ReactElement {
     onCreateTerminal: createTerminalFromSidebar,
     onCreateNote: () => {
       setShowProfilePicker(false)
-      addNote()
+      setShowNotePicker((value) => !value)
     },
     onCreateBrowser: () => {
       setShowProfilePicker(false)
@@ -1801,69 +1806,73 @@ export default function App(): React.ReactElement {
         footer={
           <div ref={footerRef} className="relative border-t border-border bg-bg-secondary px-3 py-3">
             {showProfilePicker && (
-              <div
-                className="nd-panel-raised absolute bottom-full left-4 z-[9999] mb-3 w-[260px] overflow-hidden rounded-2xl"
-                style={{
-                  backdropFilter: 'none',
-                }}
-              >
-                <div className="border-b border-border px-4 py-3">
-                  <div className="nd-label text-text-secondary">Shell Profiles</div>
-                </div>
-                <div className="py-2">
-                  {availableProfiles.map((p) => (
-                    <button
-                      key={p.id}
-                      className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-hover-bg"
-                      style={{
-                        color: p.available ? 'var(--text-primary)' : 'var(--text-disabled)',
-                        cursor: p.available ? 'pointer' : 'not-allowed',
-                      }}
-                      disabled={!p.available}
-                      onClick={() => {
-                        if (!p.available) return
-                        addTerminal(p.id)
+              <div className="absolute bottom-full left-4 z-[9999] mb-3 w-[260px]">
+                <TileCreationMenu
+                  title="Shell Profiles"
+                  items={[
+                    ...availableProfiles.map((profile) => ({
+                      id: profile.id,
+                      icon: Terminal,
+                      label: profile.label,
+                      detail: profile.available ? '[ READY ]' : '[ MISSING ]',
+                      disabled: !profile.available,
+                      onClick: () => {
+                        addTerminal(profile.id)
                         setShowProfilePicker(false)
-                      }}
-                    >
-                      <Terminal size={15} />
-                      <span className="flex-1 text-sm">{p.label}</span>
-                      <span className="nd-caption text-text-secondary">
-                        {p.available ? '[ READY ]' : '[ MISSING ]'}
-                      </span>
-                    </button>
-                  ))}
-                  <button
-                    className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-hover-bg"
-                    style={{
-                      color: canCreateRemoteTerminal ? 'var(--text-primary)' : 'var(--text-disabled)',
-                      cursor: canCreateRemoteTerminal ? 'pointer' : 'not-allowed',
-                    }}
-                    disabled={!canCreateRemoteTerminal}
-                    onClick={() => {
-                      if (!canCreateRemoteTerminal) return
-                      addRemoteTerminal()
-                      setShowProfilePicker(false)
-                    }}
-                    title={
-                      !remoteTerminalConfigured
-                        ? 'Configure Remote terminal in Workspace Settings first'
-                        : !remoteSshAvailable
-                          ? 'OpenSSH client is missing on this computer'
-                          : 'Create a terminal connected through SSH'
-                    }
-                  >
-                    <Terminal size={15} />
-                    <span className="flex-1 text-sm">Remote SSH</span>
-                    <span className="nd-caption text-text-secondary">
-                      {canCreateRemoteTerminal
+                      },
+                    })),
+                    {
+                      id: 'remote-ssh',
+                      icon: Terminal,
+                      label: 'Remote SSH',
+                      detail: canCreateRemoteTerminal
                         ? '[ READY ]'
                         : remoteTerminalConfigured
                           ? '[ OPENSSH MISSING ]'
-                          : '[ CONFIGURE ]'}
-                    </span>
-                  </button>
-                </div>
+                          : '[ CONFIGURE ]',
+                      disabled: !canCreateRemoteTerminal,
+                      title: !remoteTerminalConfigured
+                        ? 'Configure Remote terminal in Workspace Settings first'
+                        : !remoteSshAvailable
+                          ? 'OpenSSH client is missing on this computer'
+                          : 'Create a terminal connected through SSH',
+                      onClick: () => {
+                        addRemoteTerminal()
+                        setShowProfilePicker(false)
+                      },
+                    },
+                  ]}
+                />
+              </div>
+            )}
+
+            {showNotePicker && (
+              <div className="absolute bottom-full left-4 z-[9999] mb-3 w-[260px]">
+                <TileCreationMenu
+                  title="Note Type"
+                  items={[
+                    {
+                      id: 'rich-note',
+                      icon: StickyNote,
+                      label: 'Rich Note',
+                      detail: '[ RICH ]',
+                      onClick: () => {
+                        addNote('rich')
+                        setShowNotePicker(false)
+                      },
+                    },
+                    {
+                      id: 'markdown-note',
+                      icon: StickyNote,
+                      label: 'Markdown Note',
+                      detail: '[ MARKDOWN ]',
+                      onClick: () => {
+                        addNote('markdown')
+                        setShowNotePicker(false)
+                      },
+                    },
+                  ]}
+                />
               </div>
             )}
 
@@ -2216,7 +2225,8 @@ export default function App(): React.ReactElement {
                     tileCreationSelectorProps={tileCreationSelectorProps}
                     profiles={availableProfiles}
                     onCreateTerminal={(profileId) => addTerminal(profileId)}
-                    onCreateNote={() => addNote()}
+                    onCreateRichNote={() => addNote('rich')}
+                    onCreateMarkdownNote={() => addNote('markdown')}
                     onCreateBrowser={() => addBrowser()}
                     onCreateTimer={() => addTimer()}
                     onCreateFiles={() => addFiles()}

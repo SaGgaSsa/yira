@@ -21,6 +21,8 @@ import type {
   FileListResult,
   FileSelectFolderResult,
   NoteBlocks,
+  MarkdownViewMode,
+  NoteKind,
 } from '@shared/types'
 
 type NoteData = {
@@ -29,6 +31,9 @@ type NoteData = {
   content?: string
   color?: string
   font?: string
+  noteKind?: NoteKind
+  markdown?: string
+  markdownView?: MarkdownViewMode
 }
 
 interface ElectronWorld {

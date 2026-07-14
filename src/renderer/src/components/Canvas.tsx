@@ -7,10 +7,13 @@ import { ContextMenu, type MenuItem } from '@/components/ContextMenu'
 import { findMergeTargetGroup, findSelectedGroup, getGroupingBlockedReason } from '@/utils/grouping'
 import { clampViewportToWorld } from '@/utils/canvasWorld'
 import { calculateCanvasFitViewport, CANVAS_FIT_MARGIN, type CanvasFitBounds, type CanvasFitPadding } from '@/utils/canvasViewportFit'
-import { Terminal, StickyNote, Globe, LayoutGrid, Clock, Folder, Lock } from 'lucide-react'
-import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type ShellProfileId, type TileGroup, type GroupColorId, type ViewMode, type SplitViewState, type SplitPanelId, type SplitOrientation } from '@shared/types'
+import { LayoutGrid, Lock } from 'lucide-react'
+import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type TileGroup, type GroupColorId, type ViewMode, type SplitViewState, type SplitPanelId, type SplitOrientation } from '@shared/types'
 import { getAttachedTiles } from '@shared/floatingTiles'
 import { TileCreationSelector, type TileCreationSelectorProps } from './TileCreationSelector'
+import { getCanvasCreationMenuItems, type CanvasCreationMenuInput } from './canvasCreationMenu'
+
+export { getCanvasCreationMenuItems, type CanvasCreationMenuInput } from './canvasCreationMenu'
 
 const GROUP_FRAME_PADDING = 20
 const GROUP_TOOLBAR_GAP = 30
@@ -77,38 +80,6 @@ export function getCanvasMethods(): CanvasMethods | null {
   return canvasMethodsRef.current
 }
 
-export interface CanvasCreationMenuInput {
-  onCreateTerminal: (profileId: ShellProfileId) => void
-  onCreateNote: () => void
-  onCreateBrowser: () => void
-  onCreateTimer: () => void
-  onCreateFiles: () => void
-  canCreateNote: boolean
-  canCreateBrowser: boolean
-  canCreateTimer: boolean
-  canShowFilesCreation: boolean
-  canCreateFiles: boolean
-  profiles: Array<{ id: ShellProfileId; label: string; available: boolean }>
-}
-
-export function getCanvasCreationMenuItems(input: CanvasCreationMenuInput): MenuItem[] {
-  return [
-    {
-      label: 'New Terminal',
-      icon: Terminal,
-      submenu: input.profiles.map((profile) => ({
-        label: profile.label,
-        disabled: !profile.available,
-        action: () => input.onCreateTerminal(profile.id),
-      })),
-    },
-    ...(input.canCreateNote ? [{ label: 'New Note', icon: StickyNote, action: input.onCreateNote }] : []),
-    ...(input.canCreateBrowser ? [{ label: 'New Browser', icon: Globe, action: input.onCreateBrowser }] : []),
-    ...(input.canCreateTimer ? [{ label: 'New Timer', icon: Clock, action: input.onCreateTimer }] : []),
-    ...(input.canShowFilesCreation ? [{ label: 'New Files', icon: Folder, action: input.onCreateFiles, disabled: !input.canCreateFiles }] : []),
-  ]
-}
-
 interface CanvasProps extends CanvasCreationMenuInput {
   tileCreationSelectorProps: TileCreationSelectorProps
   onCreateGroupFromSelection: () => void | Promise<void>
@@ -129,7 +100,8 @@ interface CanvasProps extends CanvasCreationMenuInput {
 export function Canvas({
   tileCreationSelectorProps,
   onCreateTerminal,
-  onCreateNote,
+  onCreateRichNote,
+  onCreateMarkdownNote,
   onCreateBrowser,
   onCreateTimer,
   onCreateFiles,
@@ -944,7 +916,8 @@ export function Canvas({
             ] : []),
             ...getCanvasCreationMenuItems({
               onCreateTerminal,
-              onCreateNote,
+              onCreateRichNote,
+              onCreateMarkdownNote,
               onCreateBrowser,
               onCreateTimer,
               onCreateFiles,

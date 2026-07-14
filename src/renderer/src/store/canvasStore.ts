@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { GROUP_COLOR_ORDER, normalizeTileSize, type TileState, type CanvasState, type Viewport, type ShellProfileId, type TileGroup, type GroupColorId, type ViewMode, type SplitViewState, type SplitPanelId, type WorkspaceConfig, type WorkspaceType, type GridViewState, type GridWorkspaceState, type WindowBounds } from '@shared/types'
+import { GROUP_COLOR_ORDER, normalizeMarkdownViewMode, normalizeNoteKind, normalizeTileSize, type TileState, type CanvasState, type Viewport, type ShellProfileId, type TileGroup, type GroupColorId, type ViewMode, type SplitViewState, type SplitPanelId, type WorkspaceConfig, type WorkspaceType, type GridViewState, type GridWorkspaceState, type WindowBounds } from '@shared/types'
 import { normalizeWorkspaceConfig } from '@shared/workspaceConfig'
 import { createEmptyGridWorkspaceState, insertTileIntoGridLayout, normalizeGridLayout, normalizeGridWorkspaceState, removeTileFromGridLayout } from '@shared/gridWorkspaceState'
 import {
@@ -131,7 +131,19 @@ function normalizeTile(tile: TileState): TileState {
   const normalizedTile = tileWithoutTitlebar.notificationsMuted === false
     ? { ...tileWithoutTitlebar, notificationsMuted: undefined }
     : tileWithoutTitlebar
-  const floatingNormalizedTile = normalizeFloatingTileState(normalizedTile)
+  const normalizedNote = normalizedTile.type !== 'note'
+    ? normalizedTile
+    : normalizeNoteKind(normalizedTile.noteKind) === 'markdown'
+      ? {
+          ...normalizedTile,
+          noteKind: 'markdown' as const,
+          markdown: typeof normalizedTile.markdown === 'string' ? normalizedTile.markdown : '',
+          markdownView: normalizeMarkdownViewMode(normalizedTile.markdownView),
+        }
+      : normalizedTile.noteKind === undefined
+        ? normalizedTile
+        : { ...normalizedTile, noteKind: 'rich' as const }
+  const floatingNormalizedTile = normalizeFloatingTileState(normalizedNote)
 
   if (width === floatingNormalizedTile.width && height === floatingNormalizedTile.height) return clampTileToWorld(floatingNormalizedTile)
 
