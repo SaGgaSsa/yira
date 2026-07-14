@@ -47,6 +47,17 @@ Start the app:
 npm run dev
 ```
 
+Development uses its own persistent data profile at `~/.yira-dev`, separate
+from the real profile at `~/.yira`. The first run creates the Desarrollo,
+Tareas rápidas, and Investigación example workspaces. Later runs preserve any
+changes made in that development profile.
+
+To use a different development profile location, set `YIRA_DEV_DATA_DIR`:
+
+```bash
+YIRA_DEV_DATA_DIR=/path/to/yira-dev-data npm run dev
+```
+
 Type-check the project:
 
 ```bash
