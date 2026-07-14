@@ -3,6 +3,7 @@ import { useCanvasStore } from '@/store/canvasStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { findSelectedGroup, getGroupAnchorTile } from '@/utils/grouping'
 import { buildDuplicateTerminalTile, insertDuplicateIntoSplitPanel } from '@/utils/duplicateTerminalTile'
+import { getBrowserTileUrl } from '@/utils/browserUrl'
 import type { ConfirmDialogOptions } from '@/components/AppDialog'
 import { GRID_MAX_TILES, getDefaultTileSize } from '@shared/types'
 import type { TileState, ShellProfileId, NoteColor, NoteKind, SplitPanelId } from '@shared/types'
@@ -225,7 +226,7 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
     [addTile, addTilesToGroup, bringToFront, focusTile, groupsEnabled, selectTiles, setSplitViewState, snapCoordinate, canAddTileToActiveWorkspace],
   )
 
-  const addBrowser = useCallback(() => {
+  const addBrowser = useCallback((url?: string) => {
     if (!tileCreationAvailability.browser) return
 
     const state = useCanvasStore.getState()
@@ -241,7 +242,7 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
       width: size.width,
       height: size.height,
       zIndex: state.nextZIndex,
-      browserUrl: browserHomeUrl,
+      browserUrl: getBrowserTileUrl(url, browserHomeUrl),
       groupId: targetGroup?.id,
     }
     finalizeAddedTile(tile, targetGroup?.id)
