@@ -37,6 +37,7 @@ function normalizeWorkspace(workspace: Partial<Workspace> & { id: string; name?:
   const config = normalizeWorkspaceConfig({
     type: workspace.config?.type,
     rootFolderPath: workspace.config?.rootFolderPath ?? migratedRootFolderPath,
+    workspacePanelOpen: workspace.config?.workspacePanelOpen,
     initialCommand: workspace.config?.initialCommand,
     terminalHistoryEnabled: workspace.config?.terminalHistoryEnabled,
     remoteTerminal: workspace.config?.remoteTerminal,
@@ -130,6 +131,7 @@ function createWorkspaceFromInput(input: WorkspaceCreateInput): Workspace {
     config: normalizeWorkspaceConfig({
       type: input.type,
       rootFolderPath: input.rootFolderPath,
+      workspacePanelOpen: input.workspacePanelOpen,
       initialCommand: input.initialCommand,
       terminalHistoryEnabled: input.terminalHistoryEnabled,
       remoteTerminal: input.remoteTerminal,
@@ -147,6 +149,7 @@ function updateWorkspace(workspace: Workspace, patch: WorkspaceUpdatePatch): Wor
   workspace.config = normalizeWorkspaceConfig({
     type: workspace.config.type,
     rootFolderPath: patch.config?.rootFolderPath ?? workspace.config.rootFolderPath,
+    workspacePanelOpen: patch.config?.workspacePanelOpen ?? workspace.config.workspacePanelOpen,
     initialCommand: patch.config?.initialCommand ?? workspace.config.initialCommand,
     terminalHistoryEnabled: patch.config?.terminalHistoryEnabled ?? workspace.config.terminalHistoryEnabled,
     remoteTerminal: patch.config?.remoteTerminal ?? workspace.config.remoteTerminal,

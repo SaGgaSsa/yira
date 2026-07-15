@@ -60,8 +60,6 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.invoke('files:list', rootPath, relativeDir, options),
     open: (rootPath: string, relativePath: string) =>
       ipcRenderer.invoke('files:open', rootPath, relativePath),
-    reveal: (rootPath: string, relativePath: string) =>
-      ipcRenderer.invoke('files:reveal', rootPath, relativePath),
   },
 
   // Canvas persistence

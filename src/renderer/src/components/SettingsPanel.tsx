@@ -311,7 +311,6 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor }: SettingsPanel
               { type: 'note' as const, label: 'Note' },
               { type: 'browser' as const, label: 'Browser' },
               { type: 'timer' as const, label: 'Timer' },
-              { type: 'files' as const, label: 'Files' },
             ]).map(({ type, label }) => (
               <label
                 key={type}

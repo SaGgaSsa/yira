@@ -13,6 +13,7 @@ function workspace(id: string, name: string, rootFolderPath?: string): Workspace
     config: {
       type: 'canvas',
       rootFolderPath,
+      workspacePanelOpen: true,
       terminalHistoryEnabled: true,
     },
   }

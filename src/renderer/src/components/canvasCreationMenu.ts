@@ -1,4 +1,4 @@
-import { Terminal, StickyNote, Globe, Clock, Folder } from 'lucide-react'
+import { Terminal, StickyNote, Globe, Clock } from 'lucide-react'
 import type { ShellProfileId } from '@shared/types'
 import type { MenuItem } from './ContextMenu'
 
@@ -8,12 +8,9 @@ export interface CanvasCreationMenuInput {
   onCreateMarkdownNote: () => void
   onCreateBrowser: () => void
   onCreateTimer: () => void
-  onCreateFiles: () => void
   canCreateNote: boolean
   canCreateBrowser: boolean
   canCreateTimer: boolean
-  canShowFilesCreation: boolean
-  canCreateFiles: boolean
   profiles: Array<{ id: ShellProfileId; label: string; available: boolean }>
 }
 
@@ -38,6 +35,5 @@ export function getCanvasCreationMenuItems(input: CanvasCreationMenuInput): Menu
     }] : []),
     ...(input.canCreateBrowser ? [{ label: 'New Browser', icon: Globe, action: input.onCreateBrowser }] : []),
     ...(input.canCreateTimer ? [{ label: 'New Timer', icon: Clock, action: input.onCreateTimer }] : []),
-    ...(input.canShowFilesCreation ? [{ label: 'New Files', icon: Folder, action: input.onCreateFiles, disabled: !input.canCreateFiles }] : []),
   ]
 }

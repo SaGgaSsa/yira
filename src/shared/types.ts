@@ -24,6 +24,7 @@ export type WorkspaceMetadata = Workspace
 export interface WorkspaceConfig {
   type: WorkspaceType
   rootFolderPath?: string
+  workspacePanelOpen: boolean
   initialCommand?: string
   terminalHistoryEnabled?: boolean
   remoteTerminal?: RemoteTerminalConfig
@@ -33,6 +34,7 @@ export interface WorkspaceCreateInput {
   type?: WorkspaceType
   name: string
   rootFolderPath?: string
+  workspacePanelOpen?: boolean
   initialCommand?: string
   terminalHistoryEnabled?: boolean
   remoteTerminal?: RemoteTerminalConfig
@@ -43,6 +45,7 @@ export interface WorkspaceManagementEntry {
   name: string
   type?: WorkspaceType
   rootFolderPath?: string
+  workspacePanelOpen?: boolean
   initialCommand?: string
   terminalHistoryEnabled?: boolean
   remoteTerminal?: RemoteTerminalConfig
@@ -81,7 +84,7 @@ export interface Config {
 // ─── App Settings ──────────────────────────────────────────────────────────
 
 export type AppearanceMode = 'dark' | 'light' | 'system'
-export type ConfigurableTileCreationType = 'note' | 'browser' | 'timer' | 'files'
+export type ConfigurableTileCreationType = 'note' | 'browser' | 'timer'
 
 export type TileCreationAvailability = Record<ConfigurableTileCreationType, boolean>
 
@@ -132,7 +135,6 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
       note: true,
       browser: true,
       timer: false,
-      files: false,
     },
   },
   groups: {
@@ -306,7 +308,7 @@ export const BOARD_COLUMNS: Array<{ id: BoardStatus; label: string }> = [
 
 // ─── Tile Types ────────────────────────────────────────────────────────────
 
-export type TileType = 'terminal' | 'note' | 'browser' | 'timer' | 'files'
+export type TileType = 'terminal' | 'note' | 'browser' | 'timer'
 export type TimerStatus = 'idle' | 'running' | 'paused' | 'done'
 
 export type NoteColor = 'yellow' | 'green' | 'blue' | 'pink' | 'purple' | 'orange' | 'white' | 'dark'
@@ -398,7 +400,6 @@ export const TILE_SIZE_PRESETS: Record<TileType, TileSizePreset> = {
   note: { defaultWidth: 900, defaultHeight: 800, minWidth: 900, minHeight: 800 },
   browser: { defaultWidth: 1800, defaultHeight: 800, minWidth: 1800, minHeight: 800 },
   timer: { defaultWidth: 900, defaultHeight: 400, minWidth: 900, minHeight: 400 },
-  files: { defaultWidth: 900, defaultHeight: 400, minWidth: 900, minHeight: 400 },
 }
 
 export function getTileSizePreset(type: TileType): TileSizePreset {

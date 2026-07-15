@@ -77,8 +77,7 @@ function isSupportedTile(tile: TileState): boolean {
   return tile.type === 'terminal' ||
     tile.type === 'note' ||
     tile.type === 'browser' ||
-    tile.type === 'timer' ||
-    tile.type === 'files'
+    tile.type === 'timer'
 }
 
 function isDetachedTile(tile: TileState): boolean {

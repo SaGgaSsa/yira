@@ -4,6 +4,7 @@ import { TileCreationSelector, type TileCreationSelectorProps } from './componen
 import { TileCreationMenu } from './components/TileCreationMenu'
 import { TopBar } from './components/TopBar'
 import { Sidebar } from './components/Sidebar'
+import { WorkspacePanel } from './components/WorkspacePanel'
 import { SettingsPanel } from './components/SettingsPanel'
 import { RawJsonEditor } from './components/RawJsonEditor'
 import { ContextMenu, type MenuItem } from './components/ContextMenu'
@@ -25,7 +26,7 @@ import { useFontSize } from './hooks/useFontSize'
 import { useUpdateStore } from './store/updateStore'
 import { findMergeTargetGroup, findSelectedGroup, getGroupingBlockedReason } from './utils/grouping'
 import { GROUP_COLORS, GROUP_COLOR_ORDER, type BoardState, type BoardTask, type TileState, type CanvasState, type GridWorkspaceState, type Workspace, type WorkspaceMetadata, type TileGroup, type ViewMode, type SplitPanelId, type SplitViewState, type WorkspaceManagementEntry, type WorkspaceType } from '@shared/types'
-import { createEmptyGridWorkspaceState } from '@shared/gridWorkspaceState'
+import { createEmptyGridWorkspaceState, normalizeGridWorkspaceState } from '@shared/gridWorkspaceState'
 import {
   reconcileCanvasStateWithSharedTiles,
   reconcileGridStateWithSharedTiles,
@@ -37,6 +38,7 @@ import { DEFAULT_SPLIT_ORIENTATION, toggleSplitOrientation } from './utils/split
 import { getTerminalDisplayTitle, normalizeTerminalWindowTitle } from './utils/terminalDisplayTitle'
 import { resolveViewModeTransition } from './utils/viewModeTransition'
 import { shouldKeepSidebarOpenForWorkspace } from './utils/emptyWorkspaceView'
+import { normalizeCanvasStateForJson } from './utils/canvasStateNormalization'
 import {
   clearActivatedWorkspaceAttentionCount,
   getWorkspaceAttentionLabel,
@@ -339,7 +341,7 @@ export default function App(): React.ReactElement {
     })
   }, [])
 
-  const { addTerminal, addRemoteTerminal, duplicateTerminalTile, addNote, addBrowser, addTimer, addFiles, deleteTile: deleteCanvasTile, resetZoom } = useCanvasActions({ requestConfirm })
+  const { addTerminal, addRemoteTerminal, duplicateTerminalTile, addNote, addBrowser, addTimer, deleteTile: deleteCanvasTile, resetZoom } = useCanvasActions({ requestConfirm })
 
   // UI state
   const [showProfilePicker, setShowProfilePicker] = useState(false)
@@ -532,12 +534,20 @@ export default function App(): React.ReactElement {
       if (transitionId !== workspaceTransitionRef.current) return
     }
 
+    const restoredState = workspaceType === 'grid'
+      ? normalizeGridWorkspaceState((state as GridWorkspaceState | null) ?? createEmptyGridWorkspaceState())
+      : normalizeCanvasStateForJson((state as CanvasState | null) ?? createEmptyCanvasState())
+    if (state && JSON.stringify(state) !== JSON.stringify(restoredState)) {
+      await window.electron.canvas.save(workspace.id, restoredState, workspaceType)
+      if (transitionId !== workspaceTransitionRef.current) return
+    }
+
     skipNextAutosaveRef.current = true
     setBoardState(board)
     if (workspaceType === 'grid') {
-      restoreGridWorkspaceState(workspace.id, workspace.name, workspace.config, (state as GridWorkspaceState | null) ?? createEmptyGridWorkspaceState())
+      restoreGridWorkspaceState(workspace.id, workspace.name, workspace.config, restoredState as GridWorkspaceState)
     } else {
-      restoreWorkspaceState(workspace.id, workspace.name, workspace.config, (state as CanvasState | null) ?? createEmptyCanvasState())
+      restoreWorkspaceState(workspace.id, workspace.name, workspace.config, restoredState as CanvasState)
     }
     setShowWorkspacePicker(false)
   }, [restoreGridWorkspaceState, restoreWorkspaceState, saveToDisk])
@@ -628,7 +638,7 @@ export default function App(): React.ReactElement {
       }
 
       skipNextAutosaveRef.current = true
-      setWorkspace('', '', { type: 'canvas' })
+      setWorkspace('', '', { type: 'canvas', workspacePanelOpen: true })
       restoreState(createEmptyCanvasState())
       setWorkspaceEditor({
         mode: 'create',
@@ -826,13 +836,27 @@ export default function App(): React.ReactElement {
   const canCreateNote = tileCreationAvailability.note
   const canCreateBrowser = tileCreationAvailability.browser
   const canCreateTimer = tileCreationAvailability.timer
-  const canShowFilesCreation = tileCreationAvailability.files
-  const canCreateFiles = canShowFilesCreation && Boolean(activeWorkspaceConfig.rootFolderPath)
   const remoteTerminalConfigured = Boolean(activeWorkspaceConfig.remoteTerminal)
   const canCreateRemoteTerminal = remoteTerminalConfigured && remoteSshAvailable
   const boardEnabled = boardState.enabled
   const boardReviewCount = useMemo(() => getBoardReviewCount(boardState), [boardState])
   const boardReviewLabel = boardReviewCount > 0 ? (boardReviewCount > 9 ? '9+' : String(boardReviewCount)) : null
+  const workspaceRootPath = activeWorkspaceConfig.rootFolderPath?.trim() ?? ''
+  const hasWorkspacePanel = Boolean(workspaceRootPath)
+
+  const toggleWorkspacePanel = useCallback(() => {
+    if (!activeWorkspaceId || !hasWorkspacePanel) return
+
+    void window.electron.workspace.update(activeWorkspaceId, {
+      config: { workspacePanelOpen: !activeWorkspaceConfig.workspacePanelOpen },
+    }).then((updatedWorkspace) => {
+      if (!updatedWorkspace) return
+      setWorkspace(updatedWorkspace.id, updatedWorkspace.name, updatedWorkspace.config)
+      setWorkspaceMetadata((current) => current.map((workspace) => (
+        workspace.id === updatedWorkspace.id ? updatedWorkspace : workspace
+      )))
+    })
+  }, [activeWorkspaceConfig.workspacePanelOpen, activeWorkspaceId, hasWorkspacePanel, setWorkspace])
 
   // Zoom toggle: switch between 100% and previous zoom
   const handleZoomToggle = useCallback(() => {
@@ -1386,7 +1410,7 @@ export default function App(): React.ReactElement {
 
     if (!result.activeWorkspace) {
       skipNextAutosaveRef.current = true
-      setWorkspace('', '', { type: 'canvas' })
+      setWorkspace('', '', { type: 'canvas', workspacePanelOpen: true })
       restoreState(createEmptyCanvasState())
       setWorkspaceEditor({
         mode: 'create',
@@ -1789,8 +1813,6 @@ export default function App(): React.ReactElement {
     canCreateNote,
     canCreateBrowser,
     canCreateTimer,
-    canShowFilesCreation,
-    canCreateFiles,
     canCreateBoard: Boolean(activeWorkspaceId),
     boardEnabled,
     onCreateTerminal: createTerminalFromSidebar,
@@ -1805,11 +1827,6 @@ export default function App(): React.ReactElement {
     onCreateTimer: () => {
       setShowProfilePicker(false)
       addTimer()
-    },
-    onCreateFiles: () => {
-      if (!canCreateFiles) return
-      setShowProfilePicker(false)
-      addFiles()
     },
     onCreateBoard: () => {
       void handleBoardButton()
@@ -2010,7 +2027,7 @@ export default function App(): React.ReactElement {
             {tiles.length === 0 ? (
               <div className="nd-panel-raised rounded-[20px] px-5 py-8 text-center text-text-secondary">
                 <div className="nd-label">[ EMPTY ]</div>
-                <div className="mt-3 text-sm text-text-disabled">Create a terminal, note, browser, timer, files tile, or workspace board.</div>
+                <div className="mt-3 text-sm text-text-disabled">Create a terminal, note, browser, timer, or workspace board.</div>
               </div>
             ) : (
               <div className="space-y-2">
@@ -2176,14 +2193,18 @@ export default function App(): React.ReactElement {
               canSplitView={attachedTiles.length >= 2}
               sidebarCollapsed={sidebarCollapsed}
               onToggleSidebar={() => setSidebarCollapsed(c => !c)}
+              hasWorkspacePanel={hasWorkspacePanel}
+              workspacePanelOpen={activeWorkspaceConfig.workspacePanelOpen}
+              onToggleWorkspacePanel={toggleWorkspacePanel}
               onSetViewMode={handleSetViewMode}
               onFitToContent={() => getCanvasMethods()?.fitViewToContent()}
               onZoomToggle={handleZoomToggle}
               onOpenSettings={() => setShowSettings(true)}
             />
 
-            <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-              {activeWorkspaceType === 'canvas' && viewMode === 'splitview' && (
+            <div className="flex min-h-0 flex-1 overflow-hidden">
+              <div className="relative min-w-0 flex flex-1 flex-col overflow-hidden">
+                {activeWorkspaceType === 'canvas' && viewMode === 'splitview' && (
                 <SplitviewPanel
                   tiles={sortedTiles}
                   splitViewState={splitViewState}
@@ -2210,7 +2231,7 @@ export default function App(): React.ReactElement {
                 />
               )}
 
-              <div className="relative min-h-0 flex-1">
+                <div className="relative min-h-0 flex-1">
                 {viewMode === 'board' && boardEnabled ? (
                   <BoardView
                     workspaceId={activeWorkspaceId}
@@ -2253,13 +2274,10 @@ export default function App(): React.ReactElement {
                     onCreateMarkdownNote={() => addNote('markdown')}
                     onCreateBrowser={() => addBrowser()}
                     onCreateTimer={() => addTimer()}
-                    onCreateFiles={() => addFiles()}
                     onOpenBrowserTile={(url) => addBrowser(url)}
                     canCreateNote={canCreateNote}
                     canCreateBrowser={canCreateBrowser}
                     canCreateTimer={canCreateTimer}
-                    canShowFilesCreation={canShowFilesCreation}
-                    canCreateFiles={canCreateFiles}
                     onCreateGroupFromSelection={() => {
                       void handleCreateGroupFromSelection()
                     }}
@@ -2280,7 +2298,11 @@ export default function App(): React.ReactElement {
                     onFocusSplitPanel={setSplitFocusedPanel}
                   />
                 )}
+                </div>
               </div>
+              {hasWorkspacePanel && activeWorkspaceConfig.workspacePanelOpen && (
+                <WorkspacePanel rootPath={workspaceRootPath} />
+              )}
             </div>
           </>
         ) : (

@@ -13,7 +13,6 @@ const TILE_TYPE_LABELS: Record<TileState['type'], string> = {
   note: 'Note',
   browser: 'Browser',
   timer: 'Timer',
-  files: 'Files',
 }
 
 function generateId(): string {
@@ -302,28 +301,6 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
     finalizeAddedTile(tile, targetGroup?.id)
   }, [finalizeAddedTile, getSpawnPos, groupsEnabled, tileCreationAvailability.timer])
 
-  const addFiles = useCallback(() => {
-    if (!tileCreationAvailability.files) return
-
-    const state = useCanvasStore.getState()
-    if (!state.activeWorkspaceConfig.rootFolderPath) return
-    const targetGroup = groupsEnabled ? findSelectedGroup(state.groups, state.selectedTileIds) : null
-    const size = getDefaultTileSize('files')
-    const pos = getSpawnPos(size.width, size.height, 40)
-
-    const tile: TileState = {
-      id: generateId(),
-      type: 'files',
-      x: pos.x,
-      y: pos.y,
-      width: size.width,
-      height: size.height,
-      zIndex: state.nextZIndex,
-      groupId: targetGroup?.id,
-    }
-    finalizeAddedTile(tile, targetGroup?.id)
-  }, [finalizeAddedTile, getSpawnPos, groupsEnabled, tileCreationAvailability.files])
-
   const deleteTile = useCallback(
     async (tileId: string): Promise<boolean> => {
       const tile = useCanvasStore.getState().tiles.find((t) => t.id === tileId)
@@ -358,7 +335,6 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
     addBrowser,
     addNote,
     addTimer,
-    addFiles,
     deleteTile,
     resetZoom,
     focusTile,

@@ -9,6 +9,7 @@ function workspace(id: string, name: string, rootFolderPath?: string, type: Work
     config: {
       type,
       rootFolderPath,
+      workspacePanelOpen: true,
       terminalHistoryEnabled: true,
     },
   }
@@ -34,6 +35,7 @@ const managed = applyWorkspaceManagementChanges({
       rootFolderPath: '/repo/gamma-renamed',
       initialCommand: ' npm test ',
       terminalHistoryEnabled: false,
+      workspacePanelOpen: false,
       remoteTerminal: { host: 'notebook.tailnet.ts.net', user: 'dev' },
     },
     { name: 'Delta', rootFolderPath: '/repo/delta', terminalHistoryEnabled: true },
@@ -50,8 +52,10 @@ if (managed.workspaces[0].name !== 'Gamma Renamed') throw new Error('existing wo
 if (managed.workspaces[0].config.rootFolderPath !== '/repo/gamma-renamed') throw new Error('existing workspace root folder must be editable')
 if (managed.workspaces[0].config.initialCommand !== 'npm test') throw new Error('initial command must be normalized')
 if (managed.workspaces[0].config.terminalHistoryEnabled !== false) throw new Error('terminal history toggle must be preserved')
+if (managed.workspaces[0].config.workspacePanelOpen !== false) throw new Error('workspace panel toggle must be preserved')
 if (managed.workspaces[0].config.remoteTerminal?.host !== 'notebook.tailnet.ts.net') throw new Error('remote terminal config must be preserved')
 if (managed.workspaces[2].config.type !== 'grid') throw new Error('existing workspace type must be preserved by management edits')
+if (managed.workspaces[2].config.workspacePanelOpen !== true) throw new Error('workspace panel must default open during management edits')
 if (managed.removedWorkspaceIds.join(',') !== 'ws-alpha') throw new Error('omitted existing workspaces must be marked for removal')
 if (managed.createdWorkspaceIds.join(',') !== 'ws-new-1') throw new Error('new workspaces must be reported')
 if (managed.workspaces[1].config.type !== 'canvas') throw new Error('new management-created workspace must default to canvas')
@@ -88,6 +92,7 @@ if (!typeSwitch) throw new Error('setWorkspaceType must return updated workspace
 const switchedWorkspace = typeSwitch.find((entry) => entry.id === 'ws-alpha')
 if (switchedWorkspace?.config.type !== 'grid') throw new Error('setWorkspaceType must persist the requested workspace type')
 if (switchedWorkspace.config.rootFolderPath !== '/repo/alpha') throw new Error('setWorkspaceType must preserve existing workspace config')
+if (switchedWorkspace.config.workspacePanelOpen !== true) throw new Error('setWorkspaceType must preserve workspace panel state')
 if (existing[0].config.type !== 'canvas') throw new Error('setWorkspaceType must not mutate the existing workspace array')
 if (setWorkspaceType(existing, 'missing', 'grid') !== null) throw new Error('setWorkspaceType must return null for missing workspaces')
 

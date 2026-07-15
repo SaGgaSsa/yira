@@ -68,6 +68,7 @@ export function applyWorkspaceManagementChanges({
       const config = normalizeWorkspaceConfig({
         type: existing.config.type,
         rootFolderPath: entry.rootFolderPath,
+        workspacePanelOpen: entry.workspacePanelOpen ?? existing.config.workspacePanelOpen,
         initialCommand: entry.initialCommand,
         terminalHistoryEnabled: entry.terminalHistoryEnabled,
         remoteTerminal: entry.remoteTerminal,
@@ -83,6 +84,7 @@ export function applyWorkspaceManagementChanges({
     const config = normalizeWorkspaceConfig({
       type: entry.type,
       rootFolderPath: entry.rootFolderPath,
+      workspacePanelOpen: entry.workspacePanelOpen,
       initialCommand: entry.initialCommand,
       terminalHistoryEnabled: entry.terminalHistoryEnabled,
       remoteTerminal: entry.remoteTerminal,

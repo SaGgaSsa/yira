@@ -1,12 +1,10 @@
 import type { LucideIcon } from 'lucide-react'
-import { Terminal, StickyNote, Globe, Clock, Folder, ClipboardList } from 'lucide-react'
+import { Terminal, StickyNote, Globe, Clock, ClipboardList } from 'lucide-react'
 
 export interface TileCreationAvailability {
   canCreateNote: boolean
   canCreateBrowser: boolean
   canCreateTimer: boolean
-  canShowFilesCreation: boolean
-  canCreateFiles: boolean
   canCreateBoard?: boolean
   boardEnabled: boolean
 }
@@ -16,7 +14,6 @@ export interface TileCreationSelectorProps extends TileCreationAvailability {
   onCreateNote: () => void
   onCreateBrowser: () => void
   onCreateTimer: () => void
-  onCreateFiles: () => void
   onCreateBoard: () => void
   boardBadge?: string | null
   boardBadgeTitle?: string
@@ -24,7 +21,7 @@ export interface TileCreationSelectorProps extends TileCreationAvailability {
 }
 
 export interface TileCreationAction {
-  id: 'terminal' | 'note' | 'browser' | 'timer' | 'files' | 'board'
+  id: 'terminal' | 'note' | 'browser' | 'timer' | 'board'
   icon: LucideIcon
   label: string
   title: string
@@ -80,17 +77,6 @@ export function getTileCreationActions(input: TileCreationActionInput): TileCrea
       title: 'New timer',
       disabled: false,
       onClick: input.onCreateTimer ?? noop,
-    })
-  }
-
-  if (input.canShowFilesCreation) {
-    actions.push({
-      id: 'files',
-      icon: Folder,
-      label: 'Files',
-      title: 'New files',
-      disabled: !input.canCreateFiles,
-      onClick: input.onCreateFiles ?? noop,
     })
   }
 

@@ -7,8 +7,7 @@ function isSupportedTile(tile: CanvasState['tiles'][number]): boolean {
   return tile.type === 'terminal' ||
     tile.type === 'note' ||
     tile.type === 'browser' ||
-    tile.type === 'timer' ||
-    tile.type === 'files'
+    tile.type === 'timer'
 }
 
 export function normalizeCanvasStateForJson(state: CanvasState): CanvasState {
@@ -38,6 +37,13 @@ export function normalizeCanvasStateForJson(state: CanvasState): CanvasState {
     orientation: normalizeSplitOrientation(state.splitViewState?.orientation),
   }
 
+  const groups = (state.groups ?? [])
+    .map((group) => ({
+      ...group,
+      tileIds: group.tileIds.filter((tileId) => tileIds.has(tileId)),
+    }))
+    .filter((group) => group.tileIds.length > 0)
+
   return {
     ...state,
     tiles: tiles.map((tile) => {
@@ -61,7 +67,7 @@ export function normalizeCanvasStateForJson(state: CanvasState): CanvasState {
         height: size.height,
       })
     }),
-    groups: state.groups ?? [],
+    groups,
     viewport: normalizeFiniteViewport(state.viewport),
     viewMode,
     focusedTileId: state.focusedTileId && tileIds.has(state.focusedTileId) ? state.focusedTileId : null,

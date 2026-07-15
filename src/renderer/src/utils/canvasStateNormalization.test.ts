@@ -10,17 +10,20 @@ const state: CanvasState = {
     { id: 'browser', type: 'browser', x: 0, y: 0, width: 10, height: 20, zIndex: 3 },
     { id: 'kanban', type: 'kanban', x: 0, y: 0, width: 10, height: 20, zIndex: 4 } as unknown as CanvasState['tiles'][number],
     { id: 'timer', type: 'timer', x: 0, y: 0, width: 10, height: 20, zIndex: 5 },
-    { id: 'files', type: 'files', x: 0, y: 0, width: 10, height: 20, zIndex: 6 },
+    { id: 'files', type: 'files', x: 0, y: 0, width: 10, height: 20, zIndex: 6 } as unknown as CanvasState['tiles'][number],
   ],
-  groups: [],
+  groups: [
+    { id: 'keep', name: 'Keep', colorId: 'blue', tileIds: ['terminal', 'files'] },
+    { id: 'drop', name: 'Drop', colorId: 'blue', tileIds: ['files'] },
+  ],
   viewport: { tx: 0, ty: 0, zoom: 1 },
   nextZIndex: 9,
   focusedTileId: null,
   viewMode: 'canvas',
   fullviewActiveTileId: null,
   splitViewState: {
-    leftTileIds: ['terminal'],
-    rightTileIds: ['note'],
+    leftTileIds: ['terminal', 'files'],
+    rightTileIds: ['note', 'files'],
     activeLeftTileId: 'terminal',
     activeRightTileId: 'note',
     focusedPanel: 'left',
@@ -36,11 +39,16 @@ const expected = new Map([
   ['legacy-note', { width: 900, height: 800 }],
   ['browser', { width: 1800, height: 800 }],
   ['timer', { width: 900, height: 400 }],
-  ['files', { width: 900, height: 400 }],
 ])
 
-if (normalized.tiles.some((tile) => tile.id === 'kanban')) {
-  throw new Error('legacy kanban tiles must be dropped from normalized canvas JSON')
+if (normalized.tiles.some((tile) => tile.id === 'kanban' || tile.id === 'files')) {
+  throw new Error('legacy files and kanban tiles must be dropped from normalized canvas JSON')
+}
+if (normalized.groups.length !== 1 || normalized.groups[0]?.tileIds.join(',') !== 'terminal') {
+  throw new Error('canvas normalization must remove legacy file references from groups')
+}
+if (normalized.splitViewState?.leftTileIds.includes('files') || normalized.splitViewState?.rightTileIds.includes('files')) {
+  throw new Error('canvas normalization must remove legacy file references from split layout')
 }
 
 for (const tile of normalized.tiles) {

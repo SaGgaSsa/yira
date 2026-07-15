@@ -8,7 +8,7 @@ const state: CanvasState = {
     { id: 'browser', type: 'browser', x: 0, y: 0, width: 10, height: 10, zIndex: 3 },
     { id: 'kanban', type: 'kanban', x: 0, y: 0, width: 10, height: 10, zIndex: 4 } as unknown as CanvasState['tiles'][number],
     { id: 'timer', type: 'timer', x: 0, y: 0, width: 10, height: 10, zIndex: 5 },
-    { id: 'files', type: 'files', x: 0, y: 0, width: 10, height: 10, zIndex: 6 },
+    { id: 'files', type: 'files', x: 0, y: 0, width: 10, height: 10, zIndex: 6 } as unknown as CanvasState['tiles'][number],
   ],
   groups: [],
   viewport: { tx: 0, ty: 0, zoom: 1 },
@@ -33,7 +33,6 @@ const expected = new Map([
   ['note', { width: 900, height: 800 }],
   ['browser', { width: 1800, height: 800 }],
   ['timer', { width: 900, height: 400 }],
-  ['files', { width: 900, height: 400 }],
 ])
 
 for (const tile of useCanvasStore.getState().tiles) {
@@ -44,8 +43,8 @@ for (const tile of useCanvasStore.getState().tiles) {
   }
 }
 
-if (useCanvasStore.getState().tiles.some((tile) => tile.id === 'kanban')) {
-  throw new Error('legacy kanban tiles must be dropped when restoring canvas state')
+if (useCanvasStore.getState().tiles.some((tile) => tile.id === 'kanban' || tile.id === 'files')) {
+  throw new Error('legacy files and kanban tiles must be dropped when restoring canvas state')
 }
 
 useCanvasStore.getState().updateTile('note', { width: 2400, height: 1200 })

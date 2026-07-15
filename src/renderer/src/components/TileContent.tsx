@@ -1,18 +1,16 @@
 import React from 'react'
-import { Terminal, StickyNote, Globe, Clock, Folder } from 'lucide-react'
+import { Terminal, StickyNote, Globe, Clock } from 'lucide-react'
 import type { TileState } from '@shared/types'
 import { TerminalTileWrapper } from './TerminalTile'
 import { NoteTile } from './NoteTile'
 import { BrowserTile } from './BrowserTile'
 import { TimerTile } from './TimerTile'
-import { FilesTile } from './FilesTile'
 
 export const TILE_META = {
   terminal: { label: 'Terminal', icon: Terminal },
   note: { label: 'Note', icon: StickyNote },
   browser: { label: 'Browser', icon: Globe },
   timer: { label: 'Timer', icon: Clock },
-  files: { label: 'Files', icon: Folder },
 } as const
 
 interface TileContentProps {
@@ -53,10 +51,6 @@ export function TileContent({ tile, isFocused, edgeToEdge = false, isVisible = t
 
   if (tile.type === 'timer') {
     return <TimerTile tile={tile} isFocused={isFocused} onUpdate={onUpdate} />
-  }
-
-  if (tile.type === 'files') {
-    return <FilesTile tile={tile} autoFocus={autoFocus} />
   }
 
   const meta = TILE_META[tile.type as keyof typeof TILE_META]

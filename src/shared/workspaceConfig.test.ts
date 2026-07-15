@@ -3,12 +3,17 @@ import { normalizeWorkspaceConfig } from './workspaceConfig'
 const defaults = normalizeWorkspaceConfig({})
 if (defaults.terminalHistoryEnabled !== true) throw new Error('terminal history must default on')
 if (defaults.type !== 'canvas') throw new Error('workspace type must default to canvas')
+if (defaults.workspacePanelOpen !== true) throw new Error('workspace panel must default open')
 
 const missing = normalizeWorkspaceConfig({ rootFolderPath: ' /repo ', initialCommand: ' npm test ' })
 if (missing.rootFolderPath !== '/repo') throw new Error('root folder must be trimmed')
 if (missing.initialCommand !== 'npm test') throw new Error('initial command must be trimmed')
 if (missing.terminalHistoryEnabled !== true) throw new Error('missing terminal history setting must normalize to true')
 if (missing.type !== 'canvas') throw new Error('missing workspace type must normalize to canvas')
+if (missing.workspacePanelOpen !== true) throw new Error('missing workspace panel setting must normalize to open')
+
+const closedPanel = normalizeWorkspaceConfig({ workspacePanelOpen: false })
+if (closedPanel.workspacePanelOpen !== false) throw new Error('explicit closed workspace panel must be preserved')
 
 const disabled = normalizeWorkspaceConfig({ terminalHistoryEnabled: false })
 if (disabled.terminalHistoryEnabled !== false) throw new Error('explicit disabled terminal history must be preserved')

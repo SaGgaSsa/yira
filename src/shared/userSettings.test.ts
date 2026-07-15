@@ -1,5 +1,6 @@
 import { normalizeUserSettings } from './userSettings'
 import { DEFAULT_TERMINAL_THEME_ID, TERMINAL_THEME_IDS, getTerminalTheme } from './terminalThemes'
+import type { UserSettings } from './types'
 
 const defaults = normalizeUserSettings({})
 if (defaults.browser.homeUrl !== 'about:blank') throw new Error('default browser home URL must be about:blank')
@@ -49,3 +50,12 @@ for (const themeId of ['yira-default', 'classic-dark', 'light', 'high-contrast']
 
 const immediateAttention = normalizeUserSettings({ notifications: { attentionDelayEnabled: false } })
 if (immediateAttention.notifications.attentionDelayEnabled !== false) throw new Error('disabled native attention delay must be preserved')
+
+const withoutLegacyFiles = normalizeUserSettings({
+  tiles: {
+    creationAvailability: { files: true } as unknown as UserSettings['tiles']['creationAvailability'],
+  },
+})
+if ('files' in withoutLegacyFiles.tiles.creationAvailability) {
+  throw new Error('legacy files tile creation settings must be removed during normalization')
+}

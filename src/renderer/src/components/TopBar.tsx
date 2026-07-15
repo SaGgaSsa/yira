@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Settings, Crosshair, Grid3X3, LayoutGrid, Columns, PanelLeft, SplitSquareHorizontal, SplitSquareVertical, ClipboardList } from 'lucide-react'
+import { Settings, Crosshair, Grid3X3, LayoutGrid, Columns, PanelLeft, PanelRight, SplitSquareHorizontal, SplitSquareVertical, ClipboardList } from 'lucide-react'
 import type { SplitOrientation, ViewMode, WorkspaceType } from '@shared/types'
 
 interface TopBarProps {
@@ -13,6 +13,9 @@ interface TopBarProps {
   canSplitView: boolean
   sidebarCollapsed: boolean
   onToggleSidebar: () => void
+  hasWorkspacePanel: boolean
+  workspacePanelOpen: boolean
+  onToggleWorkspacePanel: () => void
   onSetViewMode: (mode: ViewMode) => void
   onFitToContent: () => void
   onZoomToggle: () => void
@@ -73,6 +76,9 @@ export function TopBar({
   canSplitView,
   sidebarCollapsed,
   onToggleSidebar,
+  hasWorkspacePanel,
+  workspacePanelOpen,
+  onToggleWorkspacePanel,
   onSetViewMode,
   onFitToContent,
   onZoomToggle,
@@ -199,6 +205,16 @@ export function TopBar({
                 <span className="font-mono text-sm text-text-display">{zoomPercent}%</span>
               </button>
             </>
+          )}
+
+          {hasWorkspacePanel && (
+            <button
+              className={`inline-flex h-10 w-10 items-center justify-center rounded-full border border-border-visible bg-bg-secondary text-text-secondary transition-colors hover:text-text-display ${workspacePanelOpen ? 'text-text-display' : ''}`}
+              onClick={onToggleWorkspacePanel}
+              title={workspacePanelOpen ? 'Hide workspace panel' : 'Show workspace panel'}
+            >
+              <PanelRight size={16} />
+            </button>
           )}
 
           <button

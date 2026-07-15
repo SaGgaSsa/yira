@@ -24,6 +24,7 @@ export function normalizeWorkspaceConfig(config: Partial<WorkspaceConfig> | unde
   return {
     type: normalizeWorkspaceType(config?.type),
     rootFolderPath: rootFolderPath || undefined,
+    workspacePanelOpen: config?.workspacePanelOpen !== false,
     initialCommand: initialCommand || undefined,
     terminalHistoryEnabled: config?.terminalHistoryEnabled !== false,
     remoteTerminal: normalizeRemoteTerminal(config?.remoteTerminal),

@@ -6,18 +6,12 @@ const actions = getTileCreationActions({
   canCreateNote: true,
   canCreateBrowser: true,
   canCreateTimer: false,
-  canShowFilesCreation: true,
-  canCreateFiles: false,
   boardEnabled: false,
   onCreateNote: () => { notePickerOpened += 1 },
 })
 
-if (actions.map(({ id }) => id).join(',') !== 'terminal,note,browser,files,board') {
+if (actions.map(({ id }) => id).join(',') !== 'terminal,note,browser,board') {
   throw new Error('the selector must expose the same available tile actions')
-}
-
-if (!actions.find(({ id }) => id === 'files')?.disabled) {
-  throw new Error('files must remain disabled without a root folder')
 }
 
 const note = actions.find(({ id }) => id === 'note')

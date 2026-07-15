@@ -208,6 +208,7 @@ const dirtyState: GridWorkspaceState = {
     tile('one', 1),
     tile('two', 2),
     tile('three', 3),
+    { id: 'files', type: 'files', x: 0, y: 0, width: 900, height: 400, zIndex: 5 } as unknown as TileState,
     { id: 'kanban', type: 'kanban', x: 0, y: 0, width: 1800, height: 800, zIndex: 4 } as unknown as TileState,
   ],
   nextZIndex: 4,
@@ -222,6 +223,7 @@ const dirtyState: GridWorkspaceState = {
       sizes: [10, 10, 10],
       children: [
         { id: 'leaf-one', type: 'leaf', tileId: 'one' },
+        { id: 'leaf-files', type: 'leaf', tileId: 'files' },
         { id: 'leaf-stale', type: 'leaf', tileId: 'stale' },
         { id: 'leaf-one-duplicate', type: 'leaf', tileId: 'one' },
       ],
@@ -239,8 +241,8 @@ for (const id of ['one', 'two', 'three']) {
   if (!normalizedJson.includes(`"tileId":"${id}"`)) throw new Error(`normalization must include tile ${id}`)
 }
 if (normalizedJson.includes('stale')) throw new Error('normalization must remove stale tile leaves')
-if (normalized.tiles.some((entry) => entry.id === 'kanban') || normalizedJson.includes('kanban')) {
-  throw new Error('grid normalization must drop legacy kanban tiles')
+if (normalized.tiles.some((entry) => entry.id === 'kanban' || entry.id === 'files') || normalizedJson.includes('kanban') || normalizedJson.includes('files')) {
+  throw new Error('grid normalization must drop legacy files and kanban tiles')
 }
 
 const tooManyTiles = Array.from({ length: GRID_MAX_TILES + 1 }, (_, index) => tile(`tile-${index}`, index + 1))

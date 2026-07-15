@@ -191,8 +191,4 @@ export function registerFilesIPC(): void {
     if (error) throw new Error(error)
   })
 
-  ipcMain.handle('files:reveal', async (_event, rootPath: string, relativePath: string) => {
-    const { targetPath } = await resolveRootTarget(rootPath, relativePath)
-    shell.showItemInFolder(targetPath)
-  })
 }

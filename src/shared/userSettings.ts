@@ -32,6 +32,8 @@ export function normalizeUserSettings(raw: RawUserSettings = {}): UserSettings {
   const legacyFontSize = isLegacyFontSize(raw.fontSize) ? LEGACY_FONT_SIZE_PX[raw.fontSize] : undefined
   const fontFallback = legacyFontSize ?? DEFAULT_USER_SETTINGS.interfaceFontSizePx
   const { fontSize: _legacyFontSize, ...settings } = raw
+  const rawCreationAvailability = raw.tiles?.creationAvailability as Record<string, unknown> | undefined
+  const { files: _legacyFiles, ...creationAvailability } = rawCreationAvailability ?? {}
 
   return {
     ...DEFAULT_USER_SETTINGS,
@@ -56,7 +58,7 @@ export function normalizeUserSettings(raw: RawUserSettings = {}): UserSettings {
       ...(raw.tiles ?? {}),
       creationAvailability: {
         ...DEFAULT_USER_SETTINGS.tiles.creationAvailability,
-        ...(raw.tiles?.creationAvailability ?? {}),
+        ...creationAvailability,
       },
     },
     groups: {

@@ -300,7 +300,7 @@ export function GridView({
         <div className="flex h-full w-full items-center justify-center px-4">
           <div className="nd-panel-raised w-full max-w-xl rounded-[20px] px-5 py-8 text-center text-text-secondary">
             <div className="nd-label">[ EMPTY ]</div>
-            <div className="mt-3 text-sm text-text-disabled">Create a terminal, note, browser, timer, files tile, or workspace board.</div>
+            <div className="mt-3 text-sm text-text-disabled">Create a terminal, note, browser, timer, or workspace board.</div>
             <TileCreationSelector {...tileCreationSelectorProps} className="mt-5 text-left" />
           </div>
         </div>

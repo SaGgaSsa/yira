@@ -13,12 +13,9 @@ const menuItems = getCanvasCreationMenuItems({
   onCreateMarkdownNote: () => { markdownNotesCreated += 1 },
   onCreateBrowser: () => {},
   onCreateTimer: () => {},
-  onCreateFiles: () => {},
   canCreateNote: true,
   canCreateBrowser: true,
   canCreateTimer: true,
-  canShowFilesCreation: true,
-  canCreateFiles: true,
 })
 
 const terminal = menuItems.find(({ label }) => label === 'New Terminal')
