@@ -6,3 +6,4 @@ release/
 *.log
 .codex
 .superpowers/
+.worktrees/
