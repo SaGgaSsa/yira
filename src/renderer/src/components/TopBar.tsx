@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { useTranslation } from 'react-i18next'
 import { Settings, Crosshair, Grid3X3, LayoutGrid, Columns, PanelLeft, SplitSquareHorizontal, SplitSquareVertical, ClipboardList } from 'lucide-react'
 import type { SplitOrientation, ViewMode, WorkspaceType } from '@shared/types'
 
@@ -78,6 +79,7 @@ export function TopBar({
   onZoomToggle,
   onOpenSettings,
 }: TopBarProps): React.ReactElement {
+  const { t } = useTranslation()
   const headerRef = useRef<HTMLElement>(null)
   const [viewSelectorTop, setViewSelectorTop] = useState<number | null>(null)
   const zoomPercent = Math.round(zoom * 100)
@@ -121,15 +123,15 @@ export function TopBar({
     >
       <SegmentedButton
         active={viewMode === 'fullview'}
-        label="Focus"
+        label={t('shortcuts.focus')}
         icon={Columns}
         onClick={() => onSetViewMode('fullview')}
       />
       {isGridWorkspace ? (
         <SegmentedButton
           active={viewMode === 'gridview'}
-          label="Grid"
-          title={viewMode === 'gridview' ? 'Switch to Canvas' : 'Grid'}
+          label={t('shortcuts.grid')}
+          title={viewMode === 'gridview' ? t('workspace.canvas') : t('shortcuts.grid')}
           icon={Grid3X3}
           onClick={() => onSetViewMode(viewMode === 'gridview' ? 'canvas' : 'gridview')}
         />
@@ -137,7 +139,7 @@ export function TopBar({
         <>
           <SegmentedButton
             active={viewMode === 'splitview'}
-            label="Split"
+            label={t('shortcuts.split')}
             title={splitOrientation === 'horizontal' ? 'Split top/bottom' : 'Split left/right'}
             icon={SplitIcon}
             onClick={() => onSetViewMode('splitview')}
@@ -145,8 +147,8 @@ export function TopBar({
           />
           <SegmentedButton
             active={viewMode === 'canvas'}
-            label="Canvas"
-            title={viewMode === 'canvas' ? 'Switch to Grid' : 'Canvas'}
+            label={t('shortcuts.canvas')}
+            title={viewMode === 'canvas' ? t('shortcuts.grid') : t('shortcuts.canvas')}
             icon={LayoutGrid}
             onClick={() => onSetViewMode(viewMode === 'canvas' ? 'gridview' : 'canvas')}
           />
@@ -155,7 +157,7 @@ export function TopBar({
       {boardEnabled && (
         <SegmentedButton
           active={viewMode === 'board'}
-          label="Board"
+          label={t('tile.board')}
           icon={ClipboardList}
           badgeCount={boardReviewCount}
           onClick={() => onSetViewMode('board')}
@@ -170,7 +172,7 @@ export function TopBar({
         <button
           className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border-visible bg-bg-secondary text-text-secondary transition-colors hover:text-text-display"
           onClick={onToggleSidebar}
-          title={sidebarCollapsed ? 'Open sidebar' : 'Collapse sidebar'}
+          title={sidebarCollapsed ? t('sidebar.open') : t('sidebar.collapse')}
         >
           <PanelLeft size={16} />
         </button>
@@ -183,10 +185,10 @@ export function TopBar({
                   className="nd-label inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
                   onClick={onFitToContent}
                   disabled={viewMode !== 'canvas'}
-                  title="Show all tiles"
+                  title={t('canvas.showAll')}
                 >
                   <Columns size={13} />
-                  <span>Show All</span>
+                  <span>{t('canvas.showAll')}</span>
                 </button>
               </div>
 
@@ -204,7 +206,7 @@ export function TopBar({
           <button
             className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border-visible bg-bg-secondary text-text-secondary transition-colors hover:text-text-display"
             onClick={onOpenSettings}
-            title="Settings"
+            title={t('common.settings')}
           >
             <Settings size={16} />
           </button>

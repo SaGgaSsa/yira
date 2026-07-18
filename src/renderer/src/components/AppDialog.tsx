@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AlertTriangle, CornerDownLeft, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 export interface PromptDialogOptions {
   title: string
@@ -33,6 +34,7 @@ interface AppDialogProps {
 }
 
 export function AppDialog({ request, onCancel, onConfirm }: AppDialogProps): React.ReactElement | null {
+  const { t } = useTranslation()
   const inputRef = useRef<HTMLInputElement | null>(null)
   const confirmButtonRef = useRef<HTMLButtonElement | null>(null)
   const [value, setValue] = useState('')
@@ -103,14 +105,14 @@ export function AppDialog({ request, onCancel, onConfirm }: AppDialogProps): Rea
         <div className="flex items-start justify-between gap-4 border-b border-border px-6 py-5">
           <div className="min-w-0">
             <div className="nd-label text-text-secondary">
-              {request.mode === 'prompt' ? 'Input Required' : 'Confirmation Required'}
+              {request.mode === 'prompt' ? t('dialogs.inputRequired') : t('dialogs.confirmationRequired')}
             </div>
             <h2 className="mt-2 text-xl text-text-display">{request.title}</h2>
           </div>
           <button
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border-visible text-text-secondary transition-colors hover:text-text-display"
             onClick={onCancel}
-            title="Close dialog"
+            title={t('dialogs.closeDialog')}
           >
             <X size={16} />
           </button>
@@ -120,7 +122,7 @@ export function AppDialog({ request, onCancel, onConfirm }: AppDialogProps): Rea
           {request.mode === 'confirm' && request.danger && (
             <div className="flex items-center gap-3 rounded-[20px] border border-danger/40 bg-danger/10 px-4 py-3 text-danger">
               <AlertTriangle size={16} className="shrink-0" />
-              <span className="text-sm">This action changes persisted workspace state.</span>
+              <span className="text-sm">{t('dialogs.persistedStateWarning')}</span>
             </div>
           )}
 
@@ -128,7 +130,7 @@ export function AppDialog({ request, onCancel, onConfirm }: AppDialogProps): Rea
 
           {request.mode === 'prompt' && (
             <div className="space-y-2">
-              <label className="nd-label block text-text-secondary">Value</label>
+              <label className="nd-label block text-text-secondary">{t('dialogs.value')}</label>
               <div className="flex items-center gap-3 rounded-full border border-border-visible bg-bg-primary px-4 py-3">
                 <CornerDownLeft size={14} className="shrink-0 text-text-secondary" />
                 <input
@@ -150,7 +152,7 @@ export function AppDialog({ request, onCancel, onConfirm }: AppDialogProps): Rea
               className="rounded-full border border-border-visible px-4 py-2 text-sm text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
               onClick={onCancel}
             >
-              {request.cancelLabel ?? 'Cancel'}
+              {request.cancelLabel ?? t('common.cancel')}
             </button>
           )}
           <button
@@ -163,7 +165,7 @@ export function AppDialog({ request, onCancel, onConfirm }: AppDialogProps): Rea
             onClick={() => onConfirm(request.mode === 'prompt' ? value : undefined)}
             disabled={request.mode === 'prompt' ? !canSubmitPrompt : false}
           >
-            {request.confirmLabel ?? 'Confirm'}
+            {request.confirmLabel ?? t('common.confirm')}
           </button>
         </div>
       </div>

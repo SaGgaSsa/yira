@@ -3,6 +3,7 @@ import { DEFAULT_TERMINAL_THEME_ID, TERMINAL_THEME_IDS, getTerminalTheme } from 
 
 const defaults = normalizeUserSettings({})
 if (defaults.browser.homeUrl !== 'about:blank') throw new Error('default browser home URL must be about:blank')
+if (defaults.language !== 'en') throw new Error('language must default to English')
 if (defaults.terminal.attentionEnabled !== true) throw new Error('terminal attention must default on')
 if (defaults.terminal.themeId !== DEFAULT_TERMINAL_THEME_ID) throw new Error('terminal theme must default to Yira default')
 if (defaults.notifications.attentionDelayEnabled !== true) throw new Error('native attention delay must default on')
@@ -49,3 +50,9 @@ for (const themeId of ['yira-default', 'classic-dark', 'light', 'high-contrast']
 
 const immediateAttention = normalizeUserSettings({ notifications: { attentionDelayEnabled: false } })
 if (immediateAttention.notifications.attentionDelayEnabled !== false) throw new Error('disabled native attention delay must be preserved')
+
+const spanishLanguage = normalizeUserSettings({ language: 'es' })
+if (spanishLanguage.language !== 'es') throw new Error('Spanish language setting must be preserved')
+
+const invalidLanguage = normalizeUserSettings({ language: 'fr' as never })
+if (invalidLanguage.language !== 'en') throw new Error('invalid language setting must normalize to English')

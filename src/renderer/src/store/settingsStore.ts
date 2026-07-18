@@ -3,12 +3,15 @@ import type { UserSettings, AppearanceMode, ConfigurableTileCreationType } from 
 import { DEFAULT_USER_SETTINGS } from '@shared/types'
 import type { TerminalThemeId } from '@shared/terminalThemes'
 import { clampFontSizePx, normalizeUserSettings } from '@shared/userSettings'
+import type { SupportedLanguage } from '@shared/language'
+import { i18n } from '@/i18n'
 
 export interface SettingsState extends UserSettings {
   loaded: boolean
 
   // Actions
   setAppearance: (mode: AppearanceMode) => void
+  setLanguage: (language: SupportedLanguage) => void
   setInterfaceFontSizePx: (size: number) => void
   setTileFontSizePx: (size: number) => void
   setShowGrid: (show: boolean) => void
@@ -31,6 +34,7 @@ function scheduleSave() {
   autosaveTimer.current = setTimeout(() => {
     const state = useSettingsStore.getState()
     const settings: UserSettings = {
+      language: state.language,
       appearance: state.appearance,
       interfaceFontSizePx: state.interfaceFontSizePx,
       tileFontSizePx: state.tileFontSizePx,
@@ -61,6 +65,12 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   setAppearance: (mode) => {
     set({ appearance: mode })
+    scheduleSave()
+  },
+
+  setLanguage: (language) => {
+    set({ language })
+    void i18n.changeLanguage(language)
     scheduleSave()
   },
 
@@ -134,6 +144,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       if (settings) {
         const normalized = normalizeUserSettings(settings)
         set({
+          language: normalized.language,
           appearance: normalized.appearance,
           interfaceFontSizePx: normalized.interfaceFontSizePx,
           tileFontSizePx: normalized.tileFontSizePx,
@@ -173,6 +184,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   saveSettings: () => {
     const state = get()
     const settings: UserSettings = {
+      language: state.language,
       appearance: state.appearance,
       interfaceFontSizePx: state.interfaceFontSizePx,
       tileFontSizePx: state.tileFontSizePx,

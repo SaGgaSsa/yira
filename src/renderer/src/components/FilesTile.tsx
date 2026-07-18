@@ -15,6 +15,7 @@ import {
 import type { FileEntry, FileListResult, TileState } from '@shared/types'
 import { useCanvasStore } from '@/store/canvasStore'
 import { ContextMenu, type MenuItem } from './ContextMenu'
+import { useTranslation } from 'react-i18next'
 
 interface FilesTileProps {
   tile: TileState
@@ -32,10 +33,12 @@ interface EntryMenuState {
   entry: FileEntry
 }
 
-type Notice = { kind: 'info' | 'error'; text: string }
+type Notice =
+  | { kind: 'info'; text: string }
+  | { kind: 'error'; technicalMessage?: string }
 
-function formatSize(entry: FileEntry): string {
-  if (entry.kind === 'directory') return 'Folder'
+function formatSize(entry: FileEntry, locale: string, folderLabel: string): string {
+  if (entry.kind === 'directory') return folderLabel
   if (entry.size === 0) return '0 B'
 
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
@@ -47,23 +50,23 @@ function formatSize(entry: FileEntry): string {
     unitIndex += 1
   }
 
-  return `${size >= 10 || unitIndex === 0 ? size.toFixed(0) : size.toFixed(1)} ${units[unitIndex]}`
+  return `${new Intl.NumberFormat(locale, { maximumFractionDigits: size >= 10 || unitIndex === 0 ? 0 : 1 }).format(size)} ${units[unitIndex]}`
 }
 
-function formatModifiedAt(value: string): string {
+export function formatModifiedAt(value: string, locale: string): string {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return ''
 
-  return date.toLocaleString([], {
+  return new Intl.DateTimeFormat(locale, {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-  })
+  }).format(date)
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'File operation failed'
+function technicalErrorMessage(error: unknown): string | undefined {
+  return error instanceof Error ? error.message : undefined
 }
 
 function buildBreadcrumbs(
@@ -71,7 +74,7 @@ function buildBreadcrumbs(
   fallbackRootLabel: string,
   fallbackDir: string,
 ): Array<{ label: string; path: string }> {
-  const rootLabel = result?.rootLabel || fallbackRootLabel || 'Files'
+  const rootLabel = result?.rootLabel || fallbackRootLabel
   const currentDir = result?.currentDir ?? fallbackDir
   const items = [{ label: rootLabel, path: '' }]
 
@@ -90,7 +93,7 @@ function buildBreadcrumbs(
 function folderLabelFromPath(rootPath: string): string {
   const normalized = rootPath.replace(/[\\/]+$/, '')
   const parts = normalized.split(/[\\/]/).filter(Boolean)
-  return parts[parts.length - 1] ?? (normalized || 'Files')
+  return parts[parts.length - 1] ?? normalized
 }
 
 function InactiveFilesState({
@@ -114,8 +117,12 @@ function InactiveFilesState({
 }
 
 export function FilesTile({ tile, autoFocus = false }: FilesTileProps): React.ReactElement {
+  const { t, i18n } = useTranslation()
   const rootPath = useCanvasStore((s) => s.activeWorkspaceConfig.rootFolderPath?.trim() ?? '')
-  const rootLabel = useMemo(() => folderLabelFromPath(rootPath), [rootPath])
+  const rootLabel = useMemo(
+    () => folderLabelFromPath(rootPath) || t('tile.files'),
+    [rootPath, t],
+  )
   const [location, setLocation] = useState<LocationState>({ rootPath: '', relativeDir: '' })
   const [result, setResult] = useState<FileListResult | null>(null)
   const [query, setQuery] = useState('')
@@ -163,7 +170,7 @@ export function FilesTile({ tile, autoFocus = false }: FilesTileProps): React.Re
       .catch((error: unknown) => {
         if (cancelled) return
         setResult(null)
-        setLoadError(errorMessage(error))
+        setLoadError(technicalErrorMessage(error) ?? t('files.fileOperationFailed'))
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -172,7 +179,7 @@ export function FilesTile({ tile, autoFocus = false }: FilesTileProps): React.Re
     return () => {
       cancelled = true
     }
-  }, [location.rootPath, location.relativeDir, refreshVersion, rootPath, showIgnored])
+  }, [location.rootPath, location.relativeDir, refreshVersion, rootPath, showIgnored, t])
 
   const navigateTo = useCallback((relativeDir: string) => {
     if (!rootPath) return
@@ -201,7 +208,7 @@ export function FilesTile({ tile, autoFocus = false }: FilesTileProps): React.Re
     try {
       await window.electron.files.open(location.rootPath, entry.relativePath)
     } catch (error) {
-      setNotice({ kind: 'error', text: errorMessage(error) })
+      setNotice({ kind: 'error', technicalMessage: technicalErrorMessage(error) })
     }
   }, [location.rootPath, navigateTo])
 
@@ -212,7 +219,7 @@ export function FilesTile({ tile, autoFocus = false }: FilesTileProps): React.Re
     try {
       await window.electron.files.reveal(location.rootPath, entry.relativePath)
     } catch (error) {
-      setNotice({ kind: 'error', text: errorMessage(error) })
+      setNotice({ kind: 'error', technicalMessage: technicalErrorMessage(error) })
     }
   }, [location.rootPath])
 
@@ -221,11 +228,11 @@ export function FilesTile({ tile, autoFocus = false }: FilesTileProps): React.Re
 
     try {
       await window.electron.clipboard.writeText(entry.relativePath)
-      setNotice({ kind: 'info', text: `Copied ${entry.relativePath}` })
+      setNotice({ kind: 'info', text: t('files.copiedRelativePath', { path: entry.relativePath }) })
     } catch (error) {
-      setNotice({ kind: 'error', text: errorMessage(error) })
+      setNotice({ kind: 'error', technicalMessage: technicalErrorMessage(error) })
     }
-  }, [])
+  }, [t])
 
   const copyCurrentPath = useCallback(async () => {
     const currentAbsolutePath = result?.currentPath ?? location.rootPath
@@ -233,11 +240,11 @@ export function FilesTile({ tile, autoFocus = false }: FilesTileProps): React.Re
 
     try {
       await window.electron.clipboard.writeText(currentAbsolutePath)
-      setNotice({ kind: 'info', text: 'Copied current path' })
+      setNotice({ kind: 'info', text: t('files.copiedCurrentPath') })
     } catch (error) {
-      setNotice({ kind: 'error', text: errorMessage(error) })
+      setNotice({ kind: 'error', technicalMessage: technicalErrorMessage(error) })
     }
-  }, [location.rootPath, result?.currentPath])
+  }, [location.rootPath, result?.currentPath, t])
 
   const filteredEntries = useMemo(() => {
     if (!result) return []
@@ -260,28 +267,28 @@ export function FilesTile({ tile, autoFocus = false }: FilesTileProps): React.Re
 
     return [
       {
-        label: entryMenu.entry.kind === 'directory' ? 'Open folder' : 'Open',
+        label: entryMenu.entry.kind === 'directory' ? t('files.openFolder') : t('common.open'),
         icon: entryMenu.entry.kind === 'directory' ? FolderOpen : ExternalLink,
         action: () => { void openEntry(entryMenu.entry) },
       },
       {
-        label: 'Reveal in Explorer',
+        label: t('files.revealInExplorer'),
         icon: FolderOpen,
         action: () => { void revealEntry(entryMenu.entry) },
       },
       {
-        label: 'Copy relative path',
+        label: t('files.copyRelativePath'),
         icon: Copy,
         action: () => { void copyEntryPath(entryMenu.entry) },
       },
     ]
-  }, [copyEntryPath, entryMenu, openEntry, revealEntry])
+  }, [copyEntryPath, entryMenu, openEntry, revealEntry, t])
 
   if (!rootPath) {
     return (
       <InactiveFilesState
-        title="No workspace folder"
-        message="Set a root folder in workspace settings to browse files here."
+        title={t('files.noWorkspaceFolder')}
+        message={t('files.noWorkspaceFolderMessage')}
       />
     )
   }
@@ -317,7 +324,7 @@ export function FilesTile({ tile, autoFocus = false }: FilesTileProps): React.Re
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border-visible text-text-secondary transition-colors hover:text-text-display disabled:opacity-50"
             onClick={refresh}
             disabled={loading}
-            title="Refresh"
+            title={t('common.refresh')}
           >
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           </button>
@@ -331,14 +338,14 @@ export function FilesTile({ tile, autoFocus = false }: FilesTileProps): React.Re
               className="min-w-0 flex-1 bg-transparent py-2.5 text-sm text-text-primary outline-none placeholder:text-text-disabled"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Filter folder"
+              placeholder={t('files.filterFolder')}
               spellCheck={false}
             />
             {query && (
               <button
                 className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
                 onClick={() => setQuery('')}
-                title="Clear filter"
+                title={t('files.clearFilter')}
                 type="button"
               >
                 <X size={13} />
@@ -353,13 +360,13 @@ export function FilesTile({ tile, autoFocus = false }: FilesTileProps): React.Re
               checked={showIgnored}
               onChange={(event) => setShowIgnored(event.target.checked)}
             />
-            <span className="nd-caption">Ignored</span>
+            <span className="nd-caption">{t('files.ignored')}</span>
           </label>
         </div>
 
         <div className="border-t border-border px-3 py-2">
           <div className="flex min-w-0 items-center gap-2 font-mono text-[11px] text-text-secondary">
-            <span className="shrink-0 text-text-disabled">PATH</span>
+            <span className="shrink-0 text-text-disabled">{t('files.path')}</span>
             <span className="min-w-0 flex-1 truncate" title={currentAbsolutePath}>
               {currentAbsolutePath}
             </span>
@@ -367,7 +374,7 @@ export function FilesTile({ tile, autoFocus = false }: FilesTileProps): React.Re
               className="shrink-0 rounded-full border border-border-visible px-2 py-1 text-[10px] text-text-secondary transition-colors hover:text-text-display"
               onClick={() => { void copyCurrentPath() }}
             >
-              Copy
+              {t('files.copyCurrentPath')}
             </button>
           </div>
         </div>
@@ -376,16 +383,16 @@ export function FilesTile({ tile, autoFocus = false }: FilesTileProps): React.Re
       <div className="min-h-0 flex-1 overflow-auto">
         <div className="min-w-[620px]">
           <div className="grid grid-cols-[minmax(160px,1fr)_90px_100px_118px] border-b border-border px-4 py-2 text-text-secondary">
-            <div className="nd-label">Name</div>
-            <div className="nd-label">Type</div>
-            <div className="nd-label">Size</div>
-            <div className="nd-label text-right">Actions</div>
+            <div className="nd-label">{t('files.name')}</div>
+            <div className="nd-label">{t('files.type')}</div>
+            <div className="nd-label">{t('files.size')}</div>
+            <div className="nd-label text-right">{t('files.actions')}</div>
           </div>
 
           {loading && !result && (
             <div className="flex h-44 items-center justify-center gap-3 text-sm text-text-secondary">
               <Loader2 size={16} className="animate-spin" />
-              <span>Loading files</span>
+              <span>{t('files.loadingFiles')}</span>
             </div>
           )}
 
@@ -400,14 +407,14 @@ export function FilesTile({ tile, autoFocus = false }: FilesTileProps): React.Re
                 className="rounded-full border border-border-visible px-4 py-2 text-xs text-text-secondary transition-colors hover:text-text-display"
                 onClick={refresh}
               >
-                Retry
+                {t('files.retry')}
               </button>
             </div>
           )}
 
           {!loading && !loadError && result && totalCount === 0 && (
             <div className="flex h-44 flex-col items-center justify-center gap-2 px-6 text-center text-sm text-text-disabled">
-              <div>Empty folder</div>
+              <div>{t('files.emptyFolder')}</div>
               <div className="max-w-[520px] truncate font-mono text-[11px]" title={result.currentPath}>
                 {result.currentPath}
               </div>
@@ -416,7 +423,7 @@ export function FilesTile({ tile, autoFocus = false }: FilesTileProps): React.Re
 
           {!loading && !loadError && result && totalCount > 0 && visibleCount === 0 && (
             <div className="flex h-44 items-center justify-center text-sm text-text-disabled">
-              No matches
+              {t('files.noMatches')}
             </div>
           )}
 
@@ -448,12 +455,12 @@ export function FilesTile({ tile, autoFocus = false }: FilesTileProps): React.Re
                   <div className="min-w-0">
                     <div className="truncate text-text-primary">{entry.name}</div>
                     <div className="truncate font-mono text-[11px] text-text-disabled">
-                      {formatModifiedAt(entry.modifiedAt)}
+                      {formatModifiedAt(entry.modifiedAt, i18n.language)}
                     </div>
                   </div>
                 </div>
-                <div className="nd-caption text-text-secondary">{isDirectory ? 'Directory' : 'File'}</div>
-                <div className="truncate font-mono text-xs text-text-secondary">{formatSize(entry)}</div>
+                <div className="nd-caption text-text-secondary">{isDirectory ? t('files.directory') : t('files.file')}</div>
+                <div className="truncate font-mono text-xs text-text-secondary">{formatSize(entry, i18n.language, t('files.folder'))}</div>
                 <div className="flex justify-end gap-1">
                   <button
                     className="flex h-8 w-8 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
@@ -461,7 +468,7 @@ export function FilesTile({ tile, autoFocus = false }: FilesTileProps): React.Re
                       event.stopPropagation()
                       void openEntry(entry)
                     }}
-                    title={isDirectory ? 'Open folder' : 'Open'}
+                    title={isDirectory ? t('files.openFolder') : t('common.open')}
                   >
                     {isDirectory ? <FolderOpen size={14} /> : <ExternalLink size={14} />}
                   </button>
@@ -471,7 +478,7 @@ export function FilesTile({ tile, autoFocus = false }: FilesTileProps): React.Re
                       event.stopPropagation()
                       void revealEntry(entry)
                     }}
-                    title="Reveal in Explorer"
+                    title={t('files.revealInExplorer')}
                   >
                     <FolderOpen size={14} />
                   </button>
@@ -481,7 +488,7 @@ export function FilesTile({ tile, autoFocus = false }: FilesTileProps): React.Re
                       event.stopPropagation()
                       void copyEntryPath(entry)
                     }}
-                    title="Copy relative path"
+                    title={t('files.copyRelativePath')}
                   >
                     <Copy size={14} />
                   </button>
@@ -494,7 +501,11 @@ export function FilesTile({ tile, autoFocus = false }: FilesTileProps): React.Re
 
       <div className="flex h-8 shrink-0 items-center justify-between gap-3 border-t border-border px-3 font-mono text-[11px] text-text-secondary">
         <div className={`min-w-0 truncate ${notice?.kind === 'error' ? 'text-danger' : ''}`}>
-          {notice?.text ?? `${visibleCount}/${totalCount} items`}
+          {notice
+            ? notice.kind === 'info'
+              ? notice.text
+              : notice.technicalMessage ?? t('files.fileOperationFailed')
+            : t('files.itemCount', { count: totalCount, visible: visibleCount, total: totalCount })}
         </div>
         <div className="max-w-[45%] truncate text-text-disabled">{currentPathLabel}</div>
       </div>
