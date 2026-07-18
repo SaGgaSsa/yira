@@ -26,8 +26,7 @@ export function createTerminalFitScheduler(options: TerminalFitSchedulerOptions 
     ): void {
       if (pendingFrame !== null) return
 
-      pendingFrame = requestFrame(() => {
-        pendingFrame = null
+      const fit = (): void => {
         let dimensions: TerminalFitDimensions | undefined
         try {
           fitAddon.fit()
@@ -48,6 +47,15 @@ export function createTerminalFitScheduler(options: TerminalFitSchedulerOptions 
 
         lastDimensions = { cols: dimensions.cols, rows: dimensions.rows }
         resizeTerminal(dimensions.cols, dimensions.rows)
+      }
+
+      pendingFrame = requestFrame(() => {
+        pendingFrame = requestFrame(() => {
+          pendingFrame = null
+          fit()
+        })
+
+        fit()
       })
     },
 
