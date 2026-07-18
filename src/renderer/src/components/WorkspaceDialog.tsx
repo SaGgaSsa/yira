@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { FolderOpen, Grid3X3, History, Info, LayoutGrid, TerminalSquare, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import type { RemoteTerminalConfig, WorkspaceType } from '@shared/types'
 
 export interface WorkspaceDialogValue {
@@ -44,6 +45,7 @@ function normalizeValue(value: WorkspaceDialogValue): WorkspaceDialogValue {
 }
 
 export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialogProps): React.ReactElement | null {
+  const { t } = useTranslation()
   const nameInputRef = useRef<HTMLInputElement | null>(null)
   const [value, setValue] = useState<WorkspaceDialogValue | null>(request?.value ?? null)
   const [showRemoteHelp, setShowRemoteHelp] = useState(false)
@@ -93,14 +95,14 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
       <div className="flex max-h-[calc(100vh-32px)] w-[640px] max-w-[calc(100vw-32px)] flex-col overflow-hidden rounded-[24px] border border-border-visible bg-bg-secondary shadow-2xl">
         <header className="shrink-0 flex items-center justify-between gap-4 border-b border-border px-6 py-5">
           <div className="min-w-0">
-            <div className="nd-label text-text-secondary">{request.eyebrow ?? 'Workspace Settings'}</div>
+            <div className="nd-label text-text-secondary">{request.eyebrow ?? t('workspace.workspaceSettings')}</div>
             <h2 className="mt-2 text-xl text-text-display">{request.title}</h2>
           </div>
           {canCancel && (
             <button
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border-visible text-text-secondary transition-colors hover:text-text-display"
               onClick={onCancel}
-              title="Close dialog"
+              title={t('dialogs.closeDialog')}
             >
               <X size={16} />
             </button>
@@ -111,13 +113,13 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
           <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
             <div className="mb-4 flex items-center gap-2">
               {value.type === 'grid' ? <Grid3X3 size={14} className="text-text-secondary" /> : <LayoutGrid size={14} className="text-text-secondary" />}
-              <span className="nd-label text-text-secondary">Workspace type</span>
+              <span className="nd-label text-text-secondary">{t('workspace.workspaceType')}</span>
             </div>
             {typeEditable ? (
               <div className="grid grid-cols-2 gap-3">
                 {([
-                  { type: 'canvas' as const, label: 'Canvas', icon: LayoutGrid },
-                  { type: 'grid' as const, label: 'Grid', icon: Grid3X3 },
+                  { type: 'canvas' as const, label: t('workspace.canvas'), icon: LayoutGrid },
+                  { type: 'grid' as const, label: t('workspace.grid'), icon: Grid3X3 },
                 ]).map((option) => {
                   const Icon = option.icon
                   const active = value.type === option.type
@@ -137,20 +139,20 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
               </div>
             ) : (
               <div className="rounded-full border border-border-visible bg-bg-primary px-4 py-3 text-sm text-text-display">
-                {value.type === 'grid' ? 'Grid' : 'Canvas'}
+                {value.type === 'grid' ? t('workspace.grid') : t('workspace.canvas')}
               </div>
             )}
           </section>
 
           <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
             <label className="block">
-              <span className="nd-label mb-2 block text-text-secondary">Workspace name</span>
+              <span className="nd-label mb-2 block text-text-secondary">{t('workspace.workspaceName')}</span>
               <input
                 ref={nameInputRef}
                 className="w-full rounded-full border border-border-visible bg-bg-primary px-4 py-3 font-mono text-sm text-text-display outline-none"
                 value={value.name}
                 onChange={(event) => setValue((current) => current ? { ...current, name: event.target.value } : current)}
-                placeholder="Workspace name"
+                placeholder={t('workspace.workspaceName')}
                 spellCheck={false}
               />
             </label>
@@ -159,14 +161,14 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
           <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
             <div className="mb-4 flex items-center gap-2">
               <FolderOpen size={14} className="text-text-secondary" />
-              <span className="nd-label text-text-secondary">Root folder</span>
+              <span className="nd-label text-text-secondary">{t('workspace.rootFolder')}</span>
             </div>
             <div className="flex items-center gap-2">
               <div
                 className="min-w-0 flex-1 truncate rounded-full border border-border-visible bg-bg-primary px-4 py-3 font-mono text-sm text-text-display"
-                title={value.rootFolderPath || 'No folder selected'}
+                title={value.rootFolderPath || t('workspace.noFolderSelected')}
               >
-                {value.rootFolderPath || 'No folder selected'}
+                {value.rootFolderPath || t('workspace.noFolderSelected')}
               </div>
               <button
                 className="shrink-0 rounded-full border border-border-visible px-4 py-3 text-sm text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
@@ -177,14 +179,14 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
                   })
                 }}
               >
-                Select
+                {t('workspace.selectFolder')}
               </button>
               <button
                 className="shrink-0 rounded-full border border-border-visible px-4 py-3 text-sm text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={() => setValue((current) => current ? { ...current, rootFolderPath: '' } : current)}
                 disabled={!value.rootFolderPath}
               >
-                Clear
+                {t('workspace.clearFolder')}
               </button>
             </div>
           </section>
@@ -192,13 +194,13 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
           <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
             <div className="mb-4 flex items-center gap-2">
               <TerminalSquare size={14} className="text-text-secondary" />
-              <span className="nd-label text-text-secondary">Initial command</span>
+              <span className="nd-label text-text-secondary">{t('workspace.initialCommand')}</span>
             </div>
             <input
               className="w-full rounded-full border border-border-visible bg-bg-primary px-4 py-3 font-mono text-sm text-text-display outline-none"
               value={value.initialCommand}
               onChange={(event) => setValue((current) => current ? { ...current, initialCommand: event.target.value } : current)}
-              placeholder="Optional command for new terminals"
+              placeholder={t('workspace.optionalCommand')}
               spellCheck={false}
             />
           </section>
@@ -206,11 +208,11 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
           <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
             <div className="mb-4 flex items-center gap-2">
               <TerminalSquare size={14} className="text-text-secondary" />
-              <span className="nd-label text-text-secondary">Remote terminal</span>
+              <span className="nd-label text-text-secondary">{t('workspace.remoteTerminal')}</span>
               <button
                 className="ml-auto flex h-7 w-7 items-center justify-center rounded-full border border-border-visible text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
                 onClick={() => setShowRemoteHelp(true)}
-                title="Remote terminal requirements"
+                title={t('workspace.remoteTerminalRequirements')}
                 type="button"
               >
                 <Info size={14} />
@@ -218,7 +220,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block">
-                <span className="nd-label mb-2 block text-text-secondary">Host (Tailscale or local)</span>
+                <span className="nd-label mb-2 block text-text-secondary">{t('workspace.hostTailscaleOrLocal')}</span>
                 <input
                   className="w-full rounded-full border border-border-visible bg-bg-primary px-4 py-3 font-mono text-sm text-text-display outline-none"
                   value={value.remoteTerminal.host}
@@ -231,7 +233,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
                 />
               </label>
               <label className="block">
-                <span className="nd-label mb-2 block text-text-secondary">Linux user</span>
+                <span className="nd-label mb-2 block text-text-secondary">{t('workspace.linuxUser')}</span>
                 <input
                   className="w-full rounded-full border border-border-visible bg-bg-primary px-4 py-3 font-mono text-sm text-text-display outline-none"
                   value={value.remoteTerminal.user}
@@ -244,7 +246,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
                 />
               </label>
               <label className="block sm:col-span-2 sm:max-w-[200px]">
-                <span className="nd-label mb-2 block text-text-secondary">SSH port</span>
+                <span className="nd-label mb-2 block text-text-secondary">{t('workspace.sshPort')}</span>
                 <input
                   className="w-full rounded-full border border-border-visible bg-bg-primary px-4 py-3 font-mono text-sm text-text-display outline-none"
                   type="number"
@@ -269,7 +271,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
             <label className="flex items-center justify-between gap-4">
               <span className="flex min-w-0 items-center gap-2">
                 <History size={14} className="shrink-0 text-text-secondary" />
-                <span className="nd-label truncate text-text-secondary">Workspace terminal history</span>
+                <span className="nd-label truncate text-text-secondary">{t('workspace.terminalHistory')}</span>
               </span>
               <input
                 type="checkbox"
@@ -287,7 +289,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
               className="rounded-full border border-border-visible px-4 py-2 text-sm text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
               onClick={onCancel}
             >
-              {request.cancelLabel ?? 'Cancel'}
+              {request.cancelLabel ?? t('common.cancel')}
             </button>
           )}
           <button
@@ -295,7 +297,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
             onClick={() => onConfirm(normalizeValue(value))}
             disabled={!canSubmit}
           >
-            {request.confirmLabel ?? 'Save Workspace'}
+            {request.confirmLabel ?? t('workspace.saveWorkspace')}
           </button>
         </footer>
 
@@ -304,27 +306,27 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
             <div className="w-full max-w-lg rounded-[24px] border border-border-visible bg-bg-secondary p-6 shadow-2xl">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <div className="nd-label text-text-secondary">Remote terminal</div>
-                  <h3 className="mt-2 text-lg text-text-display">Tailscale and SSH stay outside Yira</h3>
+                  <div className="nd-label text-text-secondary">{t('workspace.remoteTerminal')}</div>
+                  <h3 className="mt-2 text-lg text-text-display">{t('workspace.remoteTerminalHelpTitle')}</h3>
                 </div>
                 <button
                   className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border-visible text-text-secondary hover:text-text-display"
                   onClick={() => setShowRemoteHelp(false)}
-                  title="Close remote terminal help"
+                  title={t('workspace.closeRemoteTerminalHelp')}
                   type="button"
                 >
                   <X size={15} />
                 </button>
               </div>
               <p className="mt-4 text-sm leading-6 text-text-secondary">
-                Use localhost with a local SSH server for the first test. For the notebook, install and sign in to Tailscale on both computers; the Linux notebook must run an SSH server and accept this user. Yira only starts the local SSH client; passwords, keys, host verification, and Tailnet permissions stay outside Yira.
+                {t('workspace.remoteTerminalHelpMessage')}
               </p>
               <button
                 className="mt-6 rounded-full border border-text-display px-4 py-2 text-sm text-text-display transition-colors hover:bg-hover-bg"
                 onClick={() => setShowRemoteHelp(false)}
                 type="button"
               >
-                Got it
+                {t('workspace.gotIt')}
               </button>
             </div>
           </div>

@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
 import { Terminal, StickyNote, Globe, Clock, ClipboardList } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 export interface TileCreationAvailability {
   canCreateNote: boolean
@@ -32,16 +33,18 @@ export interface TileCreationAction {
 }
 
 type TileCreationActionInput = TileCreationAvailability & Partial<Omit<TileCreationSelectorProps, keyof TileCreationAvailability | 'className'>>
+type Translate = (key: string, fallback: string) => string
 
 const noop = () => {}
 
-export function getTileCreationActions(input: TileCreationActionInput): TileCreationAction[] {
+export function getTileCreationActions(input: TileCreationActionInput, translate?: Translate): TileCreationAction[] {
+  const text = (key: string, fallback: string) => translate?.(key, fallback) ?? fallback
   const actions: TileCreationAction[] = [
     {
       id: 'terminal',
       icon: Terminal,
-      label: 'Terminal',
-      title: 'New terminal',
+      label: text('tile.terminal', 'Terminal'),
+      title: text('tile.newTerminal', 'New terminal'),
       disabled: false,
       onClick: input.onCreateTerminal ?? noop,
     },
@@ -51,8 +54,8 @@ export function getTileCreationActions(input: TileCreationActionInput): TileCrea
     actions.push({
       id: 'note',
       icon: StickyNote,
-      label: 'Note',
-      title: 'New note',
+      label: text('tile.note', 'Note'),
+      title: text('tile.newNote', 'New note'),
       disabled: false,
       onClick: input.onCreateNote ?? noop,
     })
@@ -62,8 +65,8 @@ export function getTileCreationActions(input: TileCreationActionInput): TileCrea
     actions.push({
       id: 'browser',
       icon: Globe,
-      label: 'Browser',
-      title: 'New browser',
+      label: text('tile.browser', 'Browser'),
+      title: text('tile.newBrowser', 'New browser'),
       disabled: false,
       onClick: input.onCreateBrowser ?? noop,
     })
@@ -73,8 +76,8 @@ export function getTileCreationActions(input: TileCreationActionInput): TileCrea
     actions.push({
       id: 'timer',
       icon: Clock,
-      label: 'Timer',
-      title: 'New timer',
+      label: text('tile.timer', 'Timer'),
+      title: text('tile.newTimer', 'New timer'),
       disabled: false,
       onClick: input.onCreateTimer ?? noop,
     })
@@ -83,8 +86,8 @@ export function getTileCreationActions(input: TileCreationActionInput): TileCrea
   actions.push({
     id: 'board',
     icon: ClipboardList,
-    label: 'Board',
-    title: input.boardEnabled ? 'New task' : 'Enable board',
+    label: text('tile.board', 'Board'),
+    title: input.boardEnabled ? text('board.newTask', 'New task') : 'Enable board',
     disabled: input.canCreateBoard === false,
     onClick: input.onCreateBoard ?? noop,
     badge: input.boardBadge,
@@ -95,9 +98,10 @@ export function getTileCreationActions(input: TileCreationActionInput): TileCrea
 }
 
 export function TileCreationSelector({ className, ...input }: TileCreationSelectorProps): React.ReactElement {
+  const { t } = useTranslation()
   return (
     <div className={`grid grid-cols-2 gap-2 ${className ?? ''}`}>
-      {getTileCreationActions(input).map((action) => {
+      {getTileCreationActions(input, (key, fallback) => t(key, { defaultValue: fallback })).map((action) => {
         const Icon = action.icon
 
         return (

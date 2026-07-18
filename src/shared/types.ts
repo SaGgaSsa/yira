@@ -115,6 +115,7 @@ export type ConfigurableTileCreationType = 'note' | 'browser' | 'timer'
 export type TileCreationAvailability = Record<ConfigurableTileCreationType, boolean>
 
 export interface UserSettings {
+  language: 'en' | 'es'
   appearance: AppearanceMode
   interfaceFontSizePx: number
   tileFontSizePx: number
@@ -140,6 +141,7 @@ export interface UserSettings {
 }
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
+  language: 'en',
   appearance: 'dark',
   interfaceFontSizePx: 16,
   tileFontSizePx: 16,

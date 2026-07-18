@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowDown, ArrowUp, Grid3X3, LayoutGrid, Pencil, RotateCcw, Save, Trash2, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import type { WorkspaceManagementEntry, WorkspaceMetadata } from '@shared/types'
 import { WorkspaceDialog, type WorkspaceDialogRequest, type WorkspaceDialogValue } from './WorkspaceDialog'
 
@@ -65,6 +66,7 @@ export function WorkspaceManagementDialog({
   onCancel,
   onSave,
 }: WorkspaceManagementDialogProps): React.ReactElement | null {
+  const { t } = useTranslation()
   const [drafts, setDrafts] = useState<WorkspaceDraft[]>([])
   const [editor, setEditor] = useState<DraftEditorState>(null)
   const [saving, setSaving] = useState(false)
@@ -104,9 +106,9 @@ export function WorkspaceManagementDialog({
     setEditor({
       key: draft?.key ?? null,
       request: {
-        title: 'Edit workspace',
-        eyebrow: 'Workspace Draft',
-        confirmLabel: 'Apply Draft',
+        title: t('workspace.editWorkspace'),
+        eyebrow: t('workspace.workspaceDraft'),
+        confirmLabel: t('workspace.applyDraft'),
         typeEditable: false,
         value: draftToDialogValue(draft ?? undefined),
       },
@@ -141,7 +143,7 @@ export function WorkspaceManagementDialog({
         remoteTerminal: draft.remoteTerminal,
       })))
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save workspace changes')
+      setError(err instanceof Error ? err.message : t('workspace.saveChangesFailed'))
       setSaving(false)
     }
   }
@@ -151,12 +153,12 @@ export function WorkspaceManagementDialog({
       <div className="flex max-h-[90vh] w-[920px] max-w-[calc(100vw-32px)] flex-col overflow-hidden rounded-[24px] border border-border-visible bg-bg-secondary shadow-2xl">
         <div className="flex items-center justify-between gap-4 border-b border-border px-6 py-4">
           <div className="min-w-0">
-            <h2 className="text-xl text-text-display">Manage Workspaces</h2>
+            <h2 className="text-xl text-text-display">{t('workspace.manageWorkspaces')}</h2>
           </div>
           <button
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border-visible text-text-secondary transition-colors hover:text-text-display"
             onClick={onCancel}
-            title="Close dialog"
+            title={t('dialogs.closeDialog')}
           >
             <X size={16} />
           </button>
@@ -185,7 +187,7 @@ export function WorkspaceManagementDialog({
                         className="flex h-9 w-9 items-center justify-center rounded-full border border-border-visible text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
                         onClick={() => moveDraft(draft.key, -1)}
                         disabled={index === 0}
-                        title="Move up"
+                        title={t('workspace.moveUp')}
                       >
                         <ArrowUp size={14} />
                       </button>
@@ -193,7 +195,7 @@ export function WorkspaceManagementDialog({
                         className="flex h-9 w-9 items-center justify-center rounded-full border border-border-visible text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
                         onClick={() => moveDraft(draft.key, 1)}
                         disabled={index === drafts.length - 1}
-                        title="Move down"
+                        title={t('workspace.moveDown')}
                       >
                         <ArrowDown size={14} />
                       </button>
@@ -201,24 +203,24 @@ export function WorkspaceManagementDialog({
 
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <div className="truncate text-base text-text-display">{draft.name || 'Untitled Workspace'}</div>
+                        <div className="truncate text-base text-text-display">{draft.name || t('workspace.untitledWorkspace')}</div>
                         {draft.markedForRemoval && (
                           <span className="rounded-full border border-red-500/50 px-2 py-1 text-xs uppercase tracking-[0.08em] text-red-200">
-                            Will remove
+                            {t('workspace.willRemove')}
                           </span>
                         )}
                         <span className="inline-flex items-center gap-1 rounded-full border border-border-visible px-2 py-1 text-xs uppercase tracking-[0.08em] text-text-secondary">
                           {draft.type === 'grid' ? <Grid3X3 size={12} /> : <LayoutGrid size={12} />}
-                          {draft.type === 'grid' ? 'Grid' : 'Canvas'}
+                          {draft.type === 'grid' ? t('workspace.grid') : t('workspace.canvas')}
                         </span>
                         {isNewDraft && !draft.markedForRemoval && (
                           <span className="rounded-full border border-border-visible px-2 py-1 text-xs uppercase tracking-[0.08em] text-text-secondary">
-                            New
+                            {t('workspace.new')}
                           </span>
                         )}
                       </div>
-                      <div className="mt-2 truncate font-mono text-xs text-text-secondary" title={draft.rootFolderPath || 'No root folder'}>
-                        {draft.rootFolderPath || 'No root folder'}
+                      <div className="mt-2 truncate font-mono text-xs text-text-secondary" title={draft.rootFolderPath || t('workspace.noRootFolder')}>
+                        {draft.rootFolderPath || t('workspace.noRootFolder')}
                       </div>
                       {draft.initialCommand && (
                         <div className="mt-2 truncate font-mono text-xs text-text-disabled" title={draft.initialCommand}>
@@ -237,7 +239,7 @@ export function WorkspaceManagementDialog({
                                 entry.key === draft.key ? { ...entry, removalText } : entry
                               )))
                             }}
-                            placeholder={`Type ${draft.name}`}
+                            placeholder={t('workspace.confirmRemovalByName', { name: draft.name })}
                             spellCheck={false}
                           />
                           <button
@@ -250,7 +252,7 @@ export function WorkspaceManagementDialog({
                             disabled={!canMarkRemoval}
                           >
                             <Trash2 size={14} />
-                            <span>Remove from Yira</span>
+                            <span>{t('workspace.removeFromYira')}</span>
                           </button>
                         </div>
                       )}
@@ -265,7 +267,7 @@ export function WorkspaceManagementDialog({
                               entry.key === draft.key ? { ...entry, markedForRemoval: false, removalText: '' } : entry
                             )))
                           }}
-                          title="Undo removal"
+                          title={t('workspace.undoRemoval')}
                         >
                           <RotateCcw size={15} />
                         </button>
@@ -273,7 +275,7 @@ export function WorkspaceManagementDialog({
                         <button
                           className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border-visible text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
                           onClick={() => openEditor(draft)}
-                          title="Edit workspace"
+                          title={t('workspace.editWorkspace')}
                         >
                           <Pencil size={15} />
                         </button>
@@ -284,7 +286,7 @@ export function WorkspaceManagementDialog({
                           onClick={() => {
                             setDrafts((current) => current.filter((entry) => entry.key !== draft.key))
                           }}
-                          title="Discard draft"
+                          title={t('workspace.discardDraft')}
                         >
                           <X size={15} />
                         </button>
@@ -303,7 +305,7 @@ export function WorkspaceManagementDialog({
             onClick={onCancel}
             disabled={saving}
           >
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             className="inline-flex items-center gap-2 rounded-full border border-text-display px-4 py-2 text-sm text-text-display transition-colors disabled:cursor-not-allowed disabled:opacity-50"
@@ -313,7 +315,7 @@ export function WorkspaceManagementDialog({
             disabled={!canSave || saving}
           >
             <Save size={14} />
-            <span>{saving ? 'Saving...' : 'Save Changes'}</span>
+            <span>{saving ? t('workspace.saving') : t('workspace.saveChanges')}</span>
           </button>
         </div>
       </div>

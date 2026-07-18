@@ -22,6 +22,10 @@ function isLegacyFontSize(value: unknown): value is LegacyFontSize {
   return value === 'small' || value === 'medium' || value === 'large'
 }
 
+function normalizeLanguage(value: unknown): UserSettings['language'] {
+  return value === 'es' ? 'es' : 'en'
+}
+
 export function clampFontSizePx(value: unknown, fallback = DEFAULT_USER_SETTINGS.interfaceFontSizePx): number {
   const numeric = typeof value === 'number' ? value : Number(value)
   if (!Number.isFinite(numeric)) return fallback
@@ -38,6 +42,7 @@ export function normalizeUserSettings(raw: RawUserSettings = {}): UserSettings {
   return {
     ...DEFAULT_USER_SETTINGS,
     ...settings,
+    language: normalizeLanguage(raw.language),
     interfaceFontSizePx: clampFontSizePx(raw.interfaceFontSizePx, fontFallback),
     tileFontSizePx: clampFontSizePx(raw.tileFontSizePx, fontFallback),
     browser: {

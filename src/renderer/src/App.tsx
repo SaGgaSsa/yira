@@ -251,7 +251,6 @@ export default function App(): React.ReactElement {
   if (rendererMode === 'floating-tile') return <FloatingTileWindow />
 
   // Settings
-  const loadSettings = useSettingsStore((s) => s.loadSettings)
   useTheme()
   useFontSize()
   const initializeUpdates = useUpdateStore((s) => s.initialize)
@@ -405,11 +404,6 @@ export default function App(): React.ReactElement {
 
     setActiveDialog(null)
   }, [activeDialog])
-
-  // Load settings on mount
-  useEffect(() => {
-    loadSettings()
-  }, [loadSettings])
 
   useEffect(() => {
     if (terminalAttentionEnabled) return

@@ -4,6 +4,7 @@ import type { UserSettings } from './types'
 
 const defaults = normalizeUserSettings({})
 if (defaults.browser.homeUrl !== 'about:blank') throw new Error('default browser home URL must be about:blank')
+if (defaults.language !== 'en') throw new Error('language must default to English')
 if (defaults.terminal.attentionEnabled !== true) throw new Error('terminal attention must default on')
 if (defaults.terminal.themeId !== DEFAULT_TERMINAL_THEME_ID) throw new Error('terminal theme must default to Yira default')
 if (defaults.notifications.attentionDelayEnabled !== true) throw new Error('native attention delay must default on')
@@ -59,3 +60,9 @@ const withoutLegacyFiles = normalizeUserSettings({
 if ('files' in withoutLegacyFiles.tiles.creationAvailability) {
   throw new Error('legacy files tile creation settings must be removed during normalization')
 }
+
+const spanishLanguage = normalizeUserSettings({ language: 'es' })
+if (spanishLanguage.language !== 'es') throw new Error('Spanish language setting must be preserved')
+
+const invalidLanguage = normalizeUserSettings({ language: 'fr' as never })
+if (invalidLanguage.language !== 'en') throw new Error('invalid language setting must normalize to English')

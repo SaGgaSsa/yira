@@ -1,9 +1,10 @@
-import { ipcMain } from 'electron'
+import { app, ipcMain } from 'electron'
 import { promises as fs } from 'fs'
 import { join } from 'path'
 import { YIRA_HOME } from '../paths'
 import type { UserSettings } from '@shared/types'
 import { normalizeUserSettings } from '@shared/userSettings'
+import { resolveSupportedLanguage } from '@shared/language'
 
 const SETTINGS_PATH = join(YIRA_HOME, 'settings.json')
 
@@ -12,19 +13,31 @@ export function registerSettingsIPC(): void {
     try {
       const raw = await fs.readFile(SETTINGS_PATH, 'utf8')
       const parsed = JSON.parse(raw)
-      const normalized = normalizeUserSettings(parsed)
+      const hasLanguage = Object.prototype.hasOwnProperty.call(parsed, 'language')
+      const normalized = normalizeUserSettings({
+        ...parsed,
+        language: hasLanguage ? parsed.language : resolveSupportedLanguage(app.getLocale()),
+      })
 
       if (
         Object.prototype.hasOwnProperty.call(parsed, 'fontSize') ||
         !Object.prototype.hasOwnProperty.call(parsed, 'interfaceFontSizePx') ||
         !Object.prototype.hasOwnProperty.call(parsed, 'tileFontSizePx') ||
+        !hasLanguage ||
+        parsed.language !== normalized.language ||
         parsed?.terminal?.themeId !== normalized.terminal.themeId
       ) {
         await fs.writeFile(SETTINGS_PATH, JSON.stringify(normalized, null, 2))
       }
 
       return normalized
-    } catch {
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        const defaults = normalizeUserSettings({ language: resolveSupportedLanguage(app.getLocale()) })
+        await fs.mkdir(YIRA_HOME, { recursive: true })
+        await fs.writeFile(SETTINGS_PATH, JSON.stringify(defaults, null, 2))
+        return defaults
+      }
       return null
     }
   })
