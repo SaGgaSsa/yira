@@ -1,6 +1,6 @@
 {
   "name": "yira",
-  "version": "0.1.38",
+  "version": "0.1.39",
   "private": true,
   "productName": "Yira",
   "description": "Infinite canvas terminal workspace",
