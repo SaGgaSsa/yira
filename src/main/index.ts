@@ -9,6 +9,7 @@ import { registerSettingsIPC } from './ipc/settings'
 import { registerNotesIPC } from './ipc/notes'
 import { registerBoardsIPC } from './ipc/boards'
 import { registerFilesIPC } from './ipc/files'
+import { registerGitIPC } from './ipc/git'
 import { clearWindowAttention, registerNotificationIPC } from './ipc/notifications'
 import { registerWindowIPC } from './ipc/window'
 import { registerFloatingTilesIPC } from './ipc/floatingTiles'
@@ -111,6 +112,7 @@ app.whenReady().then(async () => {
   registerNotesIPC()
   registerBoardsIPC()
   registerFilesIPC()
+  registerGitIPC()
   registerNotificationIPC()
   registerWindowIPC()
   registerFloatingTilesIPC(() => mainWindow)

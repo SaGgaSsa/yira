@@ -10,6 +10,7 @@ function workspace(id: string, name: string, rootFolderPath?: string, type: Work
       type,
       rootFolderPath,
       workspacePanelOpen: true,
+      sourceControlViewMode: 'list',
       terminalHistoryEnabled: true,
     },
   }
@@ -36,6 +37,7 @@ const managed = applyWorkspaceManagementChanges({
       initialCommand: ' npm test ',
       terminalHistoryEnabled: false,
       workspacePanelOpen: false,
+      sourceControlViewMode: 'tree',
       remoteTerminal: { host: 'notebook.tailnet.ts.net', user: 'dev' },
     },
     { name: 'Delta', rootFolderPath: '/repo/delta', terminalHistoryEnabled: true },
@@ -53,8 +55,10 @@ if (managed.workspaces[0].config.rootFolderPath !== '/repo/gamma-renamed') throw
 if (managed.workspaces[0].config.initialCommand !== 'npm test') throw new Error('initial command must be normalized')
 if (managed.workspaces[0].config.terminalHistoryEnabled !== false) throw new Error('terminal history toggle must be preserved')
 if (managed.workspaces[0].config.workspacePanelOpen !== false) throw new Error('workspace panel toggle must be preserved')
+if (managed.workspaces[0].config.sourceControlViewMode !== 'tree') throw new Error('source control view mode must be preserved')
 if (managed.workspaces[0].config.remoteTerminal?.host !== 'notebook.tailnet.ts.net') throw new Error('remote terminal config must be preserved')
 if (managed.workspaces[2].config.type !== 'grid') throw new Error('existing workspace type must be preserved by management edits')
+if (managed.workspaces[2].config.sourceControlViewMode !== 'list') throw new Error('management edits must retain an existing source control view mode')
 if (managed.workspaces[2].config.workspacePanelOpen !== true) throw new Error('workspace panel must default open during management edits')
 if (managed.removedWorkspaceIds.join(',') !== 'ws-alpha') throw new Error('omitted existing workspaces must be marked for removal')
 if (managed.createdWorkspaceIds.join(',') !== 'ws-new-1') throw new Error('new workspaces must be reported')

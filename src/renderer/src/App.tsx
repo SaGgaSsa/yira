@@ -638,7 +638,7 @@ export default function App(): React.ReactElement {
       }
 
       skipNextAutosaveRef.current = true
-      setWorkspace('', '', { type: 'canvas', workspacePanelOpen: true })
+      setWorkspace('', '', { type: 'canvas', workspacePanelOpen: true, sourceControlViewMode: 'list' })
       restoreState(createEmptyCanvasState())
       setWorkspaceEditor({
         mode: 'create',
@@ -844,6 +844,13 @@ export default function App(): React.ReactElement {
   const workspaceRootPath = activeWorkspaceConfig.rootFolderPath?.trim() ?? ''
   const hasWorkspacePanel = Boolean(workspaceRootPath)
 
+  const handleWorkspaceConfigUpdated = useCallback((updatedWorkspace: WorkspaceMetadata) => {
+    setWorkspace(updatedWorkspace.id, updatedWorkspace.name, updatedWorkspace.config)
+    setWorkspaceMetadata((current) => current.map((workspace) => (
+      workspace.id === updatedWorkspace.id ? updatedWorkspace : workspace
+    )))
+  }, [setWorkspace])
+
   const toggleWorkspacePanel = useCallback(() => {
     if (!activeWorkspaceId || !hasWorkspacePanel) return
 
@@ -851,12 +858,9 @@ export default function App(): React.ReactElement {
       config: { workspacePanelOpen: !activeWorkspaceConfig.workspacePanelOpen },
     }).then((updatedWorkspace) => {
       if (!updatedWorkspace) return
-      setWorkspace(updatedWorkspace.id, updatedWorkspace.name, updatedWorkspace.config)
-      setWorkspaceMetadata((current) => current.map((workspace) => (
-        workspace.id === updatedWorkspace.id ? updatedWorkspace : workspace
-      )))
+      handleWorkspaceConfigUpdated(updatedWorkspace)
     })
-  }, [activeWorkspaceConfig.workspacePanelOpen, activeWorkspaceId, hasWorkspacePanel, setWorkspace])
+  }, [activeWorkspaceConfig.workspacePanelOpen, activeWorkspaceId, handleWorkspaceConfigUpdated, hasWorkspacePanel])
 
   // Zoom toggle: switch between 100% and previous zoom
   const handleZoomToggle = useCallback(() => {
@@ -1410,7 +1414,7 @@ export default function App(): React.ReactElement {
 
     if (!result.activeWorkspace) {
       skipNextAutosaveRef.current = true
-      setWorkspace('', '', { type: 'canvas', workspacePanelOpen: true })
+      setWorkspace('', '', { type: 'canvas', workspacePanelOpen: true, sourceControlViewMode: 'list' })
       restoreState(createEmptyCanvasState())
       setWorkspaceEditor({
         mode: 'create',
@@ -2301,7 +2305,12 @@ export default function App(): React.ReactElement {
                 </div>
               </div>
               {hasWorkspacePanel && activeWorkspaceConfig.workspacePanelOpen && (
-                <WorkspacePanel rootPath={workspaceRootPath} />
+                <WorkspacePanel
+                  rootPath={workspaceRootPath}
+                  workspaceId={activeWorkspaceId}
+                  sourceControlViewMode={activeWorkspaceConfig.sourceControlViewMode}
+                  onWorkspaceUpdated={handleWorkspaceConfigUpdated}
+                />
               )}
             </div>
           </>

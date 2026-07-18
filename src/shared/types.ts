@@ -3,6 +3,7 @@ import type { TerminalThemeId } from './terminalThemes'
 // ─── Workspace ─────────────────────────────────────────────────────────────
 
 export type WorkspaceType = 'canvas' | 'grid'
+export type SourceControlViewMode = 'list' | 'tree'
 
 export interface RemoteTerminalConfig {
   host: string
@@ -25,6 +26,7 @@ export interface WorkspaceConfig {
   type: WorkspaceType
   rootFolderPath?: string
   workspacePanelOpen: boolean
+  sourceControlViewMode: SourceControlViewMode
   initialCommand?: string
   terminalHistoryEnabled?: boolean
   remoteTerminal?: RemoteTerminalConfig
@@ -35,6 +37,7 @@ export interface WorkspaceCreateInput {
   name: string
   rootFolderPath?: string
   workspacePanelOpen?: boolean
+  sourceControlViewMode?: SourceControlViewMode
   initialCommand?: string
   terminalHistoryEnabled?: boolean
   remoteTerminal?: RemoteTerminalConfig
@@ -46,6 +49,7 @@ export interface WorkspaceManagementEntry {
   type?: WorkspaceType
   rootFolderPath?: string
   workspacePanelOpen?: boolean
+  sourceControlViewMode?: SourceControlViewMode
   initialCommand?: string
   terminalHistoryEnabled?: boolean
   remoteTerminal?: RemoteTerminalConfig
@@ -73,6 +77,28 @@ export interface WorkspaceOpenFolderResult {
 
 export type WorkspaceUpdatePatch = Partial<Pick<Workspace, 'name'>> & {
   config?: Partial<WorkspaceConfig>
+}
+
+// ─── Source Control ───────────────────────────────────────────────────────
+
+export type GitChangeStatus = 'added' | 'modified' | 'deleted' | 'renamed' | 'copied' | 'unmerged' | 'untracked' | 'unknown'
+
+export interface GitFileChange {
+  path: string
+  status: GitChangeStatus
+  originalPath?: string
+}
+
+export interface GitStatusResult {
+  isRepository: boolean
+  branch: string | null
+  upstream?: string
+  ahead: number
+  behind: number
+  originUrl?: string
+  staged: GitFileChange[]
+  unstaged: GitFileChange[]
+  error?: string
 }
 
 export interface Config {

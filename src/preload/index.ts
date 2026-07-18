@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { BoardTask, FileListOptions, NotificationAttentionOptions, TerminalCreateOptions, UpdateState, WindowBounds, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
+import type { BoardTask, FileListOptions, GitStatusResult, NotificationAttentionOptions, TerminalCreateOptions, UpdateState, WindowBounds, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
 
 console.log('[preload] Loading...')
 
@@ -60,6 +60,14 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.invoke('files:list', rootPath, relativeDir, options),
     open: (rootPath: string, relativePath: string) =>
       ipcRenderer.invoke('files:open', rootPath, relativePath),
+  },
+
+  git: {
+    status: (workspaceId: string) => ipcRenderer.invoke('git:status', workspaceId) as Promise<GitStatusResult>,
+    stage: (workspaceId: string, relativePath: string, originalPath?: string) => ipcRenderer.invoke('git:stage', workspaceId, relativePath, originalPath),
+    unstage: (workspaceId: string, relativePath: string, originalPath?: string) => ipcRenderer.invoke('git:unstage', workspaceId, relativePath, originalPath),
+    commit: (workspaceId: string, message: string) => ipcRenderer.invoke('git:commit', workspaceId, message),
+    sync: (workspaceId: string) => ipcRenderer.invoke('git:sync', workspaceId),
   },
 
   // Canvas persistence

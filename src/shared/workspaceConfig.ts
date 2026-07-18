@@ -1,7 +1,11 @@
-import type { RemoteTerminalConfig, WorkspaceConfig, WorkspaceType } from './types'
+import type { RemoteTerminalConfig, SourceControlViewMode, WorkspaceConfig, WorkspaceType } from './types'
 
 export function normalizeWorkspaceType(type: unknown): WorkspaceType {
   return type === 'grid' ? 'grid' : 'canvas'
+}
+
+export function normalizeSourceControlViewMode(value: unknown): SourceControlViewMode {
+  return value === 'tree' ? 'tree' : 'list'
 }
 
 function normalizeRemoteTerminal(value: Partial<RemoteTerminalConfig> | undefined): RemoteTerminalConfig | undefined {
@@ -25,6 +29,7 @@ export function normalizeWorkspaceConfig(config: Partial<WorkspaceConfig> | unde
     type: normalizeWorkspaceType(config?.type),
     rootFolderPath: rootFolderPath || undefined,
     workspacePanelOpen: config?.workspacePanelOpen !== false,
+    sourceControlViewMode: normalizeSourceControlViewMode(config?.sourceControlViewMode),
     initialCommand: initialCommand || undefined,
     terminalHistoryEnabled: config?.terminalHistoryEnabled !== false,
     remoteTerminal: normalizeRemoteTerminal(config?.remoteTerminal),

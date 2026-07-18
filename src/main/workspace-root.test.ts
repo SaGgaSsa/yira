@@ -14,6 +14,7 @@ function workspace(id: string, name: string, rootFolderPath?: string): Workspace
       type: 'canvas',
       rootFolderPath,
       workspacePanelOpen: true,
+      sourceControlViewMode: 'list',
       terminalHistoryEnabled: true,
     },
   }

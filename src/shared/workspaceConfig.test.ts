@@ -4,6 +4,7 @@ const defaults = normalizeWorkspaceConfig({})
 if (defaults.terminalHistoryEnabled !== true) throw new Error('terminal history must default on')
 if (defaults.type !== 'canvas') throw new Error('workspace type must default to canvas')
 if (defaults.workspacePanelOpen !== true) throw new Error('workspace panel must default open')
+if (defaults.sourceControlViewMode !== 'list') throw new Error('source control view mode must default to list')
 
 const missing = normalizeWorkspaceConfig({ rootFolderPath: ' /repo ', initialCommand: ' npm test ' })
 if (missing.rootFolderPath !== '/repo') throw new Error('root folder must be trimmed')
@@ -23,6 +24,13 @@ if (enabled.terminalHistoryEnabled !== true) throw new Error('explicit enabled t
 
 const grid = normalizeWorkspaceConfig({ type: 'grid' })
 if (grid.type !== 'grid') throw new Error('grid workspace type must be preserved')
+if (grid.sourceControlViewMode !== 'list') throw new Error('grid workspaces must default source control view mode to list')
+
+const sourceControlTree = normalizeWorkspaceConfig({ sourceControlViewMode: 'tree' })
+if (sourceControlTree.sourceControlViewMode !== 'tree') throw new Error('tree source control view mode must be preserved')
+
+const invalidSourceControlMode = normalizeWorkspaceConfig({ sourceControlViewMode: 'invalid' as 'tree' })
+if (invalidSourceControlMode.sourceControlViewMode !== 'list') throw new Error('invalid source control view modes must normalize to list')
 
 const remote = normalizeWorkspaceConfig({
   remoteTerminal: {

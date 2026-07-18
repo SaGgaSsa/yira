@@ -31,7 +31,7 @@ const canvasState: CanvasState = {
   },
 }
 
-useCanvasStore.getState().restoreWorkspaceState('workspace-canvas', 'Canvas', { type: 'canvas', workspacePanelOpen: true }, canvasState)
+useCanvasStore.getState().restoreWorkspaceState('workspace-canvas', 'Canvas', { type: 'canvas', workspacePanelOpen: true, sourceControlViewMode: 'list' }, canvasState)
 useCanvasStore.getState().detachTileToFloating('two', { x: 20, y: 30, width: 640, height: 420 })
 
 const detachedCanvasTile = useCanvasStore.getState().tiles.find((entry) => entry.id === 'two')
@@ -72,7 +72,7 @@ const gridState: GridWorkspaceState = {
   },
 }
 
-useCanvasStore.getState().restoreGridWorkspaceState('workspace-grid', 'Grid', { type: 'grid', workspacePanelOpen: true }, gridState)
+useCanvasStore.getState().restoreGridWorkspaceState('workspace-grid', 'Grid', { type: 'grid', workspacePanelOpen: true, sourceControlViewMode: 'list' }, gridState)
 useCanvasStore.getState().detachTileToFloating('two')
 const detachedGridState = useCanvasStore.getState()
 if (JSON.stringify(detachedGridState.gridViewState.rootNode).includes('"tileId":"two"')) {

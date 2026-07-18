@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
+import type { SourceControlViewMode, Workspace } from '@shared/types'
 import { WorkspaceExplorer } from './WorkspaceExplorer'
+import { WorkspaceSourceControl } from './WorkspaceSourceControl'
 
 const PANEL_MIN = 300
 const PANEL_MAX = 560
@@ -9,9 +11,12 @@ type WorkspacePanelTab = 'explorer' | 'agents' | 'source-control'
 
 interface WorkspacePanelProps {
   rootPath: string
+  workspaceId: string
+  sourceControlViewMode: SourceControlViewMode
+  onWorkspaceUpdated: (workspace: Workspace) => void
 }
 
-export function WorkspacePanel({ rootPath }: WorkspacePanelProps): React.ReactElement {
+export function WorkspacePanel({ rootPath, workspaceId, sourceControlViewMode, onWorkspaceUpdated }: WorkspacePanelProps): React.ReactElement {
   const [width, setWidth] = useState(PANEL_DEFAULT)
   const [resizing, setResizing] = useState(false)
   const [tab, setTab] = useState<WorkspacePanelTab>('explorer')
@@ -68,7 +73,16 @@ export function WorkspacePanel({ rootPath }: WorkspacePanelProps): React.ReactEl
           </button>
         ))}
       </div>
-      <div className="min-h-0 flex-1">{tab === 'explorer' && <WorkspaceExplorer rootPath={rootPath} />}</div>
+      <div className="min-h-0 flex-1">
+        {tab === 'explorer' && <WorkspaceExplorer rootPath={rootPath} />}
+        {tab === 'source-control' && (
+          <WorkspaceSourceControl
+            workspaceId={workspaceId}
+            sourceControlViewMode={sourceControlViewMode}
+            onWorkspaceUpdated={onWorkspaceUpdated}
+          />
+        )}
+      </div>
     </aside>
   )
 }

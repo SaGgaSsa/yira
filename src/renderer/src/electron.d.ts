@@ -20,6 +20,7 @@ import type {
   FileListOptions,
   FileListResult,
   FileSelectFolderResult,
+  GitStatusResult,
   NoteBlocks,
   MarkdownViewMode,
   NoteKind,
@@ -72,6 +73,13 @@ interface ElectronWorld {
     selectFolder: (defaultPath?: string) => Promise<FileSelectFolderResult | null>
     list: (rootPath: string, relativeDir: string, options?: FileListOptions) => Promise<FileListResult>
     open: (rootPath: string, relativePath: string) => Promise<void>
+  }
+  git: {
+    status: (workspaceId: string) => Promise<GitStatusResult>
+    stage: (workspaceId: string, relativePath: string, originalPath?: string) => Promise<void>
+    unstage: (workspaceId: string, relativePath: string, originalPath?: string) => Promise<void>
+    commit: (workspaceId: string, message: string) => Promise<void>
+    sync: (workspaceId: string) => Promise<void>
   }
   canvas: {
     load: (workspaceId: string, workspaceType?: string) => Promise<unknown | null>
