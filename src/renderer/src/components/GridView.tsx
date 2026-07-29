@@ -3,13 +3,18 @@ import { GripVertical } from 'lucide-react'
 import type { GridLayoutNode, GridLayoutSplitNode, TileState } from '@shared/types'
 import {
   commitGridDragAction,
-  computeGridDragAction,
   resizeGridChild,
+  type GridDropRect,
   type PendingGridDragAction,
 } from '@shared/gridWorkspaceState'
 import { TileContent, TILE_META } from './TileContent'
 import { TileActionButtons } from './TileActionButtons'
 import { TileCreationSelector, type TileCreationSelectorProps } from './TileCreationSelector'
+import {
+  getGridDragPreviewRect,
+  resolveGridDragPreview,
+  samePendingGridDragAction,
+} from '@/utils/gridDragPreview'
 import { getTerminalDisplayTitle } from '@/utils/terminalDisplayTitle'
 
 interface GridViewProps {
@@ -38,16 +43,33 @@ interface ResizeDragState {
 }
 
 interface MoveDragState {
+  pointerId: number
   sourceTileId: string
   pointerX: number
   pointerY: number
   pendingAction: PendingGridDragAction
+  targetRect: GridDropRect | null
+}
+
+interface LastMoveUpdate {
+  timestamp: number
+  pendingAction: PendingGridDragAction
+  targetRect: GridDropRect | null
 }
 
 function getTileTitle(tile: TileState, terminalTitles: Record<string, string>): string {
   if (tile.label?.trim()) return tile.label.trim()
   if (tile.type === 'terminal') return getTerminalDisplayTitle(tile, terminalTitles)
   return TILE_META[tile.type].label
+}
+
+function sameGridDropRect(first: GridDropRect | null, second: GridDropRect | null): boolean {
+  if (first === second) return true
+  if (!first || !second) return false
+  return first.left === second.left
+    && first.top === second.top
+    && first.width === second.width
+    && first.height === second.height
 }
 
 export function GridView({
@@ -70,16 +92,25 @@ export function GridView({
   const resizeDragRef = useRef<ResizeDragState | null>(null)
   const rootNodeRef = useRef<GridLayoutNode | null>(rootNode)
   const moveDragRef = useRef<MoveDragState | null>(null)
+  const lastMoveUpdateRef = useRef<LastMoveUpdate | null>(null)
   const [moveDrag, setMoveDrag] = useState<MoveDragState | null>(null)
   const tilesById = useMemo(() => new Map(tiles.map((tile) => [tile.id, tile])), [tiles])
   const draggedTileId = moveDrag?.sourceTileId ?? null
-  const displayRootNode = useMemo(() => {
-    if (!moveDrag || moveDrag.pendingAction.type === 'none') return rootNode
-    return commitGridDragAction(rootNode, moveDrag.pendingAction)
-  }, [moveDrag, rootNode])
+  const previewRect = moveDrag
+    ? getGridDragPreviewRect(moveDrag.pendingAction, moveDrag.targetRect)
+    : null
+  const containerRect = previewRect
+    ? containerRef.current?.getBoundingClientRect()
+    : null
 
   useEffect(() => {
+    const rootChanged = rootNodeRef.current !== rootNode
     rootNodeRef.current = rootNode
+    if (!rootChanged || !moveDragRef.current) return
+
+    moveDragRef.current = null
+    lastMoveUpdateRef.current = null
+    setMoveDrag(null)
   }, [rootNode])
 
   const startResize = useCallback((event: React.PointerEvent, splitNode: GridLayoutSplitNode, childIndex: number) => {
@@ -116,38 +147,55 @@ export function GridView({
     const drag = moveDragRef.current
     const currentRootNode = rootNodeRef.current
     const containerRect = containerRef.current?.getBoundingClientRect()
-    if (!drag || !currentRootNode || !containerRect) return
+    if (!drag || event.pointerId !== drag.pointerId || !currentRootNode || !containerRect) return
 
     const isOutside = event.clientX <= containerRect.left
       || event.clientX >= containerRect.right
       || event.clientY <= containerRect.top
       || event.clientY >= containerRect.bottom
-    let pendingAction: PendingGridDragAction = { type: 'none' }
+    let targetTileId: string | null = null
+    let targetRect: GridDropRect | null = null
 
     if (!isOutside) {
       const target = document.elementFromPoint(event.clientX, event.clientY)
       const targetElement = target instanceof Element
-        ? target.closest<HTMLElement>('[data-grid-tile-id]')
+        ? target.closest<HTMLElement>('[data-grid-drop-target-id]')
         : null
-      const targetTileId = targetElement?.dataset.gridTileId
-
-      if (targetTileId && targetTileId !== drag.sourceTileId) {
-        const targetRect = targetElement.getBoundingClientRect()
-        pendingAction = computeGridDragAction(
-          currentRootNode,
-          drag.sourceTileId,
-          targetTileId,
-          targetRect,
-          { x: event.clientX, y: event.clientY },
-        )
-      }
+      targetTileId = targetElement?.dataset.gridDropTargetId ?? null
+      targetRect = targetElement?.getBoundingClientRect() ?? null
     }
+
+    const resolved = resolveGridDragPreview(
+      currentRootNode,
+      drag.sourceTileId,
+      targetTileId,
+      targetRect,
+      { x: event.clientX, y: event.clientY },
+    )
+    const lastUpdate = lastMoveUpdateRef.current
+    const actionChanged = !samePendingGridDragAction(
+      lastUpdate?.pendingAction ?? drag.pendingAction,
+      resolved.pendingAction,
+    )
+    const rectChanged = !sameGridDropRect(
+      lastUpdate?.targetRect ?? drag.targetRect,
+      resolved.targetRect,
+    )
+    const timestamp = performance.now()
+
+    if (!actionChanged && !rectChanged && lastUpdate && timestamp - lastUpdate.timestamp < 50) return
 
     const nextDrag = {
       ...drag,
       pointerX: event.clientX,
       pointerY: event.clientY,
-      pendingAction,
+      pendingAction: resolved.pendingAction,
+      targetRect: resolved.targetRect,
+    }
+    lastMoveUpdateRef.current = {
+      timestamp,
+      pendingAction: resolved.pendingAction,
+      targetRect: resolved.targetRect,
     }
     moveDragRef.current = nextDrag
     setMoveDrag(nextDrag)
@@ -155,6 +203,7 @@ export function GridView({
 
   const clearMoveDrag = useCallback(() => {
     moveDragRef.current = null
+    lastMoveUpdateRef.current = null
     setMoveDrag(null)
   }, [])
 
@@ -163,12 +212,19 @@ export function GridView({
     event.preventDefault()
     event.stopPropagation()
     const nextDrag: MoveDragState = {
+      pointerId: event.pointerId,
       sourceTileId: tileId,
       pointerX: event.clientX,
       pointerY: event.clientY,
       pendingAction: { type: 'none' },
+      targetRect: null,
     }
     moveDragRef.current = nextDrag
+    lastMoveUpdateRef.current = {
+      timestamp: performance.now(),
+      pendingAction: nextDrag.pendingAction,
+      targetRect: nextDrag.targetRect,
+    }
     setMoveDrag(nextDrag)
     onFocusTile(tileId)
   }, [onFocusTile])
@@ -180,6 +236,9 @@ export function GridView({
       updateMoveDrag(event)
     }
     const handlePointerUp = (event: PointerEvent) => {
+      const activeDrag = moveDragRef.current
+      if (!activeDrag || event.pointerId !== activeDrag.pointerId) return
+
       updateMoveDrag(event)
       const drag = moveDragRef.current
       const containerRect = containerRef.current?.getBoundingClientRect()
@@ -195,14 +254,19 @@ export function GridView({
 
       clearMoveDrag()
     }
+    const handlePointerCancel = (event: PointerEvent) => {
+      const drag = moveDragRef.current
+      if (!drag || event.pointerId !== drag.pointerId) return
+      clearMoveDrag()
+    }
 
     window.addEventListener('pointermove', handlePointerMove)
     window.addEventListener('pointerup', handlePointerUp)
-    window.addEventListener('pointercancel', clearMoveDrag)
+    window.addEventListener('pointercancel', handlePointerCancel)
     return () => {
       window.removeEventListener('pointermove', handlePointerMove)
       window.removeEventListener('pointerup', handlePointerUp)
-      window.removeEventListener('pointercancel', clearMoveDrag)
+      window.removeEventListener('pointercancel', handlePointerCancel)
     }
   }, [clearMoveDrag, moveDrag, onSetRootNode, updateMoveDrag])
 
@@ -212,16 +276,14 @@ export function GridView({
       if (!tile) return null
       const Icon = TILE_META[tile.type].icon
       const title = getTileTitle(tile, terminalTitles)
-      const isDragPlaceholder = draggedTileId === tile.id && moveDrag?.pendingAction.type !== 'none'
+      const isDraggedTile = draggedTileId === tile.id
 
       return (
         <section
           key={node.id}
           data-grid-tile-id={tile.id}
           className={`flex h-full min-h-[180px] w-full min-w-[260px] flex-col overflow-hidden border bg-bg-secondary ${
-            draggedTileId === tile.id ? 'border-cyan-400' : 'border-border'
-          } ${
-            isDragPlaceholder ? 'border-dashed bg-cyan-400/5' : ''
+            isDraggedTile ? 'border-cyan-400' : 'border-border'
           }`}
           onMouseDown={() => onFocusTile(tile.id)}
         >
@@ -243,22 +305,16 @@ export function GridView({
               onClose={() => onCloseTile(tile.id)}
             />
           </div>
-          <div className="min-h-0 flex-1">
-            {isDragPlaceholder ? (
-              <div className="flex h-full items-center justify-center border border-dashed border-cyan-400/60 bg-cyan-400/10 text-cyan-300">
-                <GripVertical size={18} />
-              </div>
-            ) : (
-              <TileContent
-                key={`${tile.id}:${tileRefreshKeys[tile.id] ?? 0}`}
-                tile={tile}
-                isFocused={focusedTileId === tile.id}
-                edgeToEdge
-                onFocus={() => onFocusTile(tile.id)}
-                onUpdate={(patch) => onUpdateTile(tile.id, patch)}
-                onOpenBrowserTile={onOpenBrowserTile}
-              />
-            )}
+          <div className={`min-h-0 flex-1 ${isDraggedTile ? 'opacity-40 blur-[1px]' : ''}`}>
+            <TileContent
+              key={`${tile.id}:${tileRefreshKeys[tile.id] ?? 0}`}
+              tile={tile}
+              isFocused={focusedTileId === tile.id}
+              edgeToEdge
+              onFocus={() => onFocusTile(tile.id)}
+              onUpdate={(patch) => onUpdateTile(tile.id, patch)}
+              onOpenBrowserTile={onOpenBrowserTile}
+            />
           </div>
         </section>
       )
@@ -294,6 +350,40 @@ export function GridView({
     )
   }
 
+  const renderDropTargetNode = (node: GridLayoutNode): React.ReactElement => {
+    if (node.type === 'leaf') {
+      return (
+        <div
+          key={node.id}
+          data-grid-drop-target-id={node.tileId}
+          className="h-full min-h-[180px] w-full min-w-[260px]"
+        />
+      )
+    }
+
+    return (
+      <div
+        key={node.id}
+        className="flex h-full min-h-0 w-full min-w-0 flex-1 gap-1"
+        style={{ flexDirection: node.direction }}
+      >
+        {node.children.map((child, index) => (
+          <React.Fragment key={child.id}>
+            <div className="h-full min-h-0 min-w-0" style={{ flex: `${node.sizes[index] ?? 10} 1 0` }}>
+              {renderDropTargetNode(child)}
+            </div>
+            {index < node.children.length - 1 && (
+              <div
+                aria-hidden
+                className={`shrink-0 ${node.direction === 'row' ? 'w-2' : 'h-2'}`}
+              />
+            )}
+          </React.Fragment>
+        ))}
+      </div>
+    )
+  }
+
   return (
     <div ref={containerRef} className="relative flex h-full w-full overflow-hidden bg-bg-primary p-2">
       {tiles.length === 0 ? (
@@ -306,11 +396,26 @@ export function GridView({
         </div>
       ) : (
         <>
-          {displayRootNode ? (
-            renderNode(displayRootNode)
+          {rootNode ? (
+            renderNode(rootNode)
           ) : (
             <div className="flex h-full items-center justify-center text-text-secondary">
               <span className="nd-label">[ EMPTY GRID ]</span>
+            </div>
+          )}
+          {previewRect && containerRect && (
+            <div
+              className="pointer-events-none absolute left-0 top-0 z-10 box-border border-2 border-dashed border-cyan-400 bg-cyan-400/10 transition-[transform,width,height] duration-100"
+              style={{
+                transform: `translate(${previewRect.left - containerRect.left}px, ${previewRect.top - containerRect.top}px)`,
+                width: previewRect.width,
+                height: previewRect.height,
+              }}
+            />
+          )}
+          {moveDrag && rootNode && (
+            <div className="absolute inset-0 z-20 flex bg-transparent p-2">
+              {renderDropTargetNode(rootNode)}
             </div>
           )}
           {moveDrag && draggedTileId && tilesById.has(draggedTileId) && (

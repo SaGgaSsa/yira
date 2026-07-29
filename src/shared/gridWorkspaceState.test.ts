@@ -129,6 +129,41 @@ if (centerSwap.children[2].type !== 'leaf' || centerSwap.children[2].tileId !== 
 }
 if (centerSwap.sizes.join(',') !== '15,25,35') throw new Error('center swap must preserve layout sizes')
 
+const staleSourceCenterAction = computeGridDragAction(
+  dragRoot,
+  'missing-source',
+  'd',
+  dropRect,
+  { x: 350, y: 350 },
+)
+if (staleSourceCenterAction.type !== 'none') {
+  throw new Error('a center drop from a source missing from the committed root must be a no-op')
+}
+const staleSourceCenterCommit = commitGridDragAction(
+  dragRoot,
+  { type: 'swap', sourceTileId: 'missing-source', targetTileId: 'd' },
+)
+if (staleSourceCenterCommit !== dragRoot) {
+  throw new Error('committing an invalid-source center action must return the original tree')
+}
+const missingTargetCenterAction = computeGridDragAction(
+  dragRoot,
+  'a',
+  'missing-target',
+  dropRect,
+  { x: 350, y: 350 },
+)
+if (missingTargetCenterAction.type !== 'none') {
+  throw new Error('a center drop onto a target missing from the committed root must be a no-op')
+}
+const missingTargetCenterCommit = commitGridDragAction(
+  dragRoot,
+  { type: 'swap', sourceTileId: 'a', targetTileId: 'missing-target' },
+)
+if (missingTargetCenterCommit !== dragRoot) {
+  throw new Error('committing an invalid-target center action must return the original tree')
+}
+
 const moveRight = commitGridDragAction(
   dragRoot,
   computeGridDragAction(dragRoot, 'b', 'd', dropRect, { x: 480, y: 350 }),
@@ -187,6 +222,49 @@ const outerLeft = commitGridDragAction(
 if (!outerLeft || outerLeft.type !== 'split') throw new Error('outer-left move must keep a split root')
 if (outerLeft.children.map((child) => child.type === 'leaf' ? child.tileId : child.id).join(',') !== 'a,d,split-bc') {
   throw new Error('outer-left move must insert before the target parent when parent/grandparent layout allows it')
+}
+
+const outerTopAction = computeGridDragAction(dragRoot, 'd', 'a', dropRect, { x: 350, y: 210 })
+if (outerTopAction.type !== 'move' || outerTopAction.direction !== 'outer-top') {
+  throw new Error('outer-top must remain available as a move action')
+}
+const outerTop = commitGridDragAction(dragRoot, outerTopAction)
+const outerTopFirstChild = outerTop?.type === 'split' ? outerTop.children[0] : null
+if (outerTopFirstChild?.type !== 'split' || outerTopFirstChild.direction !== 'column') {
+  throw new Error('outer-top must place the source in a vertical split before the target')
+}
+
+const outerLeftAction = computeGridDragAction(dragRoot, 'd', 'c', dropRect, { x: 110, y: 350 })
+const outerRight = computeGridDragAction(dragRoot, 'a', 'c', dropRect, { x: 590, y: 350 })
+const outerBottom = computeGridDragAction(dragRoot, 'a', 'c', dropRect, { x: 350, y: 490 })
+if (outerLeftAction.type !== 'move' || outerLeftAction.direction !== 'outer-left') {
+  throw new Error('outer-left must remain available as a move action')
+}
+if (outerRight.type !== 'move' || outerRight.direction !== 'outer-right') {
+  throw new Error('outer-right must remain available as a move action')
+}
+if (outerBottom.type !== 'move' || outerBottom.direction !== 'outer-bottom') {
+  throw new Error('outer-bottom must remain available as a move action')
+}
+const committedOuterRight = commitGridDragAction(dragRoot, outerRight)
+if (
+  !committedOuterRight
+  || committedOuterRight.type !== 'split'
+  || committedOuterRight.direction !== 'row'
+  || committedOuterRight.children.map((child) => child.type === 'leaf' ? child.tileId : child.id).join(',') !== 'split-bc,a,d'
+) {
+  throw new Error('outer-right must place the source after the target parent in the containing row')
+}
+const committedOuterBottom = commitGridDragAction(dragRoot, outerBottom)
+const outerBottomTargetParent = committedOuterBottom?.type === 'split'
+  ? committedOuterBottom.children[0]
+  : null
+if (
+  outerBottomTargetParent?.type !== 'split'
+  || outerBottomTargetParent.direction !== 'column'
+  || outerBottomTargetParent.children.map((child) => child.type === 'leaf' ? child.tileId : child.id).join(',') !== 'b,c,a'
+) {
+  throw new Error('outer-bottom must place the source after the target in its containing column')
 }
 
 const noopRoot: GridLayoutNode = {

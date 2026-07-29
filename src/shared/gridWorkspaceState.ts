@@ -590,14 +590,16 @@ export function commitGridDragAction(
   action: PendingGridDragAction,
 ): GridLayoutNode | null {
   if (!rootNode || action.type === 'none') return rootNode
+  if (
+    action.sourceTileId === action.targetTileId
+    || !findLeafByTileId(rootNode, action.sourceTileId)
+    || !findLeafByTileId(rootNode, action.targetTileId)
+  ) {
+    return rootNode
+  }
 
   if (action.type === 'swap') {
     return swapGridTiles(rootNode, action.sourceTileId, action.targetTileId)
-  }
-
-  if (action.sourceTileId === action.targetTileId) return rootNode
-  if (!findLeafByTileId(rootNode, action.sourceTileId) || !findLeafByTileId(rootNode, action.targetTileId)) {
-    return rootNode
   }
 
   const { rootNode: withoutSource, movedSize } = removeTileForMove(rootNode, action.sourceTileId)
@@ -612,6 +614,9 @@ export function computeGridDragAction(
   pointer: GridPointerPosition | null | undefined,
 ): PendingGridDragAction {
   if (!rootNode || !targetTileId || sourceTileId === targetTileId) return { type: 'none' }
+  if (!findLeafByTileId(rootNode, sourceTileId) || !findLeafByTileId(rootNode, targetTileId)) {
+    return { type: 'none' }
+  }
 
   const direction = determineGridDropDirection(targetRect, pointer)
   if (!direction) return { type: 'none' }
