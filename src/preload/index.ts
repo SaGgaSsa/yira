@@ -117,6 +117,8 @@ contextBridge.exposeInMainWorld('electron', {
 
   window: {
     setTitle: (title: string) => ipcRenderer.invoke('window:setTitle', title),
+    setTitleBarOverlayTheme: (theme: 'dark' | 'light') =>
+      ipcRenderer.invoke('window:setTitleBarOverlayTheme', theme),
   },
 
   floating: {

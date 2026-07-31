@@ -111,6 +111,7 @@ interface ElectronWorld {
   }
   window: {
     setTitle: (title: string) => Promise<void>
+    setTitleBarOverlayTheme: (theme: 'dark' | 'light') => Promise<void>
   }
   floating: {
     open: (workspaceId: string, tileId: string, bounds?: WindowBounds) => Promise<void>

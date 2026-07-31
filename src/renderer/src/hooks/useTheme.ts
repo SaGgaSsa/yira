@@ -13,6 +13,8 @@ export function useTheme() {
       } else {
         root.classList.add('light')
       }
+
+      void window.electron.window.setTitleBarOverlayTheme(dark ? 'dark' : 'light')
     }
 
     if (appearance === 'system') {

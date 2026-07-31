@@ -70,6 +70,9 @@
   --space-4xl: 96px;
   --app-chrome-control-height: 3rem;
   --app-chrome-row-padding: 0.75rem;
+  --window-titlebar-height: 36px;
+  --window-titlebar-controls-left: env(titlebar-area-x, 0px);
+  --window-titlebar-controls-right: max(0px, calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw)));
   --display-xl: 72px;
   --display-lg: 48px;
   --display-md: 36px;
@@ -311,6 +314,17 @@ textarea {
   box-sizing: content-box;
   height: var(--app-chrome-control-height);
   padding-block: var(--app-chrome-row-padding);
+}
+
+.window-titlebar {
+  height: var(--window-titlebar-height);
+  padding-left: calc(var(--window-titlebar-controls-left) + 0.5rem);
+  padding-right: calc(var(--window-titlebar-controls-right) + 0.5rem);
+  -webkit-app-region: drag;
+}
+
+.window-titlebar button {
+  -webkit-app-region: no-drag;
 }
 
 .nd-label {

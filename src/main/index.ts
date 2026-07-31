@@ -21,6 +21,12 @@ const appDisplayName = is.dev ? DEV_APP_NAME : APP_NAME
 const REACT_DEVTOOLS_HINT = 'Download the React DevTools'
 const appIconPath = is.dev ? join(__dirname, '../../resources/icon.png') : join(process.resourcesPath, 'icon.png')
 const WINDOW_STATE_PATH = join(YIRA_HOME, 'window-state.json')
+const supportsTitleBarOverlay = process.platform === 'win32' || process.platform === 'linux'
+const titleBarOverlay = {
+  color: '#111111',
+  symbolColor: '#ffffff',
+  height: 36,
+}
 let mainWindow: BrowserWindow | null = null
 
 async function createWindow(): Promise<BrowserWindow> {
@@ -40,6 +46,12 @@ async function createWindow(): Promise<BrowserWindow> {
     show: false,
     backgroundColor: '#15171a',
     icon: appIconPath,
+    ...(supportsTitleBarOverlay
+      ? {
+          titleBarStyle: 'hidden' as const,
+          titleBarOverlay,
+        }
+      : {}),
     webPreferences: {
       preload: finalPreload,
       sandbox: false,
@@ -114,7 +126,7 @@ app.whenReady().then(async () => {
   registerFilesIPC()
   registerGitIPC()
   registerNotificationIPC()
-  registerWindowIPC()
+  registerWindowIPC(() => mainWindow)
   registerFloatingTilesIPC(() => mainWindow)
   registerUpdateIPC()
 

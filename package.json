@@ -1,6 +1,6 @@
 {
   "name": "yira",
-  "version": "0.1.40",
+  "version": "0.1.41",
   "private": true,
   "productName": "Yira",
   "description": "Infinite canvas terminal workspace",
@@ -14,6 +14,7 @@
     "yira-board-mcp": "dist/mcp/board-mcp.js"
   },
   "scripts": {
+    "test": "node --test scripts/*.test.mjs",
     "dev": "node ./scripts/dev-workspace.mjs",
     "build:main": "node ./scripts/electron-vite-build.mjs main",
     "build:preload": "node ./scripts/electron-vite-build.mjs preload",

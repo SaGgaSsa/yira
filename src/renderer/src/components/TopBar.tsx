@@ -1,10 +1,10 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
-import { Settings, Crosshair, Grid3X3, LayoutGrid, Columns, PanelLeft, PanelRight, SplitSquareHorizontal, SplitSquareVertical, ClipboardList } from 'lucide-react'
+import React from 'react'
+import { Settings, Grid3X3, LayoutGrid, Columns, PanelLeft, PanelRight, SplitSquareHorizontal, SplitSquareVertical, ClipboardList } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { SplitOrientation, ViewMode, WorkspaceType } from '@shared/types'
 
 interface TopBarProps {
+  hasWorkspace: boolean
   zoom: number
   viewMode: ViewMode
   splitOrientation: SplitOrientation
@@ -44,7 +44,7 @@ function SegmentedButton({
 
   return (
     <button
-      className={`nd-label inline-flex h-8 items-center gap-1.5 rounded-full px-3 transition-colors ${
+      className={`relative inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
         active
           ? 'bg-text-primary text-bg-primary'
           : 'text-text-secondary hover:bg-hover-bg hover:text-text-primary'
@@ -52,12 +52,12 @@ function SegmentedButton({
       onClick={onClick}
       disabled={disabled}
       title={title ?? label}
+      aria-label={label}
     >
-      <Icon size={13} />
-      <span>{label}</span>
+      <Icon size={14} />
       {badgeLabel && (
         <span
-          className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full border border-current px-1.5 font-mono text-[10px] leading-none"
+          className="absolute -right-1 -top-1 inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full border border-current bg-bg-secondary px-0.5 font-mono text-[8px] leading-none"
           title={`${badgeCount} board ${badgeCount === 1 ? 'task' : 'tasks'} waiting for review`}
         >
           {badgeLabel}
@@ -68,6 +68,7 @@ function SegmentedButton({
 }
 
 export function TopBar({
+  hasWorkspace,
   zoom,
   viewMode,
   splitOrientation,
@@ -86,150 +87,114 @@ export function TopBar({
   onOpenSettings,
 }: TopBarProps): React.ReactElement {
   const { t } = useTranslation()
-  const headerRef = useRef<HTMLElement>(null)
-  const [viewSelectorTop, setViewSelectorTop] = useState<number | null>(null)
   const zoomPercent = Math.round(zoom * 100)
   const SplitIcon = splitOrientation === 'horizontal' ? SplitSquareVertical : SplitSquareHorizontal
   const isGridWorkspace = workspaceType === 'grid'
 
-  const updateViewSelectorPosition = () => {
-    const header = headerRef.current
-    if (!header) return
-
-    const { top, height } = header.getBoundingClientRect()
-    const nextTop = top + height / 2
-    setViewSelectorTop((currentTop) => currentTop === nextTop ? currentTop : nextTop)
-  }
-
-  useLayoutEffect(() => {
-    updateViewSelectorPosition()
-  })
-
-  useEffect(() => {
-    const header = headerRef.current
-    if (!header) return
-
-    const observer = new ResizeObserver(updateViewSelectorPosition)
-    observer.observe(header)
-    window.addEventListener('resize', updateViewSelectorPosition)
-
-    return () => {
-      observer.disconnect()
-      window.removeEventListener('resize', updateViewSelectorPosition)
-    }
-  }, [])
-
-  const viewSelector = (
-    <div
-      className="fixed left-1/2 z-20 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-full border border-border-visible bg-bg-secondary px-1.5"
-      style={{
-        top: viewSelectorTop ?? 0,
-        height: 'var(--app-chrome-control-height)',
-      }}
-    >
-      <SegmentedButton
-        active={viewMode === 'fullview'}
-        label={t('shortcuts.focus')}
-        icon={Columns}
-        onClick={() => onSetViewMode('fullview')}
-      />
-      {isGridWorkspace ? (
-        <SegmentedButton
-          active={viewMode === 'gridview'}
-          label={t('shortcuts.grid')}
-          title={viewMode === 'gridview' ? t('workspace.canvas') : t('shortcuts.grid')}
-          icon={Grid3X3}
-          onClick={() => onSetViewMode(viewMode === 'gridview' ? 'canvas' : 'gridview')}
-        />
-      ) : (
-        <>
-          <SegmentedButton
-            active={viewMode === 'splitview'}
-            label={t('shortcuts.split')}
-            title={splitOrientation === 'horizontal' ? 'Split top/bottom' : 'Split left/right'}
-            icon={SplitIcon}
-            onClick={() => onSetViewMode('splitview')}
-            disabled={!canSplitView}
-          />
-          <SegmentedButton
-            active={viewMode === 'canvas'}
-            label={t('shortcuts.canvas')}
-            title={viewMode === 'canvas' ? t('shortcuts.grid') : t('shortcuts.canvas')}
-            icon={LayoutGrid}
-            onClick={() => onSetViewMode(viewMode === 'canvas' ? 'gridview' : 'canvas')}
-          />
-        </>
-      )}
-      {boardEnabled && (
-        <SegmentedButton
-          active={viewMode === 'board'}
-          label={t('tile.board')}
-          icon={ClipboardList}
-          badgeCount={boardReviewCount}
-          onClick={() => onSetViewMode('board')}
-        />
-      )}
-    </div>
-  )
-
   return (
-    <>
-      <header ref={headerRef} className="nd-panel app-chrome-row relative flex shrink-0 items-center justify-between border-x-0 border-t-0 px-6">
-        <button
-          className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border-visible bg-bg-secondary text-text-secondary transition-colors hover:text-text-display"
-          onClick={onToggleSidebar}
-          title={sidebarCollapsed ? t('sidebar.open') : t('sidebar.collapse')}
-        >
-          <PanelLeft size={16} />
-        </button>
+    <header className="window-titlebar nd-panel grid shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center border-x-0 border-t-0">
+      {hasWorkspace && (
+        <>
+          <div className="flex items-center gap-1">
+            <button
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
+              onClick={onToggleSidebar}
+              title={sidebarCollapsed ? t('sidebar.open') : t('sidebar.collapse')}
+              aria-label={sidebarCollapsed ? t('sidebar.open') : t('sidebar.collapse')}
+            >
+              <PanelLeft size={14} />
+            </button>
+          </div>
 
-        <div className="flex items-center gap-3">
-          {!isGridWorkspace && (
-            <>
-              <div className="nd-panel-raised flex h-10 items-center gap-1 rounded-full px-1">
+          <div className="flex items-center gap-1 rounded-md border border-border-visible bg-bg-secondary px-0.5">
+            <SegmentedButton
+              active={viewMode === 'fullview'}
+              label={t('shortcuts.focus')}
+              icon={Columns}
+              onClick={() => onSetViewMode('fullview')}
+            />
+            {isGridWorkspace ? (
+              <SegmentedButton
+                active={viewMode === 'gridview'}
+                label={t('shortcuts.grid')}
+                title={viewMode === 'gridview' ? t('workspace.canvas') : t('shortcuts.grid')}
+                icon={Grid3X3}
+                onClick={() => onSetViewMode(viewMode === 'gridview' ? 'canvas' : 'gridview')}
+              />
+            ) : (
+              <>
+                <SegmentedButton
+                  active={viewMode === 'splitview'}
+                  label={t('shortcuts.split')}
+                  title={splitOrientation === 'horizontal' ? 'Split top/bottom' : 'Split left/right'}
+                  icon={SplitIcon}
+                  onClick={() => onSetViewMode('splitview')}
+                  disabled={!canSplitView}
+                />
+                <SegmentedButton
+                  active={viewMode === 'canvas'}
+                  label={t('shortcuts.canvas')}
+                  title={viewMode === 'canvas' ? t('shortcuts.grid') : t('shortcuts.canvas')}
+                  icon={LayoutGrid}
+                  onClick={() => onSetViewMode(viewMode === 'canvas' ? 'gridview' : 'canvas')}
+                />
+              </>
+            )}
+            {boardEnabled && (
+              <SegmentedButton
+                active={viewMode === 'board'}
+                label={t('tile.board')}
+                icon={ClipboardList}
+                badgeCount={boardReviewCount}
+                onClick={() => onSetViewMode('board')}
+              />
+            )}
+          </div>
+
+          <div className="flex items-center justify-end gap-1">
+            {!isGridWorkspace && (
+              <>
                 <button
-                  className="nd-label inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
                   onClick={onFitToContent}
                   disabled={viewMode !== 'canvas'}
                   title={t('canvas.showAll')}
+                  aria-label={t('canvas.showAll')}
                 >
-                  <Columns size={13} />
-                  <span>{t('canvas.showAll')}</span>
+                  <Columns size={14} />
                 </button>
-              </div>
+                <button
+                  className="inline-flex h-7 items-center rounded-md px-1.5 font-mono text-xs text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
+                  onClick={onZoomToggle}
+                  title="Toggle zoom 100%"
+                >
+                  {zoomPercent}%
+                </button>
+              </>
+            )}
 
+            {hasWorkspacePanel && (
               <button
-                className="nd-panel-raised inline-flex h-10 items-center gap-2 rounded-full px-3 text-text-secondary transition-colors hover:text-text-primary"
-                onClick={onZoomToggle}
-                title="Toggle zoom 100%"
+                className={`inline-flex h-7 w-7 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display ${workspacePanelOpen ? 'text-text-display' : ''}`}
+                onClick={onToggleWorkspacePanel}
+                title={workspacePanelOpen ? 'Hide workspace panel' : 'Show workspace panel'}
+                aria-label={workspacePanelOpen ? 'Hide workspace panel' : 'Show workspace panel'}
               >
-                <Crosshair size={14} />
-                <span className="font-mono text-sm text-text-display">{zoomPercent}%</span>
+                <PanelRight size={14} />
               </button>
-            </>
-          )}
+            )}
 
-          {hasWorkspacePanel && (
             <button
-              className={`inline-flex h-10 w-10 items-center justify-center rounded-full border border-border-visible bg-bg-secondary text-text-secondary transition-colors hover:text-text-display ${workspacePanelOpen ? 'text-text-display' : ''}`}
-              onClick={onToggleWorkspacePanel}
-              title={workspacePanelOpen ? 'Hide workspace panel' : 'Show workspace panel'}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
+              onClick={onOpenSettings}
+              title={t('common.settings')}
+              aria-label={t('common.settings')}
             >
-              <PanelRight size={16} />
+              <Settings size={14} />
             </button>
-          )}
-
-          <button
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border-visible bg-bg-secondary text-text-secondary transition-colors hover:text-text-display"
-            onClick={onOpenSettings}
-            title={t('common.settings')}
-          >
-            <Settings size={16} />
-          </button>
-        </div>
-      </header>
-
-      {viewSelectorTop !== null && createPortal(viewSelector, document.body)}
-    </>
+          </div>
+        </>
+      )}
+    </header>
   )
 }

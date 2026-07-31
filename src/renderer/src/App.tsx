@@ -1836,8 +1836,29 @@ export default function App(): React.ReactElement {
   }
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-bg-primary text-text-primary">
-      {/* Sidebar — goes to the very top */}
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-bg-primary text-text-primary">
+      <TopBar
+        hasWorkspace={Boolean(activeWorkspaceId)}
+        zoom={viewport.zoom}
+        viewMode={viewMode}
+        splitOrientation={splitViewState.orientation}
+        workspaceType={activeWorkspaceType}
+        boardEnabled={boardEnabled}
+        boardReviewCount={boardReviewCount}
+        canSplitView={attachedTiles.length >= 2}
+        sidebarCollapsed={sidebarCollapsed}
+        onToggleSidebar={() => setSidebarCollapsed(c => !c)}
+        hasWorkspacePanel={hasWorkspacePanel}
+        workspacePanelOpen={activeWorkspaceConfig.workspacePanelOpen}
+        onToggleWorkspacePanel={toggleWorkspacePanel}
+        onSetViewMode={handleSetViewMode}
+        onFitToContent={() => getCanvasMethods()?.fitViewToContent()}
+        onZoomToggle={handleZoomToggle}
+        onOpenSettings={() => setShowSettings(true)}
+      />
+
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+      {/* Sidebar — below the native title bar */}
       <Sidebar
         collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed(c => !c)}
@@ -2180,26 +2201,6 @@ export default function App(): React.ReactElement {
         )}
 
         {activeWorkspaceId ? (
-          <>
-            <TopBar
-              zoom={viewport.zoom}
-              viewMode={viewMode}
-              splitOrientation={splitViewState.orientation}
-              workspaceType={activeWorkspaceType}
-              boardEnabled={boardEnabled}
-              boardReviewCount={boardReviewCount}
-              canSplitView={attachedTiles.length >= 2}
-              sidebarCollapsed={sidebarCollapsed}
-              onToggleSidebar={() => setSidebarCollapsed(c => !c)}
-              hasWorkspacePanel={hasWorkspacePanel}
-              workspacePanelOpen={activeWorkspaceConfig.workspacePanelOpen}
-              onToggleWorkspacePanel={toggleWorkspacePanel}
-              onSetViewMode={handleSetViewMode}
-              onFitToContent={() => getCanvasMethods()?.fitViewToContent()}
-              onZoomToggle={handleZoomToggle}
-              onOpenSettings={() => setShowSettings(true)}
-            />
-
             <div className="flex min-h-0 flex-1 overflow-hidden">
               <div className="relative min-w-0 flex flex-1 flex-col overflow-hidden">
                 {activeWorkspaceType === 'canvas' && viewMode === 'splitview' && (
@@ -2307,10 +2308,10 @@ export default function App(): React.ReactElement {
                 />
               )}
             </div>
-          </>
-        ) : (
-          <div className="flex flex-1 items-center justify-center bg-bg-primary" />
-        )}
+          ) : (
+            <div className="flex flex-1 items-center justify-center bg-bg-primary" />
+          )}
+      </div>
       </div>
 
       {/* Settings panel */}
