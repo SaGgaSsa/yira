@@ -10,6 +10,7 @@ import { isTerminalInputAttended } from '@/utils/terminalAttention'
 import { createNativeAttentionDelayScheduler } from '@/utils/nativeAttentionDelay'
 import { buildTerminalStartupCommand } from '@/utils/terminalLaunch'
 import { createTerminalFitScheduler } from '@/utils/terminalFitScheduler'
+import { sanitizeTerminalReplayBuffer } from '@/utils/terminalReplaySanitizer'
 import { getTerminalContainerBackground, getXtermTheme } from '@/utils/terminalTheme'
 import { buildTerminalContextMenuItems } from '@/utils/terminalContextMenu'
 import { shouldOpenTerminalLink } from '@/utils/terminalLinkActivation'
@@ -228,7 +229,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
       .then(({ buffer }) => {
         if (cancelled) return
         useCanvasStore.getState().registerTerminalCreated(tile.id)
-        if (buffer) term.write(buffer)
+        if (buffer) term.write(sanitizeTerminalReplayBuffer(buffer))
 
         // Listen for PTY data
         ptyUnsub = window.electron.terminal.onData(tile.id, (data: string) => {
