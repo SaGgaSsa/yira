@@ -41,6 +41,7 @@ function scheduleSave() {
       showGrid: state.showGrid,
       snapToGrid: state.snapToGrid,
       gridSize: state.gridSize,
+      updateDiagnosticsEnabled: state.updateDiagnosticsEnabled,
       browser: { homeUrl: state.browser.homeUrl },
       terminal: {
         attentionEnabled: state.terminal.attentionEnabled,
@@ -151,6 +152,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           showGrid: normalized.showGrid,
           snapToGrid: normalized.snapToGrid,
           gridSize: normalized.gridSize,
+          updateDiagnosticsEnabled: normalized.updateDiagnosticsEnabled,
           browser: {
             homeUrl: normalized.browser.homeUrl,
           },
@@ -191,6 +193,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       showGrid: state.showGrid,
       snapToGrid: state.snapToGrid,
       gridSize: state.gridSize,
+      updateDiagnosticsEnabled: state.updateDiagnosticsEnabled,
       browser: { homeUrl: state.browser.homeUrl },
       terminal: {
         attentionEnabled: state.terminal.attentionEnabled,

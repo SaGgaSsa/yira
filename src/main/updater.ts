@@ -3,6 +3,9 @@ import electronUpdater from 'electron-updater'
 import type { AppUpdater, ProgressInfo, UpdateDownloadedEvent, UpdateInfo } from 'electron-updater'
 import type { UpdateState } from '@shared/types'
 import { getUpdateErrorMessage } from './updateErrorMessage'
+import { getSafeUpdateErrorData, getSafeUpdaterLogData, UpdateDiagnostics, waitForUpdateDiagnosticTask } from './updateDiagnostics'
+import { loadStoredUserSettings } from './ipc/settings'
+import { YIRA_HOME } from './paths'
 
 const { autoUpdater } = electronUpdater
 
@@ -10,11 +13,47 @@ const UPDATE_STATE_CHANNEL = 'updates:state-changed'
 const STARTUP_CHECK_DELAY_MS = 5000
 const STARTUP_CHECK_TIMEOUT_MS = 8000
 const MANUAL_CHECK_TIMEOUT_MS = 20000
+const DIAGNOSTICS_INITIALIZATION_TIMEOUT_MS = 250
+const INSTALL_DIAGNOSTIC_FLUSH_TIMEOUT_MS = 250
 
 let updateState: UpdateState = createInitialState()
 let updaterRegistered = false
 let startupCheckScheduled = false
 let checkInFlight = false
+let updateDiagnosticsInitialization: Promise<void> | null = null
+
+const updateDiagnostics = new UpdateDiagnostics({
+  homeDir: YIRA_HOME,
+  getVersion: () => app.getVersion(),
+})
+
+function recordUpdateDiagnostic(event: string, data?: Record<string, unknown>): Promise<void> {
+  return updateDiagnostics.record({ event, data })
+}
+
+async function initializeUpdateDiagnostics(): Promise<void> {
+  try {
+    const settings = await loadStoredUserSettings()
+    const enabled = settings?.updateDiagnosticsEnabled === true
+    updateDiagnostics.setEnabled(enabled)
+    if (enabled) void recordUpdateDiagnostic('diagnostics-enabled')
+  } catch (error) {
+    console.error('Unable to initialize Yira update diagnostics:', error)
+    updateDiagnostics.setEnabled(false)
+  }
+}
+
+function ensureUpdateDiagnosticsInitialized(): Promise<void> {
+  updateDiagnosticsInitialization ??= initializeUpdateDiagnostics()
+  return updateDiagnosticsInitialization
+}
+
+async function waitForUpdateDiagnosticsInitialization(): Promise<void> {
+  await waitForUpdateDiagnosticTask(
+    ensureUpdateDiagnosticsInitialized(),
+    DIAGNOSTICS_INITIALIZATION_TIMEOUT_MS,
+  )
+}
 
 function createInitialState(): UpdateState {
   return {
@@ -56,6 +95,7 @@ function setCheckingState(message: string): void {
 }
 
 function handleUpdateAvailable(info: UpdateInfo): void {
+  void recordUpdateDiagnostic('update-available', { version: info.version ?? null })
   setUpdateState({
     status: 'available',
     availableVersion: info.version ?? null,
@@ -65,6 +105,7 @@ function handleUpdateAvailable(info: UpdateInfo): void {
 }
 
 function handleUpdateNotAvailable(): void {
+  void recordUpdateDiagnostic('update-not-available')
   setUpdateState({
     status: 'up-to-date',
     availableVersion: null,
@@ -74,14 +115,17 @@ function handleUpdateNotAvailable(): void {
 }
 
 function handleDownloadProgress(progress: ProgressInfo): void {
+  const percent = Math.max(0, Math.min(100, Math.round(progress.percent)))
+  void recordUpdateDiagnostic('download-progress', { percent })
   setUpdateState({
     status: 'downloading',
-    progressPercent: Math.max(0, Math.min(100, Math.round(progress.percent))),
+    progressPercent: percent,
     message: 'Downloading the latest update in the background.',
   })
 }
 
 function handleUpdateDownloaded(event: UpdateDownloadedEvent): void {
+  void recordUpdateDiagnostic('update-downloaded', { version: event.version ?? updateState.availableVersion })
   setUpdateState({
     status: 'downloaded',
     availableVersion: event.version ?? updateState.availableVersion,
@@ -92,6 +136,7 @@ function handleUpdateDownloaded(event: UpdateDownloadedEvent): void {
 
 function handleUpdateError(error: unknown): void {
   console.error('Yira update error:', error)
+  void recordUpdateDiagnostic('update-error', getSafeUpdateErrorData(error))
   setUpdateState({
     status: 'error',
     progressPercent: null,
@@ -109,7 +154,11 @@ function getCheckTimeoutMessage(reason: 'startup' | 'manual'): string {
 }
 
 async function runUpdateCheck(reason: 'startup' | 'manual'): Promise<UpdateState> {
+  await waitForUpdateDiagnosticsInitialization()
+  void recordUpdateDiagnostic('check-requested', { source: reason })
+
   if (!app.isPackaged) {
+    void recordUpdateDiagnostic('check-skipped', { reason: 'unpackaged' })
     setUpdateState({
       status: 'unsupported',
       availableVersion: null,
@@ -119,7 +168,15 @@ async function runUpdateCheck(reason: 'startup' | 'manual'): Promise<UpdateState
     return updateState
   }
 
-  if (checkInFlight || updateState.status === 'downloading') return updateState
+  if (checkInFlight) {
+    void recordUpdateDiagnostic('check-skipped', { reason: 'in-flight' })
+    return updateState
+  }
+
+  if (updateState.status === 'downloading') {
+    void recordUpdateDiagnostic('check-skipped', { reason: 'downloading' })
+    return updateState
+  }
 
   checkInFlight = true
   setCheckingState(reason === 'startup'
@@ -131,6 +188,7 @@ async function runUpdateCheck(reason: 'startup' | 'manual'): Promise<UpdateState
   const timeout = new Promise<void>((resolve) => {
     timeoutId = setTimeout(() => {
       timedOut = true
+      void recordUpdateDiagnostic('check-timeout', { source: reason })
       setUpdateState({
         status: 'error',
         progressPercent: null,
@@ -152,17 +210,41 @@ async function runUpdateCheck(reason: 'startup' | 'manual'): Promise<UpdateState
   return updateState
 }
 
-function installDownloadedUpdate(): void {
-  if (updateState.status !== 'downloaded') return
+async function installDownloadedUpdate(): Promise<void> {
+  await waitForUpdateDiagnosticsInitialization()
+  const eligible = updateState.status === 'downloaded'
+  const installRequest = recordUpdateDiagnostic('install-requested', { eligible, status: updateState.status })
+  if (!eligible) {
+    void installRequest
+    return
+  }
+
+  const quitAndInstallRequest = recordUpdateDiagnostic('quit-and-install-requested')
+  await waitForUpdateDiagnosticTask(quitAndInstallRequest, INSTALL_DIAGNOSTIC_FLUSH_TIMEOUT_MS)
   getUpdater().quitAndInstall(false, true)
 }
 
 function registerUpdaterEvents(): void {
   const updater = getUpdater()
+  updater.logger = {
+    info: (message?: unknown) => {
+      console.info(message)
+      void recordUpdateDiagnostic('updater-library-message', { level: 'info', ...getSafeUpdaterLogData(message) })
+    },
+    warn: (message?: unknown) => {
+      console.warn(message)
+      void recordUpdateDiagnostic('updater-library-message', { level: 'warn', ...getSafeUpdaterLogData(message) })
+    },
+    error: (message?: unknown) => {
+      console.error(message)
+      void recordUpdateDiagnostic('updater-library-message', { level: 'error', ...getSafeUpdaterLogData(message) })
+    },
+  }
   updater.autoDownload = true
   updater.autoInstallOnAppQuit = true
 
   updater.on('checking-for-update', () => {
+    void recordUpdateDiagnostic('checking')
     setCheckingState('Checking for updates.')
   })
   updater.on('update-available', handleUpdateAvailable)
@@ -172,16 +254,33 @@ function registerUpdaterEvents(): void {
   updater.on('error', handleUpdateError)
 }
 
+function registerUpdateLifecycleDiagnostics(): void {
+  app.on('before-quit', () => {
+    if (updateState.status !== 'downloaded') return
+    void recordUpdateDiagnostic('app-before-quit', { updateDownloaded: true })
+  })
+  app.on('will-quit', () => {
+    if (updateState.status !== 'downloaded') return
+    void recordUpdateDiagnostic('app-will-quit', { updateDownloaded: true })
+  })
+  app.on('quit', () => {
+    if (updateState.status !== 'downloaded') return
+    void recordUpdateDiagnostic('app-quit', { updateDownloaded: true })
+  })
+}
+
 export function registerUpdateIPC(): void {
   if (updaterRegistered) return
 
   updaterRegistered = true
   registerUpdaterEvents()
+  registerUpdateLifecycleDiagnostics()
+  void ensureUpdateDiagnosticsInitialized()
 
   ipcMain.handle('updates:getState', async (): Promise<UpdateState> => updateState)
   ipcMain.handle('updates:check', async (): Promise<UpdateState> => runUpdateCheck('manual'))
   ipcMain.handle('updates:install', async (): Promise<void> => {
-    installDownloadedUpdate()
+    await installDownloadedUpdate()
   })
 }
 

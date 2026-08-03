@@ -122,6 +122,7 @@ export interface UserSettings {
   showGrid: boolean
   snapToGrid: boolean
   gridSize: number
+  updateDiagnosticsEnabled: boolean
   browser: {
     homeUrl: string
   }
@@ -148,6 +149,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   showGrid: true,
   snapToGrid: true,
   gridSize: 20,
+  updateDiagnosticsEnabled: false,
   browser: {
     homeUrl: 'about:blank',
   },

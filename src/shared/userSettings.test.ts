@@ -9,6 +9,21 @@ if (defaults.terminal.attentionEnabled !== true) throw new Error('terminal atten
 if (defaults.terminal.themeId !== DEFAULT_TERMINAL_THEME_ID) throw new Error('terminal theme must default to Yira default')
 if (defaults.notifications.attentionDelayEnabled !== true) throw new Error('native attention delay must default on')
 
+const diagnosticsDefault = normalizeUserSettings({} as unknown as Partial<UserSettings>)
+if (diagnosticsDefault.updateDiagnosticsEnabled !== false) {
+  throw new Error('update diagnostics must default disabled')
+}
+
+const diagnosticsEnabled = normalizeUserSettings({ updateDiagnosticsEnabled: true } as unknown as Partial<UserSettings>)
+if (diagnosticsEnabled.updateDiagnosticsEnabled !== true) {
+  throw new Error('enabled update diagnostics must be preserved')
+}
+
+const diagnosticsInvalid = normalizeUserSettings({ updateDiagnosticsEnabled: 'yes' } as unknown as Partial<UserSettings>)
+if (diagnosticsInvalid.updateDiagnosticsEnabled !== false) {
+  throw new Error('invalid update diagnostics values must normalize to disabled')
+}
+
 const small = normalizeUserSettings({ fontSize: 'small' })
 if (small.interfaceFontSizePx !== 14) throw new Error('small legacy font must migrate to 14px interface font')
 if (small.tileFontSizePx !== 14) throw new Error('small legacy font must migrate to 14px tile font')
