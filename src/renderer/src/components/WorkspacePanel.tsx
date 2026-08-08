@@ -14,9 +14,11 @@ interface WorkspacePanelProps {
   workspaceId: string
   sourceControlViewMode: SourceControlViewMode
   onWorkspaceUpdated: (workspace: Workspace) => void
+  activeFilePath: string | null
+  onOpenFile: (relativePath: string) => Promise<void>
 }
 
-export function WorkspacePanel({ rootPath, workspaceId, sourceControlViewMode, onWorkspaceUpdated }: WorkspacePanelProps): React.ReactElement {
+export function WorkspacePanel({ rootPath, workspaceId, sourceControlViewMode, onWorkspaceUpdated, activeFilePath, onOpenFile }: WorkspacePanelProps): React.ReactElement {
   const [width, setWidth] = useState(PANEL_DEFAULT)
   const [resizing, setResizing] = useState(false)
   const [tab, setTab] = useState<WorkspacePanelTab>('explorer')
@@ -74,7 +76,7 @@ export function WorkspacePanel({ rootPath, workspaceId, sourceControlViewMode, o
         ))}
       </div>
       <div className="min-h-0 flex-1">
-        {tab === 'explorer' && <WorkspaceExplorer rootPath={rootPath} />}
+        {tab === 'explorer' && <WorkspaceExplorer rootPath={rootPath} activeFilePath={activeFilePath} onOpenFile={onOpenFile} />}
         {tab === 'source-control' && (
           <WorkspaceSourceControl
             workspaceId={workspaceId}

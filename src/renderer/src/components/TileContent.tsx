@@ -1,16 +1,18 @@
 import React from 'react'
-import { Terminal, StickyNote, Globe, Clock } from 'lucide-react'
+import { Terminal, StickyNote, Globe, Clock, FileText } from 'lucide-react'
 import type { TileState } from '@shared/types'
 import { TerminalTileWrapper } from './TerminalTile'
 import { NoteTile } from './NoteTile'
 import { BrowserTile } from './BrowserTile'
 import { TimerTile } from './TimerTile'
+import { FilesTile } from './FilesTile'
 
 export const TILE_META = {
   terminal: { label: 'Terminal', icon: Terminal },
   note: { label: 'Note', icon: StickyNote },
   browser: { label: 'Browser', icon: Globe },
   timer: { label: 'Timer', icon: Clock },
+  files: { label: 'File', icon: FileText },
 } as const
 
 interface TileContentProps {
@@ -20,11 +22,12 @@ interface TileContentProps {
   isVisible?: boolean
   autoFocus?: boolean
   onFocus: () => void
-  onUpdate: (patch: Partial<TileState>) => void
+  onUpdate: (patch: Partial<TileState>) => void | Promise<void>
   onOpenBrowserTile?: (url: string) => void
+  workspaceRootPath?: string
 }
 
-export function TileContent({ tile, isFocused, edgeToEdge = false, isVisible = true, autoFocus = false, onFocus, onUpdate, onOpenBrowserTile }: TileContentProps): React.ReactElement {
+export function TileContent({ tile, isFocused, edgeToEdge = false, isVisible = true, autoFocus = false, onFocus, onUpdate, onOpenBrowserTile, workspaceRootPath = '' }: TileContentProps): React.ReactElement {
   if (tile.type === 'terminal') {
     return (
       <TerminalTileWrapper
@@ -51,6 +54,18 @@ export function TileContent({ tile, isFocused, edgeToEdge = false, isVisible = t
 
   if (tile.type === 'timer') {
     return <TimerTile tile={tile} isFocused={isFocused} onUpdate={onUpdate} />
+  }
+
+  if (tile.type === 'files') {
+    return (
+      <FilesTile
+        tile={tile}
+        rootPath={workspaceRootPath}
+        isFocused={isFocused}
+        isVisible={isVisible}
+        onUpdate={onUpdate}
+      />
+    )
   }
 
   const meta = TILE_META[tile.type as keyof typeof TILE_META]

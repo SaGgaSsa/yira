@@ -9,6 +9,20 @@ const state: CanvasState = {
     { id: 'kanban', type: 'kanban', x: 0, y: 0, width: 10, height: 10, zIndex: 4 } as unknown as CanvasState['tiles'][number],
     { id: 'timer', type: 'timer', x: 0, y: 0, width: 10, height: 10, zIndex: 5 },
     { id: 'files', type: 'files', x: 0, y: 0, width: 10, height: 10, zIndex: 6 } as unknown as CanvasState['tiles'][number],
+    {
+      id: 'restored-file',
+      type: 'files',
+      x: 0,
+      y: 0,
+      width: 10,
+      height: 10,
+      zIndex: 7,
+      filePath: 'src/restored.ts',
+      filePreview: true,
+      fileDraft: 'restored draft',
+      fileVersion: 'expected-sha-256',
+      fileChangeToken: 'metadata-token',
+    } as unknown as CanvasState['tiles'][number],
   ],
   groups: [],
   viewport: { tx: 0, ty: 0, zoom: 1 },
@@ -33,6 +47,7 @@ const expected = new Map([
   ['note', { width: 900, height: 800 }],
   ['browser', { width: 1800, height: 800 }],
   ['timer', { width: 900, height: 400 }],
+  ['restored-file', { width: 900, height: 500 }],
 ])
 
 for (const tile of useCanvasStore.getState().tiles) {
@@ -45,6 +60,36 @@ for (const tile of useCanvasStore.getState().tiles) {
 
 if (useCanvasStore.getState().tiles.some((tile) => tile.id === 'kanban' || tile.id === 'files')) {
   throw new Error('legacy files and kanban tiles must be dropped when restoring canvas state')
+}
+
+const restoredFile = useCanvasStore.getState().tiles.find((tile) => tile.id === 'restored-file')
+if (
+  !restoredFile ||
+  restoredFile.filePath !== 'src/restored.ts' ||
+  restoredFile.filePreview !== true ||
+  restoredFile.fileDraft !== 'restored draft' ||
+  restoredFile.fileVersion !== 'expected-sha-256' ||
+  restoredFile.fileChangeToken !== 'metadata-token'
+) {
+  throw new Error('canvas store must restore path-backed file tiles and their persisted state')
+}
+
+useCanvasStore.getState().updateTile('restored-file', {
+  fileDraft: 'edited draft',
+  filePreview: true,
+})
+const editedPreview = useCanvasStore.getState().tiles.find((tile) => tile.id === 'restored-file')
+if (editedPreview?.filePreview !== false || editedPreview.fileDraft !== 'edited draft') {
+  throw new Error('editing a preview through the store must pin it even when the patch includes a preview flag')
+}
+
+useCanvasStore.getState().updateTile('restored-file', {
+  label: 'Renamed file',
+  filePreview: true,
+})
+const renamedPreview = useCanvasStore.getState().tiles.find((tile) => tile.id === 'restored-file')
+if (renamedPreview?.filePreview !== false || renamedPreview.label !== 'Renamed file') {
+  throw new Error('renaming a preview through the store must pin it even when the patch includes a preview flag')
 }
 
 useCanvasStore.getState().updateTile('note', { width: 2400, height: 1200 })

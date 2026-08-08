@@ -223,6 +223,15 @@ type TranslationResources = {
     retry: string
     size: string
     type: string
+    editor: string
+    preview: string
+    saved: string
+    dirty: string
+    conflict: string
+    missing: string
+    unsupported: string
+    reload: string
+    overwrite: string
   }
   terminal: {
     shellProfiles: string
@@ -488,6 +497,15 @@ const en: TranslationResources = {
     retry: 'Retry',
     size: 'Size',
     type: 'Type',
+    editor: 'Editor',
+    preview: 'Preview',
+    saved: 'Saved',
+    dirty: 'Unsaved changes',
+    conflict: 'Conflict',
+    missing: 'This file no longer exists.',
+    unsupported: 'This file cannot be edited as text.',
+    reload: 'Reload',
+    overwrite: 'Overwrite',
   },
   terminal: {
     shellProfiles: 'Shell Profiles',
@@ -753,6 +771,15 @@ const es: TranslationResources = {
     retry: 'Reintentar',
     size: 'Tamaño',
     type: 'Tipo',
+    editor: 'Editor',
+    preview: 'Vista previa',
+    saved: 'Guardado',
+    dirty: 'Cambios sin guardar',
+    conflict: 'Conflicto',
+    missing: 'Este archivo ya no existe.',
+    unsupported: 'Este archivo no se puede editar como texto.',
+    reload: 'Recargar',
+    overwrite: 'Sobrescribir',
   },
   terminal: {
     shellProfiles: 'Perfiles de shell',

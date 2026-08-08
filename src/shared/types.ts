@@ -206,6 +206,20 @@ export interface UpdateState {
   message: string | null
 }
 
+// ─── Window close preparation ─────────────────────────────────────────────
+
+export type WindowClosePreparationPhase = 'flush' | 'persist'
+
+export interface WindowClosePreparationRequest {
+  requestId: string
+  phase: WindowClosePreparationPhase
+}
+
+export interface WindowClosePreparationResponse extends WindowClosePreparationRequest {
+  ok: boolean
+  error?: string
+}
+
 // ─── Notifications ────────────────────────────────────────────────────────
 
 export interface NotificationAttentionOptions {
@@ -282,6 +296,33 @@ export interface FileSelectFolderResult {
   name: string
 }
 
+export interface FileRevision {
+  size: number
+  modifiedAt: string
+  metadataToken: string
+  sha256: string
+}
+
+export type FileReadResult =
+  | { status: 'ready'; content: string; revision: FileRevision }
+  | { status: 'unsupported'; reason: string }
+  | { status: 'missing' }
+
+export type FileStatResult =
+  | { status: 'available'; revision: FileRevision }
+  | { status: 'missing' }
+
+export type FileWriteResult =
+  | { status: 'saved'; revision: FileRevision }
+  | { status: 'conflict'; revision: FileRevision }
+  | { status: 'missing' }
+
+export interface FileWriteInput {
+  content: string
+  expectedVersion: string
+  force?: boolean
+}
+
 // ─── Board ─────────────────────────────────────────────────────────────────
 
 export type BoardStatus = 'backlog' | 'ready' | 'in_progress' | 'review' | 'done'
@@ -338,7 +379,7 @@ export const BOARD_COLUMNS: Array<{ id: BoardStatus; label: string }> = [
 
 // ─── Tile Types ────────────────────────────────────────────────────────────
 
-export type TileType = 'terminal' | 'note' | 'browser' | 'timer'
+export type TileType = 'terminal' | 'note' | 'browser' | 'timer' | 'files'
 export type TimerStatus = 'idle' | 'running' | 'paused' | 'done'
 
 export type NoteColor = 'yellow' | 'green' | 'blue' | 'pink' | 'purple' | 'orange' | 'white' | 'dark'
@@ -430,6 +471,7 @@ export const TILE_SIZE_PRESETS: Record<TileType, TileSizePreset> = {
   note: { defaultWidth: 900, defaultHeight: 800, minWidth: 900, minHeight: 800 },
   browser: { defaultWidth: 1800, defaultHeight: 800, minWidth: 1800, minHeight: 800 },
   timer: { defaultWidth: 900, defaultHeight: 400, minWidth: 900, minHeight: 400 },
+  files: { defaultWidth: 1200, defaultHeight: 800, minWidth: 900, minHeight: 500 },
 }
 
 export function getTileSizePreset(type: TileType): TileSizePreset {
@@ -510,6 +552,15 @@ export interface TileState {
 
   // Browser-specific
   browserUrl?: string
+
+  // Files-specific
+  filePath?: string
+  filePreview?: boolean
+  fileDraft?: string
+  /** SHA-256 revision expected by a subsequent write. */
+  fileVersion?: string
+  /** File metadata token used to detect external changes. */
+  fileChangeToken?: string
 
   // Timer-specific
   timerDurationMs?: number

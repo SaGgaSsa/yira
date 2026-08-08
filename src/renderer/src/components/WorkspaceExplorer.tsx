@@ -27,16 +27,18 @@ interface ExplorerTreeNodeProps {
   onToggleDirectory: (node: ExplorerNode) => void
   onOpenFile: (node: ExplorerNode) => void
   onRetry: (node: ExplorerNode) => void
+  activeFilePath: string | null
 }
 
-function ExplorerTreeNode({ node, depth, onToggleDirectory, onOpenFile, onRetry }: ExplorerTreeNodeProps): React.ReactElement {
+function ExplorerTreeNode({ node, depth, onToggleDirectory, onOpenFile, onRetry, activeFilePath }: ExplorerTreeNodeProps): React.ReactElement {
   const isDirectory = node.kind === 'directory'
+  const isActiveFile = !isDirectory && node.relativePath === activeFilePath
   const Icon = isDirectory ? Folder : File
 
   return (
     <li>
       <button
-        className="flex w-full items-center gap-1.5 py-1.5 pr-3 text-left text-sm text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
+        className={`flex w-full items-center gap-1.5 py-1.5 pr-3 text-left text-sm transition-colors hover:bg-hover-bg hover:text-text-display ${isActiveFile ? 'bg-active-bg text-text-display' : 'text-text-secondary'}`}
         style={{ paddingLeft: `${12 + depth * 16}px` }}
         onClick={() => isDirectory ? onToggleDirectory(node) : onOpenFile(node)}
         title={node.name}
@@ -76,6 +78,7 @@ function ExplorerTreeNode({ node, depth, onToggleDirectory, onOpenFile, onRetry 
               onToggleDirectory={onToggleDirectory}
               onOpenFile={onOpenFile}
               onRetry={onRetry}
+              activeFilePath={activeFilePath}
             />
           ))}
         </div>
@@ -86,9 +89,11 @@ function ExplorerTreeNode({ node, depth, onToggleDirectory, onOpenFile, onRetry 
 
 interface WorkspaceExplorerProps {
   rootPath: string
+  activeFilePath: string | null
+  onOpenFile: (relativePath: string) => Promise<void>
 }
 
-export function WorkspaceExplorer({ rootPath }: WorkspaceExplorerProps): React.ReactElement {
+export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile }: WorkspaceExplorerProps): React.ReactElement {
   const [root, setRoot] = useState<ExplorerNode>(() => createExplorerNode('', rootLabel(rootPath), 'directory'))
   const [openError, setOpenError] = useState<string | null>(null)
   const rootName = useMemo(() => rootLabel(rootPath), [rootPath])
@@ -129,10 +134,11 @@ export function WorkspaceExplorer({ rootPath }: WorkspaceExplorerProps): React.R
 
   const handleOpenFile = useCallback((node: ExplorerNode) => {
     setOpenError(null)
-    void window.electron.files.open(rootPath, node.relativePath).catch((error: unknown) => {
-      setOpenError(errorMessage(error))
-    })
-  }, [rootPath])
+    void onOpenFile(node.relativePath)
+      .catch((error: unknown) => {
+        setOpenError(errorMessage(error))
+      })
+  }, [onOpenFile])
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -145,6 +151,7 @@ export function WorkspaceExplorer({ rootPath }: WorkspaceExplorerProps): React.R
             onToggleDirectory={handleToggleDirectory}
             onOpenFile={handleOpenFile}
             onRetry={handleRetry}
+            activeFilePath={activeFilePath}
           />
         </ul>
       </div>

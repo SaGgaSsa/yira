@@ -13,6 +13,7 @@ const expected: Record<TileType, { defaultWidth: number; defaultHeight: number; 
   note: { defaultWidth: 900, defaultHeight: 800, minWidth: 900, minHeight: 800 },
   browser: { defaultWidth: 1800, defaultHeight: 800, minWidth: 1800, minHeight: 800 },
   timer: { defaultWidth: 900, defaultHeight: 400, minWidth: 900, minHeight: 400 },
+  files: { defaultWidth: 1200, defaultHeight: 800, minWidth: 900, minHeight: 500 },
 }
 
 for (const [type, preset] of Object.entries(expected) as Array<[TileType, typeof expected[TileType]]>) {
@@ -41,4 +42,9 @@ if (smallNote.width !== 900 || smallNote.height !== 800) {
 const largeNote = normalizeTileSize('note', { width: 2400, height: 1200 })
 if (largeNote.width !== 2400 || largeNote.height !== 1200) {
   throw new Error(`note size must not be capped, got ${largeNote.width}x${largeNote.height}`)
+}
+
+const smallFiles = normalizeTileSize('files', { width: 100, height: 100 })
+if (smallFiles.width !== 900 || smallFiles.height !== 500) {
+  throw new Error(`files size must normalize to 900x500, got ${smallFiles.width}x${smallFiles.height}`)
 }

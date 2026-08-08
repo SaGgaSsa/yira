@@ -16,6 +16,12 @@ import {
   TERMINAL_ATTENTION_GRACE_MS,
   type TerminalAttentionEntry,
 } from '@/utils/terminalAttention'
+import {
+  pinFileTileForDetach,
+  pinFileTileForDraft,
+  pinFileTileForGrouping,
+  pinFileTileForRename,
+} from '@/utils/fileTileLifecycle'
 
 const UNTITLED_GROUP_NAME = 'Untitled Group'
 const DEFAULT_GROUP_COLOR: GroupColorId = GROUP_COLOR_ORDER[0]
@@ -158,7 +164,27 @@ function isSupportedTile(tile: TileState): boolean {
   return tile.type === 'terminal' ||
     tile.type === 'note' ||
     tile.type === 'browser' ||
-    tile.type === 'timer'
+    tile.type === 'timer' ||
+    (tile.type === 'files' && typeof tile.filePath === 'string' && tile.filePath.trim().length > 0)
+}
+
+function hasPatchProperty(patch: Partial<TileState>, property: keyof TileState): boolean {
+  return Object.prototype.hasOwnProperty.call(patch, property)
+}
+
+function pinFilesTileForPatch(tile: TileState, patch: Partial<TileState>): TileState {
+  if (tile.type !== 'files') return { ...tile, ...patch }
+  const nextTile = { ...tile, ...patch }
+  if (hasPatchProperty(patch, 'fileDraft') && typeof patch.fileDraft === 'string') {
+    return pinFileTileForDraft(nextTile, patch.fileDraft)
+  }
+  if (hasPatchProperty(patch, 'label') && typeof patch.label === 'string') {
+    return pinFileTileForRename(nextTile, patch.label)
+  }
+  if (hasPatchProperty(patch, 'groupId') && patch.groupId) {
+    return pinFileTileForGrouping(nextTile)
+  }
+  return nextTile
 }
 
 function isTerminalNotificationMuted(tile: TileState): boolean {
@@ -482,7 +508,11 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   }),
 
   updateTile: (tileId, patch) => set((s) => {
-    const nextTiles = s.tiles.map(t => t.id === tileId ? normalizeTile({ ...t, ...patch }) : t)
+    const nextTiles = s.tiles.map((tile) => (
+      tile.id === tileId
+        ? normalizeTile(pinFilesTileForPatch(tile, patch))
+        : tile
+    ))
     if (patch.notificationsMuted !== true) return { tiles: nextTiles }
 
     return {
@@ -495,7 +525,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
 
   detachTileToFloating: (tileId, bounds) => set((s) => {
     const detached = detachTileForFloating({
-      tiles: s.tiles,
+      tiles: s.tiles.map((tile) => tile.id === tileId ? pinFileTileForDetach(tile) : tile),
       tileId,
       gridRootNode: s.activeWorkspaceConfig.type === 'grid' ? s.gridViewState.rootNode : undefined,
       bounds,
@@ -668,7 +698,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       const selected = new Set(nextIds)
       const nextTiles = s.tiles.map((tile) => (
         selected.has(tile.id)
-          ? { ...tile, groupId: group.id }
+          ? { ...pinFileTileForGrouping(tile), groupId: group.id }
           : tile
       ))
       const remainingGroups = s.groups
@@ -697,7 +727,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     const selected = new Set(nextIds)
     const nextTiles = s.tiles.map((tile) => (
       selected.has(tile.id)
-        ? { ...tile, groupId }
+        ? { ...pinFileTileForGrouping(tile), groupId }
         : tile
     ))
     const nextGroups = s.groups

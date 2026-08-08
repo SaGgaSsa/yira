@@ -210,7 +210,7 @@ async function runUpdateCheck(reason: 'startup' | 'manual'): Promise<UpdateState
   return updateState
 }
 
-async function installDownloadedUpdate(): Promise<void> {
+async function installDownloadedUpdate(prepareToClose?: () => Promise<boolean>): Promise<void> {
   await waitForUpdateDiagnosticsInitialization()
   const eligible = updateState.status === 'downloaded'
   const installRequest = recordUpdateDiagnostic('install-requested', { eligible, status: updateState.status })
@@ -218,6 +218,8 @@ async function installDownloadedUpdate(): Promise<void> {
     void installRequest
     return
   }
+
+  if (prepareToClose && !await prepareToClose()) return
 
   const quitAndInstallRequest = recordUpdateDiagnostic('quit-and-install-requested')
   await waitForUpdateDiagnosticTask(quitAndInstallRequest, INSTALL_DIAGNOSTIC_FLUSH_TIMEOUT_MS)
@@ -269,7 +271,7 @@ function registerUpdateLifecycleDiagnostics(): void {
   })
 }
 
-export function registerUpdateIPC(): void {
+export function registerUpdateIPC(options: { prepareToClose?: () => Promise<boolean> } = {}): void {
   if (updaterRegistered) return
 
   updaterRegistered = true
@@ -280,7 +282,7 @@ export function registerUpdateIPC(): void {
   ipcMain.handle('updates:getState', async (): Promise<UpdateState> => updateState)
   ipcMain.handle('updates:check', async (): Promise<UpdateState> => runUpdateCheck('manual'))
   ipcMain.handle('updates:install', async (): Promise<void> => {
-    await installDownloadedUpdate()
+    await installDownloadedUpdate(options.prepareToClose)
   })
 }
 

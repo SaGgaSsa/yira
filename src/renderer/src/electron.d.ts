@@ -11,6 +11,7 @@ import type {
   WorkspaceUpdatePatch,
   UserSettings,
   WindowBounds,
+  WindowClosePreparationRequest,
   BoardState,
   BoardTask,
   TerminalCreateOptions,
@@ -19,7 +20,11 @@ import type {
   NotificationAttentionResult,
   FileListOptions,
   FileListResult,
+  FileReadResult,
   FileSelectFolderResult,
+  FileStatResult,
+  FileWriteInput,
+  FileWriteResult,
   GitStatusResult,
   NoteBlocks,
   MarkdownViewMode,
@@ -72,7 +77,9 @@ interface ElectronWorld {
   files: {
     selectFolder: (defaultPath?: string) => Promise<FileSelectFolderResult | null>
     list: (rootPath: string, relativeDir: string, options?: FileListOptions) => Promise<FileListResult>
-    open: (rootPath: string, relativePath: string) => Promise<void>
+    read: (rootPath: string, relativePath: string) => Promise<FileReadResult>
+    stat: (rootPath: string, relativePath: string) => Promise<FileStatResult>
+    write: (rootPath: string, relativePath: string, input: FileWriteInput) => Promise<FileWriteResult>
   }
   git: {
     status: (workspaceId: string) => Promise<GitStatusResult>
@@ -112,6 +119,9 @@ interface ElectronWorld {
   window: {
     setTitle: (title: string) => Promise<void>
     setTitleBarOverlayTheme: (theme: 'dark' | 'light') => Promise<void>
+    onClosePreparationRequest: (
+      callback: (request: WindowClosePreparationRequest) => void | Promise<void>,
+    ) => () => void
   }
   floating: {
     open: (workspaceId: string, tileId: string, bounds?: WindowBounds) => Promise<void>

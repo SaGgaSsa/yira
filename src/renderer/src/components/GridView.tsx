@@ -32,6 +32,7 @@ interface GridViewProps {
   onCloseTile: (tileId: string) => void
   onOpenBrowserTile: (url: string) => void
   tileCreationSelectorProps: TileCreationSelectorProps
+  workspaceRootPath: string
 }
 
 interface ResizeDragState {
@@ -87,6 +88,7 @@ export function GridView({
   onCloseTile,
   onOpenBrowserTile,
   tileCreationSelectorProps,
+  workspaceRootPath,
 }: GridViewProps): React.ReactElement {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const resizeDragRef = useRef<ResizeDragState | null>(null)
@@ -314,6 +316,7 @@ export function GridView({
               onFocus={() => onFocusTile(tile.id)}
               onUpdate={(patch) => onUpdateTile(tile.id, patch)}
               onOpenBrowserTile={onOpenBrowserTile}
+              workspaceRootPath={workspaceRootPath}
             />
           </div>
         </section>

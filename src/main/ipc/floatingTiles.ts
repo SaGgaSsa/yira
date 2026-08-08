@@ -95,9 +95,12 @@ function closeEntry(tileId: string, attachOnClose: boolean): void {
   entry.window.close()
 }
 
-export function registerFloatingTilesIPC(getMainWindow: () => BrowserWindow | null): void {
+export function registerFloatingTilesIPC(
+  getMainWindow: () => BrowserWindow | null,
+  isAppCloseApproved: () => boolean = () => false,
+): void {
   app.on('before-quit', () => {
-    appQuitting = true
+    if (isAppCloseApproved()) appQuitting = true
   })
 
   ipcMain.handle('floating:open', (_event, input: FloatingTileOpenInput) => {

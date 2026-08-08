@@ -286,7 +286,21 @@ const dirtyState: GridWorkspaceState = {
     tile('one', 1),
     tile('two', 2),
     tile('three', 3),
-    { id: 'files', type: 'files', x: 0, y: 0, width: 900, height: 400, zIndex: 5 } as unknown as TileState,
+    { id: 'legacy-files', type: 'files', x: 0, y: 0, width: 900, height: 400, zIndex: 5 } as unknown as TileState,
+    {
+      id: 'files',
+      type: 'files',
+      x: 0,
+      y: 0,
+      width: 900,
+      height: 400,
+      zIndex: 6,
+      filePath: 'README.md',
+      filePreview: true,
+      fileDraft: '# restored',
+      fileVersion: 'expected-sha-256',
+      fileChangeToken: 'metadata-token',
+    } as unknown as TileState,
     { id: 'kanban', type: 'kanban', x: 0, y: 0, width: 1800, height: 800, zIndex: 4 } as unknown as TileState,
   ],
   nextZIndex: 4,
@@ -301,6 +315,7 @@ const dirtyState: GridWorkspaceState = {
       sizes: [10, 10, 10],
       children: [
         { id: 'leaf-one', type: 'leaf', tileId: 'one' },
+        { id: 'leaf-legacy-files', type: 'leaf', tileId: 'legacy-files' },
         { id: 'leaf-files', type: 'leaf', tileId: 'files' },
         { id: 'leaf-stale', type: 'leaf', tileId: 'stale' },
         { id: 'leaf-one-duplicate', type: 'leaf', tileId: 'one' },
@@ -315,12 +330,24 @@ if (normalized.focusedTileId !== null) throw new Error('missing focused tile id 
 if (normalized.fullviewActiveTileId !== 'one') throw new Error('missing fullview active id must fall back to first tile')
 if (!normalized.gridViewState.rootNode) throw new Error('normalization must keep or rebuild root node')
 const normalizedJson = JSON.stringify(normalized.gridViewState.rootNode)
-for (const id of ['one', 'two', 'three']) {
+for (const id of ['one', 'two', 'three', 'files']) {
   if (!normalizedJson.includes(`"tileId":"${id}"`)) throw new Error(`normalization must include tile ${id}`)
 }
-if (normalizedJson.includes('stale')) throw new Error('normalization must remove stale tile leaves')
-if (normalized.tiles.some((entry) => entry.id === 'kanban' || entry.id === 'files') || normalizedJson.includes('kanban') || normalizedJson.includes('files')) {
-  throw new Error('grid normalization must drop legacy files and kanban tiles')
+if (normalizedJson.includes('stale') || normalizedJson.includes('legacy-files')) throw new Error('normalization must remove stale and pathless file leaves')
+if (normalized.tiles.some((entry) => entry.id === 'kanban' || entry.id === 'legacy-files') || normalizedJson.includes('kanban')) {
+  throw new Error('grid normalization must drop legacy pathless files and kanban tiles')
+}
+const restoredFiles = normalized.tiles.find((entry) => entry.id === 'files')
+if (
+  restoredFiles?.width !== 900 ||
+  restoredFiles.height !== 500 ||
+  restoredFiles.filePath !== 'README.md' ||
+  restoredFiles.filePreview !== true ||
+  restoredFiles.fileDraft !== '# restored' ||
+  restoredFiles.fileVersion !== 'expected-sha-256' ||
+  restoredFiles.fileChangeToken !== 'metadata-token'
+) {
+  throw new Error('grid normalization must preserve path-backed files data and clamp their size')
 }
 
 const tooManyTiles = Array.from({ length: GRID_MAX_TILES + 1 }, (_, index) => tile(`tile-${index}`, index + 1))

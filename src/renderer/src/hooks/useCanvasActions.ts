@@ -13,6 +13,7 @@ const TILE_TYPE_LABELS: Record<TileState['type'], string> = {
   note: 'Note',
   browser: 'Browser',
   timer: 'Timer',
+  files: 'File',
 }
 
 function generateId(): string {

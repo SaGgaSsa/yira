@@ -10,11 +10,25 @@ const state: CanvasState = {
     { id: 'browser', type: 'browser', x: 0, y: 0, width: 10, height: 20, zIndex: 3 },
     { id: 'kanban', type: 'kanban', x: 0, y: 0, width: 10, height: 20, zIndex: 4 } as unknown as CanvasState['tiles'][number],
     { id: 'timer', type: 'timer', x: 0, y: 0, width: 10, height: 20, zIndex: 5 },
-    { id: 'files', type: 'files', x: 0, y: 0, width: 10, height: 20, zIndex: 6 } as unknown as CanvasState['tiles'][number],
+    { id: 'legacy-files', type: 'files', x: 0, y: 0, width: 10, height: 20, zIndex: 6 } as unknown as CanvasState['tiles'][number],
+    {
+      id: 'files',
+      type: 'files',
+      x: 0,
+      y: 0,
+      width: 10,
+      height: 20,
+      zIndex: 9,
+      filePath: 'src/main/index.ts',
+      filePreview: true,
+      fileDraft: 'const restored = true',
+      fileVersion: 'expected-sha-256',
+      fileChangeToken: 'mtime-size-token',
+    } as unknown as CanvasState['tiles'][number],
   ],
   groups: [
     { id: 'keep', name: 'Keep', colorId: 'blue', tileIds: ['terminal', 'files'] },
-    { id: 'drop', name: 'Drop', colorId: 'blue', tileIds: ['files'] },
+    { id: 'drop', name: 'Drop', colorId: 'blue', tileIds: ['legacy-files'] },
   ],
   viewport: { tx: 0, ty: 0, zoom: 1 },
   nextZIndex: 9,
@@ -23,7 +37,7 @@ const state: CanvasState = {
   fullviewActiveTileId: null,
   splitViewState: {
     leftTileIds: ['terminal', 'files'],
-    rightTileIds: ['note', 'files'],
+    rightTileIds: ['note', 'legacy-files'],
     activeLeftTileId: 'terminal',
     activeRightTileId: 'note',
     focusedPanel: 'left',
@@ -39,16 +53,17 @@ const expected = new Map([
   ['legacy-note', { width: 900, height: 800 }],
   ['browser', { width: 1800, height: 800 }],
   ['timer', { width: 900, height: 400 }],
+  ['files', { width: 900, height: 500 }],
 ])
 
-if (normalized.tiles.some((tile) => tile.id === 'kanban' || tile.id === 'files')) {
-  throw new Error('legacy files and kanban tiles must be dropped from normalized canvas JSON')
+if (normalized.tiles.some((tile) => tile.id === 'kanban' || tile.id === 'legacy-files')) {
+  throw new Error('legacy pathless files and kanban tiles must be dropped from normalized canvas JSON')
 }
-if (normalized.groups.length !== 1 || normalized.groups[0]?.tileIds.join(',') !== 'terminal') {
-  throw new Error('canvas normalization must remove legacy file references from groups')
+if (normalized.groups.length !== 1 || normalized.groups[0]?.tileIds.join(',') !== 'terminal,files') {
+  throw new Error('canvas normalization must preserve groups for path-backed file tiles only')
 }
-if (normalized.splitViewState?.leftTileIds.includes('files') || normalized.splitViewState?.rightTileIds.includes('files')) {
-  throw new Error('canvas normalization must remove legacy file references from split layout')
+if (!normalized.splitViewState?.leftTileIds.includes('files') || normalized.splitViewState?.rightTileIds.includes('legacy-files')) {
+  throw new Error('canvas normalization must preserve only path-backed file references in split layout')
 }
 
 for (const tile of normalized.tiles) {
@@ -75,4 +90,15 @@ if (normalizeNoteKind(legacyNote?.noteKind) !== 'rich') {
 const newMarkdownNote = normalized.tiles.find((tile) => tile.id === 'new-markdown')
 if (newMarkdownNote?.markdown !== '' || newMarkdownNote.markdownView !== 'live') {
   throw new Error('new Markdown notes must default to an empty source and split view')
+}
+
+const restoredFiles = normalized.tiles.find((tile) => tile.id === 'files')
+if (
+  restoredFiles?.filePath !== 'src/main/index.ts' ||
+  restoredFiles.filePreview !== true ||
+  restoredFiles.fileDraft !== 'const restored = true' ||
+  restoredFiles.fileVersion !== 'expected-sha-256' ||
+  restoredFiles.fileChangeToken !== 'mtime-size-token'
+) {
+  throw new Error('canvas normalization must restore every persisted files tile field')
 }

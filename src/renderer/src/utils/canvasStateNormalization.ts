@@ -7,7 +7,8 @@ function isSupportedTile(tile: CanvasState['tiles'][number]): boolean {
   return tile.type === 'terminal' ||
     tile.type === 'note' ||
     tile.type === 'browser' ||
-    tile.type === 'timer'
+    tile.type === 'timer' ||
+    (tile.type === 'files' && typeof tile.filePath === 'string' && tile.filePath.trim().length > 0)
 }
 
 export function normalizeCanvasStateForJson(state: CanvasState): CanvasState {

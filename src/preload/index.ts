@@ -1,7 +1,10 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { BoardTask, FileListOptions, GitStatusResult, NotificationAttentionOptions, TerminalCreateOptions, UpdateState, WindowBounds, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
+import type { BoardTask, FileListOptions, FileWriteInput, GitStatusResult, NotificationAttentionOptions, TerminalCreateOptions, UpdateState, WindowBounds, WindowClosePreparationRequest, WindowClosePreparationResponse, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
+import { createSerialTaskQueue } from '@shared/serialTaskQueue'
 
 console.log('[preload] Loading...')
+
+const closePreparationQueue = createSerialTaskQueue()
 
 contextBridge.exposeInMainWorld('electron', {
   // Workspace
@@ -58,8 +61,12 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.invoke('files:selectFolder', defaultPath),
     list: (rootPath: string, relativeDir: string, options?: FileListOptions) =>
       ipcRenderer.invoke('files:list', rootPath, relativeDir, options),
-    open: (rootPath: string, relativePath: string) =>
-      ipcRenderer.invoke('files:open', rootPath, relativePath),
+    read: (rootPath: string, relativePath: string) =>
+      ipcRenderer.invoke('files:read', rootPath, relativePath),
+    stat: (rootPath: string, relativePath: string) =>
+      ipcRenderer.invoke('files:stat', rootPath, relativePath),
+    write: (rootPath: string, relativePath: string, input: FileWriteInput) =>
+      ipcRenderer.invoke('files:write', rootPath, relativePath, input),
   },
 
   git: {
@@ -119,6 +126,27 @@ contextBridge.exposeInMainWorld('electron', {
     setTitle: (title: string) => ipcRenderer.invoke('window:setTitle', title),
     setTitleBarOverlayTheme: (theme: 'dark' | 'light') =>
       ipcRenderer.invoke('window:setTitleBarOverlayTheme', theme),
+    onClosePreparationRequest: (
+      callback: (request: WindowClosePreparationRequest) => void | Promise<void>,
+    ) => {
+      const handler = (_event: unknown, request: WindowClosePreparationRequest) => {
+        void closePreparationQueue.run(() => callback(request))
+          .then(() => {
+            const response: WindowClosePreparationResponse = { ...request, ok: true }
+            ipcRenderer.send('window:closePreparationResponse', response)
+          })
+          .catch((error: unknown) => {
+            const response: WindowClosePreparationResponse = {
+              ...request,
+              ok: false,
+              error: error instanceof Error ? error.message : String(error),
+            }
+            ipcRenderer.send('window:closePreparationResponse', response)
+          })
+      }
+      ipcRenderer.on('window:closePreparationRequest', handler)
+      return () => ipcRenderer.removeListener('window:closePreparationRequest', handler)
+    },
   },
 
   floating: {

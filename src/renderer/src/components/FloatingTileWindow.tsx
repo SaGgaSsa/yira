@@ -5,6 +5,7 @@ import { normalizeWorkspaceConfig } from '@shared/workspaceConfig'
 import { useCanvasStore } from '@/store/canvasStore'
 import { TileContent, TILE_META } from './TileContent'
 import { getTerminalDisplayTitle } from '@/utils/terminalDisplayTitle'
+import { windowBufferRegistry } from '@/utils/windowBufferRegistry'
 
 interface FloatingTileSnapshot {
   workspaceId: string
@@ -36,6 +37,7 @@ export function FloatingTileWindow(): React.ReactElement {
   const [{ workspaceId, tileId }] = useState(getParams)
   const [tile, setTile] = useState<TileState | null>(null)
   const [terminalTitle, setTerminalTitle] = useState<string | undefined>()
+  const [workspaceConfig, setWorkspaceConfig] = useState<WorkspaceConfig | null>(null)
   const [loadFailed, setLoadFailed] = useState(false)
   const setWorkspace = useCanvasStore((s) => s.setWorkspace)
   const setProfiles = useCanvasStore((s) => s.setProfiles)
@@ -67,6 +69,7 @@ export function FloatingTileWindow(): React.ReactElement {
       })))
       setTile(snapshot.tile)
       setTerminalTitle(snapshot.terminalTitle)
+      setWorkspaceConfig(snapshot.workspaceConfig)
     }
 
     void loadSnapshot()
@@ -85,12 +88,16 @@ export function FloatingTileWindow(): React.ReactElement {
     void window.electron.window.setTitle(title)
   }, [title])
 
-  const updateTile = useCallback((patch: Partial<TileState>) => {
+  const updateTile = useCallback(async (patch: Partial<TileState>) => {
     if (!tile) return
     const nextTile = { ...tile, ...patch }
     setTile(nextTile)
-    void window.electron.floating.updateTile(workspaceId, tile.id, patch)
+    await window.electron.floating.updateTile(workspaceId, tile.id, patch)
   }, [tile, workspaceId])
+
+  useEffect(() => window.electron.window.onClosePreparationRequest(async ({ phase }) => {
+    if (phase === 'flush') await windowBufferRegistry.flush()
+  }), [])
 
   if (loadFailed) {
     return (
@@ -133,6 +140,8 @@ export function FloatingTileWindow(): React.ReactElement {
           edgeToEdge
           onFocus={() => undefined}
           onUpdate={updateTile}
+          workspaceRootPath={workspaceConfig?.rootFolderPath ?? ''}
+          isVisible
         />
       </div>
     </div>

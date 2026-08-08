@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, ipcMain, Menu, clipboard } from 'electron'
+import { app, BrowserWindow, shell, ipcMain, Menu, clipboard, dialog } from 'electron'
 import { join } from 'path'
 import { existsSync } from 'fs'
 import { is } from '@electron-toolkit/utils'
@@ -11,11 +11,12 @@ import { registerBoardsIPC } from './ipc/boards'
 import { registerFilesIPC } from './ipc/files'
 import { registerGitIPC } from './ipc/git'
 import { clearWindowAttention, registerNotificationIPC } from './ipc/notifications'
-import { registerWindowIPC } from './ipc/window'
+import { registerWindowIPC, type WindowClosePreparationBridge } from './ipc/window'
 import { registerFloatingTilesIPC } from './ipc/floatingTiles'
 import { APP_ID, APP_NAME, DEV_APP_NAME, YIRA_HOME } from './paths'
 import { registerUpdateIPC, scheduleStartupUpdateCheck } from './updater'
 import { loadWindowState, saveWindowState } from './windowState'
+import { coordinateWindowClose, type CloseFailureDecision } from './windowCloseCoordinator'
 
 const appDisplayName = is.dev ? DEV_APP_NAME : APP_NAME
 const REACT_DEVTOOLS_HINT = 'Download the React DevTools'
@@ -28,6 +29,70 @@ const titleBarOverlay = {
   height: 36,
 }
 let mainWindow: BrowserWindow | null = null
+let closePreparationBridge: WindowClosePreparationBridge | null = null
+let closePreparationApproved = false
+let closePreparationInFlight: Promise<boolean> | null = null
+const CLOSE_PREPARATION_TIMEOUT_MS = 5_000
+
+async function promptClosePreparationFailure(phase: 'flush' | 'persist', error: unknown): Promise<CloseFailureDecision> {
+  const detail = error instanceof Error ? error.message : String(error)
+  const options = {
+    type: 'warning' as const,
+    title: 'Unsaved file drafts',
+    message: phase === 'flush'
+      ? 'Yira could not collect every open file draft.'
+      : 'Yira could not save the current workspace.',
+    detail,
+    buttons: ['Retry', 'Close without saving', 'Cancel'],
+    defaultId: 0,
+    cancelId: 2,
+    noLink: true,
+  }
+  const result = mainWindow && !mainWindow.isDestroyed()
+    ? await dialog.showMessageBox(mainWindow, options)
+    : await dialog.showMessageBox(options)
+
+  if (result.response === 0) return 'retry'
+  if (result.response === 1) return 'discard'
+  return 'cancel'
+}
+
+async function prepareApplicationClose(): Promise<boolean> {
+  if (closePreparationApproved) return true
+  if (closePreparationInFlight) return closePreparationInFlight
+
+  closePreparationInFlight = (async () => {
+    const bridge = closePreparationBridge
+    if (!bridge) {
+      closePreparationApproved = true
+      return true
+    }
+
+    const result = await coordinateWindowClose({
+      flushRenderers: () => bridge.requestAll('flush', CLOSE_PREPARATION_TIMEOUT_MS),
+      persistPrimary: () => bridge.requestPrimary('persist', CLOSE_PREPARATION_TIMEOUT_MS),
+      promptFailure: ({ phase, error }) => promptClosePreparationFailure(phase, error),
+      timeoutMs: CLOSE_PREPARATION_TIMEOUT_MS,
+    })
+    closePreparationApproved = result === 'proceed'
+    return closePreparationApproved
+  })().finally(() => {
+    closePreparationInFlight = null
+  })
+
+  return closePreparationInFlight
+}
+
+async function requestApplicationQuit(): Promise<void> {
+  if (!await prepareApplicationClose()) return
+  app.quit()
+}
+
+app.on('before-quit', (event) => {
+  if (closePreparationApproved) return
+  event.preventDefault()
+  void requestApplicationQuit()
+})
 
 async function createWindow(): Promise<BrowserWindow> {
   const windowState = await loadWindowState(WINDOW_STATE_PATH)
@@ -74,6 +139,11 @@ async function createWindow(): Promise<BrowserWindow> {
   })
   win.on('focus', () => {
     clearWindowAttention(win)
+  })
+  win.on('close', (event) => {
+    if (closePreparationApproved) return
+    event.preventDefault()
+    void requestApplicationQuit()
   })
 
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
@@ -126,9 +196,9 @@ app.whenReady().then(async () => {
   registerFilesIPC()
   registerGitIPC()
   registerNotificationIPC()
-  registerWindowIPC(() => mainWindow)
-  registerFloatingTilesIPC(() => mainWindow)
-  registerUpdateIPC()
+  closePreparationBridge = registerWindowIPC(() => mainWindow)
+  registerFloatingTilesIPC(() => mainWindow, () => closePreparationApproved)
+  registerUpdateIPC({ prepareToClose: prepareApplicationClose })
 
   ipcMain.handle('shell:openExternal', async (_event, url: string) => {
     await shell.openExternal(url)

@@ -25,7 +25,7 @@ import { useTheme } from './hooks/useTheme'
 import { useFontSize } from './hooks/useFontSize'
 import { useUpdateStore } from './store/updateStore'
 import { findMergeTargetGroup, findSelectedGroup, getGroupingBlockedReason } from './utils/grouping'
-import { GROUP_COLORS, GROUP_COLOR_ORDER, type BoardState, type BoardTask, type TileState, type CanvasState, type GridWorkspaceState, type Workspace, type WorkspaceMetadata, type TileGroup, type ViewMode, type SplitPanelId, type SplitViewState, type WorkspaceManagementEntry, type WorkspaceType } from '@shared/types'
+import { GRID_MAX_TILES, GROUP_COLORS, GROUP_COLOR_ORDER, getDefaultTileSize, type BoardState, type BoardTask, type TileState, type CanvasState, type GridWorkspaceState, type Workspace, type WorkspaceMetadata, type TileGroup, type ViewMode, type SplitPanelId, type SplitViewState, type WorkspaceManagementEntry, type WorkspaceType } from '@shared/types'
 import { createEmptyGridWorkspaceState, normalizeGridWorkspaceState } from '@shared/gridWorkspaceState'
 import {
   reconcileCanvasStateWithSharedTiles,
@@ -49,6 +49,8 @@ import {
 import { TILE_META } from './components/TileContent'
 import { TileListItem } from './components/TileListItem'
 import { buildTileConfigurationMenuItems } from './components/tileConfigurationMenu'
+import { createFileTileOpenRequestTracker, deriveFileTileTitle, planFileTileOpen } from './utils/fileTileLifecycle'
+import { windowBufferRegistry } from './utils/windowBufferRegistry'
 import { Terminal, StickyNote, FolderOpen, ChevronDown, SlidersHorizontal, Trash2, Pencil, Lock, Columns, Download, X, Plus } from 'lucide-react'
 
 const GROUP_SHOW_TOP_PADDING = 42
@@ -371,6 +373,7 @@ export default function App(): React.ReactElement {
   const prevZoomRef = useRef(1)
   const footerRef = useRef<HTMLDivElement | null>(null)
   const workspaceMenuRef = useRef<HTMLDivElement | null>(null)
+  const fileTileOpenRequestsRef = useRef(createFileTileOpenRequestTracker())
 
   const deleteTile = useCallback(async (tileId: string): Promise<boolean> => {
     const isGridWorkspace = useCanvasStore.getState().activeWorkspaceConfig.type === 'grid'
@@ -487,6 +490,23 @@ export default function App(): React.ReactElement {
     },
     [],
   )
+
+  useEffect(() => window.electron.window.onClosePreparationRequest(async ({ phase }) => {
+    if (phase === 'flush') {
+      await windowBufferRegistry.flush()
+      return
+    }
+
+    await windowBufferRegistry.flush()
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current)
+      autosaveTimerRef.current = null
+    }
+    const state = useCanvasStore.getState()
+    if (state.activeWorkspaceId) {
+      await saveToDisk(state.activeWorkspaceId, state.activeWorkspaceConfig.type)
+    }
+  }), [saveToDisk])
 
   const activateWorkspace = useCallback(async (
     workspace: Pick<Workspace, 'id' | 'name' | 'config'> | null,
@@ -837,6 +857,17 @@ export default function App(): React.ReactElement {
   const boardReviewLabel = boardReviewCount > 0 ? (boardReviewCount > 9 ? '9+' : String(boardReviewCount)) : null
   const workspaceRootPath = activeWorkspaceConfig.rootFolderPath?.trim() ?? ''
   const hasWorkspacePanel = Boolean(workspaceRootPath)
+  const activeFilePath = useMemo(() => {
+    const activeTileId = viewMode === 'fullview'
+      ? fullviewActiveTileId
+      : viewMode === 'splitview'
+        ? splitViewState.focusedPanel === 'left'
+          ? splitViewState.activeLeftTileId
+          : splitViewState.activeRightTileId
+        : focusedTileId
+    const activeTile = activeTileId ? tiles.find((tile) => tile.id === activeTileId) : null
+    return activeTile?.type === 'files' ? activeTile.filePath ?? null : null
+  }, [focusedTileId, fullviewActiveTileId, splitViewState, tiles, viewMode])
 
   const handleWorkspaceConfigUpdated = useCallback((updatedWorkspace: WorkspaceMetadata) => {
     setWorkspace(updatedWorkspace.id, updatedWorkspace.name, updatedWorkspace.config)
@@ -975,6 +1006,135 @@ export default function App(): React.ReactElement {
 
     handleCenterTileFromSidebar(tileId)
   }, [activateSplitTile, activeWorkspaceType, focusTile, handleCenterTileFromSidebar, selectTiles, setFullviewActiveTileId, setSplitViewState, splitViewState, viewMode])
+
+  const makeOpenedFileVisible = useCallback((tileId: string) => {
+    const state = useCanvasStore.getState()
+    const tile = state.tiles.find((entry) => entry.id === tileId)
+    if (!tile) return
+
+    state.focusTile(tileId)
+    state.selectTiles([tileId])
+    state.bringToFront(tileId)
+    state.setFullviewActiveTileId(tileId)
+
+    if (isTileDetached(tile)) {
+      void window.electron.floating.focus(tileId)
+      return
+    }
+
+    const workspaceType = state.activeWorkspaceConfig.type
+    const currentMode = state.viewMode
+    if (currentMode === 'fullview') return
+
+    if (workspaceType === 'grid') {
+      if (currentMode === 'board') state.setViewMode('gridview')
+      return
+    }
+
+    if (currentMode === 'splitview') {
+      const split = state.splitViewState
+      if (split.leftTileIds.includes(tileId)) {
+        state.setSplitFocusedPanel('left')
+        state.setSplitPanelActiveTile('left', tileId)
+      } else if (split.rightTileIds.includes(tileId)) {
+        state.setSplitFocusedPanel('right')
+        state.setSplitPanelActiveTile('right', tileId)
+      } else {
+        const panel = split.focusedPanel
+        state.setSplitViewState(panel === 'left'
+          ? { ...split, leftTileIds: [...split.leftTileIds, tileId], activeLeftTileId: tileId }
+          : { ...split, rightTileIds: [...split.rightTileIds, tileId], activeRightTileId: tileId })
+      }
+      return
+    }
+
+    if (currentMode === 'board') state.setViewMode('canvas')
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => getCanvasMethods()?.centerViewOnTile(tileId))
+    })
+  }, [])
+
+  const openFileTile = useCallback(async (relativePath: string) => {
+    const path = relativePath.trim()
+    if (!workspaceRootPath || !path) throw new Error('A workspace file path is required')
+
+    const initialState = useCanvasStore.getState()
+    const request = fileTileOpenRequestsRef.current.begin(
+      initialState.activeWorkspaceId,
+      workspaceRootPath,
+    )
+    const size = getDefaultTileSize('files')
+    const focusedTile = initialState.tiles.find((tile) => tile.id === initialState.focusedTileId)
+    const position = focusedTile
+      ? { x: focusedTile.x + focusedTile.width + 40, y: focusedTile.y }
+      : {
+          x: (-initialState.viewport.tx + 200) / initialState.viewport.zoom,
+          y: (-initialState.viewport.ty + 150) / initialState.viewport.zoom,
+        }
+    const proposed: TileState = {
+      id: `tile-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      type: 'files',
+      x: position.x,
+      y: position.y,
+      width: size.width,
+      height: size.height,
+      zIndex: initialState.nextZIndex,
+      label: deriveFileTileTitle(path),
+      filePath: path,
+      filePreview: true,
+    }
+
+    const initialPlan = planFileTileOpen(initialState.tiles, proposed)
+    if (initialPlan.kind === 'focus-existing') {
+      makeOpenedFileVisible(initialPlan.tileId)
+      return
+    }
+
+    const getCurrentRequestState = () => {
+      const current = useCanvasStore.getState()
+      const currentRootPath = current.activeWorkspaceConfig.rootFolderPath?.trim() ?? ''
+      return fileTileOpenRequestsRef.current.isCurrent(
+        request,
+        current.activeWorkspaceId,
+        currentRootPath,
+      ) ? current : null
+    }
+    let readResult
+    try {
+      readResult = await window.electron.files.read(workspaceRootPath, path)
+    } catch (error) {
+      if (!getCurrentRequestState()) return
+      throw error
+    }
+    const currentState = getCurrentRequestState()
+    if (!currentState) return
+    const initializedTile = readResult.status === 'ready'
+      ? {
+          ...proposed,
+          fileVersion: readResult.revision.sha256,
+          fileChangeToken: readResult.revision.metadataToken,
+        }
+      : proposed
+    const state = currentState
+    const plan = planFileTileOpen(state.tiles, initializedTile)
+
+    if (plan.kind === 'focus-existing') {
+      makeOpenedFileVisible(plan.tileId)
+      return
+    }
+
+    if (plan.kind === 'reuse-preview') {
+      state.setTiles(state.tiles.map((tile) => tile.id === plan.tile.id ? plan.tile : tile))
+      makeOpenedFileVisible(plan.tile.id)
+      return
+    }
+
+    if (state.activeWorkspaceConfig.type === 'grid' && state.tiles.length >= GRID_MAX_TILES) {
+      throw new Error(`Grid workspaces can contain at most ${GRID_MAX_TILES} tiles.`)
+    }
+    state.addTile(plan.tile)
+    makeOpenedFileVisible(plan.tile.id)
+  }, [makeOpenedFileVisible, workspaceRootPath])
 
   const handleSetViewMode = useCallback((mode: ViewMode) => {
     if (mode === 'board') {
@@ -2263,6 +2423,7 @@ export default function App(): React.ReactElement {
                     }}
                     onOpenBrowserTile={(url) => addBrowser(url)}
                     tileCreationSelectorProps={tileCreationSelectorProps}
+                    workspaceRootPath={workspaceRootPath}
                   />
                 ) : (
                   <Canvas
@@ -2295,6 +2456,7 @@ export default function App(): React.ReactElement {
                     splitViewState={splitViewState}
                     splitOrientation={splitViewState.orientation}
                     onFocusSplitPanel={setSplitFocusedPanel}
+                    workspaceRootPath={workspaceRootPath}
                   />
                 )}
                 </div>
@@ -2305,6 +2467,8 @@ export default function App(): React.ReactElement {
                   workspaceId={activeWorkspaceId}
                   sourceControlViewMode={activeWorkspaceConfig.sourceControlViewMode}
                   onWorkspaceUpdated={handleWorkspaceConfigUpdated}
+                  activeFilePath={activeFilePath}
+                  onOpenFile={openFileTile}
                 />
               )}
             </div>

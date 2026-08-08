@@ -1,9 +1,10 @@
-import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { BrowserWindow, dialog, ipcMain } from 'electron'
 import type { OpenDialogOptions } from 'electron'
 import { promises as fs } from 'fs'
 import { basename, isAbsolute, relative, resolve, sep } from 'path'
-import type { FileEntry, FileListOptions, FileListResult, FileSelectFolderResult } from '@shared/types'
+import type { FileEntry, FileListOptions, FileListResult, FileSelectFolderResult, FileWriteInput } from '@shared/types'
 import { canonicalizeRootFolderPath } from '../workspace-root'
+import { readFile, resolveRootTarget, statFile, writeFile } from './file-access'
 
 const IGNORED_NAMES = new Set([
   '.git',
@@ -16,10 +17,6 @@ const IGNORED_NAMES = new Set([
   '.next',
   '.vite',
 ])
-
-function normalizeForCompare(path: string): string {
-  return process.platform === 'win32' ? path.toLowerCase() : path
-}
 
 function isInsidePath(rootPath: string, targetPath: string): boolean {
   const relativePath = relative(rootPath, targetPath)
@@ -43,70 +40,11 @@ function shouldHideEntry(name: string): boolean {
   return name.startsWith('.') || IGNORED_NAMES.has(key)
 }
 
-function hasTraversalSegment(relativePath: string): boolean {
-  return relativePath.split(/[\\/]+/).some((segment) => segment === '..')
-}
-
 function getParentPath(relativeDir: string): string | null {
   if (!relativeDir) return null
   const segments = relativeDir.split('/').filter(Boolean)
   segments.pop()
   return segments.length > 0 ? segments.join('/') : ''
-}
-
-async function resolveRootTarget(
-  rootPathInput: string,
-  relativePath: string,
-): Promise<{ rootPath: string; targetPath: string; relativePath: string }> {
-  if (typeof rootPathInput !== 'string' || !rootPathInput.trim()) {
-    throw new Error('Files folder is required')
-  }
-  if (typeof relativePath !== 'string') {
-    throw new Error('Relative path must be a string')
-  }
-  if (relativePath.includes('\0')) {
-    throw new Error('Invalid path')
-  }
-  if (isAbsolute(relativePath)) {
-    throw new Error('Path must be relative to the files folder')
-  }
-  if (hasTraversalSegment(relativePath)) {
-    throw new Error('Path traversal is not allowed')
-  }
-
-  let rootPath: string
-  try {
-    rootPath = await fs.realpath(rootPathInput)
-  } catch {
-    throw new Error('Files folder is unavailable')
-  }
-
-  const rootStat = await fs.stat(rootPath)
-  if (!rootStat.isDirectory()) {
-    throw new Error('Files folder is not a directory')
-  }
-
-  const rootResolved = resolve(rootPath)
-  const targetPath = resolve(rootResolved, relativePath || '.')
-  if (!isInsidePath(normalizeForCompare(rootResolved), normalizeForCompare(targetPath))) {
-    throw new Error('Path escapes the files folder')
-  }
-
-  let targetRealPath: string
-  try {
-    targetRealPath = await fs.realpath(targetPath)
-  } catch {
-    throw new Error('Path does not exist')
-  }
-  if (!isInsidePath(normalizeForCompare(rootResolved), normalizeForCompare(targetRealPath))) {
-    throw new Error('Path escapes the files folder')
-  }
-
-  return {
-    rootPath: rootResolved,
-    targetPath,
-    relativePath: toRendererRelativePath(rootResolved, targetRealPath),
-  }
 }
 
 async function listFiles(
@@ -128,7 +66,7 @@ async function listFiles(
     if (!options.showIgnored && shouldHideEntry(dirent.name)) continue
 
     const entryPath = resolve(resolved.targetPath, dirent.name)
-    if (!isInsidePath(normalizeForCompare(resolved.rootPath), normalizeForCompare(entryPath))) continue
+    if (!isInsidePath(resolved.rootPath, entryPath)) continue
 
     try {
       const stat = await fs.lstat(entryPath)
@@ -185,10 +123,16 @@ export function registerFilesIPC(): void {
       listFiles(rootPath, relativeDir, options),
   )
 
-  ipcMain.handle('files:open', async (_event, rootPath: string, relativePath: string) => {
-    const { targetPath } = await resolveRootTarget(rootPath, relativePath)
-    const error = await shell.openPath(targetPath)
-    if (error) throw new Error(error)
-  })
+  ipcMain.handle('files:read', async (_event, rootPath: string, relativePath: string) =>
+    readFile(rootPath, relativePath),
+  )
+
+  ipcMain.handle('files:stat', async (_event, rootPath: string, relativePath: string) =>
+    statFile(rootPath, relativePath),
+  )
+
+  ipcMain.handle('files:write', async (_event, rootPath: string, relativePath: string, input: FileWriteInput) =>
+    writeFile(rootPath, relativePath, input),
+  )
 
 }
