@@ -1,6 +1,7 @@
 import {
   clearActivatedWorkspaceAttentionCount,
   getWorkspaceAttentionLabel,
+  pruneWorkspaceAttentionCounts,
   sumTerminalAttentionCounts,
   updateActiveWorkspaceAttentionCount,
 } from './workspaceAttention'
@@ -22,6 +23,15 @@ if (removed.inactive !== 3) throw new Error('removing the active summary must pr
 const switched = clearActivatedWorkspaceAttentionCount({ active: 4, target: 2, other: 1 }, 'target')
 if (switched.target !== undefined) throw new Error('activating a workspace must clear only that workspace summary')
 if (switched.active !== 4 || switched.other !== 1) throw new Error('activating a workspace must preserve other summaries')
+
+const attentionBeforeWorkspaceRemoval = { retained: 5, removed: 2 }
+const attentionAfterWorkspaceRemoval = pruneWorkspaceAttentionCounts(
+  attentionBeforeWorkspaceRemoval,
+  new Set(['retained']),
+)
+if (attentionAfterWorkspaceRemoval.retained !== 5) throw new Error('existing workspace attention counts must survive cleanup')
+if (attentionAfterWorkspaceRemoval.removed !== undefined) throw new Error('removed workspace attention counts must be discarded')
+if (attentionBeforeWorkspaceRemoval.removed !== 2) throw new Error('workspace attention cleanup must not mutate existing counts')
 
 if (getWorkspaceAttentionLabel({ target: 9 }, 'target') !== '9') throw new Error('workspace count 9 must render as 9')
 if (getWorkspaceAttentionLabel({ target: 10 }, 'target') !== '9+') throw new Error('workspace count over 9 must render as 9+')

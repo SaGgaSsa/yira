@@ -35,6 +35,20 @@ export function clearActivatedWorkspaceAttentionCount(
   return next
 }
 
+export function pruneWorkspaceAttentionCounts(
+  counts: WorkspaceAttentionCounts,
+  existingWorkspaceIds: Iterable<string>,
+): WorkspaceAttentionCounts {
+  const existingIds = new Set(existingWorkspaceIds)
+  const next: WorkspaceAttentionCounts = {}
+
+  for (const [workspaceId, count] of Object.entries(counts)) {
+    if (existingIds.has(workspaceId)) next[workspaceId] = count
+  }
+
+  return next
+}
+
 export function getWorkspaceAttentionLabel(
   counts: WorkspaceAttentionCounts,
   workspaceId: string,
