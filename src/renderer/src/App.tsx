@@ -27,7 +27,7 @@ import { useTheme } from './hooks/useTheme'
 import { useFontSize } from './hooks/useFontSize'
 import { useUpdateStore } from './store/updateStore'
 import { findMergeTargetGroup, getGroupingBlockedReason } from './utils/grouping'
-import { GRID_MAX_TILES, GROUP_COLORS, GROUP_COLOR_ORDER, getDefaultTileSize, type BoardState, type BoardTask, type TileState, type CanvasState, type GridWorkspaceState, type Workspace, type WorkspaceMetadata, type TileGroup, type ViewMode, type SplitPanelId, type SplitViewState, type WorkspaceManagementEntry, type WorkspaceType } from '@shared/types'
+import { GRID_MAX_TILES, GROUP_COLOR_ORDER, getDefaultTileSize, type BoardState, type BoardTask, type TileState, type CanvasState, type GridWorkspaceState, type Workspace, type WorkspaceMetadata, type TileGroup, type ViewMode, type SplitPanelId, type SplitViewState, type WorkspaceManagementEntry, type WorkspaceType } from '@shared/types'
 import { createEmptyGridWorkspaceState, normalizeGridWorkspaceState } from '@shared/gridWorkspaceState'
 import {
   reconcileCanvasStateWithSharedTiles,
@@ -52,6 +52,7 @@ import {
 import { TILE_META } from './components/TileContent'
 import { resolveWorkspaceFocusTarget } from './utils/workspaceFocus'
 import { getWorkspaceSidebarOrder } from './utils/workspaceOrdering'
+import { getWorkspaceDialogCopy } from './utils/workspaceDialogCopy'
 import { buildTileConfigurationMenuItems } from './components/tileConfigurationMenu'
 import { createFileTileOpenRequestTracker, deriveFileTileTitle, planFileTileOpen } from './utils/fileTileLifecycle'
 import { windowBufferRegistry } from './utils/windowBufferRegistry'
@@ -682,12 +683,13 @@ export default function App(): React.ReactElement {
       skipNextAutosaveRef.current = true
       setWorkspace('', '', { type: 'canvas', workspacePanelOpen: true, sourceControlViewMode: 'list' })
       restoreState(createEmptyCanvasState())
+      const dialogCopy = getWorkspaceDialogCopy('first', t)
       setWorkspaceEditor({
         mode: 'create',
         request: {
-          title: 'Create your first workspace',
-          eyebrow: 'First Workspace Setup',
-          confirmLabel: 'Create Workspace',
+          title: dialogCopy.title,
+          eyebrow: dialogCopy.eyebrow,
+          confirmLabel: dialogCopy.confirmLabel,
           canCancel: false,
           typeEditable: true,
           value: {
@@ -707,7 +709,7 @@ export default function App(): React.ReactElement {
     }).catch((err) => console.error('[App] Error loading shell profiles:', err))
     window.electron.terminal.sshAvailable().then(setRemoteSshAvailable)
       .catch((err) => console.error('[App] Error checking SSH client:', err))
-  }, [activateWorkspace, refreshWorkspaceMetadata, restoreState, setProfiles, setWorkspace])
+  }, [activateWorkspace, refreshWorkspaceMetadata, restoreState, setProfiles, setWorkspace, t])
 
   const switchWorkspace = useCallback(
     (workspace: WorkspaceMetadata) => {
@@ -1509,12 +1511,13 @@ export default function App(): React.ReactElement {
       skipNextAutosaveRef.current = true
       setWorkspace('', '', { type: 'canvas', workspacePanelOpen: true, sourceControlViewMode: 'list' })
       restoreState(createEmptyCanvasState())
+      const dialogCopy = getWorkspaceDialogCopy('first', t)
       setWorkspaceEditor({
         mode: 'create',
         request: {
-          title: 'Create your first workspace',
-          eyebrow: 'First Workspace Setup',
-          confirmLabel: 'Create Workspace',
+          title: dialogCopy.title,
+          eyebrow: dialogCopy.eyebrow,
+          confirmLabel: dialogCopy.confirmLabel,
           canCancel: false,
           typeEditable: true,
           value: {
@@ -1536,16 +1539,17 @@ export default function App(): React.ReactElement {
     }
 
     await activateWorkspace(result.activeWorkspace, { persistCurrent: false, updateMain: false })
-  }, [activeWorkspaceId, activateWorkspace, pruneWorkspaceAttentionCounts, restoreState, saveToDisk, setWorkspace])
+  }, [activeWorkspaceId, activateWorkspace, pruneWorkspaceAttentionCounts, restoreState, saveToDisk, setWorkspace, t])
 
   const openCreateWorkspaceDialog = useCallback(() => {
     setShowWorkspacePicker(false)
+    const dialogCopy = getWorkspaceDialogCopy('new', t)
     setWorkspaceEditor({
       mode: 'create',
       request: {
-        title: 'Create workspace',
-        eyebrow: 'Workspace Setup',
-        confirmLabel: 'Create Workspace',
+        title: dialogCopy.title,
+        eyebrow: dialogCopy.eyebrow,
+        confirmLabel: dialogCopy.confirmLabel,
         typeEditable: true,
         value: {
           type: 'canvas',
@@ -1557,7 +1561,7 @@ export default function App(): React.ReactElement {
         },
       },
     })
-  }, [])
+  }, [t])
 
   const createTerminalFromSidebar = useCallback(() => {
     if (availableProfiles.length <= 1 && defaultProfile && !remoteTerminalConfigured) {

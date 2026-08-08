@@ -81,9 +81,11 @@ export function ListRow({
 }: ListRowProps): React.ReactElement {
   const attentionLabel = formatTerminalAttentionCount(attentionCount)
   const actionCount = [onConfigure, onFocus, onDetach, onClose].filter(Boolean).length
-  const actionPaddingClass = actionCount > 0
-    ? actionCount >= 3 ? 'pr-[7.75rem]' : 'pr-[5.75rem]'
-    : ''
+  const actionPaddingClass = actionCount >= 4
+    ? 'pr-[7.75rem]'
+    : actionCount > 0
+      ? 'pr-[5.75rem]'
+      : ''
 
   return (
     <div
