@@ -7,7 +7,6 @@ import type { TileState } from '@shared/types'
 import { useCanvasStore } from '@/store/canvasStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { isTerminalInputAttended } from '@/utils/terminalAttention'
-import { createNativeAttentionDelayScheduler } from '@/utils/nativeAttentionDelay'
 import { buildTerminalStartupCommand } from '@/utils/terminalLaunch'
 import { createTerminalFitScheduler } from '@/utils/terminalFitScheduler'
 import { sanitizeTerminalReplayBuffer } from '@/utils/terminalReplaySanitizer'
@@ -51,11 +50,8 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
   const fitSchedulerRef = useRef(createTerminalFitScheduler())
   const isVisibleRef = useRef(isVisible)
   const attentionEnabled = useSettingsStore((s) => s.terminal.attentionEnabled)
-  const attentionDelayEnabled = useSettingsStore((s) => s.notifications.attentionDelayEnabled)
   const attentionEnabledRef = useRef(attentionEnabled)
-  const attentionDelayEnabledRef = useRef(attentionDelayEnabled)
   const notificationsMutedRef = useRef(tile.notificationsMuted === true)
-  const nativeAttentionSchedulerRef = useRef(createNativeAttentionDelayScheduler())
   const tileFontSizePx = useSettingsStore((s) => s.tileFontSizePx)
   const terminalThemeId = useSettingsStore((s) => s.terminal.themeId)
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number; selectionText: string; linkUrl?: string } | null>(null)
@@ -70,14 +66,9 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
   const clearAttentionIfAttended = useCallback(() => {
     if (!isTerminalInputAttended(document.hasFocus(), termRef.current?.textarea, document.activeElement)) return
 
-    nativeAttentionSchedulerRef.current.cancel(tile.id)
     if (!attentionEnabledRef.current) return
 
     useCanvasStore.getState().clearTerminalAttention(tile.id)
-  }, [tile.id])
-
-  const cancelNativeAttention = useCallback(() => {
-    nativeAttentionSchedulerRef.current.cancel(tile.id)
   }, [tile.id])
 
   const copySelection = useCallback(async (selectionSnapshot?: string) => {
@@ -113,20 +104,13 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
 
   useEffect(() => {
     attentionEnabledRef.current = attentionEnabled
-    if (!attentionEnabled) nativeAttentionSchedulerRef.current.cancel(tile.id)
     if (!attentionEnabled) return
     clearAttentionIfAttended()
   }, [attentionEnabled, clearAttentionIfAttended, tile.id])
 
   useEffect(() => {
-    attentionDelayEnabledRef.current = attentionDelayEnabled
-    if (!attentionDelayEnabled) nativeAttentionSchedulerRef.current.cancel(tile.id)
-  }, [attentionDelayEnabled, tile.id])
-
-  useEffect(() => {
     notificationsMutedRef.current = tile.notificationsMuted === true
     if (tile.notificationsMuted !== true) return
-    nativeAttentionSchedulerRef.current.cancel(tile.id)
     useCanvasStore.getState().clearTerminalAttention(tile.id)
   }, [tile.id, tile.notificationsMuted])
 
@@ -183,7 +167,6 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
 
     const terminalInput = term.textarea
     terminalInput?.addEventListener('focus', clearAttentionIfAttended)
-    window.addEventListener('focus', cancelNativeAttention)
     window.addEventListener('focus', clearAttentionIfAttended)
 
     // ResizeObserver for container size changes
@@ -241,30 +224,11 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
 
           const isWindowFocused = document.hasFocus()
           if (isTerminalInputAttended(isWindowFocused, term.textarea, document.activeElement)) {
-            nativeAttentionSchedulerRef.current.cancel(tile.id)
             useCanvasStore.getState().clearTerminalAttention(tile.id)
             return
           }
 
-          const shouldRequestAttention = useCanvasStore.getState().markTerminalOutput(tile.id)
-          if (shouldRequestAttention && !isWindowFocused) {
-            nativeAttentionSchedulerRef.current.schedule({
-              tileId: tile.id,
-              delayEnabled: attentionDelayEnabledRef.current,
-              muted: notificationsMutedRef.current,
-              shouldRequestAttention: () => (
-                attentionEnabledRef.current &&
-                !notificationsMutedRef.current &&
-                !document.hasFocus() &&
-                !isTerminalInputAttended(document.hasFocus(), term.textarea, document.activeElement)
-              ),
-              requestAttention: () => {
-                void window.electron.notifications.requestAttention({ onlyWhenInactive: true }).catch((error: unknown) => {
-                  console.error('[TerminalTile] Failed to request attention:', error)
-                })
-              },
-            })
-          }
+          useCanvasStore.getState().markTerminalOutput(tile.id)
         })
 
         // Send user input to PTY
@@ -283,11 +247,9 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
     // Cleanup on unmount / before re-run
     return () => {
       cancelled = true
-      nativeAttentionSchedulerRef.current.cancel(tile.id)
       fitSchedulerRef.current.cancelPending()
       ro.disconnect()
       terminalInput?.removeEventListener('focus', clearAttentionIfAttended)
-      window.removeEventListener('focus', cancelNativeAttention)
       window.removeEventListener('focus', clearAttentionIfAttended)
       ptyUnsub?.()
       inputDisposer?.dispose()
@@ -298,7 +260,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
       termRef.current = null
       fitRef.current = null
     }
-  }, [tile.id, tile.shellProfileId, clearAttentionIfAttended, cancelNativeAttention, doFit])
+  }, [tile.id, tile.shellProfileId, clearAttentionIfAttended, doFit])
 
   useEffect(() => {
     if (!isVisible) {
