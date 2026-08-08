@@ -107,6 +107,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor }: SettingsPanel
   const showGrid = useSettingsStore((s) => s.showGrid)
   const snapToGrid = useSettingsStore((s) => s.snapToGrid)
   const gridSize = useSettingsStore((s) => s.gridSize)
+  const updateDiagnosticsEnabled = useSettingsStore((s) => s.updateDiagnosticsEnabled)
   const browserHomeUrl = useSettingsStore((s) => s.browser.homeUrl)
   const terminalAttentionEnabled = useSettingsStore((s) => s.terminal.attentionEnabled)
   const terminalThemeId = useSettingsStore((s) => s.terminal.themeId)
@@ -120,6 +121,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor }: SettingsPanel
   const setShowGrid = useSettingsStore((s) => s.setShowGrid)
   const setSnapToGrid = useSettingsStore((s) => s.setSnapToGrid)
   const setGridSize = useSettingsStore((s) => s.setGridSize)
+  const setUpdateDiagnosticsEnabled = useSettingsStore((s) => s.setUpdateDiagnosticsEnabled)
   const setBrowserHomeUrl = useSettingsStore((s) => s.setBrowserHomeUrl)
   const setTerminalAttentionEnabled = useSettingsStore((s) => s.setTerminalAttentionEnabled)
   const setTerminalThemeId = useSettingsStore((s) => s.setTerminalThemeId)
@@ -317,6 +319,18 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor }: SettingsPanel
           </div>
 
           <div className="space-y-4">
+            <label className="flex items-center justify-between gap-4 rounded-[20px] border border-border-visible bg-bg-primary px-4 py-4">
+              <span>
+                <span className="nd-label block text-text-display">{t('settings.updateDiagnostics')}</span>
+                <span className="mt-2 block text-sm leading-6 text-text-secondary">{t('settings.updateDiagnosticsDescription')}</span>
+              </span>
+              <input
+                type="checkbox"
+                checked={updateDiagnosticsEnabled}
+                onChange={(event) => setUpdateDiagnosticsEnabled(event.target.checked)}
+              />
+            </label>
+
             <label className="flex items-center justify-between gap-4 rounded-[20px] border border-border-visible bg-bg-primary px-4 py-4">
               <span>
                 <span className="nd-label block text-text-display">{t('settings.groupsCapability')}</span>

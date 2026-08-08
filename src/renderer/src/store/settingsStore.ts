@@ -17,6 +17,7 @@ export interface SettingsState extends UserSettings {
   setShowGrid: (show: boolean) => void
   setSnapToGrid: (snap: boolean) => void
   setGridSize: (size: number) => void
+  setUpdateDiagnosticsEnabled: (enabled: boolean) => void
   setBrowserHomeUrl: (url: string) => void
   setTerminalAttentionEnabled: (enabled: boolean) => void
   setTerminalThemeId: (themeId: TerminalThemeId) => void
@@ -42,6 +43,7 @@ function scheduleSave() {
       snapToGrid: state.snapToGrid,
       gridSize: state.gridSize,
       updateDiagnosticsEnabled: state.updateDiagnosticsEnabled,
+      updateDiagnosticsMigrationComplete: state.updateDiagnosticsMigrationComplete,
       browser: { homeUrl: state.browser.homeUrl },
       terminal: {
         attentionEnabled: state.terminal.attentionEnabled,
@@ -100,6 +102,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     scheduleSave()
   },
 
+  setUpdateDiagnosticsEnabled: (enabled) => {
+    set({ updateDiagnosticsEnabled: enabled })
+    scheduleSave()
+  },
+
   setBrowserHomeUrl: (url) => {
     set((state) => ({ browser: { ...state.browser, homeUrl: url.trim() || DEFAULT_USER_SETTINGS.browser.homeUrl } }))
     scheduleSave()
@@ -153,6 +160,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           snapToGrid: normalized.snapToGrid,
           gridSize: normalized.gridSize,
           updateDiagnosticsEnabled: normalized.updateDiagnosticsEnabled,
+          updateDiagnosticsMigrationComplete: normalized.updateDiagnosticsMigrationComplete,
           browser: {
             homeUrl: normalized.browser.homeUrl,
           },
@@ -194,6 +202,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       snapToGrid: state.snapToGrid,
       gridSize: state.gridSize,
       updateDiagnosticsEnabled: state.updateDiagnosticsEnabled,
+      updateDiagnosticsMigrationComplete: state.updateDiagnosticsMigrationComplete,
       browser: { homeUrl: state.browser.homeUrl },
       terminal: {
         attentionEnabled: state.terminal.attentionEnabled,

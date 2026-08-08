@@ -97,6 +97,8 @@ type TranslationResources = {
     tiles: string
     updateAvailable: string
     updateChecking: string
+    updateDiagnostics: string
+    updateDiagnosticsDescription: string
     updateDownloaded: string
     updateDownloading: string
     updateDownloadingProgress: string
@@ -376,6 +378,8 @@ const en: TranslationResources = {
     tiles: 'Tiles',
     updateAvailable: 'Update {{version}} found. Download will continue in the background.',
     updateChecking: 'Checking GitHub Releases for a newer version.',
+    updateDiagnostics: 'Update diagnostics',
+    updateDiagnosticsDescription: 'Store local update events to help investigate update failures.',
     updateDownloaded: 'Update {{version}} is ready. Restart Yira to install it.',
     updateDownloading: 'Downloading update.',
     updateDownloadingProgress: 'Downloading update ({{percent}}%).',
@@ -655,6 +659,8 @@ const es: TranslationResources = {
     tiles: 'Paneles',
     updateAvailable: 'Se encontró la actualización {{version}}. La descarga continuará en segundo plano.',
     updateChecking: 'Buscando una versión más reciente en GitHub Releases.',
+    updateDiagnostics: 'Diagnósticos de actualizaciones',
+    updateDiagnosticsDescription: 'Guarda eventos locales de actualización para investigar fallos de actualización.',
     updateDownloaded: 'La actualización {{version}} está lista. Reinicia Yira para instalarla.',
     updateDownloading: 'Descargando actualización.',
     updateDownloadingProgress: 'Descargando actualización ({{percent}}%).',

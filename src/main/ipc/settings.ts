@@ -24,6 +24,9 @@ export async function loadStoredUserSettings(): Promise<UserSettings | null> {
       !Object.prototype.hasOwnProperty.call(parsed, 'tileFontSizePx') ||
       !Object.prototype.hasOwnProperty.call(parsed, 'updateDiagnosticsEnabled') ||
       typeof parsed.updateDiagnosticsEnabled !== 'boolean' ||
+      !Object.prototype.hasOwnProperty.call(parsed, 'updateDiagnosticsMigrationComplete') ||
+      typeof parsed.updateDiagnosticsMigrationComplete !== 'boolean' ||
+      parsed.updateDiagnosticsMigrationComplete !== normalized.updateDiagnosticsMigrationComplete ||
       !hasLanguage ||
       parsed.language !== normalized.language ||
       parsed?.terminal?.themeId !== normalized.terminal.themeId

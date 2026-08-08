@@ -10,18 +10,24 @@ if (defaults.terminal.themeId !== DEFAULT_TERMINAL_THEME_ID) throw new Error('te
 if (defaults.notifications.attentionDelayEnabled !== true) throw new Error('native attention delay must default on')
 
 const diagnosticsDefault = normalizeUserSettings({} as unknown as Partial<UserSettings>)
-if (diagnosticsDefault.updateDiagnosticsEnabled !== false) {
-  throw new Error('update diagnostics must default disabled')
+if (diagnosticsDefault.updateDiagnosticsEnabled !== true) {
+  throw new Error('update diagnostics must default enabled during testing')
+}
+if (diagnosticsDefault.updateDiagnosticsMigrationComplete !== true) {
+  throw new Error('new settings must mark update diagnostics migration complete')
 }
 
-const diagnosticsEnabled = normalizeUserSettings({ updateDiagnosticsEnabled: true } as unknown as Partial<UserSettings>)
-if (diagnosticsEnabled.updateDiagnosticsEnabled !== true) {
-  throw new Error('enabled update diagnostics must be preserved')
+const migratedDiagnostics = normalizeUserSettings({ updateDiagnosticsEnabled: false } as unknown as Partial<UserSettings>)
+if (migratedDiagnostics.updateDiagnosticsEnabled !== true) {
+  throw new Error('existing settings must enable update diagnostics once')
 }
 
-const diagnosticsInvalid = normalizeUserSettings({ updateDiagnosticsEnabled: 'yes' } as unknown as Partial<UserSettings>)
-if (diagnosticsInvalid.updateDiagnosticsEnabled !== false) {
-  throw new Error('invalid update diagnostics values must normalize to disabled')
+const optedOutDiagnostics = normalizeUserSettings({
+  updateDiagnosticsEnabled: false,
+  updateDiagnosticsMigrationComplete: true,
+} as unknown as Partial<UserSettings>)
+if (optedOutDiagnostics.updateDiagnosticsEnabled !== false) {
+  throw new Error('explicit update diagnostics opt-out must be preserved after migration')
 }
 
 const small = normalizeUserSettings({ fontSize: 'small' })

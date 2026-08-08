@@ -7,10 +7,11 @@ export const MAX_FONT_SIZE_PX = 36
 
 export type LegacyFontSize = 'small' | 'medium' | 'large'
 
-type RawUserSettings = Omit<Partial<UserSettings>, 'terminal' | 'updateDiagnosticsEnabled'> & {
+type RawUserSettings = Omit<Partial<UserSettings>, 'terminal' | 'updateDiagnosticsEnabled' | 'updateDiagnosticsMigrationComplete'> & {
   fontSize?: unknown
   terminal?: Partial<UserSettings['terminal']>
   updateDiagnosticsEnabled?: unknown
+  updateDiagnosticsMigrationComplete?: unknown
 }
 
 const LEGACY_FONT_SIZE_PX: Record<LegacyFontSize, number> = {
@@ -36,7 +37,8 @@ export function clampFontSizePx(value: unknown, fallback = DEFAULT_USER_SETTINGS
 export function normalizeUserSettings(raw: RawUserSettings = {}): UserSettings {
   const legacyFontSize = isLegacyFontSize(raw.fontSize) ? LEGACY_FONT_SIZE_PX[raw.fontSize] : undefined
   const fontFallback = legacyFontSize ?? DEFAULT_USER_SETTINGS.interfaceFontSizePx
-  const { fontSize: _legacyFontSize, updateDiagnosticsEnabled, ...settings } = raw
+  const { fontSize: _legacyFontSize, updateDiagnosticsEnabled, updateDiagnosticsMigrationComplete, ...settings } = raw
+  const diagnosticsMigrationComplete = updateDiagnosticsMigrationComplete === true
   const rawCreationAvailability = raw.tiles?.creationAvailability as Record<string, unknown> | undefined
   const { files: _legacyFiles, ...creationAvailability } = rawCreationAvailability ?? {}
 
@@ -46,7 +48,8 @@ export function normalizeUserSettings(raw: RawUserSettings = {}): UserSettings {
     language: normalizeLanguage(raw.language),
     interfaceFontSizePx: clampFontSizePx(raw.interfaceFontSizePx, fontFallback),
     tileFontSizePx: clampFontSizePx(raw.tileFontSizePx, fontFallback),
-    updateDiagnosticsEnabled: updateDiagnosticsEnabled === true,
+    updateDiagnosticsEnabled: diagnosticsMigrationComplete ? updateDiagnosticsEnabled === true : true,
+    updateDiagnosticsMigrationComplete: true,
     browser: {
       ...DEFAULT_USER_SETTINGS.browser,
       ...(raw.browser ?? {}),
