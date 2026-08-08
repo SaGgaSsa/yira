@@ -2,7 +2,7 @@ import { BrowserWindow, app, ipcMain, screen } from 'electron'
 import { join } from 'path'
 import { existsSync } from 'fs'
 import { is } from '@electron-toolkit/utils'
-import type { WindowBounds } from '../../shared/types'
+import type { FloatingNavigationRequest, WindowBounds } from '../../shared/types'
 
 interface FloatingTileOpenInput {
   workspaceId: string
@@ -227,5 +227,18 @@ export function registerFloatingTilesIPC(
     const mainWindow = getMainWindow()
     if (!mainWindow || mainWindow.isDestroyed()) return
     mainWindow.webContents.send('floating:updateTile', input)
+  })
+
+  ipcMain.handle('floating:requestNavigation', (event, tileId: string, request: FloatingNavigationRequest) => {
+    const entry = floatingWindows.get(tileId)
+    if (!entry || entry.window.webContents !== event.sender) return
+    if (!request || (request.kind !== 'file' && request.kind !== 'browser') || typeof request.target !== 'string' || !request.target.trim()) return
+    const mainWindow = getMainWindow()
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    mainWindow.webContents.send('floating:navigationRequested', {
+      workspaceId: entry.workspaceId,
+      kind: request.kind,
+      target: request.target,
+    })
   })
 }

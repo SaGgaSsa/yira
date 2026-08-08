@@ -44,7 +44,7 @@ if (deduplicated.kind !== 'focus-existing' || deduplicated.tileId !== 'existing'
   throw new Error('opening a path already present must focus that tile instead of creating a duplicate')
 }
 
-const reusable = fileTile('preview', { x: 10, y: 20, zIndex: 1 })
+const reusable = fileTile('preview', { x: 10, y: 20, zIndex: 1, fileMarkdownView: 'preview' })
 if (!isCleanReusableFilePreview(reusable)) {
   throw new Error('a preview without a draft or structural state must be reusable')
 }
@@ -58,12 +58,13 @@ if (
   reused.tile.fileDraft !== undefined ||
   reused.tile.fileVersion !== 'new-sha' ||
   reused.tile.fileChangeToken !== 'new-token' ||
+  reused.tile.fileMarkdownView !== 'preview' ||
   reused.tile.label !== 'new.ts' ||
   reused.tile.x !== 10 ||
   reused.tile.y !== 20 ||
   reused.tile.zIndex !== 1
 ) {
-  throw new Error('preview reuse must retain tile placement while replacing path metadata and title')
+  throw new Error('preview reuse must retain tile placement and Markdown view while replacing path metadata and title')
 }
 
 for (const structuralPreview of [

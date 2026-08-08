@@ -6,7 +6,7 @@ import {
   type GridWorkspaceState,
   type TileState,
 } from './types'
-import { normalizeTileSize } from './types'
+import { normalizeFileMarkdownViewMode, normalizeTileSize } from './types'
 
 export { GRID_MAX_TILES } from './types'
 
@@ -65,9 +65,12 @@ function normalizeViewMode(mode: unknown): GridViewMode {
 function normalizeTile(tile: TileState): TileState {
   const size = normalizeTileSize(tile.type, tile)
   const { hideTitlebar: _hideTitlebar, ...tileWithoutTitlebar } = tile as TileState & { hideTitlebar?: unknown }
+  const normalizedTile = tileWithoutTitlebar.type === 'files'
+    ? { ...tileWithoutTitlebar, fileMarkdownView: normalizeFileMarkdownViewMode(tileWithoutTitlebar.fileMarkdownView) }
+    : tileWithoutTitlebar
 
   return {
-    ...tileWithoutTitlebar,
+    ...normalizedTile,
     width: size.width,
     height: size.height,
   }

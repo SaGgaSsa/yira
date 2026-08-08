@@ -300,6 +300,7 @@ const dirtyState: GridWorkspaceState = {
       fileDraft: '# restored',
       fileVersion: 'expected-sha-256',
       fileChangeToken: 'metadata-token',
+      fileMarkdownView: 'preview',
     } as unknown as TileState,
     { id: 'kanban', type: 'kanban', x: 0, y: 0, width: 1800, height: 800, zIndex: 4 } as unknown as TileState,
   ],
@@ -346,6 +347,7 @@ if (
   restoredFiles.fileDraft !== '# restored' ||
   restoredFiles.fileVersion !== 'expected-sha-256' ||
   restoredFiles.fileChangeToken !== 'metadata-token'
+  || restoredFiles.fileMarkdownView !== 'preview'
 ) {
   throw new Error('grid normalization must preserve path-backed files data and clamp their size')
 }

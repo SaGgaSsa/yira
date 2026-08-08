@@ -140,6 +140,8 @@ export function FloatingTileWindow(): React.ReactElement {
           edgeToEdge
           onFocus={() => undefined}
           onUpdate={updateTile}
+          onOpenFileTile={(relativePath) => window.electron.floating.requestNavigation(tile.id, { kind: 'file', target: relativePath })}
+          onOpenBrowserTile={(url) => { void window.electron.floating.requestNavigation(tile.id, { kind: 'browser', target: url }) }}
           workspaceRootPath={workspaceConfig?.rootFolderPath ?? ''}
           isVisible
         />

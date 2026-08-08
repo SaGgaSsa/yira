@@ -323,6 +323,11 @@ export interface FileWriteInput {
   force?: boolean
 }
 
+export type FilePreviewAssetResult =
+  | { status: 'ready'; mimeType: string; dataBase64: string }
+  | { status: 'unsupported'; reason: string }
+  | { status: 'missing' }
+
 // ─── Board ─────────────────────────────────────────────────────────────────
 
 export type BoardStatus = 'backlog' | 'ready' | 'in_progress' | 'review' | 'done'
@@ -393,6 +398,10 @@ export function normalizeNoteKind(value: unknown): NoteKind {
 
 export function normalizeMarkdownViewMode(value: unknown): MarkdownViewMode {
   return value === 'edit' || value === 'preview' || value === 'live' ? value : 'live'
+}
+
+export function normalizeFileMarkdownViewMode(value: unknown): MarkdownViewMode {
+  return value === 'edit' || value === 'preview' || value === 'live' ? value : 'edit'
 }
 
 export const NOTE_COLORS: Record<NoteColor, { bg: string; text: string }> = {
@@ -522,6 +531,15 @@ export interface TileFloatingState {
   gridPlacement?: DetachedGridPlacement
 }
 
+export interface FloatingNavigationRequest {
+  kind: 'file' | 'browser'
+  target: string
+}
+
+export interface FloatingNavigationEvent extends FloatingNavigationRequest {
+  workspaceId: string
+}
+
 export interface TileState {
   id: string
   type: TileType
@@ -561,6 +579,7 @@ export interface TileState {
   fileVersion?: string
   /** File metadata token used to detect external changes. */
   fileChangeToken?: string
+  fileMarkdownView?: MarkdownViewMode
 
   // Timer-specific
   timerDurationMs?: number

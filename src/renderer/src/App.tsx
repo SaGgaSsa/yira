@@ -1136,6 +1136,15 @@ export default function App(): React.ReactElement {
     makeOpenedFileVisible(plan.tile.id)
   }, [makeOpenedFileVisible, workspaceRootPath])
 
+  useEffect(() => window.electron.floating.onNavigationRequested(({ workspaceId, kind, target }) => {
+    if (workspaceId !== useCanvasStore.getState().activeWorkspaceId) return
+    if (kind === 'file') {
+      void openFileTile(target)
+      return
+    }
+    addBrowser(target)
+  }), [addBrowser, openFileTile])
+
   const handleSetViewMode = useCallback((mode: ViewMode) => {
     if (mode === 'board') {
       if (boardState.enabled) setViewMode('board')
@@ -2422,6 +2431,7 @@ export default function App(): React.ReactElement {
                       void deleteTile(tileId)
                     }}
                     onOpenBrowserTile={(url) => addBrowser(url)}
+                    onOpenFileTile={openFileTile}
                     tileCreationSelectorProps={tileCreationSelectorProps}
                     workspaceRootPath={workspaceRootPath}
                   />
@@ -2435,6 +2445,7 @@ export default function App(): React.ReactElement {
                     onCreateBrowser={() => addBrowser()}
                     onCreateTimer={() => addTimer()}
                     onOpenBrowserTile={(url) => addBrowser(url)}
+                    onOpenFileTile={openFileTile}
                     canCreateNote={canCreateNote}
                     canCreateBrowser={canCreateBrowser}
                     canCreateTimer={canCreateTimer}

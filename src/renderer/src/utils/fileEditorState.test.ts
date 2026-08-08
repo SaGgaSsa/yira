@@ -5,6 +5,7 @@ import {
   applyFileWrite,
   beginFileEdit,
   createFileEditorState,
+  fileLanguage,
   type FileEditorState,
 } from './fileEditorState'
 
@@ -13,6 +14,10 @@ const firstRevision: FileRevision = {
   modifiedAt: '2026-08-04T10:00:00.000Z',
   metadataToken: 'token-1',
   sha256: 'sha-1',
+}
+
+if (fileLanguage('docs/guide.markdown') !== 'markdown') {
+  throw new Error('.markdown files must use Monaco Markdown syntax highlighting')
 }
 
 const secondRevision: FileRevision = {

@@ -20,11 +20,14 @@ import type {
   NotificationAttentionResult,
   FileListOptions,
   FileListResult,
+  FilePreviewAssetResult,
   FileReadResult,
   FileSelectFolderResult,
   FileStatResult,
   FileWriteInput,
   FileWriteResult,
+  FloatingNavigationEvent,
+  FloatingNavigationRequest,
   GitStatusResult,
   NoteBlocks,
   MarkdownViewMode,
@@ -80,6 +83,7 @@ interface ElectronWorld {
     read: (rootPath: string, relativePath: string) => Promise<FileReadResult>
     stat: (rootPath: string, relativePath: string) => Promise<FileStatResult>
     write: (rootPath: string, relativePath: string, input: FileWriteInput) => Promise<FileWriteResult>
+    readPreviewAsset: (rootPath: string, relativePath: string) => Promise<FilePreviewAssetResult>
   }
   git: {
     status: (workspaceId: string) => Promise<GitStatusResult>
@@ -131,6 +135,7 @@ interface ElectronWorld {
     requestAttach: (tileId: string) => Promise<void>
     getTileSnapshot: (workspaceId: string, tileId: string) => Promise<unknown | null>
     updateTile: (workspaceId: string, tileId: string, patch: unknown) => Promise<void>
+    requestNavigation: (tileId: string, request: FloatingNavigationRequest) => Promise<void>
     onAttachRequested: (
       callback: (event: { workspaceId: string; tileId: string; bounds?: WindowBounds }) => void,
     ) => () => void
@@ -143,6 +148,7 @@ interface ElectronWorld {
     onUpdateTile: (
       callback: (event: { workspaceId: string; tileId: string; patch: unknown }) => void,
     ) => () => void
+    onNavigationRequested: (callback: (event: FloatingNavigationEvent) => void) => () => void
   }
   updates: {
     getState: () => Promise<UpdateState>

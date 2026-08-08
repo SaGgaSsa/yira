@@ -225,6 +225,11 @@ type TranslationResources = {
     type: string
     editor: string
     preview: string
+    temporary: string
+    markdownEdit: string
+    markdownSplit: string
+    markdownPreview: string
+    imageUnavailable: string
     saved: string
     dirty: string
     conflict: string
@@ -499,6 +504,11 @@ const en: TranslationResources = {
     type: 'Type',
     editor: 'Editor',
     preview: 'Preview',
+    temporary: 'Temporary',
+    markdownEdit: 'Edit Markdown',
+    markdownSplit: 'Edit and preview Markdown',
+    markdownPreview: 'View rendered Markdown',
+    imageUnavailable: 'Image unavailable',
     saved: 'Saved',
     dirty: 'Unsaved changes',
     conflict: 'Conflict',
@@ -773,6 +783,11 @@ const es: TranslationResources = {
     type: 'Tipo',
     editor: 'Editor',
     preview: 'Vista previa',
+    temporary: 'Temporal',
+    markdownEdit: 'Editar Markdown',
+    markdownSplit: 'Editar y previsualizar Markdown',
+    markdownPreview: 'Ver Markdown renderizado',
+    imageUnavailable: 'Imagen no disponible',
     saved: 'Guardado',
     dirty: 'Cambios sin guardar',
     conflict: 'Conflicto',

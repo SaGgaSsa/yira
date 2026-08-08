@@ -84,6 +84,7 @@ export function getCanvasMethods(): CanvasMethods | null {
 interface CanvasProps extends CanvasCreationMenuInput {
   tileCreationSelectorProps: TileCreationSelectorProps
   onOpenBrowserTile: (url: string) => void
+  onOpenFileTile: (relativePath: string) => void | Promise<void>
   onCreateGroupFromSelection: () => void | Promise<void>
   onDeleteTile: (tileId: string) => Promise<boolean>
   onConfigureTile: (tile: TileState, x: number, y: number) => void
@@ -103,6 +104,7 @@ interface CanvasProps extends CanvasCreationMenuInput {
 export function Canvas({
   tileCreationSelectorProps,
   onOpenBrowserTile,
+  onOpenFileTile,
   onCreateTerminal,
   onCreateRichNote,
   onCreateMarkdownNote,
@@ -736,6 +738,7 @@ export function Canvas({
                   }}
                   onUpdate={(patch) => updateTile(tile.id, patch)}
                   onOpenBrowserTile={onOpenBrowserTile}
+                  onOpenFileTile={onOpenFileTile}
                   workspaceRootPath={workspaceRootPath}
                 />
               </TileChrome>

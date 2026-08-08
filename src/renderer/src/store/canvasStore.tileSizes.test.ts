@@ -22,6 +22,7 @@ const state: CanvasState = {
       fileDraft: 'restored draft',
       fileVersion: 'expected-sha-256',
       fileChangeToken: 'metadata-token',
+      fileMarkdownView: 'live',
     } as unknown as CanvasState['tiles'][number],
   ],
   groups: [],
@@ -70,8 +71,15 @@ if (
   restoredFile.fileDraft !== 'restored draft' ||
   restoredFile.fileVersion !== 'expected-sha-256' ||
   restoredFile.fileChangeToken !== 'metadata-token'
+  || restoredFile.fileMarkdownView !== 'live'
 ) {
   throw new Error('canvas store must restore path-backed file tiles and their persisted state')
+}
+
+useCanvasStore.getState().updateTile('restored-file', { fileMarkdownView: 'preview' })
+const changedView = useCanvasStore.getState().tiles.find((tile) => tile.id === 'restored-file')
+if (changedView?.fileMarkdownView !== 'preview' || changedView.filePreview !== true) {
+  throw new Error('changing the Markdown view must persist it without pinning a reusable file tile')
 }
 
 useCanvasStore.getState().updateTile('restored-file', {

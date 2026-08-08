@@ -6,10 +6,11 @@ import type { FileHandle } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { readFile, statFile, writeFile } from './file-access'
+import { readFile, readPreviewAsset, statFile, writeFile } from './file-access'
 import * as fileAccess from './file-access'
 
 const TWO_MIB = 2 * 1024 * 1024
+const TEN_MIB = 10 * 1024 * 1024
 
 async function createWorkspace(): Promise<string> {
   return fs.mkdtemp(join(tmpdir(), 'yira-files-ipc-'))
@@ -111,6 +112,55 @@ test('rejects traversal, external symlinks, and missing files', async () => {
     await assert.rejects(readFile(rootPath, '../outside.txt'), /traversal/i)
     await assert.rejects(readFile(rootPath, 'outside-link.txt'), /escapes/i)
     assert.deepEqual(await readFile(rootPath, 'missing.txt'), { status: 'missing' })
+  } finally {
+    await removeWorkspace(rootPath)
+    await removeWorkspace(outsidePath)
+  }
+})
+
+test('reads supported Markdown preview images with validated MIME types', async () => {
+  const rootPath = await createWorkspace()
+  const fixtures: Array<[string, string, Buffer]> = [
+    ['image.png', 'image/png', Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])],
+    ['image.jpg', 'image/jpeg', Buffer.from([0xff, 0xd8, 0xff, 0xdb])],
+    ['image.gif', 'image/gif', Buffer.from('GIF89a', 'ascii')],
+    ['image.webp', 'image/webp', Buffer.concat([Buffer.from('RIFF', 'ascii'), Buffer.alloc(4), Buffer.from('WEBP', 'ascii')])],
+    ['image.avif', 'image/avif', Buffer.concat([Buffer.alloc(4), Buffer.from('ftypavif', 'ascii')])],
+    ['sequence.avif', 'image/avif', Buffer.concat([Buffer.alloc(4), Buffer.from('ftypavis', 'ascii')])],
+  ]
+  try {
+    for (const [name, mimeType, content] of fixtures) {
+      await fs.writeFile(join(rootPath, name), content)
+      const result = await readPreviewAsset(rootPath, name)
+      assert.equal(result.status, 'ready')
+      if (result.status !== 'ready') throw new Error(`${name} must be ready`)
+      assert.equal(result.mimeType, mimeType)
+      assert.equal(result.dataBase64, content.toString('base64'))
+    }
+  } finally {
+    await removeWorkspace(rootPath)
+  }
+})
+
+test('rejects unsupported, oversized, spoofed, missing, and unsafe preview images', async () => {
+  const rootPath = await createWorkspace()
+  const outsidePath = await createWorkspace()
+  try {
+    await fs.writeFile(join(rootPath, 'vector.svg'), '<svg/>', 'utf8')
+    await fs.writeFile(join(rootPath, 'spoofed.png'), '<html>unsafe</html>', 'utf8')
+    await fs.writeFile(join(rootPath, 'large.png'), Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      Buffer.alloc(TEN_MIB),
+    ]))
+    await fs.writeFile(join(outsidePath, 'outside.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+    await fs.symlink(join(outsidePath, 'outside.png'), join(rootPath, 'outside-link.png'))
+
+    assert.equal((await readPreviewAsset(rootPath, 'vector.svg')).status, 'unsupported')
+    assert.equal((await readPreviewAsset(rootPath, 'spoofed.png')).status, 'unsupported')
+    assert.equal((await readPreviewAsset(rootPath, 'large.png')).status, 'unsupported')
+    assert.deepEqual(await readPreviewAsset(rootPath, 'missing.png'), { status: 'missing' })
+    await assert.rejects(readPreviewAsset(rootPath, '../outside.png'), /traversal/i)
+    await assert.rejects(readPreviewAsset(rootPath, 'outside-link.png'), /escapes/i)
   } finally {
     await removeWorkspace(rootPath)
     await removeWorkspace(outsidePath)

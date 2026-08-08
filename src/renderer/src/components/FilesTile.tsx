@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import Editor, { type Monaco } from '@monaco-editor/react'
-import { AlertTriangle, Check, RefreshCw, Save } from 'lucide-react'
+import { AlertTriangle, Check, Code2, Columns2, Eye, RefreshCw, Save } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { TileState } from '@shared/types'
 import { useSettingsStore } from '@/store/settingsStore'
@@ -15,6 +15,8 @@ import {
   type FileEditorTransition,
 } from '@/utils/fileEditorState'
 import { windowBufferRegistry } from '@/utils/windowBufferRegistry'
+import { fileMarkdownLayout, isMarkdownFilePath, normalizeFileMarkdownViewMode } from '@/utils/fileMarkdown'
+import { MarkdownPreviewPane } from './MarkdownPreviewPane'
 
 const FILE_POLL_INTERVAL_MS = 2_000
 
@@ -24,6 +26,8 @@ interface FilesTileProps {
   isFocused: boolean
   isVisible: boolean
   onUpdate: (patch: Partial<TileState>) => void | Promise<void>
+  onOpenFile?: (relativePath: string) => void | Promise<void>
+  onOpenBrowser?: (url: string) => void
 }
 
 function defineYiraThemes(monaco: Monaco): void {
@@ -59,7 +63,7 @@ function hasPatch(patch: Partial<TileState>): boolean {
   return Object.keys(patch).length > 0
 }
 
-export function FilesTile({ tile, rootPath, isFocused, isVisible, onUpdate }: FilesTileProps): React.ReactElement {
+export function FilesTile({ tile, rootPath, isFocused, isVisible, onUpdate, onOpenFile, onOpenBrowser }: FilesTileProps): React.ReactElement {
   const { t } = useTranslation()
   const appearance = useSettingsStore((state) => state.appearance)
   const tileFontSizePx = useSettingsStore((state) => state.tileFontSizePx)
@@ -73,6 +77,9 @@ export function FilesTile({ tile, rootPath, isFocused, isVisible, onUpdate }: Fi
   const readRequestRef = useRef(0)
   const savingRef = useRef(false)
   const onUpdateRef = useRef(onUpdate)
+  const isMarkdown = isMarkdownFilePath(filePath)
+  const markdownView = normalizeFileMarkdownViewMode(tile.fileMarkdownView)
+  const markdownLayout = isMarkdown ? fileMarkdownLayout(markdownView) : { showEditor: true, showPreview: false }
 
   useEffect(() => {
     stateRef.current = state
@@ -278,7 +285,28 @@ export function FilesTile({ tile, rootPath, isFocused, isVisible, onUpdate }: Fi
       <div className="flex min-h-11 shrink-0 items-center gap-2 border-b border-border px-3 py-2">
         <span className="min-w-0 flex-1 truncate font-mono text-xs text-text-secondary" title={filePath}>{filePath}</span>
         {tile.filePreview && (
-          <span className="nd-caption rounded-full border border-border-visible px-2 py-1 text-text-secondary">{t('files.preview')}</span>
+          <span className="nd-caption rounded-full border border-border-visible px-2 py-1 text-text-secondary">{t('files.temporary')}</span>
+        )}
+        {isMarkdown && (
+          <div className="flex items-center gap-0.5 rounded-md border border-border-visible bg-bg-tertiary p-0.5">
+            {([
+              { mode: 'edit' as const, label: t('files.markdownEdit'), Icon: Code2 },
+              { mode: 'live' as const, label: t('files.markdownSplit'), Icon: Columns2 },
+              { mode: 'preview' as const, label: t('files.markdownPreview'), Icon: Eye },
+            ]).map(({ mode, label, Icon }) => (
+              <button
+                key={mode}
+                type="button"
+                className={`inline-flex h-7 w-7 items-center justify-center rounded transition-colors ${markdownView === mode ? 'bg-active-bg text-text-display' : 'text-text-secondary hover:bg-hover-bg hover:text-text-display'}`}
+                title={label}
+                aria-label={label}
+                aria-pressed={markdownView === mode}
+                onClick={() => void onUpdate({ fileMarkdownView: mode })}
+              >
+                <Icon size={14} />
+              </button>
+            ))}
+          </div>
         )}
         {state.conflict ? (
           <span className="inline-flex items-center gap-1 text-xs text-warning"><AlertTriangle size={13} />{t('files.conflict')}</span>
@@ -323,31 +351,47 @@ export function FilesTile({ tile, rootPath, isFocused, isVisible, onUpdate }: Fi
           {operationError ?? t('files.missing')}
         </div>
       )}
-      <div className="min-h-0 flex-1" style={{ '--font-base': 'var(--tile-font-base)' } as React.CSSProperties}>
-        <Editor
-          path={`file:///${filePath}`}
-          language={fileLanguage(filePath)}
-          value={state.draft}
-          beforeMount={defineYiraThemes}
-          theme={lightTheme ? 'yira-light' : 'yira-dark'}
-          onChange={(value) => {
-            const current = stateRef.current
-            if (current.status !== 'ready') return
-            setSaveConfirmed(false)
-            applyTransition(beginFileEdit(current, value ?? ''))
-          }}
-          options={{
-            automaticLayout: true,
-            fontFamily: "'IBM Plex Mono', 'Consolas', monospace",
-            fontSize: tileFontSizePx,
-            minimap: { enabled: false },
-            padding: { top: 12, bottom: 12 },
-            scrollBeyondLastLine: false,
-            smoothScrolling: true,
-            tabSize: 2,
-            readOnly: saving,
-          }}
-        />
+      <div className="flex min-h-0 flex-1" style={{ '--font-base': 'var(--tile-font-base)' } as React.CSSProperties}>
+        {markdownLayout.showEditor && (
+          <div className={`min-h-0 min-w-0 flex-1 ${markdownLayout.showPreview ? 'border-r border-border' : ''}`}>
+            <Editor
+              path={`file:///${filePath}`}
+              language={fileLanguage(filePath)}
+              value={state.draft}
+              beforeMount={defineYiraThemes}
+              theme={lightTheme ? 'yira-light' : 'yira-dark'}
+              onChange={(value) => {
+                const current = stateRef.current
+                if (current.status !== 'ready') return
+                setSaveConfirmed(false)
+                applyTransition(beginFileEdit(current, value ?? ''))
+              }}
+              options={{
+                automaticLayout: true,
+                fontFamily: "'IBM Plex Mono', 'Consolas', monospace",
+                fontSize: tileFontSizePx,
+                minimap: { enabled: false },
+                padding: { top: 12, bottom: 12 },
+                scrollBeyondLastLine: false,
+                smoothScrolling: true,
+                tabSize: 2,
+                readOnly: saving,
+              }}
+            />
+          </div>
+        )}
+        {markdownLayout.showPreview && (
+          <div className="min-h-0 min-w-0 flex-1">
+            <MarkdownPreviewPane
+              source={state.draft}
+              colorMode={lightTheme ? 'light' : 'dark'}
+              rootPath={rootPath}
+              filePath={filePath}
+              onOpenFile={onOpenFile}
+              onOpenBrowser={onOpenBrowser}
+            />
+          </div>
+        )}
       </div>
     </div>
   )

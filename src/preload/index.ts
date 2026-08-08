@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { BoardTask, FileListOptions, FileWriteInput, GitStatusResult, NotificationAttentionOptions, TerminalCreateOptions, UpdateState, WindowBounds, WindowClosePreparationRequest, WindowClosePreparationResponse, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
+import type { BoardTask, FileListOptions, FileWriteInput, FloatingNavigationEvent, FloatingNavigationRequest, GitStatusResult, NotificationAttentionOptions, TerminalCreateOptions, UpdateState, WindowBounds, WindowClosePreparationRequest, WindowClosePreparationResponse, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
 import { createSerialTaskQueue } from '@shared/serialTaskQueue'
 
 console.log('[preload] Loading...')
@@ -67,6 +67,8 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.invoke('files:stat', rootPath, relativePath),
     write: (rootPath: string, relativePath: string, input: FileWriteInput) =>
       ipcRenderer.invoke('files:write', rootPath, relativePath, input),
+    readPreviewAsset: (rootPath: string, relativePath: string) =>
+      ipcRenderer.invoke('files:readPreviewAsset', rootPath, relativePath),
   },
 
   git: {
@@ -161,6 +163,8 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.invoke('floating:getTileSnapshot', { workspaceId, tileId }),
     updateTile: (workspaceId: string, tileId: string, patch: unknown) =>
       ipcRenderer.invoke('floating:updateTile', { workspaceId, tileId, patch }),
+    requestNavigation: (tileId: string, request: FloatingNavigationRequest) =>
+      ipcRenderer.invoke('floating:requestNavigation', tileId, request),
     onAttachRequested: (callback: (event: { workspaceId: string; tileId: string; bounds?: WindowBounds }) => void) => {
       const handler = (_event: unknown, payload: { workspaceId: string; tileId: string; bounds?: WindowBounds }) => callback(payload)
       ipcRenderer.on('floating:attachRequested', handler)
@@ -188,6 +192,11 @@ contextBridge.exposeInMainWorld('electron', {
       const handler = (_event: unknown, payload: { workspaceId: string; tileId: string; patch: unknown }) => callback(payload)
       ipcRenderer.on('floating:updateTile', handler)
       return () => ipcRenderer.removeListener('floating:updateTile', handler)
+    },
+    onNavigationRequested: (callback: (event: FloatingNavigationEvent) => void) => {
+      const handler = (_event: unknown, payload: FloatingNavigationEvent) => callback(payload)
+      ipcRenderer.on('floating:navigationRequested', handler)
+      return () => ipcRenderer.removeListener('floating:navigationRequested', handler)
     },
   },
 

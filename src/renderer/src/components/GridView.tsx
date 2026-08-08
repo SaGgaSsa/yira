@@ -31,6 +31,7 @@ interface GridViewProps {
   onDetachTile: (tile: TileState) => void
   onCloseTile: (tileId: string) => void
   onOpenBrowserTile: (url: string) => void
+  onOpenFileTile: (relativePath: string) => void | Promise<void>
   tileCreationSelectorProps: TileCreationSelectorProps
   workspaceRootPath: string
 }
@@ -87,6 +88,7 @@ export function GridView({
   onDetachTile,
   onCloseTile,
   onOpenBrowserTile,
+  onOpenFileTile,
   tileCreationSelectorProps,
   workspaceRootPath,
 }: GridViewProps): React.ReactElement {
@@ -316,6 +318,7 @@ export function GridView({
               onFocus={() => onFocusTile(tile.id)}
               onUpdate={(patch) => onUpdateTile(tile.id, patch)}
               onOpenBrowserTile={onOpenBrowserTile}
+              onOpenFileTile={onOpenFileTile}
               workspaceRootPath={workspaceRootPath}
             />
           </div>

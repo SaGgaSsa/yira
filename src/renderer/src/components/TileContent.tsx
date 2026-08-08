@@ -24,10 +24,11 @@ interface TileContentProps {
   onFocus: () => void
   onUpdate: (patch: Partial<TileState>) => void | Promise<void>
   onOpenBrowserTile?: (url: string) => void
+  onOpenFileTile?: (relativePath: string) => void | Promise<void>
   workspaceRootPath?: string
 }
 
-export function TileContent({ tile, isFocused, edgeToEdge = false, isVisible = true, autoFocus = false, onFocus, onUpdate, onOpenBrowserTile, workspaceRootPath = '' }: TileContentProps): React.ReactElement {
+export function TileContent({ tile, isFocused, edgeToEdge = false, isVisible = true, autoFocus = false, onFocus, onUpdate, onOpenBrowserTile, onOpenFileTile, workspaceRootPath = '' }: TileContentProps): React.ReactElement {
   if (tile.type === 'terminal') {
     return (
       <TerminalTileWrapper
@@ -64,6 +65,8 @@ export function TileContent({ tile, isFocused, edgeToEdge = false, isVisible = t
         isFocused={isFocused}
         isVisible={isVisible}
         onUpdate={onUpdate}
+        onOpenFile={onOpenFileTile}
+        onOpenBrowser={onOpenBrowserTile}
       />
     )
   }

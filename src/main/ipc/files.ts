@@ -4,7 +4,7 @@ import { promises as fs } from 'fs'
 import { basename, isAbsolute, relative, resolve, sep } from 'path'
 import type { FileEntry, FileListOptions, FileListResult, FileSelectFolderResult, FileWriteInput } from '@shared/types'
 import { canonicalizeRootFolderPath } from '../workspace-root'
-import { readFile, resolveRootTarget, statFile, writeFile } from './file-access'
+import { readFile, readPreviewAsset, resolveRootTarget, statFile, writeFile } from './file-access'
 
 const IGNORED_NAMES = new Set([
   '.git',
@@ -133,6 +133,10 @@ export function registerFilesIPC(): void {
 
   ipcMain.handle('files:write', async (_event, rootPath: string, relativePath: string, input: FileWriteInput) =>
     writeFile(rootPath, relativePath, input),
+  )
+
+  ipcMain.handle('files:readPreviewAsset', async (_event, rootPath: string, relativePath: string) =>
+    readPreviewAsset(rootPath, relativePath),
   )
 
 }

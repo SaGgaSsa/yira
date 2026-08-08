@@ -24,6 +24,7 @@ const state: CanvasState = {
       fileDraft: 'const restored = true',
       fileVersion: 'expected-sha-256',
       fileChangeToken: 'mtime-size-token',
+      fileMarkdownView: 'preview',
     } as unknown as CanvasState['tiles'][number],
   ],
   groups: [
@@ -99,6 +100,7 @@ if (
   restoredFiles.fileDraft !== 'const restored = true' ||
   restoredFiles.fileVersion !== 'expected-sha-256' ||
   restoredFiles.fileChangeToken !== 'mtime-size-token'
+  || restoredFiles.fileMarkdownView !== 'preview'
 ) {
   throw new Error('canvas normalization must restore every persisted files tile field')
 }

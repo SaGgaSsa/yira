@@ -1,5 +1,5 @@
 import type { CanvasState, SplitViewState, ViewMode } from '@shared/types'
-import { normalizeMarkdownViewMode, normalizeNoteKind, normalizeTileSize } from '@shared/types'
+import { normalizeFileMarkdownViewMode, normalizeMarkdownViewMode, normalizeNoteKind, normalizeTileSize } from '@shared/types'
 import { DEFAULT_SPLIT_ORIENTATION, normalizeSplitOrientation } from './splitViewState'
 import { clampTileToWorld, normalizeFiniteViewport } from './canvasWorld'
 
@@ -62,8 +62,11 @@ export function normalizeCanvasStateForJson(state: CanvasState): CanvasState {
           : tileWithoutTitlebar.noteKind === undefined
             ? tileWithoutTitlebar
             : { ...tileWithoutTitlebar, noteKind: 'rich' as const }
+      const normalizedFile = normalizedNote.type === 'files'
+        ? { ...normalizedNote, fileMarkdownView: normalizeFileMarkdownViewMode(normalizedNote.fileMarkdownView) }
+        : normalizedNote
       return clampTileToWorld({
-        ...normalizedNote,
+        ...normalizedFile,
         width: size.width,
         height: size.height,
       })

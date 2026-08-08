@@ -211,6 +211,7 @@ export function fileLanguage(filePath: string): string {
     jsonc: 'json',
     jsx: 'javascript',
     md: 'markdown',
+    markdown: 'markdown',
     py: 'python',
     sh: 'shell',
     bash: 'shell',

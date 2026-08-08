@@ -1,6 +1,6 @@
 {
   "name": "yira",
-  "version": "0.1.43",
+  "version": "0.1.44",
   "private": true,
   "productName": "Yira",
   "description": "Infinite canvas terminal workspace",
@@ -68,6 +68,7 @@
     "monaco-editor": "^0.55.1",
     "node-pty": "^1.1.0",
     "react-i18next": "17.0.9",
+    "rehype-raw": "^7.0.0",
     "zustand": "^5.0.0"
   },
   "build": {

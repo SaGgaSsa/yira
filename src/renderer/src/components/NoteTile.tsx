@@ -9,7 +9,9 @@ import type { MarkdownViewMode, NoteBlocks, NoteColor, NoteFont, TileState } fro
 import { normalizeMarkdownViewMode, NOTE_COLORS } from '@shared/types'
 import { createElectronClipboardPayload } from '@/utils/noteClipboard'
 import { getMarkdownEditorKey } from '@/utils/markdownEditor'
+import { safeMarkdownPreviewOptions } from '@/utils/markdownPlugins'
 import { safeMarkdownUrl } from '@/utils/markdownPreview'
+import { MarkdownPreviewPane } from './MarkdownPreviewPane'
 
 interface NoteTileProps {
   tile: TileState
@@ -494,18 +496,28 @@ function MarkdownNoteTile({ tile, autoFocus = false, onUpdate }: NoteTileProps):
         </div>
 
         <div ref={editorRef} className="yira-markdown-editor min-h-[480px] flex-1 px-6 py-5">
-          <MDEditor
-            key={getMarkdownEditorKey(tile.id, viewMode)}
-            value={markdown}
-            onChange={(value) => handleMarkdownChange(value ?? '')}
-            preview={viewMode}
-            commands={MARKDOWN_COMMANDS}
-            extraCommands={[]}
-            visibleDragbar={false}
-            height="100%"
-            data-color-mode="dark"
-            previewOptions={{ skipHtml: true, urlTransform: safeMarkdownUrl }}
-          />
+          {viewMode === 'preview' ? (
+            <MarkdownPreviewPane
+              source={markdown}
+              colorMode={document.documentElement.classList.contains('light') ? 'light' : 'dark'}
+            />
+          ) : (
+            <MDEditor
+              key={getMarkdownEditorKey(tile.id, viewMode)}
+              value={markdown}
+              onChange={(value) => handleMarkdownChange(value ?? '')}
+              preview={viewMode}
+              commands={MARKDOWN_COMMANDS}
+              extraCommands={[]}
+              visibleDragbar={false}
+              height="100%"
+              data-color-mode="dark"
+              previewOptions={{
+                ...safeMarkdownPreviewOptions,
+                urlTransform: safeMarkdownUrl,
+              }}
+            />
+          )}
         </div>
       </div>
     </div>

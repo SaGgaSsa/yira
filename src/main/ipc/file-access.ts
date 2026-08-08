@@ -2,10 +2,11 @@ import { createHash } from 'crypto'
 import { constants as fsConstants, promises as fs } from 'fs'
 import type { Stats } from 'fs'
 import type { FileHandle } from 'fs/promises'
-import { isAbsolute, relative, resolve } from 'path'
-import type { FileReadResult, FileRevision, FileStatResult, FileWriteInput, FileWriteResult } from '@shared/types'
+import { extname, isAbsolute, relative, resolve } from 'path'
+import type { FilePreviewAssetResult, FileReadResult, FileRevision, FileStatResult, FileWriteInput, FileWriteResult } from '@shared/types'
 
 export const MAX_TEXT_FILE_BYTES = 2 * 1024 * 1024
+export const MAX_PREVIEW_ASSET_BYTES = 10 * 1024 * 1024
 
 export interface ResolvedRootTarget {
   rootPath: string
@@ -201,12 +202,15 @@ async function openValidatedFile(
 
 async function readSnapshot(
   handle: FileHandle,
-  options: { enforceEditorSizeLimit?: boolean } = {},
+  options: { enforceEditorSizeLimit?: boolean; maxBytes?: number; maxBytesMessage?: string } = {},
 ): Promise<{ buffer: Buffer; revision: FileRevision }> {
   const before = await handle.stat()
   if (!before.isFile()) throw new UnsupportedFileError('Path is not a file')
   if (options.enforceEditorSizeLimit && before.size > MAX_TEXT_FILE_BYTES) {
     throw new UnsupportedFileError('Files larger than 2 MiB cannot be opened in the editor')
+  }
+  if (options.maxBytes !== undefined && before.size > options.maxBytes) {
+    throw new UnsupportedFileError(options.maxBytesMessage ?? 'File is too large')
   }
 
   const buffer = await handle.readFile()
@@ -221,13 +225,57 @@ async function readSnapshot(
 async function readTarget(
   rootPath: string,
   relativePath: string,
-  options?: { enforceEditorSizeLimit?: boolean },
+  options?: { enforceEditorSizeLimit?: boolean; maxBytes?: number; maxBytesMessage?: string },
 ): Promise<{ buffer: Buffer; revision: FileRevision }> {
   const { handle } = await openValidatedFile(rootPath, relativePath, fsConstants.O_RDONLY)
   try {
     return await readSnapshot(handle, options)
   } finally {
     await handle.close()
+  }
+}
+
+interface PreviewAssetType {
+  mimeType: string
+  matches: (buffer: Buffer) => boolean
+}
+
+function previewAssetType(filePath: string): PreviewAssetType | null {
+  const extension = extname(filePath).toLowerCase()
+  const types: Record<string, PreviewAssetType> = {
+    '.png': {
+      mimeType: 'image/png',
+      matches: (buffer) => buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])),
+    },
+    '.jpg': { mimeType: 'image/jpeg', matches: (buffer) => buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff },
+    '.jpeg': { mimeType: 'image/jpeg', matches: (buffer) => buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff },
+    '.gif': { mimeType: 'image/gif', matches: (buffer) => ['GIF87a', 'GIF89a'].includes(buffer.subarray(0, 6).toString('ascii')) },
+    '.webp': { mimeType: 'image/webp', matches: (buffer) => buffer.subarray(0, 4).toString('ascii') === 'RIFF' && buffer.subarray(8, 12).toString('ascii') === 'WEBP' },
+    '.avif': {
+      mimeType: 'image/avif',
+      matches: (buffer) => ['ftypavif', 'ftypavis'].includes(buffer.subarray(4, 12).toString('ascii')),
+    },
+  }
+  return types[extension] ?? null
+}
+
+export async function readPreviewAsset(rootPath: string, relativePath: string): Promise<FilePreviewAssetResult> {
+  const type = previewAssetType(relativePath)
+  if (!type) return { status: 'unsupported', reason: 'Only PNG, JPEG, GIF, WebP, and AVIF images are supported' }
+
+  try {
+    const { buffer } = await readTarget(rootPath, relativePath, {
+      maxBytes: MAX_PREVIEW_ASSET_BYTES,
+      maxBytesMessage: 'Preview images larger than 10 MiB are not supported',
+    })
+    if (!type.matches(buffer)) {
+      return { status: 'unsupported', reason: 'Image content does not match its file type' }
+    }
+    return { status: 'ready', mimeType: type.mimeType, dataBase64: buffer.toString('base64') }
+  } catch (error) {
+    if (error instanceof MissingFileError) return { status: 'missing' }
+    if (error instanceof UnsupportedFileError) return { status: 'unsupported', reason: error.message }
+    throw error
   }
 }
 
