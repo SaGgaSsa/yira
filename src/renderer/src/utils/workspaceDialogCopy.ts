@@ -8,6 +8,10 @@ export interface WorkspaceDialogCopy {
 
 type Translate = (key: string) => string
 
+export function getInitialWorkspaceDialogCopy(translate: Translate): WorkspaceDialogCopy {
+  return getWorkspaceDialogCopy('first', translate)
+}
+
 export function getWorkspaceDialogCopy(
   mode: WorkspaceDialogCopyMode,
   translate: Translate,

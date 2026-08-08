@@ -52,7 +52,7 @@ import {
 import { TILE_META } from './components/TileContent'
 import { resolveWorkspaceFocusTarget } from './utils/workspaceFocus'
 import { getWorkspaceSidebarOrder } from './utils/workspaceOrdering'
-import { getWorkspaceDialogCopy } from './utils/workspaceDialogCopy'
+import { getInitialWorkspaceDialogCopy, getWorkspaceDialogCopy } from './utils/workspaceDialogCopy'
 import { buildTileConfigurationMenuItems } from './components/tileConfigurationMenu'
 import { createFileTileOpenRequestTracker, deriveFileTileTitle, planFileTileOpen } from './utils/fileTileLifecycle'
 import { windowBufferRegistry } from './utils/windowBufferRegistry'
@@ -264,6 +264,8 @@ export default function App(): React.ReactElement {
   if (rendererMode === 'floating-tile') return <FloatingTileWindow />
 
   const { t } = useTranslation()
+  // Keep startup copy stable: this effect must stay mount-only to avoid reloading persisted workspace state on language changes.
+  const startupFirstWorkspaceDialogCopyRef = useRef(getInitialWorkspaceDialogCopy(t))
 
   // Settings
   useTheme()
@@ -683,7 +685,7 @@ export default function App(): React.ReactElement {
       skipNextAutosaveRef.current = true
       setWorkspace('', '', { type: 'canvas', workspacePanelOpen: true, sourceControlViewMode: 'list' })
       restoreState(createEmptyCanvasState())
-      const dialogCopy = getWorkspaceDialogCopy('first', t)
+      const dialogCopy = startupFirstWorkspaceDialogCopyRef.current
       setWorkspaceEditor({
         mode: 'create',
         request: {
@@ -709,7 +711,7 @@ export default function App(): React.ReactElement {
     }).catch((err) => console.error('[App] Error loading shell profiles:', err))
     window.electron.terminal.sshAvailable().then(setRemoteSshAvailable)
       .catch((err) => console.error('[App] Error checking SSH client:', err))
-  }, [activateWorkspace, refreshWorkspaceMetadata, restoreState, setProfiles, setWorkspace, t])
+  }, [activateWorkspace, refreshWorkspaceMetadata, restoreState, setProfiles, setWorkspace])
 
   const switchWorkspace = useCallback(
     (workspace: WorkspaceMetadata) => {

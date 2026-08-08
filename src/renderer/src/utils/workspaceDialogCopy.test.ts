@@ -1,6 +1,6 @@
 import i18next from 'i18next'
 import { resources } from '../i18n/resources'
-import { getWorkspaceDialogCopy } from './workspaceDialogCopy'
+import { getInitialWorkspaceDialogCopy, getWorkspaceDialogCopy } from './workspaceDialogCopy'
 
 const i18n = i18next.createInstance()
 
@@ -12,6 +12,19 @@ await i18n.init({
 })
 
 const translate = (key: string) => i18n.t(key)
+const startupCopy = getInitialWorkspaceDialogCopy(translate)
+await i18n.changeLanguage('en')
+if (startupCopy.title !== 'Crea tu primer espacio de trabajo') {
+  throw new Error('startup dialog copy must remain captured in the initial language')
+}
+if (startupCopy.eyebrow !== 'Configuración del primer espacio de trabajo') {
+  throw new Error('startup dialog eyebrow must remain captured in the initial language')
+}
+if (startupCopy.confirmLabel !== 'Nuevo espacio de trabajo') {
+  throw new Error('startup dialog confirm label must remain captured in the initial language')
+}
+
+await i18n.changeLanguage('es')
 const firstWorkspaceCopy = getWorkspaceDialogCopy('first', translate)
 if (firstWorkspaceCopy.title !== 'Crea tu primer espacio de trabajo') {
   throw new Error('first-workspace dialog title must use the Spanish i18n resource')
