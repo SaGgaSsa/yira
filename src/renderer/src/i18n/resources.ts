@@ -37,6 +37,10 @@ type TranslationResources = {
   }
   sidebar: {
     groups: string
+    workspaces: string
+    workspaceCount_one: string
+    workspaceCount_other: string
+    emptyWorkspaces: string
     workspaceActions: string
     collapse: string
     open: string
@@ -170,6 +174,10 @@ type TranslationResources = {
     removeFromYira: string
     undoRemoval: string
     discardDraft: string
+    configure: string
+    focus: string
+    attention_one: string
+    attention_other: string
   }
   tile: {
     terminal: string
@@ -318,6 +326,10 @@ const en: TranslationResources = {
   },
   sidebar: {
     groups: 'Groups',
+    workspaces: 'Workspaces',
+    workspaceCount_one: '{{count}} workspace',
+    workspaceCount_other: '{{count}} workspaces',
+    emptyWorkspaces: 'Create a workspace to see it here.',
     workspaceActions: 'Workspace actions',
     collapse: 'Collapse sidebar',
     open: 'Open sidebar',
@@ -451,6 +463,10 @@ const en: TranslationResources = {
     removeFromYira: 'Remove from Yira',
     undoRemoval: 'Undo removal',
     discardDraft: 'Discard draft',
+    configure: 'Configure workspace',
+    focus: 'Focus workspace',
+    attention_one: '{{count}} terminal output event in this workspace',
+    attention_other: '{{count}} terminal output events in this workspace',
   },
   tile: {
     terminal: 'Terminal',
@@ -599,6 +615,10 @@ const es: TranslationResources = {
   },
   sidebar: {
     groups: 'Grupos',
+    workspaces: 'Espacios de trabajo',
+    workspaceCount_one: '{{count}} espacio de trabajo',
+    workspaceCount_other: '{{count}} espacios de trabajo',
+    emptyWorkspaces: 'Crea un espacio de trabajo para verlo aquí.',
     workspaceActions: 'Acciones del espacio de trabajo',
     collapse: 'Contraer barra lateral',
     open: 'Abrir barra lateral',
@@ -732,6 +752,10 @@ const es: TranslationResources = {
     removeFromYira: 'Quitar de Yira',
     undoRemoval: 'Deshacer eliminación',
     discardDraft: 'Descartar borrador',
+    configure: 'Configurar espacio de trabajo',
+    focus: 'Enfocar espacio de trabajo',
+    attention_one: '{{count}} evento de salida de terminal en este espacio de trabajo',
+    attention_other: '{{count}} eventos de salida de terminal en este espacio de trabajo',
   },
   tile: {
     terminal: 'Terminal',

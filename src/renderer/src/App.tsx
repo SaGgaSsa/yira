@@ -1,4 +1,5 @@
 import React, { useEffect, useCallback, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Canvas, getCanvasMethods } from './components/Canvas'
 import { TileCreationSelector, type TileCreationSelectorProps } from './components/TileCreationSelector'
 import { TileCreationMenu } from './components/TileCreationMenu'
@@ -16,6 +17,7 @@ import { AppDialog, type ConfirmDialogOptions, type PromptDialogOptions } from '
 import { GroupEditorDialog, type GroupEditorRequest, type GroupEditorValue } from './components/GroupEditorDialog'
 import { WorkspaceDialog, type WorkspaceDialogRequest, type WorkspaceDialogValue } from './components/WorkspaceDialog'
 import { WorkspaceManagementDialog } from './components/WorkspaceManagementDialog'
+import { WorkspaceListItem } from './components/WorkspaceListItem'
 import { TileEditorDialog, type TileEditorRequest, type TileEditorValue } from './components/TileEditorDialog'
 import { useCanvasStore } from './store/canvasStore'
 import { useSettingsStore } from './store/settingsStore'
@@ -24,7 +26,7 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useTheme } from './hooks/useTheme'
 import { useFontSize } from './hooks/useFontSize'
 import { useUpdateStore } from './store/updateStore'
-import { findMergeTargetGroup, findSelectedGroup, getGroupingBlockedReason } from './utils/grouping'
+import { findMergeTargetGroup, getGroupingBlockedReason } from './utils/grouping'
 import { GRID_MAX_TILES, GROUP_COLORS, GROUP_COLOR_ORDER, getDefaultTileSize, type BoardState, type BoardTask, type TileState, type CanvasState, type GridWorkspaceState, type Workspace, type WorkspaceMetadata, type TileGroup, type ViewMode, type SplitPanelId, type SplitViewState, type WorkspaceManagementEntry, type WorkspaceType } from '@shared/types'
 import { createEmptyGridWorkspaceState, normalizeGridWorkspaceState } from '@shared/gridWorkspaceState'
 import {
@@ -42,16 +44,18 @@ import { normalizeCanvasStateForJson } from './utils/canvasStateNormalization'
 import {
   clearActivatedWorkspaceAttentionCount,
   getWorkspaceAttentionLabel,
+  pruneWorkspaceAttentionCounts,
   sumTerminalAttentionCounts,
   updateActiveWorkspaceAttentionCount,
   type WorkspaceAttentionCounts,
 } from './utils/workspaceAttention'
 import { TILE_META } from './components/TileContent'
-import { TileListItem } from './components/TileListItem'
+import { resolveWorkspaceFocusTarget } from './utils/workspaceFocus'
+import { getWorkspaceSidebarOrder } from './utils/workspaceOrdering'
 import { buildTileConfigurationMenuItems } from './components/tileConfigurationMenu'
 import { createFileTileOpenRequestTracker, deriveFileTileTitle, planFileTileOpen } from './utils/fileTileLifecycle'
 import { windowBufferRegistry } from './utils/windowBufferRegistry'
-import { Terminal, StickyNote, FolderOpen, ChevronDown, SlidersHorizontal, Trash2, Pencil, Lock, Columns, Download, X, Plus } from 'lucide-react'
+import { Terminal, StickyNote, ChevronDown, SlidersHorizontal, Trash2, Pencil, Lock, Columns, Download, X, Plus } from 'lucide-react'
 
 const GROUP_SHOW_TOP_PADDING = 42
 const BASE_WINDOW_TITLE = 'Yira'
@@ -244,6 +248,12 @@ type WorkspaceEditorState =
     }
   | null
 
+type WorkspaceActivationOptions = {
+  persistCurrent?: boolean
+  updateMain?: boolean
+  activationMode?: 'focus-last'
+}
+
 function isPromptDialog(dialog: PromptDialogState | ConfirmDialogState): dialog is PromptDialogState {
   return dialog.request.mode === 'prompt'
 }
@@ -251,6 +261,8 @@ function isPromptDialog(dialog: PromptDialogState | ConfirmDialogState): dialog 
 export default function App(): React.ReactElement {
   const rendererMode = new URLSearchParams(window.location.search).get('mode')
   if (rendererMode === 'floating-tile') return <FloatingTileWindow />
+
+  const { t } = useTranslation()
 
   // Settings
   useTheme()
@@ -287,7 +299,6 @@ export default function App(): React.ReactElement {
   const updateTile = useCanvasStore((s) => s.updateTile)
   const focusTile = useCanvasStore((s) => s.focusTile)
   const selectTiles = useCanvasStore((s) => s.selectTiles)
-  const bringToFront = useCanvasStore((s) => s.bringToFront)
   const createGroup = useCanvasStore((s) => s.createGroup)
   const addTilesToGroup = useCanvasStore((s) => s.addTilesToGroup)
   const updateGroup = useCanvasStore((s) => s.updateGroup)
@@ -510,7 +521,7 @@ export default function App(): React.ReactElement {
 
   const activateWorkspace = useCallback(async (
     workspace: Pick<Workspace, 'id' | 'name' | 'config'> | null,
-    options?: { persistCurrent?: boolean; updateMain?: boolean },
+    options?: WorkspaceActivationOptions,
   ) => {
     if (!workspace) return
 
@@ -528,9 +539,10 @@ export default function App(): React.ReactElement {
     }
     if (currentWorkspaceId && currentWorkspaceId !== workspace.id) {
       const outgoingAttentionCount = sumTerminalAttentionCounts(currentState.terminalAttention)
-      setWorkspaceAttentionCounts((current) => clearActivatedWorkspaceAttentionCount(
-        updateActiveWorkspaceAttentionCount(current, currentWorkspaceId, outgoingAttentionCount),
-        workspace.id,
+      setWorkspaceAttentionCounts((current) => updateActiveWorkspaceAttentionCount(
+        current,
+        currentWorkspaceId,
+        outgoingAttentionCount,
       ))
       await window.electron.floating.closeWorkspace(currentWorkspaceId)
     }
@@ -542,6 +554,10 @@ export default function App(): React.ReactElement {
       window.electron.board.load(workspace.id),
     ])
     if (transitionId !== workspaceTransitionRef.current) return
+
+    const rememberedTileId = state
+      ? (state as CanvasState | GridWorkspaceState).fullviewActiveTileId
+      : null
 
     if (options?.updateMain !== false) {
       await window.electron.workspace.setActive(workspace.id)
@@ -563,8 +579,20 @@ export default function App(): React.ReactElement {
     } else {
       restoreWorkspaceState(workspace.id, workspace.name, workspace.config, restoredState as CanvasState)
     }
+
+    if (options?.activationMode === 'focus-last') {
+      const focusTarget = resolveWorkspaceFocusTarget(restoredState.tiles, rememberedTileId)
+      if (focusTarget) {
+        focusTile(focusTarget)
+        selectTiles([focusTarget])
+        setFullviewActiveTileId(focusTarget)
+        setViewMode('fullview')
+      }
+    }
+
+    setWorkspaceAttentionCounts((current) => clearActivatedWorkspaceAttentionCount(current, workspace.id))
     setShowWorkspacePicker(false)
-  }, [restoreGridWorkspaceState, restoreWorkspaceState, saveToDisk])
+  }, [focusTile, restoreGridWorkspaceState, restoreWorkspaceState, saveToDisk, selectTiles, setFullviewActiveTileId, setViewMode])
 
   useEffect(() => {
     return window.electron.floating.onSnapshotRequest(({ workspaceId, tileId }) => {
@@ -681,7 +709,6 @@ export default function App(): React.ReactElement {
       .catch((err) => console.error('[App] Error checking SSH client:', err))
   }, [activateWorkspace, refreshWorkspaceMetadata, restoreState, setProfiles, setWorkspace])
 
-  // Switch workspace
   const switchWorkspace = useCallback(
     (workspace: WorkspaceMetadata) => {
       if (workspace.id === activeWorkspaceId) {
@@ -819,6 +846,10 @@ export default function App(): React.ReactElement {
     availableProfiles.find((p) => p.id === 'zsh') ??
     availableProfiles.find((p) => p.available)
   const effectiveGroups = groupsEnabled ? groups : []
+  const sidebarWorkspaces = useMemo(
+    () => getWorkspaceSidebarOrder(workspaceMetadata),
+    [workspaceMetadata],
+  )
   const terminalAttentionCounts = useMemo(() => {
     if (!terminalAttentionEnabled) return {}
 
@@ -876,6 +907,28 @@ export default function App(): React.ReactElement {
     )))
   }, [setWorkspace])
 
+  const openWorkspaceEditor = useCallback((workspace: WorkspaceMetadata) => {
+    setShowWorkspacePicker(false)
+    setWorkspaceEditor({
+      mode: 'edit',
+      workspaceId: workspace.id,
+      request: {
+        title: t('workspace.editWorkspace'),
+        eyebrow: t('workspace.workspaceSettings'),
+        confirmLabel: t('workspace.saveWorkspace'),
+        typeEditable: false,
+        value: {
+          type: workspace.config.type,
+          name: workspace.name,
+          rootFolderPath: workspace.config.rootFolderPath ?? '',
+          initialCommand: workspace.config.initialCommand ?? '',
+          terminalHistoryEnabled: workspace.config.terminalHistoryEnabled !== false,
+          remoteTerminal: workspace.config.remoteTerminal ?? { host: '', user: '' },
+        },
+      },
+    })
+  }, [t])
+
   const toggleWorkspacePanel = useCallback(() => {
     if (!activeWorkspaceId || !hasWorkspacePanel) return
 
@@ -903,109 +956,12 @@ export default function App(): React.ReactElement {
     }
   }, [viewport, setViewport])
 
-  const handleSelectSingleTile = useCallback((tileId: string) => {
-    focusTile(tileId)
-    selectTiles([tileId])
-    bringToFront(tileId)
-    setFullviewActiveTileId(tileId)
-  }, [focusTile, selectTiles, bringToFront, setFullviewActiveTileId])
-
   const activateSplitTile = useCallback((panel: SplitPanelId, tileId: string) => {
     focusTile(tileId)
     selectTiles([tileId])
     setSplitPanelActiveTile(panel, tileId)
     setFullviewActiveTileId(tileId)
   }, [focusTile, selectTiles, setFullviewActiveTileId, setSplitPanelActiveTile])
-
-  const handleCenterTileFromSidebar = useCallback((tileId: string) => {
-    if (activeWorkspaceType !== 'canvas' || viewMode !== 'canvas') return
-    getCanvasMethods()?.centerViewOnTile(tileId)
-  }, [activeWorkspaceType, viewMode])
-
-  const handleShowTileFromSidebar = useCallback((tileId: string) => {
-    const tile = tiles.find((entry) => entry.id === tileId)
-    if (!tile) return
-    if (isTileDetached(tile)) {
-      void window.electron.floating.focus(tile.id)
-      return
-    }
-
-    const bounds = {
-      minX: tile.x,
-      minY: tile.y,
-      maxX: tile.x + tile.width,
-      maxY: tile.y + tile.height,
-    }
-
-    setTileMenu(null)
-    selectTiles([tile.id])
-    focusTile(tile.id)
-
-    const fitTileBounds = () => {
-      getCanvasMethods()?.fitViewToBounds(bounds)
-    }
-
-    if (activeWorkspaceType === 'grid') {
-      setViewMode('gridview')
-      return
-    }
-
-    if (viewMode === 'canvas') {
-      fitTileBounds()
-      return
-    }
-
-    setViewMode('canvas')
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        fitTileBounds()
-      })
-    })
-  }, [activeWorkspaceType, focusTile, selectTiles, setViewMode, tiles, viewMode])
-
-  const handleSidebarTileClick = useCallback((tileId: string) => {
-    if (viewMode === 'fullview') {
-      focusTile(tileId)
-      selectTiles([tileId])
-      setFullviewActiveTileId(tileId)
-      return
-    }
-
-    if (viewMode === 'splitview' && activeWorkspaceType === 'canvas') {
-      if (splitViewState.leftTileIds.includes(tileId)) {
-        activateSplitTile('left', tileId)
-        return
-      }
-
-      if (splitViewState.rightTileIds.includes(tileId)) {
-        activateSplitTile('right', tileId)
-        return
-      }
-
-      const targetPanel = splitViewState.focusedPanel
-      setSplitViewState(targetPanel === 'left'
-        ? {
-            ...splitViewState,
-            leftTileIds: [...splitViewState.leftTileIds, tileId],
-            activeLeftTileId: tileId,
-          }
-        : {
-            ...splitViewState,
-            rightTileIds: [...splitViewState.rightTileIds, tileId],
-            activeRightTileId: tileId,
-          })
-      activateSplitTile(targetPanel, tileId)
-      return
-    }
-
-    if (activeWorkspaceType === 'grid') {
-      focusTile(tileId)
-      selectTiles([tileId])
-      return
-    }
-
-    handleCenterTileFromSidebar(tileId)
-  }, [activateSplitTile, activeWorkspaceType, focusTile, handleCenterTileFromSidebar, selectTiles, setFullviewActiveTileId, setSplitViewState, splitViewState, viewMode])
 
   const makeOpenedFileVisible = useCallback((tileId: string) => {
     const state = useCanvasStore.getState()
@@ -1211,11 +1167,6 @@ export default function App(): React.ReactElement {
     setViewMode(transition.viewMode)
   }, [activeWorkspaceType, attachedTiles, boardState.enabled, focusTile, focusedTileId, fullviewActiveTileId, selectTiles, setFullviewActiveTileId, setSplitViewState, setViewMode, splitViewState, switchWorkspaceType, viewMode])
 
-  const selectedGroup = useMemo(
-    () => findSelectedGroup(effectiveGroups, selectedTileIds),
-    [effectiveGroups, selectedTileIds],
-  )
-
   const mergeTargetGroup = useMemo(
     () => findMergeTargetGroup(attachedTiles, effectiveGroups, selectedTileIds),
     [attachedTiles, effectiveGroups, selectedTileIds],
@@ -1315,15 +1266,6 @@ export default function App(): React.ReactElement {
     }
   }, [tiles])
 
-  const handleSelectGroup = useCallback((group: TileGroup) => {
-    const bounds = getGroupBounds(group)
-    if (!bounds) return
-
-    selectTiles(bounds.tileIds)
-    focusTile(null)
-    getCanvasMethods()?.centerViewOnBounds(bounds)
-  }, [getGroupBounds, selectTiles, focusTile])
-
   const handleShowGroup = useCallback((group: TileGroup) => {
     const bounds = getGroupBounds(group)
     if (!bounds) return
@@ -1410,15 +1352,6 @@ export default function App(): React.ReactElement {
     setViewMode('fullview')
   }, [focusTile, selectTiles, setFullviewActiveTileId, setViewMode])
 
-  const handleTileActionFocus = useCallback((tile: TileState) => {
-    if (viewMode === 'fullview') {
-      handleSelectSingleTile(tile.id)
-      return
-    }
-
-    focusTileInFullview(tile)
-  }, [focusTileInFullview, handleSelectSingleTile, viewMode])
-
   const detachTile = useCallback((tile: TileState) => {
     if (!activeWorkspaceId || isTileDetached(tile)) return
     detachTileToFloating(tile.id)
@@ -1430,15 +1363,6 @@ export default function App(): React.ReactElement {
     attachFloatingTile(tile.id)
     void window.electron.floating.close(tile.id, false)
   }, [attachFloatingTile])
-
-  const handleSidebarTilePrimaryAction = useCallback((tile: TileState) => {
-    if (isTileDetached(tile)) {
-      void window.electron.floating.focus(tile.id)
-      return
-    }
-
-    handleSidebarTileClick(tile.id)
-  }, [handleSidebarTileClick])
 
   const duplicateTileFromMenu = useCallback((tile: TileState) => {
     const duplicateId = duplicateTerminalTile(tile.id)
@@ -1572,6 +1496,12 @@ export default function App(): React.ReactElement {
     const result = await window.electron.workspace.commitManagementChanges({ workspaces: entries })
 
     setWorkspaceMetadata(result.workspaces)
+    if (result.removedWorkspaceIds.length > 0) {
+      setWorkspaceAttentionCounts((current) => pruneWorkspaceAttentionCounts(
+        current,
+        result.workspaces.map((workspace) => workspace.id),
+      ))
+    }
     setShowWorkspaceManager(false)
     setShowWorkspacePicker(false)
 
@@ -1606,7 +1536,7 @@ export default function App(): React.ReactElement {
     }
 
     await activateWorkspace(result.activeWorkspace, { persistCurrent: false, updateMain: false })
-  }, [activeWorkspaceId, activateWorkspace, restoreState, saveToDisk, setWorkspace])
+  }, [activeWorkspaceId, activateWorkspace, pruneWorkspaceAttentionCounts, restoreState, saveToDisk, setWorkspace])
 
   const openCreateWorkspaceDialog = useCallback(() => {
     setShowWorkspacePicker(false)
@@ -1628,36 +1558,6 @@ export default function App(): React.ReactElement {
       },
     })
   }, [])
-
-  const handleOpenFolderWorkspace = useCallback(async () => {
-    const result = await window.electron.workspace.openFolder()
-    if (result.canceled) return
-
-    if (result.workspace) {
-      await refreshWorkspaceMetadata()
-      await activateWorkspace(result.workspace)
-      return
-    }
-
-    setShowWorkspacePicker(false)
-    setWorkspaceEditor({
-      mode: 'create',
-      request: {
-        title: 'Create workspace',
-        eyebrow: 'Workspace Setup',
-        confirmLabel: 'Create Workspace',
-        typeEditable: true,
-        value: {
-          type: 'canvas',
-          name: result.suggestedName ?? '',
-          rootFolderPath: result.selectedRootFolderPath ?? '',
-          initialCommand: '',
-          terminalHistoryEnabled: true,
-          remoteTerminal: { host: '', user: '' },
-        },
-      },
-    })
-  }, [activateWorkspace, refreshWorkspaceMetadata])
 
   const createTerminalFromSidebar = useCallback(() => {
     if (availableProfiles.length <= 1 && defaultProfile && !remoteTerminalConfigured) {
@@ -2113,17 +2013,22 @@ export default function App(): React.ReactElement {
             <button
               className="flex h-full w-full items-center justify-between rounded-2xl border border-border-visible bg-bg-tertiary px-3 text-left transition-colors hover:border-text-secondary"
               onClick={() => setShowWorkspacePicker((v) => !v)}
-              title="Workspace actions"
+              title={t('sidebar.workspaceActions')}
             >
               <span className="min-w-0">
                 <span className="flex min-w-0 items-center gap-2 text-base text-text-display">
                   <span className="truncate">
-                    {activeWorkspaceName || 'None'}
+                    {activeWorkspaceName || t('common.none')}
                   </span>
                   {activeWorkspaceAttentionLabel && (
                     <span
                       className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full border border-text-display px-1.5 font-mono text-[10px] leading-none text-text-display"
-                      title={`${workspaceAttentionCounts[activeWorkspaceId] ?? 0} terminal output ${(workspaceAttentionCounts[activeWorkspaceId] ?? 0) === 1 ? 'event' : 'events'} in this workspace`}
+                      title={t(
+                        (workspaceAttentionCounts[activeWorkspaceId] ?? 0) === 1
+                          ? 'workspace.attention_one'
+                          : 'workspace.attention_other',
+                        { count: workspaceAttentionCounts[activeWorkspaceId] ?? 0 },
+                      )}
                     >
                       {activeWorkspaceAttentionLabel}
                     </span>
@@ -2140,55 +2045,13 @@ export default function App(): React.ReactElement {
                   backdropFilter: 'none',
                 }}
               >
-                <div className="max-h-56 overflow-y-auto py-2">
-                  {workspaceMetadata.map((workspace) => {
-                    const workspaceAttentionLabel = getWorkspaceAttentionLabel(workspaceAttentionCounts, workspace.id)
-                    const workspaceAttentionCount = workspaceAttentionCounts[workspace.id] ?? 0
-
-                    return (
-                      <button
-                        key={workspace.id}
-                        className="flex w-full min-w-0 items-center justify-between px-4 py-2.5 text-left transition-colors hover:bg-hover-bg"
-                        style={{
-                          color: workspace.id === activeWorkspaceId ? 'var(--text-primary)' : 'var(--text-secondary)',
-                        }}
-                        onClick={() => switchWorkspace(workspace)}
-                      >
-                        <span className="min-w-0 truncate text-sm">{workspace.name}</span>
-                        <span className="ml-3 flex shrink-0 items-center gap-2">
-                          {workspaceAttentionLabel && (
-                            <span
-                              className="inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-text-display px-1.5 font-mono text-[10px] leading-none text-text-display"
-                              title={`${workspaceAttentionCount} terminal output ${workspaceAttentionCount === 1 ? 'event' : 'events'} in this workspace`}
-                            >
-                              {workspaceAttentionLabel}
-                            </span>
-                          )}
-                          {workspace.id === activeWorkspaceId && (
-                            <span className="nd-caption shrink-0 text-text-secondary">[ ACTIVE ]</span>
-                          )}
-                        </span>
-                      </button>
-                    )
-                  })}
-                </div>
-
                 <div className="border-t border-border p-2">
                   <button
                     className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm text-text-primary transition-colors hover:bg-hover-bg"
                     onClick={openCreateWorkspaceDialog}
                   >
                     <Plus size={14} />
-                    <span className="nd-label">New Workspace</span>
-                  </button>
-                  <button
-                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm text-text-primary transition-colors hover:bg-hover-bg"
-                    onClick={() => {
-                      void handleOpenFolderWorkspace()
-                    }}
-                  >
-                    <FolderOpen size={14} />
-                    <span className="nd-label">Open Folder</span>
+                    <span className="nd-label">{t('app.newWorkspace')}</span>
                   </button>
                   <button
                     className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm text-text-primary transition-colors hover:bg-hover-bg"
@@ -2198,7 +2061,7 @@ export default function App(): React.ReactElement {
                     }}
                   >
                     <SlidersHorizontal size={14} />
-                    <span className="nd-label">Manage Workspaces</span>
+                    <span className="nd-label">{t('app.manageWorkspaces')}</span>
                   </button>
                 </div>
               </div>
@@ -2207,127 +2070,37 @@ export default function App(): React.ReactElement {
 
           <div className="flex-1 px-3 py-4">
             <div className="mb-3 flex items-center justify-between px-2">
-              <span className="nd-label text-text-secondary">Active Surfaces</span>
+              <span className="nd-label text-text-secondary">{t('sidebar.workspaces')}</span>
               <span className="nd-caption text-text-secondary">
-                {selectedTileIds.length > 1 ? `${selectedTileIds.length} SELECTED` : `${tiles.length} TRACKED`}
+                {t(
+                  sidebarWorkspaces.length === 1 ? 'sidebar.workspaceCount_one' : 'sidebar.workspaceCount_other',
+                  { count: sidebarWorkspaces.length },
+                )}
               </span>
             </div>
-            {tiles.length === 0 ? (
+
+            {sidebarWorkspaces.length === 0 ? (
               <div className="nd-panel-raised rounded-[20px] px-5 py-8 text-center text-text-secondary">
-                <div className="nd-label">[ EMPTY ]</div>
-                <div className="mt-3 text-sm text-text-disabled">Create a terminal, note, browser, timer, or workspace board.</div>
+                <div className="nd-label">{t('common.none')}</div>
+                <div className="mt-3 text-sm text-text-disabled">{t('sidebar.emptyWorkspaces')}</div>
               </div>
             ) : (
               <div className="space-y-2">
-                {tiles
-                  .slice()
-                  .sort((a, b) => b.zIndex - a.zIndex)
-                  .map((tile) => {
-                    const isActive = tile.id === focusedTileId
-                    const isSelected = selectedTileIds.includes(tile.id)
-
-                    return (
-                      <TileListItem
-                        key={tile.id}
-                        tile={tile}
-                        active={isActive || isSelected}
-                        displayLabel={tile.type === 'terminal' ? getTerminalDisplayTitle(tile, terminalTitles) : undefined}
-                        attentionCount={terminalAttentionCounts[tile.id] ?? 0}
-                        detached={isTileDetached(tile)}
-                        className="w-full transition-colors"
-                        onClick={() => handleSidebarTilePrimaryAction(tile)}
-                        onDoubleClick={() => handleShowTileFromSidebar(tile.id)}
-                        onConfigure={(event) => {
-                          openTileConfigurationMenu(tile.id, event.currentTarget)
-                        }}
-                        onFocusTile={() => {
-                          if (isTileDetached(tile)) {
-                            void window.electron.floating.focus(tile.id)
-                            return
-                          }
-                          handleTileActionFocus(tile)
-                        }}
-                        onDetachTile={() => {
-                          if (isTileDetached(tile)) {
-                            attachTile(tile)
-                            return
-                          }
-                          detachTile(tile)
-                        }}
-                        onClose={() => {
-                          if (isTileDetached(tile)) {
-                            void window.electron.floating.close(tile.id, false)
-                            void deleteTile(tile.id)
-                            return
-                          }
-                          if (viewMode === 'fullview') {
-                            void closeTileFromFullview(tile.id)
-                            return
-                          }
-                          void deleteTile(tile.id)
-                        }}
-                      />
-                    )
-                  })}
+                {sidebarWorkspaces.map((workspace) => (
+                  <WorkspaceListItem
+                    key={workspace.id}
+                    workspace={workspace}
+                    active={workspace.id === activeWorkspaceId}
+                    attentionCount={workspaceAttentionCounts[workspace.id] ?? 0}
+                    className="w-full transition-colors"
+                    onClick={() => switchWorkspace(workspace)}
+                    onConfigure={() => openWorkspaceEditor(workspace)}
+                    onFocus={() => {
+                      void activateWorkspace(workspace, { activationMode: 'focus-last' })
+                    }}
+                  />
+                ))}
               </div>
-            )}
-
-            {groupsEnabled && (
-              <>
-                <div className="mb-3 mt-6 flex items-center justify-between px-2">
-                  <span className="nd-label text-text-secondary">Groups</span>
-                  <span className="nd-caption text-text-secondary">{effectiveGroups.length} SAVED</span>
-                </div>
-                {effectiveGroups.length === 0 ? (
-                  <div className="rounded-[20px] border border-dashed border-border px-5 py-6 text-sm text-text-disabled">
-                    Create a selection on the canvas and use the bottom Group bar to save it as a permanent group.
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {effectiveGroups.map((group) => {
-                  const isSelectedGroup = selectedGroup?.id === group.id
-                  const groupColor = GROUP_COLORS[group.colorId]
-                  const isLockedGroup = Boolean(group.locked)
-
-                  return (
-                    <button
-                      key={group.id}
-                      className="w-full rounded-[20px] border px-4 py-4 text-left transition-colors"
-                      style={{
-                        background: isSelectedGroup ? 'var(--surface-raised)' : 'var(--surface)',
-                        borderColor: isSelectedGroup ? 'var(--text-display)' : 'var(--border)',
-                      }}
-                      onClick={() => handleSelectGroup(group)}
-                      onDoubleClick={() => handleShowGroup(group)}
-                      onContextMenu={(event) => {
-                        event.preventDefault()
-                        setTileMenu(null)
-                        setGroupMenu({ groupId: group.id, x: event.clientX, y: event.clientY })
-                      }}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex min-w-0 gap-3">
-                          <span
-                            className="mt-1 h-3 w-3 shrink-0 rounded-full border"
-                            style={{ background: groupColor.swatch, borderColor: 'rgba(255,255,255,0.25)' }}
-                          />
-                          <div className="min-w-0">
-                            <div className="nd-label text-text-secondary">
-                              {isLockedGroup
-                                ? isSelectedGroup ? '[ ACTIVE LOCKED GROUP ]' : '[ LOCKED GROUP ]'
-                                : isSelectedGroup ? '[ ACTIVE GROUP ]' : '[ GROUP ]'}
-                            </div>
-                            <div className="mt-2 truncate text-sm text-text-display">{group.name}</div>
-                          </div>
-                        </div>
-                        <span className="nd-caption shrink-0 text-text-secondary">{group.tileIds.length} TILES</span>
-                      </div>
-                    </button>
-                  )
-                    })}
-                  </div>
-                )}
-              </>
             )}
           </div>
         </div>
