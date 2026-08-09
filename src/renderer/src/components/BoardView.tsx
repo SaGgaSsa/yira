@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Check, ClipboardList, Copy, MessageSquarePlus, Search, Trash2, Undo2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { Check, ClipboardList, Copy, MessageSquarePlus, Search, Trash2, Undo2, X } from 'lucide-react'
 import { BOARD_COLUMNS, type BoardState, type BoardTask } from '@shared/types'
 import { getBoardHistory, getVisibleBoardColumns } from '@shared/board'
 
 interface BoardViewProps {
   workspaceId: string
   board: BoardState
+  onClose: () => void
   onCreateTask: () => void
   onUpdateTask: (taskId: string, patch: { title?: string; task?: string }) => void
   onAddNote: (taskId: string, note: string) => void
@@ -139,6 +141,7 @@ function TaskCard({
 export function BoardView({
   workspaceId,
   board,
+  onClose,
   onCreateTask,
   onUpdateTask,
   onAddNote,
@@ -146,6 +149,7 @@ export function BoardView({
   onApproveReviewTask,
   onRejectReviewTask,
 }: BoardViewProps): React.ReactElement {
+  const { t } = useTranslation()
   const [historySearch, setHistorySearch] = useState('')
   const columns = useMemo(() => getVisibleBoardColumns(board), [board])
   const history = useMemo(() => getBoardHistory(board, historySearch), [board, historySearch])
@@ -173,6 +177,14 @@ export function BoardView({
           >
             <ClipboardList size={14} />
             <span className="nd-label">New Task</span>
+          </button>
+          <button
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-text-display text-text-display transition-colors hover:bg-hover-bg"
+            onClick={onClose}
+            title={t('board.close')}
+            aria-label={t('board.close')}
+          >
+            <X size={16} />
           </button>
         </div>
       </div>

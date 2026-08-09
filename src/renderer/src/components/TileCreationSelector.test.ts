@@ -23,3 +23,23 @@ note?.onClick()
 if (notePickerOpened !== 1) {
   throw new Error('the selector must open the shared note creation picker')
 }
+
+let openedBoard = 0
+let createdTask = 0
+const hiddenBoard = getTileCreationActions({
+  canCreateNote: false,
+  canCreateBrowser: false,
+  canCreateTimer: false,
+  boardEnabled: true,
+  boardVisible: false,
+  onOpenBoard: () => { openedBoard += 1 },
+  onCreateBoard: () => { createdTask += 1 },
+}, (key, fallback) => key === 'board.open' ? 'Open board' : fallback)
+const board = hiddenBoard.find(({ id }) => id === 'board')
+board?.onClick()
+if (openedBoard !== 1 || createdTask !== 0) {
+  throw new Error('a hidden enabled board action must reopen the board without creating a task')
+}
+if (board?.title !== 'Open board') {
+  throw new Error('a hidden enabled board action must use the translated open-board title')
+}

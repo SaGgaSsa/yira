@@ -319,6 +319,7 @@ export default function App(): React.ReactElement {
   const attachFloatingTile = useCanvasStore((s) => s.attachFloatingTile)
   const setViewMode = useCanvasStore((s) => s.setViewMode)
   const setFullviewActiveTileId = useCanvasStore((s) => s.setFullviewActiveTileId)
+  const setBoardVisible = useCanvasStore((s) => s.setBoardVisible)
   const setSplitViewState = useCanvasStore((s) => s.setSplitViewState)
   const setGridViewState = useCanvasStore((s) => s.setGridViewState)
   const setSplitPanelActiveTile = useCanvasStore((s) => s.setSplitPanelActiveTile)
@@ -898,6 +899,14 @@ export default function App(): React.ReactElement {
   const boardReviewLabel = boardReviewCount > 0 ? (boardReviewCount > 9 ? '9+' : String(boardReviewCount)) : null
   const workspaceRootPath = activeWorkspaceConfig.rootFolderPath?.trim() ?? ''
   const hasWorkspacePanel = Boolean(workspaceRootPath)
+  const closeBoard = useCallback(() => {
+    setBoardVisible(false)
+    setViewMode(activeWorkspaceType === 'grid' ? 'gridview' : 'fullview')
+  }, [activeWorkspaceType, setBoardVisible, setViewMode])
+  const openBoard = useCallback(() => {
+    setBoardVisible(true)
+    setViewMode('board')
+  }, [setBoardVisible, setViewMode])
   const activeFilePath = useMemo(() => {
     const activeTileId = viewMode === 'fullview'
       ? fullviewActiveTileId
@@ -1113,7 +1122,7 @@ export default function App(): React.ReactElement {
 
   const handleSetViewMode = useCallback((mode: ViewMode) => {
     if (mode === 'board') {
-      if (boardState.enabled) setViewMode('board')
+      if (boardState.enabled) openBoard()
       return
     }
 
@@ -1175,7 +1184,7 @@ export default function App(): React.ReactElement {
     }
 
     setViewMode(transition.viewMode)
-  }, [activeWorkspaceType, attachedTiles, boardState.enabled, focusTile, focusedTileId, fullviewActiveTileId, selectTiles, setFullviewActiveTileId, setSplitViewState, setViewMode, splitViewState, switchWorkspaceType, viewMode])
+  }, [activeWorkspaceType, attachedTiles, boardState.enabled, focusTile, focusedTileId, fullviewActiveTileId, openBoard, selectTiles, setFullviewActiveTileId, setSplitViewState, setViewMode, splitViewState, switchWorkspaceType, viewMode])
 
   const mergeTargetGroup = useMemo(
     () => findMergeTargetGroup(attachedTiles, effectiveGroups, selectedTileIds),
@@ -1600,8 +1609,8 @@ export default function App(): React.ReactElement {
     if (!task) return
     const nextBoard = await window.electron.board.createUserTask(activeWorkspaceId, { title, task })
     setBoardState(nextBoard)
-    setViewMode('board')
-  }, [activeWorkspaceId, requestPrompt, setViewMode])
+    openBoard()
+  }, [activeWorkspaceId, openBoard, requestPrompt])
 
   const handleBoardButton = useCallback(async () => {
     if (!activeWorkspaceId) return
@@ -1609,11 +1618,11 @@ export default function App(): React.ReactElement {
     if (!boardState.enabled) {
       const nextBoard = await window.electron.board.enable(activeWorkspaceId)
       setBoardState(nextBoard)
-      setViewMode('board')
+      openBoard()
       return
     }
     await handleCreateBoardTask()
-  }, [activeWorkspaceId, boardState.enabled, handleCreateBoardTask, setViewMode])
+  }, [activeWorkspaceId, boardState.enabled, handleCreateBoardTask, openBoard])
 
   const updateBoardTask = useCallback((taskId: string, patch: { title?: string; task?: string }) => {
     if (!activeWorkspaceId) return
@@ -1717,7 +1726,7 @@ export default function App(): React.ReactElement {
   }, [attachedTiles, sortedTiles, fullviewActiveTileId, focusedTileId, viewMode, setFullviewActiveTileId, setViewMode])
 
   useEffect(() => {
-    if (viewMode === 'board' && !boardState.enabled) {
+    if (viewMode === 'board' && (!boardState.enabled || !boardVisible)) {
       setViewMode(activeWorkspaceType === 'grid' ? 'gridview' : 'fullview')
       return
     }
@@ -1730,7 +1739,7 @@ export default function App(): React.ReactElement {
     if (activeWorkspaceType === 'canvas' && viewMode === 'gridview') {
       setViewMode('fullview')
     }
-  }, [activeWorkspaceType, boardState.enabled, setViewMode, viewMode])
+  }, [activeWorkspaceType, boardState.enabled, boardVisible, setViewMode, viewMode])
 
   useEffect(() => {
     if (activeWorkspaceType !== 'canvas' || viewMode !== 'splitview') return
@@ -1894,6 +1903,7 @@ export default function App(): React.ReactElement {
     canCreateTimer,
     canCreateBoard: Boolean(activeWorkspaceId),
     boardEnabled,
+    boardVisible,
     onCreateTerminal: createTerminalFromSidebar,
     onCreateNote: () => {
       setShowProfilePicker(false)
@@ -1910,6 +1920,7 @@ export default function App(): React.ReactElement {
     onCreateBoard: () => {
       void handleBoardButton()
     },
+    onOpenBoard: openBoard,
     boardBadge: boardReviewLabel,
     boardBadgeTitle: boardReviewLabel
       ? `${boardReviewCount} board ${boardReviewCount === 1 ? 'task' : 'tasks'} waiting for review`
@@ -1925,6 +1936,7 @@ export default function App(): React.ReactElement {
         splitOrientation={splitViewState.orientation}
         workspaceType={activeWorkspaceType}
         boardEnabled={boardEnabled}
+        boardVisible={boardVisible}
         boardReviewCount={boardReviewCount}
         canSplitView={attachedTiles.length >= 2}
         sidebarCollapsed={sidebarCollapsed}
@@ -2185,10 +2197,11 @@ export default function App(): React.ReactElement {
               )}
 
                 <div className="relative min-h-0 flex-1">
-                {viewMode === 'board' && boardEnabled ? (
+                {viewMode === 'board' && boardEnabled && boardVisible ? (
                   <BoardView
                     workspaceId={activeWorkspaceId}
                     board={boardState}
+                    onClose={closeBoard}
                     onCreateTask={handleCreateBoardTask}
                     onUpdateTask={updateBoardTask}
                     onAddNote={addBoardNote}

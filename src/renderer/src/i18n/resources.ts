@@ -276,8 +276,10 @@ type TranslationResources = {
     approve: string
     backlog: string
     boardView: string
+    close: string
     history: string
     newTask: string
+    open: string
     reject: string
     searchHistory: string
     workspaceBoard: string
@@ -573,8 +575,10 @@ const en: TranslationResources = {
     approve: 'Approve',
     backlog: 'Backlog',
     boardView: 'Board View',
+    close: 'Close board',
     history: 'History',
     newTask: 'New Task',
+    open: 'Open board',
     reject: 'Reject',
     searchHistory: 'Search history',
     workspaceBoard: 'Workspace Board',
@@ -870,8 +874,10 @@ const es: TranslationResources = {
     approve: 'Aprobar',
     backlog: 'Pendientes',
     boardView: 'Vista de tablero',
+    close: 'Cerrar tablero',
     history: 'Historial',
     newTask: 'Nueva tarea',
+    open: 'Abrir tablero',
     reject: 'Rechazar',
     searchHistory: 'Buscar en el historial',
     workspaceBoard: 'Tablero del espacio de trabajo',

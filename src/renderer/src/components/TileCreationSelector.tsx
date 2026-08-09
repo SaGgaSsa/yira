@@ -11,11 +11,13 @@ export interface TileCreationAvailability {
 }
 
 export interface TileCreationSelectorProps extends TileCreationAvailability {
+  boardVisible: boolean
   onCreateTerminal: () => void
   onCreateNote: () => void
   onCreateBrowser: () => void
   onCreateTimer: () => void
   onCreateBoard: () => void
+  onOpenBoard: () => void
   boardBadge?: string | null
   boardBadgeTitle?: string
   className?: string
@@ -83,13 +85,16 @@ export function getTileCreationActions(input: TileCreationActionInput, translate
     })
   }
 
+  const boardHidden = input.boardEnabled && input.boardVisible === false
   actions.push({
     id: 'board',
     icon: ClipboardList,
     label: text('tile.board', 'Board'),
-    title: input.boardEnabled ? text('board.newTask', 'New task') : 'Enable board',
+    title: boardHidden
+      ? text('board.open', 'Open board')
+      : input.boardEnabled ? text('board.newTask', 'New task') : 'Enable board',
     disabled: input.canCreateBoard === false,
-    onClick: input.onCreateBoard ?? noop,
+    onClick: boardHidden ? input.onOpenBoard ?? noop : input.onCreateBoard ?? noop,
     badge: input.boardBadge,
     badgeTitle: input.boardBadgeTitle,
   })

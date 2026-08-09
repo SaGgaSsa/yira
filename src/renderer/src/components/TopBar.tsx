@@ -10,6 +10,7 @@ interface TopBarProps {
   splitOrientation: SplitOrientation
   workspaceType: WorkspaceType
   boardEnabled: boolean
+  boardVisible: boolean
   boardReviewCount: number
   canSplitView: boolean
   sidebarCollapsed: boolean
@@ -74,6 +75,7 @@ export function TopBar({
   splitOrientation,
   workspaceType,
   boardEnabled,
+  boardVisible,
   boardReviewCount,
   canSplitView,
   sidebarCollapsed,
@@ -140,7 +142,7 @@ export function TopBar({
                 />
               </>
             )}
-            {boardEnabled && (
+            {boardEnabled && boardVisible && (
               <SegmentedButton
                 active={viewMode === 'board'}
                 label={t('tile.board')}
