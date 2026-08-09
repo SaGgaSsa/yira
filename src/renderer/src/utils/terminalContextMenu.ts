@@ -46,7 +46,7 @@ export function buildTerminalContextMenuItems(input: TerminalContextMenuInput): 
       action: input.onSelectAll,
     },
     {
-      label: input.notificationsMuted ? 'Unmute Notifications' : 'Mute Notifications',
+      label: input.notificationsMuted ? 'Unmute Activity' : 'Mute Activity',
       action: input.onToggleNotifications,
     },
   ]

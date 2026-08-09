@@ -43,7 +43,7 @@ for (const removedLabel of ['Focus', 'Close', 'Hide Titlebar', 'Show Titlebar'])
   }
 }
 
-for (const expectedLabel of ['Edit', 'Duplicate', 'Refresh', 'Mute Notifications', 'Lock']) {
+for (const expectedLabel of ['Edit', 'Duplicate', 'Refresh', 'Mute Activity', 'Lock']) {
   if (!terminalLabels.includes(expectedLabel)) {
     throw new Error(`terminal configuration menu must include ${expectedLabel}`)
   }
@@ -52,6 +52,11 @@ for (const expectedLabel of ['Edit', 'Duplicate', 'Refresh', 'Mute Notifications
 const mutedTimerLabels = labelsFor({ ...timerTile, notificationsMuted: true })
 if (!mutedTimerLabels.includes('Unmute Notifications')) {
   throw new Error('timer configuration menu must include unmute when muted')
+}
+
+const timerLabels = labelsFor(timerTile)
+if (!timerLabels.includes('Mute Notifications')) {
+  throw new Error('timer configuration menu must retain notification wording')
 }
 
 const noteLabels = labelsFor(noteTile)

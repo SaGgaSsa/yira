@@ -95,6 +95,8 @@ type TranslationResources = {
     terminal: string
     terminalActivity: string
     terminalActivityDescription: string
+    timerNativeAttention: string
+    timerNativeAttentionDescription: string
     textScale: string
     themeAndActivity: string
     tileContentFontSize: string
@@ -384,6 +386,8 @@ const en: TranslationResources = {
     terminal: 'Terminal',
     terminalActivity: 'Terminal activity',
     terminalActivityDescription: 'Show or hide output counters. Terminal output does not request native attention.',
+    timerNativeAttention: 'Timer native attention',
+    timerNativeAttentionDescription: 'Allow this timer to request native attention when it completes.',
     textScale: 'Text scale',
     themeAndActivity: 'Theme and activity',
     tileContentFontSize: 'Tile content font size',
@@ -673,6 +677,8 @@ const es: TranslationResources = {
     terminal: 'Terminal',
     terminalActivity: 'Actividad de terminal',
     terminalActivityDescription: 'Muestra u oculta los contadores de salida. La salida de terminal no solicita atención nativa.',
+    timerNativeAttention: 'Atención nativa del temporizador',
+    timerNativeAttentionDescription: 'Permite que este temporizador solicite atención nativa cuando termine.',
     textScale: 'Escala de texto',
     themeAndActivity: 'Tema y actividad',
     tileContentFontSize: 'Tamaño de fuente del contenido del panel',

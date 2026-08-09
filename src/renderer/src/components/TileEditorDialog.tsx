@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Bell, CornerDownLeft, TerminalSquare, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import type { TileState } from '@shared/types'
 
 export interface TileEditorValue {
@@ -23,7 +24,30 @@ interface TileEditorDialogProps {
   onConfirm: (value: TileEditorValue) => void
 }
 
+export interface TileNotificationCopy {
+  label: string
+  description: string
+}
+
+export function getTileNotificationCopy(
+  tileType: TileState['type'],
+  translate: (key: string) => string,
+): TileNotificationCopy {
+  if (tileType === 'terminal') {
+    return {
+      label: translate('settings.terminalActivity'),
+      description: translate('settings.terminalActivityDescription'),
+    }
+  }
+
+  return {
+    label: translate('settings.timerNativeAttention'),
+    description: translate('settings.timerNativeAttentionDescription'),
+  }
+}
+
 export function TileEditorDialog({ request, onCancel, onConfirm }: TileEditorDialogProps): React.ReactElement | null {
+  const { t } = useTranslation()
   const nameInputRef = useRef<HTMLInputElement | null>(null)
   const [value, setValue] = useState<TileEditorValue | null>(request?.value ?? null)
 
@@ -68,6 +92,7 @@ export function TileEditorDialog({ request, onCancel, onConfirm }: TileEditorDia
   if (!request || !value) return null
 
   const showNotificationsField = request.tileType === 'terminal' || request.tileType === 'timer'
+  const notificationCopy = getTileNotificationCopy(request.tileType, t)
 
   return createPortal(
     <div className="fixed inset-0 z-[10035] flex items-center justify-center bg-black/80">
@@ -132,12 +157,12 @@ export function TileEditorDialog({ request, onCancel, onConfirm }: TileEditorDia
             <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
               <div className="mb-4 flex items-center gap-2">
                 <Bell size={14} className="text-text-secondary" />
-                <span className="nd-label text-text-secondary">Notifications</span>
+                <span className="nd-label text-text-secondary">{notificationCopy.label}</span>
               </div>
               <label className="flex items-center justify-between gap-4 rounded-[20px] border border-border-visible bg-bg-primary px-4 py-4">
                 <span>
-                  <span className="nd-label block text-text-display">Notifications</span>
-                  <span className="mt-2 block text-sm leading-6 text-text-secondary">Allow this tile to request attention.</span>
+                  <span className="nd-label block text-text-display">{notificationCopy.label}</span>
+                  <span className="mt-2 block text-sm leading-6 text-text-secondary">{notificationCopy.description}</span>
                 </span>
                 <input
                   type="checkbox"

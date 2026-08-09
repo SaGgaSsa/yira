@@ -17,8 +17,9 @@ const loadWithJiti = require('jiti')(__filename, {
       target: 'node22',
     }).code,
   }),
-}) as (id: string) => typeof import('./TerminalTile')
-const { handleTerminalOutput } = loadWithJiti('./TerminalTile.tsx')
+}) as <T>(id: string) => T
+const { getTileNotificationCopy } = loadWithJiti<typeof import('./TileEditorDialog')>('./TileEditorDialog.tsx')
+const { handleTerminalOutput, registerTerminalInputFocusListener } = loadWithJiti<typeof import('./TerminalTile')>('./TerminalTile.tsx')
 
 const terminalTile: TileState = {
   id: 'terminal',
@@ -56,7 +57,7 @@ interface MockTerminal {
 
 function createMockTerminal(): MockTerminal {
   return {
-    textarea: {} as Element,
+    textarea: new EventTarget() as Element,
     writes: [],
     write(data) {
       this.writes.push(data)
@@ -126,9 +127,25 @@ try {
   if (!useCanvasStore.getState().terminalAttention.terminal) {
     throw new Error('focused-terminal clear setup must create activity first')
   }
-  runOutput(focusedTerminal, { isWindowFocused: true, activeElement: focusedTerminal.textarea })
+
+  const removeFocusListener = registerTerminalInputFocusListener({
+    terminalInput: focusedTerminal.textarea,
+    textarea: focusedTerminal.textarea,
+    isWindowFocused: () => true,
+    getActiveElement: () => focusedTerminal.textarea,
+    attentionEnabled: () => true,
+    clearActivity: () => {
+      useCanvasStore.getState().clearTerminalAttention('terminal')
+    },
+  })
+  focusedTerminal.textarea.dispatchEvent(new Event('focus'))
+  removeFocusListener()
+
   if (useCanvasStore.getState().terminalAttention.terminal) {
     throw new Error('focusing the xterm textarea must clear the activity badge')
+  }
+  if (focusedTerminal.writes.length !== 1) {
+    throw new Error('focusing the xterm textarea must clear activity without another PTY output event')
   }
 
   let nativeRequests = 0
@@ -161,4 +178,21 @@ try {
   if (scheduledAttention !== 0) throw new Error('terminal output must not schedule native attention')
 } finally {
   Date.now = realDateNow
+}
+
+const translate = (key: string): string => key
+const terminalCopy = getTileNotificationCopy('terminal', translate)
+if (terminalCopy.label !== 'settings.terminalActivity') {
+  throw new Error('terminal editor copy must describe activity, not native notifications')
+}
+if (terminalCopy.description !== 'settings.terminalActivityDescription') {
+  throw new Error('terminal editor copy must describe output counters without native attention')
+}
+
+const timerCopy = getTileNotificationCopy('timer', translate)
+if (timerCopy.label !== 'settings.timerNativeAttention') {
+  throw new Error('timer editor copy must retain native-attention wording')
+}
+if (timerCopy.description !== 'settings.timerNativeAttentionDescription') {
+  throw new Error('timer editor copy must explain timer native attention')
 }

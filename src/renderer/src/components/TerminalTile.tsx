@@ -46,6 +46,15 @@ export interface TerminalOutputHandlerOptions {
   clearActivity: () => void
 }
 
+export interface TerminalInputFocusListenerOptions {
+  terminalInput: EventTarget | null | undefined
+  textarea: Element | null | undefined
+  isWindowFocused: () => boolean
+  getActiveElement: () => Element | null
+  attentionEnabled: () => boolean
+  clearActivity: () => void
+}
+
 export function handleTerminalOutput({
   data,
   term,
@@ -66,6 +75,24 @@ export function handleTerminalOutput({
   }
 
   markActivity()
+}
+
+export function registerTerminalInputFocusListener({
+  terminalInput,
+  textarea,
+  isWindowFocused,
+  getActiveElement,
+  attentionEnabled,
+  clearActivity,
+}: TerminalInputFocusListenerOptions): () => void {
+  const handleFocus = () => {
+    if (!isTerminalInputAttended(isWindowFocused(), textarea, getActiveElement())) return
+    if (!attentionEnabled()) return
+    clearActivity()
+  }
+
+  terminalInput?.addEventListener('focus', handleFocus)
+  return () => terminalInput?.removeEventListener('focus', handleFocus)
 }
 
 function applyTerminalPadding(container: HTMLElement | null, edgeToEdge: boolean): void {
@@ -202,7 +229,16 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
     })
 
     const terminalInput = term.textarea
-    terminalInput?.addEventListener('focus', clearAttentionIfAttended)
+    const removeTerminalInputFocusListener = registerTerminalInputFocusListener({
+      terminalInput,
+      textarea: terminalInput,
+      isWindowFocused: () => document.hasFocus(),
+      getActiveElement: () => document.activeElement,
+      attentionEnabled: () => attentionEnabledRef.current,
+      clearActivity: () => {
+        useCanvasStore.getState().clearTerminalAttention(tile.id)
+      },
+    })
     window.addEventListener('focus', clearAttentionIfAttended)
 
     // ResizeObserver for container size changes
@@ -288,7 +324,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
       cancelled = true
       fitSchedulerRef.current.cancelPending()
       ro.disconnect()
-      terminalInput?.removeEventListener('focus', clearAttentionIfAttended)
+      removeTerminalInputFocusListener()
       window.removeEventListener('focus', clearAttentionIfAttended)
       ptyUnsub?.()
       inputDisposer?.dispose()
