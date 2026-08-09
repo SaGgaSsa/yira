@@ -1,5 +1,5 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto'
-import { createServer, type Server } from 'node:http'
+import { createServer, type Server, type ServerResponse } from 'node:http'
 
 import { normalizeAgentAlert, type AgentAlert } from './agentAlerts'
 
@@ -19,7 +19,7 @@ export type AgentAlertLaunchEnvironment = Record<
 
 const MAX_BODY_BYTES = 8 * 1024
 
-function sendJson(response: Parameters<Parameters<typeof createServer>[0]>[1], status: number): void {
+function sendJson(response: ServerResponse, status: number): void {
   response.writeHead(status, { 'content-type': 'application/json; charset=utf-8' })
   response.end('{}')
 }
