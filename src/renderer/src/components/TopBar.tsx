@@ -92,7 +92,7 @@ export function TopBar({
   const isGridWorkspace = workspaceType === 'grid'
 
   return (
-    <header className="window-titlebar nd-panel grid shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center border-x-0 border-t-0">
+    <header className="window-titlebar nd-panel relative flex shrink-0 items-center border-x-0 border-t-0">
       {hasWorkspace && (
         <>
           <div className="flex items-center gap-1">
@@ -106,7 +106,7 @@ export function TopBar({
             </button>
           </div>
 
-          <div className="flex items-center gap-1 rounded-md border border-border-visible bg-bg-secondary px-0.5">
+          <div className="absolute left-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1 rounded-md border border-border-visible bg-bg-secondary px-0.5 top-1/2">
             <SegmentedButton
               active={viewMode === 'fullview'}
               label={t('shortcuts.focus')}
@@ -151,7 +151,7 @@ export function TopBar({
             )}
           </div>
 
-          <div className="flex items-center justify-end gap-1">
+          <div className="ml-auto flex items-center justify-end gap-1">
             {!isGridWorkspace && (
               <>
                 <button

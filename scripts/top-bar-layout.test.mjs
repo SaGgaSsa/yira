@@ -21,7 +21,8 @@ test('uses a compact native title bar with safe areas and drag regions', () => {
 })
 
 test('renders the view selector in the compact title bar without a portal', () => {
-  assert.match(topBar, /className="window-titlebar nd-panel grid shrink-0 grid-cols-\[minmax\(0,1fr\)_auto_minmax\(0,1fr\)\]/)
+  assert.match(topBar, /className="window-titlebar nd-panel relative flex shrink-0/)
+  assert.match(topBar, /className="absolute left-1\/2 flex -translate-x-1\/2/)
   assert.match(topBar, /<Icon size=\{14\} \/>/)
   assert.match(topBar, /h-7 w-7/)
   assert.doesNotMatch(topBar, /createPortal|ResizeObserver|useLayoutEffect|getBoundingClientRect/)
