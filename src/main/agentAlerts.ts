@@ -102,7 +102,9 @@ export class SemanticAgentAlertState {
   }
 
   setEnabled(enabled: boolean): void {
+    if (this.enabled === enabled) return
     this.enabled = enabled
+    if (!enabled) this.clearAll()
   }
 
   /**
@@ -116,6 +118,9 @@ export class SemanticAgentAlertState {
     if (!alert) return false
 
     const current = this.states.get(alert.tileId)
+    if (current?.priority === 'intervention' && alert.event === 'completed') {
+      return false
+    }
     if (current && current.provider === alert.provider && current.event === alert.event) {
       return false
     }
