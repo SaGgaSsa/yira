@@ -1,6 +1,6 @@
 # Workspace Terminal History Implementation Plan
 
-> **For agentic workers:** Implement later from this plan. Use `superpowers:subagent-driven-development` or `superpowers:executing-plans` if available.
+> **For agentic workers:** Implement this plan task by task under the repository's **Plan Implementation and Luna Delegation** rules in `AGENTS.md`.
 
 **Goal:** Add workspace-scoped terminal command history for compatible shells.
 

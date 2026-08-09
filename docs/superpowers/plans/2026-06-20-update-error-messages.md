@@ -1,6 +1,6 @@
 # Update Error Messages Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** Implement this plan task by task under the repository's **Plan Implementation and Luna Delegation** rules in `AGENTS.md`. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Show safe, actionable update errors instead of raw `electron-updater` exceptions.
 
