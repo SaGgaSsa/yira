@@ -160,8 +160,15 @@ export function createCanvasStateForWorkspaceTypeSwitch(sharedTiles: TileState[]
 export function reconcileCanvasStateWithSharedTiles(
   state: CanvasState | null | undefined,
   sharedTiles: TileState[],
+  sourceBoardVisible?: boolean,
 ): CanvasState {
-  if (!state) return createCanvasStateForWorkspaceTypeSwitch(sharedTiles)
+  if (!state) {
+    const initialState = createCanvasStateForWorkspaceTypeSwitch(sharedTiles)
+    return {
+      ...initialState,
+      boardVisible: sourceBoardVisible ?? initialState.boardVisible,
+    }
+  }
 
   const canvasTilesById = new Map(state.tiles.map((tile) => [tile.id, tile]))
   const tiles = sharedTiles.map((tile) => mergeSharedTileWithCanvasLayout(tile, canvasTilesById.get(tile.id)))
@@ -176,7 +183,7 @@ export function reconcileCanvasStateWithSharedTiles(
     focusedTileId,
     viewMode: normalizeCanvasViewMode(state.viewMode),
     fullviewActiveTileId,
-    boardVisible: state.boardVisible !== false,
+    boardVisible: sourceBoardVisible ?? (state.boardVisible !== false),
     splitViewState: normalizeSplitViewForTiles(state.splitViewState, tiles, fullviewActiveTileId ?? focusedTileId),
   }
 }
@@ -184,11 +191,13 @@ export function reconcileCanvasStateWithSharedTiles(
 export function reconcileGridStateWithSharedTiles(
   state: GridWorkspaceState | null | undefined,
   sharedTiles: TileState[],
+  sourceBoardVisible?: boolean,
 ): GridWorkspaceState {
   const base = state ?? createEmptyGridWorkspaceState()
 
   return normalizeGridWorkspaceState({
     ...base,
+    boardVisible: sourceBoardVisible ?? base.boardVisible,
     tiles: sharedTiles.map(cloneTile),
     nextZIndex: maxNextZIndex(sharedTiles, base.nextZIndex),
     gridViewState: {

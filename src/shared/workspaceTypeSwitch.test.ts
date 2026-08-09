@@ -97,6 +97,15 @@ if (hiddenCanvas.boardVisible !== false) {
   throw new Error('Canvas reconciliation must preserve an explicitly hidden board')
 }
 
+const sourceHiddenCanvas = reconcileCanvasStateWithSharedTiles(
+  canvasState([tile('one', 1)], true),
+  [tile('one', 10)],
+  false,
+)
+if (sourceHiddenCanvas.boardVisible !== false) {
+  throw new Error('Canvas reconciliation must preserve source board visibility over a visible target layout')
+}
+
 const gridRoot: GridLayoutNode = {
   id: 'root',
   type: 'split',
@@ -128,6 +137,23 @@ if (preservedGrid.tiles.find((entry) => entry.id === 'one')?.label !== 'New one'
 }
 if (preservedGrid.boardVisible !== false) {
   throw new Error('Grid reconciliation must preserve an explicitly hidden board')
+}
+
+const sourceHiddenGrid = reconcileGridStateWithSharedTiles(
+  {
+    tiles: [tile('one', 1)],
+    nextZIndex: 5,
+    focusedTileId: 'one',
+    fullviewActiveTileId: 'one',
+    viewMode: 'gridview',
+    boardVisible: true,
+    gridViewState: { rootNode: { id: 'visible-target', type: 'leaf', tileId: 'one' } },
+  },
+  [tile('one', 10)],
+  false,
+)
+if (sourceHiddenGrid.boardVisible !== false) {
+  throw new Error('Grid reconciliation must preserve source board visibility over a visible target layout')
 }
 
 const deletedAndAddedGrid = reconcileGridStateWithSharedTiles(

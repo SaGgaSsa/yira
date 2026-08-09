@@ -756,7 +756,7 @@ export default function App(): React.ReactElement {
     skipNextAutosaveRef.current = true
 
     if (nextType === 'grid') {
-      const nextState = reconcileGridStateWithSharedTiles(targetRawState as GridWorkspaceState | null, sharedTiles)
+      const nextState = reconcileGridStateWithSharedTiles(targetRawState as GridWorkspaceState | null, sharedTiles, state.boardVisible)
       const restoredState: GridWorkspaceState = {
         ...nextState,
         viewMode: nextViewMode === 'fullview' ? 'fullview' : 'gridview',
@@ -766,7 +766,7 @@ export default function App(): React.ReactElement {
       return
     }
 
-    const nextState = reconcileCanvasStateWithSharedTiles(targetRawState as CanvasState | null, sharedTiles)
+    const nextState = reconcileCanvasStateWithSharedTiles(targetRawState as CanvasState | null, sharedTiles, state.boardVisible)
     const restoredState: CanvasState = {
       ...nextState,
       viewMode: nextViewMode === 'fullview' || nextViewMode === 'splitview' || nextViewMode === 'board'
