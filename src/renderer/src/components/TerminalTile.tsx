@@ -32,6 +32,42 @@ interface Props {
   onOpenBrowserTile?: (url: string) => void
 }
 
+export interface TerminalOutputHandlerOptions {
+  data: string
+  term: {
+    textarea?: Element | null
+    write: (data: string) => void
+  }
+  attentionEnabled: boolean
+  notificationsMuted: boolean
+  isWindowFocused: boolean
+  activeElement: Element | null
+  markActivity: () => void
+  clearActivity: () => void
+}
+
+export function handleTerminalOutput({
+  data,
+  term,
+  attentionEnabled,
+  notificationsMuted,
+  isWindowFocused,
+  activeElement,
+  markActivity,
+  clearActivity,
+}: TerminalOutputHandlerOptions): void {
+  term.write(data)
+
+  if (!attentionEnabled || notificationsMuted) return
+
+  if (isTerminalInputAttended(isWindowFocused, term.textarea, activeElement)) {
+    clearActivity()
+    return
+  }
+
+  markActivity()
+}
+
 function applyTerminalPadding(container: HTMLElement | null, edgeToEdge: boolean): void {
   const xtermEl = container?.querySelector('.xterm') as HTMLElement | null
   if (!xtermEl) return
@@ -218,17 +254,20 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
         ptyUnsub = window.electron.terminal.onData(tile.id, (data: string) => {
           if (cancelled) return
 
-          term.write(data)
-
-          if (!attentionEnabledRef.current || notificationsMutedRef.current) return
-
-          const isWindowFocused = document.hasFocus()
-          if (isTerminalInputAttended(isWindowFocused, term.textarea, document.activeElement)) {
-            useCanvasStore.getState().clearTerminalAttention(tile.id)
-            return
-          }
-
-          useCanvasStore.getState().markTerminalOutput(tile.id)
+          handleTerminalOutput({
+            data,
+            term,
+            attentionEnabled: attentionEnabledRef.current,
+            notificationsMuted: notificationsMutedRef.current,
+            isWindowFocused: document.hasFocus(),
+            activeElement: document.activeElement,
+            markActivity: () => {
+              useCanvasStore.getState().markTerminalOutput(tile.id)
+            },
+            clearActivity: () => {
+              useCanvasStore.getState().clearTerminalAttention(tile.id)
+            },
+          })
         })
 
         // Send user input to PTY
