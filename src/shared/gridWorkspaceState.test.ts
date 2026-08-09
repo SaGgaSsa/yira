@@ -27,6 +27,23 @@ function tile(id: string, zIndex: number): TileState {
 const empty = createEmptyGridWorkspaceState()
 if (empty.viewMode !== 'gridview') throw new Error('empty grid workspace must open in grid view')
 if (empty.gridViewState.rootNode !== null) throw new Error('empty grid workspace must not create a root node')
+if (empty.boardVisible !== true) throw new Error('empty grid workspace must show the board by default')
+
+const hiddenGrid = normalizeGridWorkspaceState({
+  ...empty,
+  boardVisible: false,
+})
+if (hiddenGrid.boardVisible !== false) {
+  throw new Error('grid normalization must retain an explicitly hidden board')
+}
+
+const legacyGrid = normalizeGridWorkspaceState({
+  ...empty,
+  boardVisible: undefined as unknown as boolean,
+})
+if (legacyGrid.boardVisible !== true) {
+  throw new Error('legacy grid layouts must default board visibility to true')
+}
 
 let root: GridLayoutNode | null = null
 for (const id of ['one', 'two', 'three', 'four', 'five', 'six']) {

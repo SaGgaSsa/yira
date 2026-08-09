@@ -152,6 +152,7 @@ export function createCanvasStateForWorkspaceTypeSwitch(sharedTiles: TileState[]
     focusedTileId: activeTileId,
     viewMode: 'canvas',
     fullviewActiveTileId: activeTileId,
+    boardVisible: true,
     splitViewState: { ...EMPTY_SPLIT_VIEW_STATE },
   }
 }
@@ -175,6 +176,7 @@ export function reconcileCanvasStateWithSharedTiles(
     focusedTileId,
     viewMode: normalizeCanvasViewMode(state.viewMode),
     fullviewActiveTileId,
+    boardVisible: state.boardVisible !== false,
     splitViewState: normalizeSplitViewForTiles(state.splitViewState, tiles, fullviewActiveTileId ?? focusedTileId),
   }
 }

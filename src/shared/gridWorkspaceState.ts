@@ -403,6 +403,7 @@ export function createEmptyGridWorkspaceState(): GridWorkspaceState {
     focusedTileId: null,
     fullviewActiveTileId: null,
     viewMode: 'gridview',
+    boardVisible: true,
     gridViewState: {
       rootNode: null,
     },
@@ -429,6 +430,7 @@ export function normalizeGridWorkspaceState(state: GridWorkspaceState): GridWork
     focusedTileId,
     fullviewActiveTileId,
     viewMode: normalizeViewMode(state.viewMode),
+    boardVisible: state.boardVisible !== false,
     gridViewState: {
       rootNode: normalizeGridLayout(state.gridViewState?.rootNode, tiles),
     },

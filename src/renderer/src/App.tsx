@@ -74,6 +74,7 @@ function createEmptyCanvasState(): CanvasState {
     focusedTileId: null,
     viewMode: 'fullview',
     fullviewActiveTileId: null,
+    boardVisible: true,
     splitViewState: {
       leftTileIds: [],
       rightTileIds: [],
@@ -85,8 +86,8 @@ function createEmptyCanvasState(): CanvasState {
   }
 }
 
-type CanvasSnapshotSource = Pick<ReturnType<typeof useCanvasStore.getState>, 'tiles' | 'groups' | 'viewport' | 'nextZIndex' | 'focusedTileId' | 'viewMode' | 'fullviewActiveTileId' | 'splitViewState'>
-type GridSnapshotSource = Pick<ReturnType<typeof useCanvasStore.getState>, 'tiles' | 'nextZIndex' | 'focusedTileId' | 'viewMode' | 'fullviewActiveTileId' | 'gridViewState'>
+type CanvasSnapshotSource = Pick<ReturnType<typeof useCanvasStore.getState>, 'tiles' | 'groups' | 'viewport' | 'nextZIndex' | 'focusedTileId' | 'viewMode' | 'fullviewActiveTileId' | 'boardVisible' | 'splitViewState'>
+type GridSnapshotSource = Pick<ReturnType<typeof useCanvasStore.getState>, 'tiles' | 'nextZIndex' | 'focusedTileId' | 'viewMode' | 'fullviewActiveTileId' | 'boardVisible' | 'gridViewState'>
 
 function createCanvasSnapshot(source: CanvasSnapshotSource): CanvasState {
   return {
@@ -100,6 +101,7 @@ function createCanvasSnapshot(source: CanvasSnapshotSource): CanvasState {
     focusedTileId: source.focusedTileId,
     viewMode: source.viewMode,
     fullviewActiveTileId: source.fullviewActiveTileId,
+    boardVisible: source.boardVisible,
     splitViewState: {
       ...source.splitViewState,
       leftTileIds: [...source.splitViewState.leftTileIds],
@@ -115,6 +117,7 @@ function createGridSnapshot(source: GridSnapshotSource): GridWorkspaceState {
     focusedTileId: source.focusedTileId,
     viewMode: source.viewMode === 'fullview' ? 'fullview' : 'gridview',
     fullviewActiveTileId: source.fullviewActiveTileId,
+    boardVisible: source.boardVisible,
     gridViewState: {
       rootNode: source.gridViewState.rootNode ? JSON.parse(JSON.stringify(source.gridViewState.rootNode)) as GridWorkspaceState['gridViewState']['rootNode'] : null,
     },
@@ -289,6 +292,7 @@ export default function App(): React.ReactElement {
   const selectedTileIds = useCanvasStore((s) => s.selectedTileIds)
   const viewMode = useCanvasStore((s) => s.viewMode)
   const fullviewActiveTileId = useCanvasStore((s) => s.fullviewActiveTileId)
+  const boardVisible = useCanvasStore((s) => s.boardVisible)
   const splitViewState = useCanvasStore((s) => s.splitViewState)
   const gridViewState = useCanvasStore((s) => s.gridViewState)
   const terminalTitles = useCanvasStore((s) => s.terminalTitles)
@@ -471,9 +475,10 @@ export default function App(): React.ReactElement {
       focusedTileId,
       viewMode,
       fullviewActiveTileId,
+      boardVisible,
       splitViewState,
     }),
-    [tiles, groups, viewport, nextZIndex, focusedTileId, viewMode, fullviewActiveTileId, splitViewState],
+    [tiles, groups, viewport, nextZIndex, focusedTileId, viewMode, fullviewActiveTileId, boardVisible, splitViewState],
   )
   const currentGridState = useMemo(
     () => createGridSnapshot({
@@ -482,9 +487,10 @@ export default function App(): React.ReactElement {
       focusedTileId,
       viewMode,
       fullviewActiveTileId,
+      boardVisible,
       gridViewState,
     }),
-    [tiles, nextZIndex, focusedTileId, viewMode, fullviewActiveTileId, gridViewState],
+    [tiles, nextZIndex, focusedTileId, viewMode, fullviewActiveTileId, boardVisible, gridViewState],
   )
 
   const refreshWorkspaceMetadata = useCallback(async (): Promise<WorkspaceMetadata[]> => {

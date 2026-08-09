@@ -301,6 +301,7 @@ interface CanvasStore {
   focusedTileId: string | null
   viewMode: ViewMode
   fullviewActiveTileId: string | null
+  boardVisible: boolean
   splitViewState: SplitViewState
   gridViewState: GridViewState
   selectedTileIds: string[]
@@ -325,6 +326,7 @@ interface CanvasStore {
   updateTilePositions: (positions: Array<{ id: string; x: number; y: number }>) => void
   focusTile: (tileId: string | null) => void
   setViewMode: (mode: ViewMode) => void
+  setBoardVisible: (visible: boolean) => void
   setFullviewActiveTileId: (tileId: string | null) => void
   setSplitViewState: (state: SplitViewState) => void
   setGridViewState: (state: GridViewState) => void
@@ -367,6 +369,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   focusedTileId: null,
   viewMode: 'fullview',
   fullviewActiveTileId: null,
+  boardVisible: true,
   splitViewState: { ...EMPTY_SPLIT_VIEW_STATE },
   gridViewState: { ...EMPTY_GRID_VIEW_STATE },
   selectedTileIds: [],
@@ -423,6 +426,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       nextZIndex: state.nextZIndex,
       focusedTileId: state.focusedTileId ?? null,
       viewMode: normalizeViewMode(state.viewMode),
+      boardVisible: state.boardVisible !== false,
       fullviewActiveTileId,
       splitViewState: normalizeSplitViewState(state.splitViewState, normalized.tiles, state.focusedTileId ?? null, fullviewActiveTileId),
       gridViewState: { ...EMPTY_GRID_VIEW_STATE },
@@ -595,6 +599,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
 
   focusTile: (tileId) => set({ focusedTileId: tileId }),
   setViewMode: (mode) => set({ viewMode: mode }),
+  setBoardVisible: (boardVisible) => set({ boardVisible }),
   setFullviewActiveTileId: (tileId) => set({ fullviewActiveTileId: tileId }),
   setSplitViewState: (splitViewState) => set({ splitViewState }),
   setGridViewState: (gridViewState) => set((s) => ({
@@ -851,6 +856,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       nextZIndex: state.nextZIndex,
       focusedTileId: state.focusedTileId ?? null,
       viewMode: normalizeViewMode(state.viewMode),
+      boardVisible: state.boardVisible !== false,
       fullviewActiveTileId,
       splitViewState: normalizeSplitViewState(state.splitViewState, normalized.tiles, state.focusedTileId ?? null, fullviewActiveTileId),
       gridViewState: { ...EMPTY_GRID_VIEW_STATE },
@@ -874,6 +880,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       nextZIndex: normalized.nextZIndex,
       focusedTileId: normalized.focusedTileId,
       viewMode: normalized.viewMode,
+      boardVisible: normalized.boardVisible !== false,
       fullviewActiveTileId: normalized.fullviewActiveTileId,
       splitViewState: { ...EMPTY_SPLIT_VIEW_STATE },
       gridViewState: normalized.gridViewState,

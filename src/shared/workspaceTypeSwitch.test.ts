@@ -18,7 +18,7 @@ function tile(id: string, zIndex: number, patch: Partial<TileState> = {}): TileS
   }
 }
 
-function canvasState(tiles: TileState[]): CanvasState {
+function canvasState(tiles: TileState[], boardVisible = true): CanvasState {
   return {
     tiles,
     groups: [],
@@ -27,6 +27,7 @@ function canvasState(tiles: TileState[]): CanvasState {
     focusedTileId: tiles[0]?.id ?? null,
     viewMode: 'canvas',
     fullviewActiveTileId: tiles[0]?.id ?? null,
+    boardVisible,
     splitViewState: {
       leftTileIds: tiles[0] ? [tiles[0].id] : [],
       rightTileIds: tiles[1] ? [tiles[1].id] : [],
@@ -60,6 +61,7 @@ const firstCanvas = createCanvasStateForWorkspaceTypeSwitch([
   tile('two', 2),
 ])
 if (firstCanvas.viewMode !== 'canvas') throw new Error('first Grid to Canvas switch must open Canvas view')
+if (firstCanvas.boardVisible !== true) throw new Error('new Canvas state must show the board by default')
 if (firstCanvas.tiles.map((entry) => entry.id).join(',') !== 'one,two') {
   throw new Error('first Grid to Canvas switch must keep shared tiles')
 }
@@ -87,6 +89,14 @@ if (preservedCanvas.nextZIndex <= Math.max(...preservedCanvas.tiles.map((entry) 
   throw new Error('Canvas reconciliation must keep nextZIndex ahead of reconciled tile z-indexes')
 }
 
+const hiddenCanvas = reconcileCanvasStateWithSharedTiles(
+  canvasState([tile('one', 1)], false),
+  [tile('one', 10)],
+)
+if (hiddenCanvas.boardVisible !== false) {
+  throw new Error('Canvas reconciliation must preserve an explicitly hidden board')
+}
+
 const gridRoot: GridLayoutNode = {
   id: 'root',
   type: 'split',
@@ -104,6 +114,7 @@ const preservedGrid = reconcileGridStateWithSharedTiles(
     focusedTileId: 'one',
     fullviewActiveTileId: 'one',
     viewMode: 'fullview',
+    boardVisible: false,
     gridViewState: { rootNode: gridRoot },
   },
   [tile('one', 10, { label: 'New one' }), tile('two', 20)],
@@ -114,6 +125,9 @@ if (preservedGridRoot.sizes.join(',') !== '30,70') throw new Error('Grid reconci
 if (leafIds(preservedGridRoot).join(',') !== 'two,one') throw new Error('Grid reconciliation must preserve grid leaf order')
 if (preservedGrid.tiles.find((entry) => entry.id === 'one')?.label !== 'New one') {
   throw new Error('Grid reconciliation must copy shared tile edits')
+}
+if (preservedGrid.boardVisible !== false) {
+  throw new Error('Grid reconciliation must preserve an explicitly hidden board')
 }
 
 const deletedAndAddedGrid = reconcileGridStateWithSharedTiles(

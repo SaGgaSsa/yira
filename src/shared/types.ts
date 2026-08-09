@@ -604,6 +604,8 @@ export interface CanvasState {
   focusedTileId: string | null
   viewMode: ViewMode
   fullviewActiveTileId: string | null
+  /** Legacy persisted layouts may omit this presentation property. */
+  boardVisible?: boolean
   splitViewState?: SplitViewState
 }
 
@@ -651,6 +653,8 @@ export interface GridWorkspaceState {
   focusedTileId: string | null
   fullviewActiveTileId: string | null
   viewMode: GridViewMode
+  /** Legacy persisted layouts may omit this presentation property. */
+  boardVisible?: boolean
   gridViewState: GridViewState
 }
 
