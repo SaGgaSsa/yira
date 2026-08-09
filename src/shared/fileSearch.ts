@@ -3,7 +3,7 @@ export type FileSearchQueryResult =
       ok: true
       query: string
       mode: 'literal' | 'regex'
-      matches: (fileName: string) => boolean
+      matches: (fileName: string, relativePath?: string) => boolean
     }
   | {
       ok: false
@@ -27,7 +27,7 @@ export function compileFileSearchQuery(rawQuery: string): FileSearchQueryResult 
       ok: true,
       query: rawQuery,
       mode: isRegex ? 'regex' : 'literal',
-      matches: (fileName) => matcher.test(fileName),
+      matches: (fileName, relativePath = fileName) => matcher.test(isRegex ? relativePath : fileName),
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)

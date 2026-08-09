@@ -53,6 +53,20 @@ test('recursively searches regular file names and sorts relative paths case-inse
   }
 })
 
+test('matches regular-expression queries against workspace-relative paths', async () => {
+  const rootPath = await makeSearchTree()
+  try {
+    const result = await searchFiles(rootPath, '^src/.*\\.test\\.ts$')
+
+    assert.deepEqual(result.entries, [
+      { name: 'Alpha.test.ts', relativePath: 'src/Alpha.test.ts' },
+      { name: 'beta.test.ts', relativePath: 'src/beta.test.ts' },
+    ])
+  } finally {
+    await removeWorkspace(rootPath)
+  }
+})
+
 test('excludes hidden names and every ignored directory at every depth', async () => {
   const rootPath = await createWorkspace()
   const ignoredNames = ['.git', 'node_modules', 'dist', 'dist-electron', 'build', 'release', 'coverage', '.next', '.vite']
@@ -93,6 +107,51 @@ test('returns matching files only and does not follow file or directory symlinks
   }
 })
 
+test('does not follow a directory replaced by a symlink during traversal', async () => {
+  const rootPath = await createWorkspace()
+  const outsidePath = await createWorkspace()
+  const swappedPath = join(rootPath, 'swapped')
+  const originalSwappedPath = join(rootPath, 'swapped-original')
+  const originalLstat = fs.lstat
+  const originalReaddir = fs.readdir
+  let swapped = false
+  let followedSwappedDirectory = false
+
+  try {
+    await writeSearchFile(rootPath, 'inside/match.ts')
+    await writeSearchFile(rootPath, 'swapped/placeholder.txt')
+    await writeSearchFile(outsidePath, 'outside/match.ts')
+
+    fs.lstat = (async (path: string, ...args: unknown[]) => {
+      const result = await originalLstat(path, ...(args as []))
+      if (!swapped && path.endsWith('/swapped')) {
+        swapped = true
+        await fs.rename(swappedPath, originalSwappedPath)
+        await fs.symlink(outsidePath, swappedPath)
+      }
+      return result
+    }) as typeof fs.lstat
+    fs.readdir = (async (path: string, options?: unknown) => {
+      if (swapped && path === swappedPath) followedSwappedDirectory = true
+      return originalReaddir(path, options as never)
+    }) as typeof fs.readdir
+
+    const result = await searchFiles(rootPath, 'match')
+
+    assert.equal(followedSwappedDirectory, false)
+    assert.deepEqual(result.entries, [{ name: 'match.ts', relativePath: 'inside/match.ts' }])
+  } finally {
+    fs.lstat = originalLstat
+    fs.readdir = originalReaddir
+    if (swapped) {
+      await fs.rm(swappedPath, { recursive: true, force: true })
+      await fs.rename(originalSwappedPath, swappedPath)
+    }
+    await removeWorkspace(rootPath)
+    await removeWorkspace(outsidePath)
+  }
+})
+
 test('rejects invalid queries and roots while keeping results inside the canonical root', async () => {
   const rootPath = await createWorkspace()
   const outsidePath = await createWorkspace()
@@ -115,47 +174,45 @@ test('rejects invalid queries and roots while keeping results inside the canonic
 
 test('rejects an unreadable root directory instead of treating it as an empty result', async () => {
   const rootPath = await createWorkspace()
-  const originalReaddir = fs.readdir
+  const originalOpen = fs.open
   try {
-    fs.readdir = (async (path: string, options?: unknown) => {
+    fs.open = (async (path: string, ...args: unknown[]) => {
       if (path === rootPath) {
         const error = new Error('permission denied') as NodeJS.ErrnoException
         error.code = 'EACCES'
         throw error
       }
-      return originalReaddir(path, options as never)
-    }) as typeof fs.readdir
+      return originalOpen(path, ...(args as []))
+    }) as typeof fs.open
 
     await assert.rejects(searchFiles(rootPath, '.*'), /permission denied/i)
   } finally {
-    fs.readdir = originalReaddir
+    fs.open = originalOpen
     await removeWorkspace(rootPath)
   }
 })
 
 test('tolerates inaccessible or disappearing child directories', async () => {
   const rootPath = await createWorkspace()
-  const inaccessiblePath = join(rootPath, 'inaccessible')
-  const missingPath = join(rootPath, 'missing')
-  const originalReaddir = fs.readdir
+  const originalOpen = fs.open
   try {
     await writeSearchFile(rootPath, 'visible.ts')
     await writeSearchFile(rootPath, 'inaccessible/hidden.ts')
     await writeSearchFile(rootPath, 'missing/hidden.ts')
-    fs.readdir = (async (path: string, options?: unknown) => {
-      if (path === inaccessiblePath || path === missingPath) {
-        const error = new Error(path === inaccessiblePath ? 'permission denied' : 'directory disappeared') as NodeJS.ErrnoException
-        error.code = path === inaccessiblePath ? 'EACCES' : 'ENOENT'
+    fs.open = (async (path: string, ...args: unknown[]) => {
+      if (path.endsWith('/inaccessible') || path.endsWith('/missing')) {
+        const error = new Error(path.endsWith('/inaccessible') ? 'permission denied' : 'directory disappeared') as NodeJS.ErrnoException
+        error.code = path.endsWith('/inaccessible') ? 'EACCES' : 'ENOENT'
         throw error
       }
-      return originalReaddir(path, options as never)
-    }) as typeof fs.readdir
+      return originalOpen(path, ...(args as []))
+    }) as typeof fs.open
 
     const result = await searchFiles(rootPath, '.*\\.ts')
 
     assert.deepEqual(result.entries, [{ name: 'visible.ts', relativePath: 'visible.ts' }])
   } finally {
-    fs.readdir = originalReaddir
+    fs.open = originalOpen
     await removeWorkspace(rootPath)
   }
 })

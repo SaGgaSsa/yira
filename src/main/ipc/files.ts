@@ -1,6 +1,8 @@
 import { createRequire } from 'node:module'
 import type { OpenDialogOptions } from 'electron'
-import { promises as fs } from 'fs'
+import { constants as fsConstants, promises as fs } from 'fs'
+import type { Stats } from 'fs'
+import type { FileHandle } from 'fs/promises'
 import { basename, isAbsolute, relative, resolve, sep } from 'path'
 import type { FileEntry, FileListOptions, FileListResult, FileSearchEntry, FileSearchResult, FileSelectFolderResult, FileWriteInput } from '@shared/types'
 import { compileFileSearchQuery } from '@shared/fileSearch'
@@ -28,6 +30,10 @@ function isInsidePath(rootPath: string, targetPath: string): boolean {
     !relativePath.startsWith('..') &&
     !isAbsolute(relativePath)
   )
+}
+
+function normalizeForCompare(path: string): string {
+  return process.platform === 'win32' ? path.toLowerCase() : path
 }
 
 function toRendererRelativePath(rootPath: string, targetPath: string): string {
@@ -103,14 +109,14 @@ async function listFiles(
 
 async function collectSearchEntries(
   rootPath: string,
-  directoryPath: string,
-  matches: (fileName: string) => boolean,
+  directory: SearchDirectory,
+  matches: (fileName: string, relativePath?: string) => boolean,
   entries: FileSearchEntry[],
   tolerateReadError: boolean,
 ): Promise<void> {
   let dirents: import('fs').Dirent[]
   try {
-    dirents = await fs.readdir(directoryPath, { withFileTypes: true })
+    dirents = await directory.readEntries()
   } catch (error) {
     if (tolerateReadError) return
     throw error
@@ -119,8 +125,7 @@ async function collectSearchEntries(
   for (const dirent of dirents) {
     if (shouldHideEntry(dirent.name)) continue
 
-    const entryPath = resolve(directoryPath, dirent.name)
-    if (!isInsidePath(rootPath, entryPath)) continue
+    const entryPath = resolve(directory.readPath, dirent.name)
 
     let entryStat: import('fs').Stats
     try {
@@ -132,16 +137,176 @@ async function collectSearchEntries(
 
     if (entryStat.isSymbolicLink()) continue
     if (entryStat.isDirectory()) {
-      await collectSearchEntries(rootPath, entryPath, matches, entries, true)
+      const childDirectory = await openSearchDirectory(rootPath, entryPath, true)
+      if (!childDirectory) continue
+      try {
+        await collectSearchEntries(rootPath, {
+          ...childDirectory,
+          relativePath: joinRendererPath(directory.relativePath, dirent.name),
+        }, matches, entries, true)
+      } finally {
+        await childDirectory.close()
+      }
       continue
     }
-    if (!entryStat.isFile() || !matches(dirent.name)) continue
+    const relativePath = joinRendererPath(directory.relativePath, dirent.name)
+    if (!entryStat.isFile() || !matches(dirent.name, relativePath)) continue
 
     entries.push({
       name: dirent.name,
-      relativePath: toRendererRelativePath(rootPath, entryPath),
+      relativePath,
     })
   }
+}
+
+interface SearchDirectory {
+  readPath: string
+  relativePath: string
+  readEntries: () => Promise<import('fs').Dirent[]>
+  close: () => Promise<void>
+}
+
+function descriptorDirectoryPath(): string | null {
+  if (process.platform === 'linux') return '/proc/self/fd'
+  if (process.platform === 'darwin') return '/dev/fd'
+  return null
+}
+
+function descriptorPathForHandle(handle: FileHandle): string | null {
+  const directoryPath = descriptorDirectoryPath()
+  return directoryPath ? `${directoryPath}/${handle.fd}` : null
+}
+
+function sameFile(left: Stats, right: Stats): boolean {
+  return left.dev === right.dev && left.ino === right.ino
+}
+
+const SEARCH_DIRECTORY_FLAGS = fsConstants.O_RDONLY
+  | (fsConstants.O_DIRECTORY ?? 0)
+  | (fsConstants.O_NOFOLLOW ?? 0)
+
+async function openDescriptorSearchDirectory(
+  rootPath: string,
+  directoryPath: string,
+  tolerateReadError: boolean,
+): Promise<SearchDirectory | null> {
+  let handle: FileHandle
+  try {
+    handle = await fs.open(directoryPath, SEARCH_DIRECTORY_FLAGS)
+  } catch (error) {
+    if (tolerateReadError) return null
+    throw error
+  }
+
+  let keepOpen = false
+  try {
+    const descriptorStat = await handle.stat()
+    if (!descriptorStat.isDirectory()) return null
+
+    const descriptorPath = descriptorPathForHandle(handle)
+    if (descriptorPath) {
+      const descriptorTarget = await fs.realpath(descriptorPath)
+      if (!isInsidePath(normalizeForCompare(rootPath), normalizeForCompare(descriptorTarget))) {
+        throw new Error('Path escapes the files folder')
+      }
+      keepOpen = true
+      return {
+        readPath: descriptorPath,
+        relativePath: '',
+        readEntries: () => fs.readdir(descriptorPath, { withFileTypes: true }),
+        close: () => handle.close(),
+      }
+    }
+    throw new Error('Directory descriptors are unavailable')
+  } catch (error) {
+    if (tolerateReadError) return null
+    throw error
+  } finally {
+    if (!keepOpen) await handle.close().catch(() => undefined)
+  }
+}
+
+async function readDirectoryEntries(directory: import('fs').Dir): Promise<import('fs').Dirent[]> {
+  const entries: import('fs').Dirent[] = []
+  while (true) {
+    const entry = await directory.read()
+    if (!entry) return entries
+    entries.push(entry)
+  }
+}
+
+async function openPathSearchDirectory(
+  rootPath: string,
+  directoryPath: string,
+  tolerateReadError: boolean,
+): Promise<SearchDirectory | null> {
+  let before: Stats
+  let beforeRealPath: string
+  try {
+    before = await fs.lstat(directoryPath)
+    if (before.isSymbolicLink() || !before.isDirectory()) return null
+    beforeRealPath = await fs.realpath(directoryPath)
+    if (!isInsidePath(normalizeForCompare(rootPath), normalizeForCompare(beforeRealPath))) return null
+  } catch (error) {
+    if (tolerateReadError) return null
+    throw error
+  }
+
+  let directory: import('fs').Dir
+  try {
+    directory = await fs.opendir(directoryPath)
+  } catch (error) {
+    if (tolerateReadError) return null
+    throw error
+  }
+
+  let keepOpen = false
+  try {
+    const after = await fs.lstat(directoryPath)
+    const afterRealPath = await fs.realpath(directoryPath)
+    if (
+      after.isSymbolicLink()
+      || !after.isDirectory()
+      || !sameFile(before, after)
+      || normalizeForCompare(beforeRealPath) !== normalizeForCompare(afterRealPath)
+      || !isInsidePath(normalizeForCompare(rootPath), normalizeForCompare(afterRealPath))
+    ) return null
+
+    keepOpen = true
+    return {
+      readPath: directoryPath,
+      relativePath: '',
+      readEntries: async () => {
+        const current = await fs.lstat(directoryPath)
+        const currentRealPath = await fs.realpath(directoryPath)
+        if (
+          current.isSymbolicLink()
+          || !current.isDirectory()
+          || !sameFile(before, current)
+          || normalizeForCompare(beforeRealPath) !== normalizeForCompare(currentRealPath)
+        ) {
+          throw new Error('Path changed while opening')
+        }
+        return readDirectoryEntries(directory)
+      },
+      close: () => directory.close(),
+    }
+  } catch (error) {
+    if (tolerateReadError) return null
+    throw error
+  } finally {
+    if (!keepOpen) await directory.close().catch(() => undefined)
+  }
+}
+
+async function openSearchDirectory(
+  rootPath: string,
+  directoryPath: string,
+  tolerateReadError: boolean,
+): Promise<SearchDirectory | null> {
+  return descriptorDirectoryPath()
+    ? openDescriptorSearchDirectory(rootPath, directoryPath, tolerateReadError)
+    : openPathSearchDirectory(rootPath, directoryPath, tolerateReadError)
 }
 
 export async function searchFiles(rootPath: string, query: string): Promise<FileSearchResult> {
@@ -150,7 +315,13 @@ export async function searchFiles(rootPath: string, query: string): Promise<File
 
   const resolved = await resolveRootTarget(rootPath, '')
   const entries: FileSearchEntry[] = []
-  await collectSearchEntries(resolved.rootPath, resolved.targetPath, compiled.matches, entries, false)
+  const rootDirectory = await openSearchDirectory(resolved.rootPath, resolved.targetPath, false)
+  if (!rootDirectory) throw new Error('Files folder is not a directory')
+  try {
+    await collectSearchEntries(resolved.rootPath, rootDirectory, compiled.matches, entries, false)
+  } finally {
+    await rootDirectory.close()
+  }
 
   entries.sort((left, right) => (
     left.relativePath.localeCompare(right.relativePath, undefined, { numeric: true, sensitivity: 'base' })
