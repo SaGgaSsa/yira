@@ -365,8 +365,8 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor }: SettingsPanel
           <div className="space-y-3">
             <label className="flex items-center justify-between gap-4 rounded-[20px] border border-border-visible bg-bg-primary px-4 py-4">
               <span>
-                <span className="nd-label block text-text-display">{t('settings.delayNativeAttention')}</span>
-                <span className="mt-2 block text-sm leading-6 text-text-secondary">{t('settings.delayNativeAttentionDescription')}</span>
+                <span className="nd-label block text-text-display">{t('settings.delayTimerNativeAttention')}</span>
+                <span className="mt-2 block text-sm leading-6 text-text-secondary">{t('settings.delayTimerNativeAttentionDescription')}</span>
               </span>
               <input
                 type="checkbox"
@@ -428,7 +428,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor }: SettingsPanel
             <ActiveSectionIcon size={16} className="text-text-secondary" />
             <div>
               <div className="nd-label text-text-secondary">{t('settings.terminal')}</div>
-              <h3 className="mt-1 text-xl text-text-display">{t('settings.themeAndAttention')}</h3>
+              <h3 className="mt-1 text-xl text-text-display">{t('settings.themeAndActivity')}</h3>
             </div>
           </div>
 
@@ -468,8 +468,8 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor }: SettingsPanel
 
             <label className="flex items-center justify-between gap-4 rounded-[20px] border border-border-visible bg-bg-primary px-4 py-4">
               <span>
-                <span className="nd-label block text-text-display">{t('settings.terminalAttention')}</span>
-                <span className="mt-2 block text-sm leading-6 text-text-secondary">{t('settings.terminalAttentionDescription')}</span>
+                <span className="nd-label block text-text-display">{t('settings.terminalActivity')}</span>
+                <span className="mt-2 block text-sm leading-6 text-text-secondary">{t('settings.terminalActivityDescription')}</span>
               </span>
               <input
                 type="checkbox"

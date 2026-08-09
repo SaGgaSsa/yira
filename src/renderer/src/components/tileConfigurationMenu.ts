@@ -52,7 +52,9 @@ export function buildTileConfigurationMenuItems({
     },
     ...(tile.type === 'terminal' || tile.type === 'timer'
       ? [{
-          label: tile.notificationsMuted ? 'Unmute Notifications' : 'Mute Notifications',
+          label: tile.type === 'terminal'
+            ? tile.notificationsMuted ? 'Unmute Activity' : 'Mute Activity'
+            : tile.notificationsMuted ? 'Unmute Notifications' : 'Mute Notifications',
           icon: tile.notificationsMuted ? Bell : BellOff,
           action: runTileAction(tile, onToggleNotificationsMuted, onBeforeAction),
         }]

@@ -56,8 +56,8 @@ type TranslationResources = {
     checking: string
     currentVersion: string
     defaultStartPage: string
-    delayNativeAttention: string
-    delayNativeAttentionDescription: string
+    delayTimerNativeAttention: string
+    delayTimerNativeAttentionDescription: string
     density: string
     language: string
     languageDescription: string
@@ -93,10 +93,12 @@ type TranslationResources = {
     snapEnabled: string
     systemControls: string
     terminal: string
-    terminalAttention: string
-    terminalAttentionDescription: string
+    terminalActivity: string
+    terminalActivityDescription: string
+    timerNativeAttention: string
+    timerNativeAttentionDescription: string
     textScale: string
-    themeAndAttention: string
+    themeAndActivity: string
     tileContentFontSize: string
     tiles: string
     updateAvailable: string
@@ -345,8 +347,8 @@ const en: TranslationResources = {
     checking: 'Checking…',
     currentVersion: 'Current version',
     defaultStartPage: 'Default start page',
-    delayNativeAttention: 'Delay native attention',
-    delayNativeAttentionDescription: 'Wait 10 seconds before requesting native window attention.',
+    delayTimerNativeAttention: 'Delay timer native attention',
+    delayTimerNativeAttentionDescription: 'Wait 10 seconds before requesting native attention for completed timers.',
     density: 'Density',
     language: 'Language',
     languageDescription: 'Choose the language used throughout Yira.',
@@ -382,10 +384,12 @@ const en: TranslationResources = {
     snapEnabled: 'Snap enabled',
     systemControls: 'Yira system controls',
     terminal: 'Terminal',
-    terminalAttention: 'Terminal Attention',
-    terminalAttentionDescription: 'Show output counters and request native attention while Yira is inactive.',
+    terminalActivity: 'Terminal activity',
+    terminalActivityDescription: 'Show or hide output counters. Terminal output does not request native attention.',
+    timerNativeAttention: 'Timer native attention',
+    timerNativeAttentionDescription: 'Allow this timer to request native attention when it completes.',
     textScale: 'Text scale',
-    themeAndAttention: 'Theme and attention',
+    themeAndActivity: 'Theme and activity',
     tileContentFontSize: 'Tile content font size',
     tiles: 'Tiles',
     updateAvailable: 'Update {{version}} found. Download will continue in the background.',
@@ -634,8 +638,8 @@ const es: TranslationResources = {
     checking: 'Buscando…',
     currentVersion: 'Versión actual',
     defaultStartPage: 'Página de inicio predeterminada',
-    delayNativeAttention: 'Demorar atención nativa',
-    delayNativeAttentionDescription: 'Espera 10 segundos antes de solicitar atención nativa de la ventana.',
+    delayTimerNativeAttention: 'Demorar atención nativa de temporizadores',
+    delayTimerNativeAttentionDescription: 'Espera 10 segundos antes de solicitar atención nativa para temporizadores completados.',
     density: 'Densidad',
     language: 'Idioma',
     languageDescription: 'Elige el idioma que se usa en Yira.',
@@ -671,10 +675,12 @@ const es: TranslationResources = {
     snapEnabled: 'Ajuste activado',
     systemControls: 'Controles del sistema Yira',
     terminal: 'Terminal',
-    terminalAttention: 'Atención de terminal',
-    terminalAttentionDescription: 'Muestra contadores de salida y solicita atención nativa mientras Yira está inactivo.',
+    terminalActivity: 'Actividad de terminal',
+    terminalActivityDescription: 'Muestra u oculta los contadores de salida. La salida de terminal no solicita atención nativa.',
+    timerNativeAttention: 'Atención nativa del temporizador',
+    timerNativeAttentionDescription: 'Permite que este temporizador solicite atención nativa cuando termine.',
     textScale: 'Escala de texto',
-    themeAndAttention: 'Tema y atención',
+    themeAndActivity: 'Tema y actividad',
     tileContentFontSize: 'Tamaño de fuente del contenido del panel',
     tiles: 'Paneles',
     updateAvailable: 'Se encontró la actualización {{version}}. La descarga continuará en segundo plano.',
