@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight, File, Folder, RefreshCw } from 'lucide-react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ChevronDown, ChevronRight, File, Folder, RefreshCw, Search, X } from 'lucide-react'
 import type { FileEntry } from '@shared/types'
 import {
   createExplorerNode,
@@ -7,6 +7,14 @@ import {
   updateExplorerDirectory,
   type ExplorerNode,
 } from '@/utils/workspaceExplorerTree'
+import {
+  createWorkspaceSearchState,
+  executeWorkspaceFileSearch,
+  getWorkspaceSearchView,
+  resetWorkspaceSearchState,
+  startWorkspaceSearch,
+  type WorkspaceSearchState,
+} from '@/utils/workspaceExplorerSearch'
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Unable to load directory'
@@ -96,6 +104,11 @@ interface WorkspaceExplorerProps {
 export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile }: WorkspaceExplorerProps): React.ReactElement {
   const [root, setRoot] = useState<ExplorerNode>(() => createExplorerNode('', rootLabel(rootPath), 'directory'))
   const [openError, setOpenError] = useState<string | null>(null)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchState, setSearchState] = useState<WorkspaceSearchState>(() => createWorkspaceSearchState())
+  const searchRequestIdRef = useRef(0)
+  const searchRootPathRef = useRef(rootPath)
+  searchRootPathRef.current = rootPath
   const rootName = useMemo(() => rootLabel(rootPath), [rootPath])
 
   const loadDirectory = useCallback(async (relativePath: string) => {
@@ -122,6 +135,28 @@ export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile }: Work
     void loadDirectory('')
   }, [loadDirectory, rootName])
 
+  useEffect(() => {
+    searchRequestIdRef.current += 1
+    setSearchOpen(false)
+    setSearchState(resetWorkspaceSearchState())
+  }, [rootPath])
+
+  useEffect(() => {
+    if (!searchOpen || searchState.status !== 'loading') return
+
+    const requestId = searchRequestIdRef.current
+    const query = searchState.query
+    const timeoutId = window.setTimeout(() => {
+      void executeWorkspaceFileSearch(rootPath, query, window.electron.files.search)
+        .then((nextState) => {
+          if (requestId !== searchRequestIdRef.current || searchRootPathRef.current !== rootPath) return
+          setSearchState((current) => current.query === query ? nextState : current)
+        })
+    }, 200)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [rootPath, searchOpen, searchState.query, searchState.status])
+
   const handleToggleDirectory = useCallback((node: ExplorerNode) => {
     const shouldLoad = !node.expanded && node.status !== 'ready'
     setRoot((current) => toggleExplorerDirectory(current, node.relativePath))
@@ -132,28 +167,122 @@ export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile }: Work
     void loadDirectory(node.relativePath)
   }, [loadDirectory])
 
-  const handleOpenFile = useCallback((node: ExplorerNode) => {
+  const handleOpenRelativePath = useCallback((relativePath: string) => {
     setOpenError(null)
-    void onOpenFile(node.relativePath)
+    void onOpenFile(relativePath)
       .catch((error: unknown) => {
         setOpenError(errorMessage(error))
       })
   }, [onOpenFile])
 
+  const handleOpenFile = useCallback((node: ExplorerNode) => {
+    handleOpenRelativePath(node.relativePath)
+  }, [handleOpenRelativePath])
+
+  const handleOpenSearch = useCallback(() => {
+    searchRequestIdRef.current += 1
+    setSearchOpen(true)
+    setSearchState(resetWorkspaceSearchState())
+  }, [])
+
+  const handleCloseSearch = useCallback(() => {
+    searchRequestIdRef.current += 1
+    setSearchOpen(false)
+    setSearchState(resetWorkspaceSearchState())
+  }, [])
+
+  const handleSearchQueryChange = useCallback((query: string) => {
+    searchRequestIdRef.current += 1
+    setSearchState((current) => startWorkspaceSearch(current, query))
+  }, [])
+
+  const searchView = getWorkspaceSearchView(searchState)
+
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="nd-label shrink-0 border-b border-border px-4 py-3 text-text-secondary">{rootName}</div>
+      <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-3 text-text-secondary">
+        {searchOpen ? (
+          <>
+            <input
+              autoFocus
+              aria-label="Search workspace files"
+              className="min-w-0 flex-1 bg-transparent text-sm text-text-display outline-none placeholder:text-text-disabled"
+              onChange={(event) => handleSearchQueryChange(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== 'Escape') return
+                event.preventDefault()
+                handleCloseSearch()
+              }}
+              placeholder="Search files"
+              type="search"
+              value={searchState.query}
+            />
+            <button
+              type="button"
+              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-text-secondary hover:bg-hover-bg hover:text-text-display"
+              onClick={handleCloseSearch}
+              title="Close search"
+              aria-label="Close search"
+            >
+              <X size={15} />
+            </button>
+          </>
+        ) : (
+          <>
+            <span className="nd-label min-w-0 flex-1 truncate">{rootName}</span>
+            <button
+              type="button"
+              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-text-secondary hover:bg-hover-bg hover:text-text-display"
+              onClick={handleOpenSearch}
+              title="Search workspace files"
+              aria-label="Search workspace files"
+            >
+              <Search size={15} />
+            </button>
+          </>
+        )}
+      </div>
       <div className="min-h-0 flex-1 overflow-auto py-1">
-        <ul>
-          <ExplorerTreeNode
-            node={root}
-            depth={0}
-            onToggleDirectory={handleToggleDirectory}
-            onOpenFile={handleOpenFile}
-            onRetry={handleRetry}
-            activeFilePath={activeFilePath}
-          />
-        </ul>
+        {searchOpen ? (
+          <>
+            {searchView === 'prompt' && <div className="px-4 py-3 text-sm text-text-disabled">Type to search files</div>}
+            {searchView === 'loading' && <div className="px-4 py-3 text-sm text-text-disabled">Searching…</div>}
+            {searchView === 'error' && <div className="px-4 py-3 text-sm text-red-300">{searchState.error}</div>}
+            {searchView === 'no-results' && <div className="px-4 py-3 text-sm text-text-disabled">No files found</div>}
+            {searchView === 'results' && (
+              <ul>
+                {searchState.entries.map((entry) => {
+                  const isActiveFile = entry.relativePath === activeFilePath
+                  return (
+                    <li key={entry.relativePath}>
+                      <button
+                        type="button"
+                        className={`flex w-full items-center gap-1.5 px-3 py-1.5 text-left text-sm transition-colors hover:bg-hover-bg hover:text-text-display ${isActiveFile ? 'bg-active-bg text-text-display' : 'text-text-secondary'}`}
+                        onClick={() => handleOpenRelativePath(entry.relativePath)}
+                        title={entry.relativePath}
+                      >
+                        <File size={14} className="shrink-0" />
+                        <span className="min-w-0 truncate">{entry.name}</span>
+                        <span className="min-w-0 flex-1 truncate text-xs text-text-disabled">{entry.relativePath}</span>
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </>
+        ) : (
+          <ul>
+            <ExplorerTreeNode
+              node={root}
+              depth={0}
+              onToggleDirectory={handleToggleDirectory}
+              onOpenFile={handleOpenFile}
+              onRetry={handleRetry}
+              activeFilePath={activeFilePath}
+            />
+          </ul>
+        )}
       </div>
       {openError && <div className="shrink-0 border-t border-border px-3 py-2 text-xs text-red-300">{openError}</div>}
     </div>
