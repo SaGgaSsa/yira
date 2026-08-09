@@ -12,10 +12,10 @@ export const SHORTCUT_CATALOG: ShortcutCatalogGroup[] = [
   {
     label: 'Navigation',
     items: [
-      { label: 'Focus left split panel', keys: 'Ctrl+1' },
-      { label: 'Focus right split panel', keys: 'Ctrl+2' },
-      { label: 'Previous tab', keys: 'Ctrl+Alt+←' },
-      { label: 'Next tab', keys: 'Ctrl+Alt+→' },
+      { label: 'Focus left split panel', keys: 'Ctrl+Alt+←' },
+      { label: 'Focus right split panel', keys: 'Ctrl+Alt+→' },
+      { label: 'Previous tab', keys: 'Ctrl+Shift+Tab' },
+      { label: 'Next tab', keys: 'Ctrl+Tab' },
     ],
   },
   {
