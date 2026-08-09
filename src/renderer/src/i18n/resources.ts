@@ -47,6 +47,12 @@ type TranslationResources = {
   }
   settings: {
     active: string
+    agentAlerts: string
+    agentAlertsDescription: string
+    agentHookSetup: string
+    agentHookSetupDescription: string
+    configure: string
+    uninstall: string
     appearance: string
     aboutAndUpdates: string
     advanced: string
@@ -338,6 +344,12 @@ const en: TranslationResources = {
   },
   settings: {
     active: 'ACTIVE',
+    agentAlerts: 'Agent alerts',
+    agentAlertsDescription: 'Show semantic completion and intervention alerts from configured Codex and Claude hooks.',
+    agentHookSetup: 'Codex and Claude hooks',
+    agentHookSetupDescription: 'Configure or repair only Yira-managed hooks. Codex requires approving new hooks with /hooks.',
+    configure: 'Configure',
+    uninstall: 'Uninstall',
     appearance: 'Appearance',
     aboutAndUpdates: 'About & Updates',
     advanced: 'Advanced',
@@ -629,6 +641,12 @@ const es: TranslationResources = {
   },
   settings: {
     active: 'ACTIVO',
+    agentAlerts: 'Alertas de agentes',
+    agentAlertsDescription: 'Muestra alertas semánticas de finalización e intervención de los hooks configurados de Codex y Claude.',
+    agentHookSetup: 'Hooks de Codex y Claude',
+    agentHookSetupDescription: 'Configura o repara sólo hooks administrados por Yira. Codex requiere aprobar los nuevos hooks con /hooks.',
+    configure: 'Configurar',
+    uninstall: 'Desinstalar',
     appearance: 'Apariencia',
     aboutAndUpdates: 'Acerca de y actualizaciones',
     advanced: 'Avanzado',

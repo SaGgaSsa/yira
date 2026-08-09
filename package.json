@@ -14,7 +14,7 @@
     "yira-board-mcp": "dist/mcp/board-mcp.js"
   },
   "scripts": {
-    "test": "node --test scripts/*.test.mjs && tsx --test scripts/*.test.ts src/renderer/src/utils/shortcutResolver.test.ts src/renderer/src/hooks/useKeyboardShortcuts.test.ts src/renderer/src/utils/shortcutCatalog.test.ts",
+    "test": "node --test scripts/*.test.mjs && tsx --test scripts/*.test.ts src/main/agentAlerts.test.ts src/main/agentAlertBridge.test.ts src/main/agentHookConfiguration.test.ts src/shared/userSettings.test.ts src/renderer/src/utils/shortcutResolver.test.ts src/renderer/src/hooks/useKeyboardShortcuts.test.ts src/renderer/src/utils/shortcutCatalog.test.ts",
     "dev": "node ./scripts/dev-workspace.mjs",
     "build:main": "node ./scripts/electron-vite-build.mjs main",
     "build:preload": "node ./scripts/electron-vite-build.mjs preload",
@@ -86,6 +86,10 @@
       {
         "from": "resources/icon.png",
         "to": "icon.png"
+      },
+      {
+        "from": "resources/agent-hook-client.mjs",
+        "to": "agent-hook-client.mjs"
       }
     ],
     "asar": true,

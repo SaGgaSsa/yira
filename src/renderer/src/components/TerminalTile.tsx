@@ -237,6 +237,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
       attentionEnabled: () => attentionEnabledRef.current,
       clearActivity: () => {
         useCanvasStore.getState().clearTerminalAttention(tile.id)
+        void window.electron.terminal.acknowledgeAgentAlert(tile.id)
       },
     })
     window.addEventListener('focus', clearAttentionIfAttended)
@@ -250,6 +251,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
     // Create PTY session
     let cancelled = false
     let ptyUnsub: (() => void) | null = null
+    let agentAlertUnsub: (() => void) | null = null
     let inputDisposer: { dispose: () => void } | null = null
     const titleDisposer = term.onTitleChange((title) => {
       useCanvasStore.getState().setTerminalTitle(tile.id, title)
@@ -306,6 +308,14 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
           })
         })
 
+        agentAlertUnsub = window.electron.terminal.onAgentAlert(tile.id, (state: unknown) => {
+          if (!state || typeof state !== 'object') return
+          const alert = state as { provider?: unknown; event?: unknown }
+          if (typeof alert.provider !== 'string' || typeof alert.event !== 'string') return
+          const reason = alert.event === 'completed' ? 'completed' : alert.event === 'permission' ? 'needs permission' : 'needs input'
+          term.write(`\r\n\x1b[33m[Yira] ${alert.provider}: ${reason}\x1b[0m\r\n`)
+        })
+
         // Send user input to PTY
         inputDisposer = term.onData((data: string) => {
           window.electron.terminal.write(tile.id, data)
@@ -327,6 +337,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
       removeTerminalInputFocusListener()
       window.removeEventListener('focus', clearAttentionIfAttended)
       ptyUnsub?.()
+      agentAlertUnsub?.()
       inputDisposer?.dispose()
       osc52Disposer.dispose()
       titleDisposer.dispose()

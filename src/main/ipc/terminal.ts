@@ -1,4 +1,4 @@
-import { ipcMain, WebContents } from 'electron'
+import { BrowserWindow, ipcMain, WebContents } from 'electron'
 import { promises as fs } from 'fs'
 import type { ShellProfile, TerminalCreateOptions } from '@shared/types'
 import { detectShellProfiles, detectSshClient } from '../shell-profiles'
@@ -6,6 +6,8 @@ import { buildTerminalHistorySetup } from '../terminal-history'
 import { resolveTerminalWorkspaceRoot } from '../workspace-root'
 import { getWorkspacePathById, getWorkspaceRootFolderById } from './workspace'
 import { buildRemoteSshLaunch } from '../remote-ssh'
+import { AgentAlertBridge } from '../agentAlertBridge'
+import { SemanticAgentAlertState, type AgentAlertState } from '../agentAlerts'
 
 // node-pty must be required (not imported) due to native module ESM issues
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -27,6 +29,26 @@ interface TerminalSession {
 const terminals = new Map<string, TerminalSession>()
 let profiles: ShellProfile[] = []
 let sshClient: string | null = null
+const agentAlerts = new SemanticAgentAlertState({ onChange: broadcastAgentAlert })
+const agentAlertBridge = new AgentAlertBridge({ onAlert: (alert) => { agentAlerts.report(alert) } })
+
+function broadcastAgentAlert(tileId: string, state: AgentAlertState | null): void {
+  const session = terminals.get(tileId)
+  if (session) {
+    for (const listener of [...session.listeners]) {
+      if (listener.isDestroyed()) session.listeners.delete(listener)
+      else listener.send(`terminal:agentAlert:${tileId}`, state)
+    }
+  }
+
+  if (!state || BrowserWindow.getAllWindows().some((window) => !window.isDestroyed() && window.isFocused())) return
+  const window = BrowserWindow.getAllWindows().find((candidate) => !candidate.isDestroyed())
+  window?.flashFrame(true)
+}
+
+export function setAgentAlertsEnabled(enabled: boolean): void {
+  agentAlerts.setEnabled(enabled)
+}
 
 function resolveProfile(shellProfileId: string): ShellProfile | undefined {
   return profiles.find(p => p.id === shellProfileId)
@@ -66,6 +88,9 @@ export function registerTerminalIPC(): void {
     }
 
     const spawnEnv: Record<string, string> = { ...process.env as Record<string, string> }
+    await agentAlertBridge.start()
+    if (isRemoteSsh) agentAlertBridge.registerRemoteTerminal(tileId)
+    else Object.assign(spawnEnv, agentAlertBridge.registerLocalTerminal(tileId))
     const spawnArgs = isRemoteSsh
       ? buildRemoteSshLaunch(options.remoteTerminal!, options.remoteStartupCommand).args
       : [...profile!.args]
@@ -150,7 +175,16 @@ export function registerTerminalIPC(): void {
   })
 
   ipcMain.handle('terminal:write', (_, tileId: string, data: string) => {
+    if (data) agentAlerts.clearOnInput(tileId)
     terminals.get(tileId)?.pty.write(data)
+  })
+
+  ipcMain.handle('terminal:acknowledgeAgentAlert', (_, tileId: string) => {
+    agentAlerts.clearOnFocus(tileId)
+  })
+
+  ipcMain.handle('terminal:setAgentAlertsEnabled', (_, enabled: boolean) => {
+    setAgentAlertsEnabled(enabled === true)
   })
 
   ipcMain.handle('terminal:resize', (_, tileId: string, cols: number, rows: number) => {
@@ -165,6 +199,8 @@ export function registerTerminalIPC(): void {
       try { session.pty.kill() } catch { /* ignore */ }
       terminals.delete(tileId)
     }
+    agentAlertBridge.unregisterTerminal(tileId)
+    agentAlerts.clearOnDestroy(tileId)
   })
 
   // terminal:detach — disconnects PTY but doesn't kill the process

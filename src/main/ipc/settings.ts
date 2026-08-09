@@ -1,12 +1,40 @@
 import { app, ipcMain } from 'electron'
 import { promises as fs } from 'fs'
 import { join } from 'path'
+import { homedir } from 'os'
+import { is } from '@electron-toolkit/utils'
 import { YIRA_HOME } from '../paths'
 import type { UserSettings } from '@shared/types'
 import { normalizeUserSettings } from '@shared/userSettings'
 import { resolveSupportedLanguage } from '@shared/language'
+import { installClaudeHookConfiguration, installCodexHookConfiguration, uninstallClaudeHookConfiguration, uninstallCodexHookConfiguration, type AgentHookProvider } from '../agentHookConfiguration'
 
 const SETTINGS_PATH = join(YIRA_HOME, 'settings.json')
+
+function getAgentHookPath(provider: AgentHookProvider): string {
+  return provider === 'codex' ? join(homedir(), '.codex', 'hooks.json') : join(homedir(), '.claude', 'settings.json')
+}
+
+function getAgentHookClientCommand(): string {
+  return is.dev ? `node ${JSON.stringify(join(process.cwd(), 'resources', 'agent-hook-client.mjs'))}` : `node ${JSON.stringify(join(process.resourcesPath, 'agent-hook-client.mjs'))}`
+}
+
+async function mutateAgentHooks(provider: AgentHookProvider, operation: 'install' | 'uninstall') {
+  const path = getAgentHookPath(provider)
+  let text = '{}'
+  try { text = await fs.readFile(path, 'utf8') } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+  }
+  const command = getAgentHookClientCommand()
+  const result = provider === 'codex'
+    ? operation === 'install' ? installCodexHookConfiguration(text, command) : uninstallCodexHookConfiguration(text, command)
+    : operation === 'install' ? installClaudeHookConfiguration(text, command) : uninstallClaudeHookConfiguration(text, command)
+  if (result.ok && result.changed) {
+    await fs.mkdir(join(path, '..'), { recursive: true })
+    await fs.writeFile(path, result.text, 'utf8')
+  }
+  return result
+}
 
 export async function loadStoredUserSettings(): Promise<UserSettings | null> {
   try {
@@ -29,6 +57,7 @@ export async function loadStoredUserSettings(): Promise<UserSettings | null> {
       parsed.updateDiagnosticsMigrationComplete !== normalized.updateDiagnosticsMigrationComplete ||
       !hasLanguage ||
       parsed.language !== normalized.language ||
+      typeof parsed?.terminal?.agentAlertsEnabled !== 'boolean' ||
       parsed?.terminal?.themeId !== normalized.terminal.themeId
     ) {
       await fs.writeFile(SETTINGS_PATH, JSON.stringify(normalized, null, 2))
@@ -57,4 +86,7 @@ export function registerSettingsIPC(): void {
     await fs.mkdir(YIRA_HOME, { recursive: true })
     await fs.writeFile(SETTINGS_PATH, JSON.stringify(normalized, null, 2))
   })
+
+  ipcMain.handle('agentHooks:configure', async (_, provider: AgentHookProvider) => mutateAgentHooks(provider, 'install'))
+  ipcMain.handle('agentHooks:uninstall', async (_, provider: AgentHookProvider) => mutateAgentHooks(provider, 'uninstall'))
 }

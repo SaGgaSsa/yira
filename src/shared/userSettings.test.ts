@@ -6,6 +6,7 @@ const defaults = normalizeUserSettings({})
 if (defaults.browser.homeUrl !== 'about:blank') throw new Error('default browser home URL must be about:blank')
 if (defaults.language !== 'en') throw new Error('language must default to English')
 if (defaults.terminal.attentionEnabled !== true) throw new Error('terminal attention must default on')
+if (defaults.terminal.agentAlertsEnabled !== true) throw new Error('agent alerts must default on')
 if (defaults.terminal.themeId !== DEFAULT_TERMINAL_THEME_ID) throw new Error('terminal theme must default to Yira default')
 if (defaults.notifications.attentionDelayEnabled !== true) throw new Error('native attention delay must default on')
 
@@ -57,6 +58,11 @@ if (legacy.notifications.attentionDelayEnabled !== true) throw new Error('legacy
 
 const disabled = normalizeUserSettings({ terminal: { attentionEnabled: false } })
 if (disabled.terminal.attentionEnabled !== false) throw new Error('disabled terminal attention setting must be preserved')
+
+const disabledAgentAlerts = normalizeUserSettings({ terminal: { agentAlertsEnabled: false } })
+if (disabledAgentAlerts.terminal.agentAlertsEnabled !== false) {
+  throw new Error('disabled agent alerts setting must be preserved')
+}
 
 const validTerminalTheme = normalizeUserSettings({ terminal: { attentionEnabled: true, themeId: 'high-contrast' } })
 if (validTerminalTheme.terminal.themeId !== 'high-contrast') throw new Error('valid terminal theme setting must be preserved')

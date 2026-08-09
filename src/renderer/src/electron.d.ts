@@ -61,6 +61,8 @@ interface ElectronWorld {
   settings: {
     load: () => Promise<UserSettings | null>
     save: (settings: UserSettings) => Promise<void>
+    configureAgentHooks: (provider: 'codex' | 'claude') => Promise<{ message: string }>
+    uninstallAgentHooks: (provider: 'codex' | 'claude') => Promise<{ message: string }>
   }
   note: {
     save: (tileId: string, data: NoteData) => Promise<void>
@@ -102,8 +104,11 @@ interface ElectronWorld {
     resize: (tileId: string, cols: number, rows: number) => Promise<void>
     destroy: (tileId: string) => Promise<void>
     detach: (tileId: string) => Promise<void>
+    acknowledgeAgentAlert: (tileId: string) => Promise<void>
+    setAgentAlertsEnabled: (enabled: boolean) => Promise<void>
     sshAvailable: () => Promise<boolean>
     onData: (tileId: string, callback: (data: string) => void) => () => void
+    onAgentAlert: (tileId: string, callback: (state: unknown) => void) => () => void
   }
   shellProfiles: {
     list: () => Promise<Array<{ id: ShellProfileId; label: string; available: boolean }>>

@@ -129,6 +129,7 @@ export interface UserSettings {
   }
   terminal: {
     attentionEnabled: boolean
+    agentAlertsEnabled: boolean
     themeId: TerminalThemeId
   }
   notifications: {
@@ -157,6 +158,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   },
   terminal: {
     attentionEnabled: true,
+    agentAlertsEnabled: true,
     themeId: 'yira-default',
   },
   notifications: {

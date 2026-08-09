@@ -100,6 +100,7 @@ function getShortcutItemLabel(t: TFunction, label: string): string {
 export function SettingsPanel({ open, onClose, onOpenJsonEditor }: SettingsPanelProps): React.ReactElement {
   const { t } = useTranslation()
   const [activeSection, setActiveSection] = useState<SettingsSectionId>('appearance')
+  const [agentHookMessage, setAgentHookMessage] = useState('')
   const language = useSettingsStore((s) => s.language)
   const appearance = useSettingsStore((s) => s.appearance)
   const interfaceFontSizePx = useSettingsStore((s) => s.interfaceFontSizePx)
@@ -110,6 +111,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor }: SettingsPanel
   const updateDiagnosticsEnabled = useSettingsStore((s) => s.updateDiagnosticsEnabled)
   const browserHomeUrl = useSettingsStore((s) => s.browser.homeUrl)
   const terminalAttentionEnabled = useSettingsStore((s) => s.terminal.attentionEnabled)
+  const agentAlertsEnabled = useSettingsStore((s) => s.terminal.agentAlertsEnabled)
   const terminalThemeId = useSettingsStore((s) => s.terminal.themeId)
   const attentionDelayEnabled = useSettingsStore((s) => s.notifications.attentionDelayEnabled)
   const tileCreationAvailability = useSettingsStore((s) => s.tiles.creationAvailability)
@@ -124,6 +126,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor }: SettingsPanel
   const setUpdateDiagnosticsEnabled = useSettingsStore((s) => s.setUpdateDiagnosticsEnabled)
   const setBrowserHomeUrl = useSettingsStore((s) => s.setBrowserHomeUrl)
   const setTerminalAttentionEnabled = useSettingsStore((s) => s.setTerminalAttentionEnabled)
+  const setAgentAlertsEnabled = useSettingsStore((s) => s.setAgentAlertsEnabled)
   const setTerminalThemeId = useSettingsStore((s) => s.setTerminalThemeId)
   const setNotificationAttentionDelayEnabled = useSettingsStore((s) => s.setNotificationAttentionDelayEnabled)
   const setTileCreationAvailable = useSettingsStore((s) => s.setTileCreationAvailable)
@@ -328,6 +331,32 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor }: SettingsPanel
                 type="checkbox"
                 checked={updateDiagnosticsEnabled}
                 onChange={(event) => setUpdateDiagnosticsEnabled(event.target.checked)}
+              />
+            </label>
+
+            <div className="rounded-[20px] border border-border-visible bg-bg-primary px-4 py-4">
+              <span className="nd-label block text-text-display">{t('settings.agentHookSetup')}</span>
+              <p className="mt-2 text-sm leading-6 text-text-secondary">{t('settings.agentHookSetupDescription')}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {(['codex', 'claude'] as const).map((provider) => (
+                  <React.Fragment key={provider}>
+                    <button className="rounded-full border border-border-visible px-3 py-2 text-xs text-text-display" onClick={() => void window.electron.settings.configureAgentHooks(provider).then((result) => setAgentHookMessage(result.message)).catch((error: unknown) => setAgentHookMessage(String(error)))}>{t('settings.configure')} {provider === 'codex' ? 'Codex' : 'Claude'}</button>
+                    <button className="rounded-full border border-border-visible px-3 py-2 text-xs text-text-secondary" onClick={() => void window.electron.settings.uninstallAgentHooks(provider).then((result) => setAgentHookMessage(result.message)).catch((error: unknown) => setAgentHookMessage(String(error)))}>{t('settings.uninstall')} {provider === 'codex' ? 'Codex' : 'Claude'}</button>
+                  </React.Fragment>
+                ))}
+              </div>
+              {agentHookMessage && <p className="mt-3 text-sm text-text-secondary">{agentHookMessage}</p>}
+            </div>
+
+            <label className="flex items-center justify-between gap-4 rounded-[20px] border border-border-visible bg-bg-primary px-4 py-4">
+              <span>
+                <span className="nd-label block text-text-display">{t('settings.agentAlerts')}</span>
+                <span className="mt-2 block text-sm leading-6 text-text-secondary">{t('settings.agentAlertsDescription')}</span>
+              </span>
+              <input
+                type="checkbox"
+                checked={agentAlertsEnabled}
+                onChange={(event) => setAgentAlertsEnabled(event.target.checked)}
               />
             </label>
 

@@ -20,6 +20,7 @@ export interface SettingsState extends UserSettings {
   setUpdateDiagnosticsEnabled: (enabled: boolean) => void
   setBrowserHomeUrl: (url: string) => void
   setTerminalAttentionEnabled: (enabled: boolean) => void
+  setAgentAlertsEnabled: (enabled: boolean) => void
   setTerminalThemeId: (themeId: TerminalThemeId) => void
   setNotificationAttentionDelayEnabled: (enabled: boolean) => void
   setTileCreationAvailable: (type: ConfigurableTileCreationType, available: boolean) => void
@@ -47,6 +48,7 @@ function scheduleSave() {
       browser: { homeUrl: state.browser.homeUrl },
       terminal: {
         attentionEnabled: state.terminal.attentionEnabled,
+        agentAlertsEnabled: state.terminal.agentAlertsEnabled,
         themeId: state.terminal.themeId,
       },
       notifications: { attentionDelayEnabled: state.notifications.attentionDelayEnabled },
@@ -117,6 +119,12 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     scheduleSave()
   },
 
+  setAgentAlertsEnabled: (enabled) => {
+    set((state) => ({ terminal: { ...state.terminal, agentAlertsEnabled: enabled } }))
+    void window.electron.terminal.setAgentAlertsEnabled(enabled)
+    scheduleSave()
+  },
+
   setTerminalThemeId: (themeId) => {
     set((state) => ({ terminal: { ...state.terminal, themeId } }))
     scheduleSave()
@@ -166,6 +174,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           },
           terminal: {
             attentionEnabled: normalized.terminal.attentionEnabled,
+            agentAlertsEnabled: normalized.terminal.agentAlertsEnabled,
             themeId: normalized.terminal.themeId,
           },
           notifications: {
@@ -182,6 +191,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           },
           loaded: true,
         })
+        void window.electron.terminal.setAgentAlertsEnabled(normalized.terminal.agentAlertsEnabled)
       } else {
         set({ loaded: true })
       }
@@ -206,6 +216,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       browser: { homeUrl: state.browser.homeUrl },
       terminal: {
         attentionEnabled: state.terminal.attentionEnabled,
+        agentAlertsEnabled: state.terminal.agentAlertsEnabled,
         themeId: state.terminal.themeId,
       },
       notifications: { attentionDelayEnabled: state.notifications.attentionDelayEnabled },

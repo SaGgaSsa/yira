@@ -26,6 +26,8 @@ contextBridge.exposeInMainWorld('electron', {
   settings: {
     load: () => ipcRenderer.invoke('settings:load'),
     save: (settings: unknown) => ipcRenderer.invoke('settings:save', settings),
+    configureAgentHooks: (provider: 'codex' | 'claude') => ipcRenderer.invoke('agentHooks:configure', provider),
+    uninstallAgentHooks: (provider: 'codex' | 'claude') => ipcRenderer.invoke('agentHooks:uninstall', provider),
   },
 
   // Notes
@@ -94,10 +96,18 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.invoke('terminal:resize', tileId, cols, rows),
     destroy: (tileId: string) => ipcRenderer.invoke('terminal:destroy', tileId),
     detach: (tileId: string) => ipcRenderer.invoke('terminal:detach', tileId),
+    acknowledgeAgentAlert: (tileId: string) => ipcRenderer.invoke('terminal:acknowledgeAgentAlert', tileId),
+    setAgentAlertsEnabled: (enabled: boolean) => ipcRenderer.invoke('terminal:setAgentAlertsEnabled', enabled),
     sshAvailable: () => ipcRenderer.invoke('terminal:sshAvailable'),
     onData: (tileId: string, callback: (data: string) => void) => {
       const channel = `terminal:data:${tileId}`
       const handler = (_evt: unknown, data: string) => callback(data)
+      ipcRenderer.on(channel, handler)
+      return () => { ipcRenderer.removeListener(channel, handler) }
+    },
+    onAgentAlert: (tileId: string, callback: (state: unknown) => void) => {
+      const channel = `terminal:agentAlert:${tileId}`
+      const handler = (_evt: unknown, state: unknown) => callback(state)
       ipcRenderer.on(channel, handler)
       return () => { ipcRenderer.removeListener(channel, handler) }
     },
