@@ -18,11 +18,11 @@ function shortcut(overrides: Partial<KeyboardShortcutInput>): KeyboardShortcutIn
   }
 }
 
-test('resolves Ctrl+Alt+ArrowLeft as the previous panel shortcut', () => {
+test('resolves Ctrl+Alt+ArrowLeft as left-panel focus', () => {
   assert.equal(resolveKeyboardShortcut(shortcut({ key: 'ArrowLeft' })), 'focus-left-panel')
 })
 
-test('resolves Ctrl+Alt+ArrowRight as the next panel shortcut', () => {
+test('resolves Ctrl+Alt+ArrowRight as right-panel focus', () => {
   assert.equal(resolveKeyboardShortcut(shortcut({ key: 'ArrowRight' })), 'focus-right-panel')
 })
 

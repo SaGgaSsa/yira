@@ -19,10 +19,10 @@ function assert(condition: boolean, message: string): void {
 }
 
 const focusedLeft = focusSplitPanelByShortcut({ ...splitState, focusedPanel: 'right' }, 'left')
-assert(focusedLeft.focusedPanel === 'left', 'Ctrl+1 must focus the left split panel')
+assert(focusedLeft.focusedPanel === 'left', 'Ctrl+Alt+ArrowLeft must focus the left split panel')
 
 const focusedRight = focusSplitPanelByShortcut(splitState, 'right')
-assert(focusedRight.focusedPanel === 'right', 'Ctrl+2 must focus the right split panel')
+assert(focusedRight.focusedPanel === 'right', 'Ctrl+Alt+ArrowRight must focus the right split panel')
 
 const nextLeftTab = switchSplitPanelTabByShortcut(splitState, 'next')
 assert(nextLeftTab.activeLeftTileId === 'left-c', 'next split tab must activate the next tile in the focused panel')
