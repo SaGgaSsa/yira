@@ -4,9 +4,10 @@ import { promises as fs } from 'node:fs'
 import type { Stats } from 'node:fs'
 import type { FileHandle } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import test from 'node:test'
 import { readFile, readPreviewAsset, statFile, writeFile } from './file-access'
+import { searchFiles } from './files'
 import * as fileAccess from './file-access'
 
 const TWO_MIB = 2 * 1024 * 1024
@@ -19,6 +20,145 @@ async function createWorkspace(): Promise<string> {
 async function removeWorkspace(path: string): Promise<void> {
   await fs.rm(path, { recursive: true, force: true })
 }
+
+async function writeSearchFile(rootPath: string, relativePath: string): Promise<void> {
+  const filePath = join(rootPath, ...relativePath.split('/'))
+  await fs.mkdir(dirname(filePath), { recursive: true })
+  await fs.writeFile(filePath, relativePath, 'utf8')
+}
+
+async function makeSearchTree(): Promise<string> {
+  const rootPath = await createWorkspace()
+  await writeSearchFile(rootPath, 'README.md')
+  await writeSearchFile(rootPath, 'src/Alpha.test.ts')
+  await writeSearchFile(rootPath, 'src/beta.test.ts')
+  await fs.mkdir(join(rootPath, 'src', 'match-directory.txt'), { recursive: true })
+  await writeSearchFile(rootPath, 'src/match-directory.txt/inside.ts')
+  return rootPath
+}
+
+test('recursively searches regular file names and sorts relative paths case-insensitively', async () => {
+  const rootPath = await makeSearchTree()
+  try {
+    const result = await searchFiles(rootPath, '.*\\.test\\.ts')
+
+    assert.deepEqual(result, {
+      entries: [
+        { name: 'Alpha.test.ts', relativePath: 'src/Alpha.test.ts' },
+        { name: 'beta.test.ts', relativePath: 'src/beta.test.ts' },
+      ],
+    })
+  } finally {
+    await removeWorkspace(rootPath)
+  }
+})
+
+test('excludes hidden names and every ignored directory at every depth', async () => {
+  const rootPath = await createWorkspace()
+  const ignoredNames = ['.git', 'node_modules', 'dist', 'dist-electron', 'build', 'release', 'coverage', '.next', '.vite']
+  try {
+    await writeSearchFile(rootPath, 'visible/keep.ts')
+    await writeSearchFile(rootPath, '.hidden/hidden.ts')
+    await writeSearchFile(rootPath, 'visible/.hidden-nested.ts')
+    await writeSearchFile(rootPath, '.hidden-root.ts')
+    for (const name of ignoredNames) {
+      await writeSearchFile(rootPath, `${name}/ignored.ts`)
+    }
+    await writeSearchFile(rootPath, 'visible/DIST/ignored-case.ts')
+
+    const result = await searchFiles(rootPath, '.*\\.ts')
+
+    assert.deepEqual(result.entries, [{ name: 'keep.ts', relativePath: 'visible/keep.ts' }])
+  } finally {
+    await removeWorkspace(rootPath)
+  }
+})
+
+test('returns matching files only and does not follow file or directory symlinks', async () => {
+  const rootPath = await createWorkspace()
+  const outsidePath = await createWorkspace()
+  try {
+    await writeSearchFile(rootPath, 'inside/match.ts')
+    await writeSearchFile(outsidePath, 'outside/match.ts')
+    await fs.symlink(join(outsidePath, 'outside', 'match.ts'), join(rootPath, 'outside-file-match.ts'))
+    await fs.symlink(join(outsidePath, 'outside'), join(rootPath, 'outside-directory-match'))
+    await fs.mkdir(join(rootPath, 'real-directory-match.ts'), { recursive: true })
+
+    const result = await searchFiles(rootPath, 'match')
+
+    assert.deepEqual(result.entries, [{ name: 'match.ts', relativePath: 'inside/match.ts' }])
+  } finally {
+    await removeWorkspace(rootPath)
+    await removeWorkspace(outsidePath)
+  }
+})
+
+test('rejects invalid queries and roots while keeping results inside the canonical root', async () => {
+  const rootPath = await createWorkspace()
+  const outsidePath = await createWorkspace()
+  try {
+    await writeSearchFile(rootPath, 'inside.ts')
+    await writeSearchFile(outsidePath, 'outside.ts')
+    await assert.rejects(searchFiles(rootPath, 'file.*('), /Invalid regular expression/i)
+    await assert.rejects(searchFiles(join(rootPath, 'inside.ts'), '.*'), /not a directory/i)
+    await assert.rejects(searchFiles(join(rootPath, 'missing-root'), '.*'), /unavailable/i)
+    await fs.symlink(outsidePath, join(rootPath, 'external'))
+
+    const result = await searchFiles(rootPath, '.*\\.ts')
+
+    assert.deepEqual(result.entries, [{ name: 'inside.ts', relativePath: 'inside.ts' }])
+  } finally {
+    await removeWorkspace(rootPath)
+    await removeWorkspace(outsidePath)
+  }
+})
+
+test('rejects an unreadable root directory instead of treating it as an empty result', async () => {
+  const rootPath = await createWorkspace()
+  const originalReaddir = fs.readdir
+  try {
+    fs.readdir = (async (path: string, options?: unknown) => {
+      if (path === rootPath) {
+        const error = new Error('permission denied') as NodeJS.ErrnoException
+        error.code = 'EACCES'
+        throw error
+      }
+      return originalReaddir(path, options as never)
+    }) as typeof fs.readdir
+
+    await assert.rejects(searchFiles(rootPath, '.*'), /permission denied/i)
+  } finally {
+    fs.readdir = originalReaddir
+    await removeWorkspace(rootPath)
+  }
+})
+
+test('tolerates inaccessible or disappearing child directories', async () => {
+  const rootPath = await createWorkspace()
+  const inaccessiblePath = join(rootPath, 'inaccessible')
+  const missingPath = join(rootPath, 'missing')
+  const originalReaddir = fs.readdir
+  try {
+    await writeSearchFile(rootPath, 'visible.ts')
+    await writeSearchFile(rootPath, 'inaccessible/hidden.ts')
+    await writeSearchFile(rootPath, 'missing/hidden.ts')
+    fs.readdir = (async (path: string, options?: unknown) => {
+      if (path === inaccessiblePath || path === missingPath) {
+        const error = new Error(path === inaccessiblePath ? 'permission denied' : 'directory disappeared') as NodeJS.ErrnoException
+        error.code = path === inaccessiblePath ? 'EACCES' : 'ENOENT'
+        throw error
+      }
+      return originalReaddir(path, options as never)
+    }) as typeof fs.readdir
+
+    const result = await searchFiles(rootPath, '.*\\.ts')
+
+    assert.deepEqual(result.entries, [{ name: 'visible.ts', relativePath: 'visible.ts' }])
+  } finally {
+    fs.readdir = originalReaddir
+    await removeWorkspace(rootPath)
+  }
+})
 
 test('reads UTF-8 text with a SHA-256 revision', async () => {
   const rootPath = await createWorkspace()

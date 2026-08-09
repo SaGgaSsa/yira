@@ -20,6 +20,7 @@ import type {
   NotificationAttentionResult,
   FileListOptions,
   FileListResult,
+  FileSearchResult,
   FilePreviewAssetResult,
   FileReadResult,
   FileSelectFolderResult,
@@ -82,6 +83,7 @@ interface ElectronWorld {
   files: {
     selectFolder: (defaultPath?: string) => Promise<FileSelectFolderResult | null>
     list: (rootPath: string, relativeDir: string, options?: FileListOptions) => Promise<FileListResult>
+    search: (rootPath: string, query: string) => Promise<FileSearchResult>
     read: (rootPath: string, relativePath: string) => Promise<FileReadResult>
     stat: (rootPath: string, relativePath: string) => Promise<FileStatResult>
     write: (rootPath: string, relativePath: string, input: FileWriteInput) => Promise<FileWriteResult>

@@ -1,10 +1,14 @@
-import { BrowserWindow, dialog, ipcMain } from 'electron'
+import { createRequire } from 'node:module'
 import type { OpenDialogOptions } from 'electron'
 import { promises as fs } from 'fs'
 import { basename, isAbsolute, relative, resolve, sep } from 'path'
-import type { FileEntry, FileListOptions, FileListResult, FileSelectFolderResult, FileWriteInput } from '@shared/types'
+import type { FileEntry, FileListOptions, FileListResult, FileSearchEntry, FileSearchResult, FileSelectFolderResult, FileWriteInput } from '@shared/types'
+import { compileFileSearchQuery } from '@shared/fileSearch'
 import { canonicalizeRootFolderPath } from '../workspace-root'
 import { readFile, readPreviewAsset, resolveRootTarget, statFile, writeFile } from './file-access'
+
+const electronApi = createRequire(import.meta.url)('electron') as typeof import('electron')
+const { BrowserWindow, dialog, ipcMain } = electronApi
 
 const IGNORED_NAMES = new Set([
   '.git',
@@ -97,6 +101,65 @@ async function listFiles(
   }
 }
 
+async function collectSearchEntries(
+  rootPath: string,
+  directoryPath: string,
+  matches: (fileName: string) => boolean,
+  entries: FileSearchEntry[],
+  tolerateReadError: boolean,
+): Promise<void> {
+  let dirents: import('fs').Dirent[]
+  try {
+    dirents = await fs.readdir(directoryPath, { withFileTypes: true })
+  } catch (error) {
+    if (tolerateReadError) return
+    throw error
+  }
+
+  for (const dirent of dirents) {
+    if (shouldHideEntry(dirent.name)) continue
+
+    const entryPath = resolve(directoryPath, dirent.name)
+    if (!isInsidePath(rootPath, entryPath)) continue
+
+    let entryStat: import('fs').Stats
+    try {
+      entryStat = await fs.lstat(entryPath)
+    } catch {
+      // Skip entries that disappear or cannot be read while searching.
+      continue
+    }
+
+    if (entryStat.isSymbolicLink()) continue
+    if (entryStat.isDirectory()) {
+      await collectSearchEntries(rootPath, entryPath, matches, entries, true)
+      continue
+    }
+    if (!entryStat.isFile() || !matches(dirent.name)) continue
+
+    entries.push({
+      name: dirent.name,
+      relativePath: toRendererRelativePath(rootPath, entryPath),
+    })
+  }
+}
+
+export async function searchFiles(rootPath: string, query: string): Promise<FileSearchResult> {
+  const compiled = compileFileSearchQuery(query)
+  if (!compiled.ok) throw new Error(compiled.error)
+
+  const resolved = await resolveRootTarget(rootPath, '')
+  const entries: FileSearchEntry[] = []
+  await collectSearchEntries(resolved.rootPath, resolved.targetPath, compiled.matches, entries, false)
+
+  entries.sort((left, right) => (
+    left.relativePath.localeCompare(right.relativePath, undefined, { numeric: true, sensitivity: 'base' })
+    || left.relativePath.localeCompare(right.relativePath, undefined, { numeric: true })
+  ))
+
+  return { entries }
+}
+
 export function registerFilesIPC(): void {
   ipcMain.handle('files:selectFolder', async (_event, defaultPath?: string): Promise<FileSelectFolderResult | null> => {
     const win = BrowserWindow.getFocusedWindow()
@@ -121,6 +184,10 @@ export function registerFilesIPC(): void {
     'files:list',
     async (_event, rootPath: string, relativeDir = '', options: FileListOptions = {}) =>
       listFiles(rootPath, relativeDir, options),
+  )
+
+  ipcMain.handle('files:search', async (_event, rootPath: string, query: string) =>
+    searchFiles(rootPath, query),
   )
 
   ipcMain.handle('files:read', async (_event, rootPath: string, relativePath: string) =>

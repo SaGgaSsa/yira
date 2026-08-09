@@ -295,6 +295,15 @@ export interface FileListResult {
   rootPath: string
 }
 
+export interface FileSearchEntry {
+  name: string
+  relativePath: string
+}
+
+export interface FileSearchResult {
+  entries: FileSearchEntry[]
+}
+
 export interface FileSelectFolderResult {
   path: string
   name: string

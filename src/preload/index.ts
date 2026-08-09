@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { BoardTask, FileListOptions, FileWriteInput, FloatingNavigationEvent, FloatingNavigationRequest, GitStatusResult, NotificationAttentionOptions, TerminalCreateOptions, UpdateState, WindowBounds, WindowClosePreparationRequest, WindowClosePreparationResponse, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
+import type { BoardTask, FileListOptions, FileSearchResult, FileWriteInput, FloatingNavigationEvent, FloatingNavigationRequest, GitStatusResult, NotificationAttentionOptions, TerminalCreateOptions, UpdateState, WindowBounds, WindowClosePreparationRequest, WindowClosePreparationResponse, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
 import { createSerialTaskQueue } from '@shared/serialTaskQueue'
 
 console.log('[preload] Loading...')
@@ -63,6 +63,8 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.invoke('files:selectFolder', defaultPath),
     list: (rootPath: string, relativeDir: string, options?: FileListOptions) =>
       ipcRenderer.invoke('files:list', rootPath, relativeDir, options),
+    search: (rootPath: string, query: string) =>
+      ipcRenderer.invoke('files:search', rootPath, query) as Promise<FileSearchResult>,
     read: (rootPath: string, relativePath: string) =>
       ipcRenderer.invoke('files:read', rootPath, relativePath),
     stat: (rootPath: string, relativePath: string) =>
