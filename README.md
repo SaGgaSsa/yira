@@ -64,4 +64,4 @@ Type-check the project:
 npx tsc --noEmit
 ```
 
-From this WSL workspace, do not use `npm run build`, `npm run dist:win`, or `npm run release:win`.
+Do not use `npm run dist:win` or `npm run release:win` locally; produce Windows installers and releases in Windows CI.
