@@ -3,6 +3,8 @@ import {
   createWorkspaceSearchState,
   executeWorkspaceFileSearch,
   getWorkspaceSearchView,
+  getWorkspaceSearchKeyAction,
+  isWorkspaceSearchRequestCurrent,
   resetWorkspaceSearchState,
   startWorkspaceSearch,
 } from './workspaceExplorerSearch'
@@ -61,4 +63,22 @@ if (failed.status !== 'error' || failed.error !== 'Search unavailable') {
 const reset = resetWorkspaceSearchState()
 if (reset.query !== '' || reset.status !== 'idle' || reset.entries.length !== 0 || reset.error !== null) {
   throw new Error('closing workspace search must clear query, results, and errors')
+}
+
+if (getWorkspaceSearchKeyAction('Escape') !== 'close' || getWorkspaceSearchKeyAction('Enter') !== 'ignore') {
+  throw new Error('Escape must close workspace search while other keys leave it open')
+}
+
+const currentRequest = { id: 4, rootPath: '/workspace', query: 'README' }
+if (!isWorkspaceSearchRequestCurrent(currentRequest, currentRequest)) {
+  throw new Error('a response matching its request id, root, and query must be accepted')
+}
+for (const staleRequest of [
+  { id: 3, rootPath: '/workspace', query: 'README' },
+  { id: 4, rootPath: '/other-workspace', query: 'README' },
+  { id: 4, rootPath: '/workspace', query: 'package' },
+]) {
+  if (isWorkspaceSearchRequestCurrent(staleRequest, currentRequest)) {
+    throw new Error('a stale workspace search response must be rejected when its id, root, or query differs')
+  }
 }

@@ -12,6 +12,27 @@ export interface WorkspaceSearchState {
 
 export type WorkspaceSearchView = 'prompt' | 'loading' | 'results' | 'no-results' | 'error'
 
+export type WorkspaceSearchKeyAction = 'close' | 'ignore'
+
+export interface WorkspaceSearchRequest {
+  id: number
+  rootPath: string
+  query: string
+}
+
+export function getWorkspaceSearchKeyAction(key: string): WorkspaceSearchKeyAction {
+  return key === 'Escape' ? 'close' : 'ignore'
+}
+
+export function isWorkspaceSearchRequestCurrent(
+  response: WorkspaceSearchRequest,
+  current: WorkspaceSearchRequest,
+): boolean {
+  return response.id === current.id
+    && response.rootPath === current.rootPath
+    && response.query === current.query
+}
+
 export function createWorkspaceSearchState(): WorkspaceSearchState {
   return {
     query: '',

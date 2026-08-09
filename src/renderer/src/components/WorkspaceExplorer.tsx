@@ -10,9 +10,12 @@ import {
 import {
   createWorkspaceSearchState,
   executeWorkspaceFileSearch,
+  getWorkspaceSearchKeyAction,
   getWorkspaceSearchView,
+  isWorkspaceSearchRequestCurrent,
   resetWorkspaceSearchState,
   startWorkspaceSearch,
+  type WorkspaceSearchRequest,
   type WorkspaceSearchState,
 } from '@/utils/workspaceExplorerSearch'
 
@@ -146,11 +149,18 @@ export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile }: Work
 
     const requestId = searchRequestIdRef.current
     const query = searchState.query
+    const responseRequest: WorkspaceSearchRequest = { id: requestId, rootPath, query }
     const timeoutId = window.setTimeout(() => {
       void executeWorkspaceFileSearch(rootPath, query, window.electron.files.search)
         .then((nextState) => {
-          if (requestId !== searchRequestIdRef.current || searchRootPathRef.current !== rootPath) return
-          setSearchState((current) => current.query === query ? nextState : current)
+          setSearchState((current) => {
+            const currentRequest: WorkspaceSearchRequest = {
+              id: searchRequestIdRef.current,
+              rootPath: searchRootPathRef.current,
+              query: current.query,
+            }
+            return isWorkspaceSearchRequestCurrent(responseRequest, currentRequest) ? nextState : current
+          })
         })
     }, 200)
 
@@ -209,7 +219,7 @@ export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile }: Work
               className="min-w-0 flex-1 bg-transparent text-sm text-text-display outline-none placeholder:text-text-disabled"
               onChange={(event) => handleSearchQueryChange(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key !== 'Escape') return
+                if (getWorkspaceSearchKeyAction(event.key) !== 'close') return
                 event.preventDefault()
                 handleCloseSearch()
               }}
