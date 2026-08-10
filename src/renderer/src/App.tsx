@@ -6,7 +6,7 @@ import { TileCreationMenu } from './components/TileCreationMenu'
 import { TopBar } from './components/TopBar'
 import { Sidebar } from './components/Sidebar'
 import { WorkspacePanel } from './components/WorkspacePanel'
-import { SettingsPanel } from './components/SettingsPanel'
+import { SettingsPanel, type SettingsSectionId } from './components/SettingsPanel'
 import { RawJsonEditor } from './components/RawJsonEditor'
 import { ContextMenu, type MenuItem } from './components/ContextMenu'
 import { SplitviewPanel } from './components/SplitviewPanel'
@@ -374,6 +374,7 @@ export default function App(): React.ReactElement {
   const [workspaceAttentionCounts, setWorkspaceAttentionCounts] = useState<WorkspaceAttentionCounts>({})
   const [boardState, setBoardState] = useState<BoardState>(EMPTY_BOARD_STATE)
   const [showSettings, setShowSettings] = useState(false)
+  const [settingsSection, setSettingsSection] = useState<SettingsSectionId>('appearance')
   const [showJsonEditor, setShowJsonEditor] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [groupEditor, setGroupEditor] = useState<GroupEditorState>(null)
@@ -928,6 +929,11 @@ export default function App(): React.ReactElement {
     )))
   }, [setWorkspace])
 
+  const openSettings = useCallback((section: SettingsSectionId = 'appearance') => {
+    setSettingsSection(section)
+    setShowSettings(true)
+  }, [])
+
   const openWorkspaceEditor = useCallback((workspace: WorkspaceMetadata) => {
     setShowWorkspacePicker(false)
     setWorkspaceEditor({
@@ -1373,6 +1379,12 @@ export default function App(): React.ReactElement {
     setFullviewActiveTileId(tile.id)
     setViewMode('fullview')
   }, [focusTile, selectTiles, setFullviewActiveTileId, setViewMode])
+
+  const focusAgentTile = useCallback((tileId: string) => {
+    const tile = useCanvasStore.getState().tiles.find((entry) => entry.id === tileId)
+    if (!tile) return
+    focusTileInFullview(tile)
+  }, [focusTileInFullview])
 
   const detachTile = useCallback((tile: TileState) => {
     if (!activeWorkspaceId || isTileDetached(tile)) return
@@ -1954,7 +1966,7 @@ export default function App(): React.ReactElement {
         onSetViewMode={handleSetViewMode}
         onFitToContent={() => getCanvasMethods()?.fitViewToContent()}
         onZoomToggle={handleZoomToggle}
-        onOpenSettings={() => setShowSettings(true)}
+        onOpenSettings={() => openSettings()}
       />
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -2290,8 +2302,8 @@ export default function App(): React.ReactElement {
                   tiles={tiles}
                   terminalTitles={terminalTitles}
                   addTerminal={addTerminal}
-                  onFocusTile={focusTile}
-                  onOpenSettings={() => setShowSettings(true)}
+                  onFocusTile={focusAgentTile}
+                  onOpenSettings={() => openSettings('advanced')}
                 />
               )}
             </div>
@@ -2304,6 +2316,7 @@ export default function App(): React.ReactElement {
       {/* Settings panel */}
       <SettingsPanel
         open={showSettings}
+        initialSection={settingsSection}
         onClose={() => setShowSettings(false)}
         onOpenJsonEditor={() => {
           setShowSettings(false)

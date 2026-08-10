@@ -1,6 +1,23 @@
-import type { AgentSessionHistoryQuery } from '@shared/types'
+import type {
+  AgentProvider,
+  AgentProviderAvailabilitySnapshot,
+  AgentProvidersConfig,
+  AgentSessionHistoryQuery,
+} from '@shared/types'
 
 export type AgentHistoryScope = 'workspace' | 'all'
+
+/** Gate both fresh and resumed sessions with the same provider checks. */
+export function canLaunchAgent(
+  provider: AgentProvider,
+  providers: AgentProvidersConfig,
+  availability: AgentProviderAvailabilitySnapshot | null,
+  hasAvailableProfile: boolean,
+): boolean {
+  return hasAvailableProfile &&
+    providers[provider]?.enabled !== false &&
+    availability?.[provider]?.available === true
+}
 
 /** Build the restricted bridge query used by the Agents panel. */
 export function buildAgentHistoryQuery(

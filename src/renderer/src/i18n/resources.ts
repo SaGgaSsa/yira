@@ -48,6 +48,7 @@ type TranslationResources = {
   agents: {
     title: string
     newSession: string
+    refreshAvailability: string
     available: string
     unavailable: string
     disabled: string
@@ -386,6 +387,7 @@ const en: TranslationResources = {
   agents: {
     title: 'Agents',
     newSession: 'New agent session',
+    refreshAvailability: 'Refresh provider availability',
     available: 'Available',
     unavailable: 'Unavailable',
     disabled: 'Disabled in workspace',
@@ -724,6 +726,7 @@ const es: TranslationResources = {
   agents: {
     title: 'Agentes',
     newSession: 'Nueva sesión de agente',
+    refreshAvailability: 'Actualizar disponibilidad de proveedores',
     available: 'Disponible',
     unavailable: 'No disponible',
     disabled: 'Desactivado en el espacio de trabajo',

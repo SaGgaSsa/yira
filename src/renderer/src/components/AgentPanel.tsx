@@ -14,6 +14,7 @@ import type {
 } from '@shared/types'
 import {
   buildAgentHistoryQuery,
+  canLaunchAgent,
   formatAgentAge,
   sanitizeAgentCwd,
   type AgentHistoryScope,
@@ -40,6 +41,12 @@ type HistoryState = {
   status: 'idle' | 'loading' | 'ready' | 'error'
   items: AgentSessionHistoryItem[]
   hasMore: boolean
+}
+
+type SessionSubscription = {
+  generation: number
+  disposed: boolean
+  subscribed: boolean
 }
 
 const PROVIDERS: readonly AgentProvider[] = ['claude', 'codex']
@@ -211,40 +218,56 @@ export function AgentPanel({
   const { t } = useTranslation()
   const [availability, setAvailability] = useState<AgentProviderAvailabilitySnapshot | null>(null)
   const [availabilityError, setAvailabilityError] = useState(false)
+  const [availabilityLoading, setAvailabilityLoading] = useState(false)
   const [sessions, setSessions] = useState<AgentActiveSession[]>([])
   const [historyScope, setHistoryScope] = useState<AgentHistoryScope>('workspace')
   const [historySearch, setHistorySearch] = useState('')
   const [historyState, setHistoryState] = useState<HistoryState>({ status: 'idle', items: [], hasMore: false })
   const historyRequestRef = useRef(0)
+  const availabilityRequestRef = useRef(0)
+  const sessionSubscriptionRef = useRef<SessionSubscription | null>(null)
 
   const availableProfile = useMemo(
     () => availableProfiles.find((profile) => profile.available),
     [availableProfiles],
   )
 
-  useEffect(() => {
-    let cancelled = false
+  const refreshAvailability = useCallback(async () => {
+    const requestId = ++availabilityRequestRef.current
     setAvailability(null)
     setAvailabilityError(false)
+    setAvailabilityLoading(true)
 
-    void window.electron.agents.availability()
-      .then((result) => {
-        if (cancelled) return
-        setAvailability(result)
-      })
-      .catch(() => {
-        if (cancelled) return
-        setAvailabilityError(true)
-      })
-
-    return () => {
-      cancelled = true
+    try {
+      const result = await window.electron.agents.availability()
+      if (requestId !== availabilityRequestRef.current) return
+      setAvailability(result)
+    } catch {
+      if (requestId !== availabilityRequestRef.current) return
+      setAvailabilityError(true)
+    } finally {
+      if (requestId !== availabilityRequestRef.current) return
+      setAvailabilityLoading(false)
     }
   }, [])
 
   useEffect(() => {
+    void refreshAvailability()
+    return () => {
+      availabilityRequestRef.current += 1
+    }
+  }, [refreshAvailability])
+
+  useEffect(() => {
     let cancelled = false
     setSessions([])
+
+    const subscription: SessionSubscription = {
+      generation: (sessionSubscriptionRef.current?.generation ?? 0) + 1,
+      disposed: false,
+      subscribed: false,
+    }
+    sessionSubscriptionRef.current = subscription
 
     const removeListener = window.electron.agents.onSessionsChanged((snapshot) => {
       if (!cancelled) setSessions(snapshot.sessions)
@@ -258,25 +281,35 @@ export function AgentPanel({
         if (!cancelled) setSessions([])
       })
 
-    let subscribed = false
     void window.electron.agents.subscribeSessions(workspaceId)
       .then((result) => {
-        subscribed = result
-        if (cancelled && subscribed) void window.electron.agents.unsubscribeSessions()
+        if (subscription.disposed) {
+          if (result && sessionSubscriptionRef.current === null) void window.electron.agents.unsubscribeSessions()
+          return
+        }
+        if (sessionSubscriptionRef.current !== subscription || sessionSubscriptionRef.current.generation !== subscription.generation) return
+        subscription.subscribed = result
       })
       .catch(() => undefined)
 
     return () => {
       cancelled = true
+      subscription.disposed = true
       removeListener()
-      if (subscribed) void window.electron.agents.unsubscribeSessions()
+      if (sessionSubscriptionRef.current !== subscription || sessionSubscriptionRef.current.generation !== subscription.generation) return
+      sessionSubscriptionRef.current = null
+      if (subscription.subscribed) void window.electron.agents.unsubscribeSessions()
     }
   }, [workspaceId])
 
   useEffect(() => {
     historyRequestRef.current += 1
     setHistoryState({ status: 'idle', items: [], hasMore: false })
-  }, [historyScope, workspaceId])
+  }, [historySearch, historyScope, workspaceId])
+
+  const canLaunch = useCallback((provider: AgentProvider): boolean => {
+    return canLaunchAgent(provider, agentProviders, availabilityError ? null : availability, Boolean(availableProfile))
+  }, [agentProviders, availability, availabilityError, availableProfile])
 
   const loadHistory = useCallback(async () => {
     const requestId = ++historyRequestRef.current
@@ -293,20 +326,14 @@ export function AgentPanel({
     }
   }, [historyScope, historySearch, workspaceId])
 
-  const canLaunch = useCallback((provider: AgentProvider): boolean => {
-    if (!availableProfile || agentProviders[provider]?.enabled === false) return false
-    if (availabilityError || !availability) return false
-    return availability[provider]?.available === true
-  }, [agentProviders, availability, availabilityError, availableProfile])
-
   const launchAgent = useCallback((provider: AgentProvider) => {
-    if (!availableProfile || !canLaunch(provider)) return
+    if (!canLaunch(provider) || !availableProfile) return
     const tileId = addTerminal(availableProfile.id, { provider })
     if (tileId) onFocusTile(tileId)
   }, [addTerminal, availableProfile, canLaunch, onFocusTile])
 
   const resumeAgent = useCallback((item: AgentSessionHistoryItem) => {
-    if (!availableProfile) return
+    if (!canLaunch(item.provider) || !availableProfile) return
     const cwd = sanitizeAgentCwd(item.cwd)
     const metadata: TerminalAgentMetadata = {
       provider: item.provider,
@@ -315,7 +342,7 @@ export function AgentPanel({
     }
     const tileId = addTerminal(availableProfile.id, metadata)
     if (tileId) onFocusTile(tileId)
-  }, [addTerminal, availableProfile, onFocusTile])
+  }, [addTerminal, availableProfile, canLaunch, onFocusTile])
 
   const tileById = useMemo(() => new Map(tiles.map((tile) => [tile.id, tile])), [tiles])
   const setupNeeded = availabilityError || (availability !== null && PROVIDERS.some((provider) => (
@@ -325,6 +352,7 @@ export function AgentPanel({
   const copy = {
     title: t('agents.title', 'Agents'),
     newSession: t('agents.newSession', 'New agent session'),
+    refreshAvailability: t('agents.refreshAvailability', 'Refresh provider availability'),
     available: t('agents.available', 'Available'),
     unavailable: t('agents.unavailable', 'Unavailable'),
     disabled: t('agents.disabled', 'Disabled in workspace'),
@@ -362,7 +390,17 @@ export function AgentPanel({
       <div className="shrink-0 border-b border-border px-4 py-4">
         <div className="flex items-center gap-2">
           <Bot size={16} className="text-text-secondary" />
-          <div className="nd-label text-text-display">{copy.title}</div>
+          <div className="nd-label flex-1 text-text-display">{copy.title}</div>
+          <button
+            type="button"
+            className="inline-flex h-7 w-7 items-center justify-center rounded text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={() => void refreshAvailability()}
+            disabled={availabilityLoading}
+            title={copy.refreshAvailability}
+            aria-label={copy.refreshAvailability}
+          >
+            <RefreshCw size={14} className={availabilityLoading ? 'animate-spin' : ''} />
+          </button>
         </div>
         <div className="mt-1 text-xs text-text-secondary">{copy.newSession}</div>
         <div className="mt-3 grid gap-2">
@@ -504,7 +542,7 @@ export function AgentPanel({
                 key={`${item.provider}-${item.identifier}`}
                 item={item}
                 onResume={resumeAgent}
-                resumeDisabled={!availableProfile}
+                resumeDisabled={!canLaunch(item.provider)}
                 unknownTitle={copy.unknownTitle}
                 unknownDate={copy.unknownDate}
                 cwdUnavailableLabel={copy.cwdUnavailable}

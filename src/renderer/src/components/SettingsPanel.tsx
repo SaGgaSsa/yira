@@ -11,13 +11,7 @@ import type { TerminalThemeId } from '@shared/terminalThemes'
 import { TERMINAL_THEMES } from '@shared/terminalThemes'
 import { MAX_FONT_SIZE_PX, MIN_FONT_SIZE_PX } from '@shared/userSettings'
 
-interface SettingsPanelProps {
-  open: boolean
-  onClose: () => void
-  onOpenJsonEditor: () => void
-}
-
-type SettingsSectionId =
+export type SettingsSectionId =
   | 'appearance'
   | 'density'
   | 'canvas'
@@ -27,6 +21,13 @@ type SettingsSectionId =
   | 'browser'
   | 'advanced'
   | 'about'
+
+interface SettingsPanelProps {
+  open: boolean
+  onClose: () => void
+  onOpenJsonEditor: () => void
+  initialSection?: SettingsSectionId
+}
 
 const SETTINGS_SECTIONS: Array<{
   id: SettingsSectionId
@@ -97,7 +98,7 @@ function getShortcutItemLabel(t: TFunction, label: string): string {
   }
 }
 
-export function SettingsPanel({ open, onClose, onOpenJsonEditor }: SettingsPanelProps): React.ReactElement {
+export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection = 'appearance' }: SettingsPanelProps): React.ReactElement {
   const { t } = useTranslation()
   const [activeSection, setActiveSection] = useState<SettingsSectionId>('appearance')
   const [agentHookMessage, setAgentHookMessage] = useState('')
@@ -154,8 +155,8 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor }: SettingsPanel
 
   useEffect(() => {
     if (!open) return
-    setActiveSection('appearance')
-  }, [open])
+    setActiveSection(initialSection)
+  }, [initialSection, open])
 
   const handleBackdropClick = useCallback(
     (e: React.MouseEvent) => {
