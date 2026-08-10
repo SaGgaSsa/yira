@@ -14,6 +14,10 @@ type SourceControlAction =
   | { type: 'commit'; message: string }
   | { type: 'sync' }
 
+interface SourceControlRefreshOptions {
+  preserveActionError?: boolean
+}
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Unable to load source control status'
 }
@@ -227,30 +231,37 @@ export function WorkspaceSourceControl({ workspaceId, sourceControlViewMode, onW
   const [actionPending, setActionPending] = useState(false)
   const [commitMessage, setCommitMessage] = useState('')
   const [retryAction, setRetryAction] = useState<SourceControlAction | null>(null)
+  const activeWorkspaceRef = useRef(workspaceId)
+  const statusWorkspaceRef = useRef<string | null>(null)
   const historyLoadedWorkspaceRef = useRef<string | null>(null)
+  const manualCommitsToggleRef = useRef(new Map<string, boolean>())
   const refreshVersionRef = useRef(0)
+  activeWorkspaceRef.current = workspaceId
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async ({ preserveActionError = false }: SourceControlRefreshOptions = {}) => {
+    if (activeWorkspaceRef.current !== workspaceId) return
     setLoading(true)
-    setActionError(null)
+    if (!preserveActionError) setActionError(null)
     const refreshVersion = refreshVersionRef.current + 1
     refreshVersionRef.current = refreshVersion
     const [statusResult, historyResult] = await Promise.allSettled([
       Promise.resolve().then(() => window.electron.git.status(workspaceId)),
       Promise.resolve().then(() => window.electron.git.history(workspaceId)),
     ])
-    if (refreshVersion !== refreshVersionRef.current) return
+    if (refreshVersion !== refreshVersionRef.current || activeWorkspaceRef.current !== workspaceId) return
 
     if (statusResult.status === 'fulfilled') {
+      statusWorkspaceRef.current = workspaceId
       setStatus(statusResult.value)
     } else {
+      statusWorkspaceRef.current = workspaceId
       setStatus({ isRepository: false, branch: null, ahead: 0, behind: 0, staged: [], unstaged: [], error: errorMessage(statusResult.reason) })
     }
 
     if (historyResult.status === 'fulfilled') {
       const nextHistory = historyResult.value
       setHistory(nextHistory)
-      if (statusResult.status === 'fulfilled' && statusResult.value.isRepository && !nextHistory.error && historyLoadedWorkspaceRef.current !== workspaceId) {
+      if (statusResult.status === 'fulfilled' && statusResult.value.isRepository && !nextHistory.error && historyLoadedWorkspaceRef.current !== workspaceId && !manualCommitsToggleRef.current.has(workspaceId)) {
         historyLoadedWorkspaceRef.current = workspaceId
         setCommitsExpanded(nextHistory.outgoing.length > 0)
       }
@@ -261,16 +272,28 @@ export function WorkspaceSourceControl({ workspaceId, sourceControlViewMode, onW
   }, [workspaceId])
 
   useEffect(() => {
+    refreshVersionRef.current += 1
     historyLoadedWorkspaceRef.current = null
+    statusWorkspaceRef.current = null
+    setStatus(null)
     setHistory(null)
-    setCommitsExpanded(false)
+    setCommitsExpanded(manualCommitsToggleRef.current.get(workspaceId) ?? false)
+    setLoading(true)
+    setActionError(null)
+    setActionPending(false)
+    setCommitMessage('')
+    setRetryAction(null)
     void refresh()
   }, [refresh, workspaceId])
 
   const runAction = useCallback(async (action: SourceControlAction): Promise<boolean> => {
+    const actionWorkspaceId = workspaceId
+    if (activeWorkspaceRef.current !== actionWorkspaceId) return false
     setActionError(null)
     setRetryAction(null)
     setActionPending(true)
+    let mutationFailed = false
+    let mutationError: unknown
     try {
       if (action.type === 'toggle') {
         if (action.staged) await window.electron.git.unstage(workspaceId, action.change.path, action.change.originalPath)
@@ -280,15 +303,23 @@ export function WorkspaceSourceControl({ workspaceId, sourceControlViewMode, onW
       } else {
         await window.electron.git.sync(workspaceId)
       }
-      await refresh()
-      return true
     } catch (error) {
-      setActionError(errorMessage(error))
-      setRetryAction(action)
-      return false
-    } finally {
+      mutationFailed = true
+      mutationError = error
+    }
+
+    if (activeWorkspaceRef.current === actionWorkspaceId) {
+      if (mutationFailed) {
+        setActionError(errorMessage(mutationError))
+        setRetryAction(action)
+      }
+      await refresh({ preserveActionError: mutationFailed })
+    }
+
+    if (activeWorkspaceRef.current === actionWorkspaceId) {
       setActionPending(false)
     }
+    return !mutationFailed && activeWorkspaceRef.current === actionWorkspaceId
   }, [refresh, workspaceId])
 
   const handleToggle = useCallback(async (change: GitFileChange, staged: boolean) => {
@@ -303,9 +334,9 @@ export function WorkspaceSourceControl({ workspaceId, sourceControlViewMode, onW
   }, [actionPending, commitMessage, runAction])
 
   const handleSync = useCallback(async () => {
-    if (!status?.upstream || actionPending) return
+    if (statusWorkspaceRef.current !== workspaceId || !status?.upstream || actionPending) return
     await runAction({ type: 'sync' })
-  }, [actionPending, runAction, status?.upstream])
+  }, [actionPending, runAction, status?.upstream, workspaceId])
 
   const handleRetryAction = useCallback(async () => {
     if (!retryAction || actionPending) return
@@ -314,19 +345,33 @@ export function WorkspaceSourceControl({ workspaceId, sourceControlViewMode, onW
     }
   }, [actionPending, retryAction, runAction])
 
+  const handleCommitsToggle = useCallback(() => {
+    if (activeWorkspaceRef.current !== workspaceId) return
+    setCommitsExpanded((expanded) => {
+      const nextExpanded = !expanded
+      manualCommitsToggleRef.current.set(workspaceId, nextExpanded)
+      return nextExpanded
+    })
+  }, [workspaceId])
+
   const handleViewModeChange = useCallback((viewMode: SourceControlViewMode) => {
     if (viewMode === sourceControlViewMode) return
-    void window.electron.workspace.update(workspaceId, { config: { sourceControlViewMode: viewMode } })
+    const updateWorkspaceId = workspaceId
+    void window.electron.workspace.update(updateWorkspaceId, { config: { sourceControlViewMode: viewMode } })
       .then((workspace) => {
+        if (activeWorkspaceRef.current !== updateWorkspaceId) return
         if (!workspace) throw new Error('Workspace is unavailable')
         onWorkspaceUpdated(workspace)
       })
-      .catch((error: unknown) => setActionError(errorMessage(error)))
+      .catch((error: unknown) => {
+        if (activeWorkspaceRef.current === updateWorkspaceId) setActionError(errorMessage(error))
+      })
   }, [onWorkspaceUpdated, sourceControlViewMode, workspaceId])
 
-  const branch = status?.branch ?? 'No branch'
-  const canOpenOrigin = Boolean(status?.originUrl)
-  const canCommit = Boolean(status?.staged.length) && Boolean(commitMessage.trim())
+  const currentStatus = statusWorkspaceRef.current === workspaceId ? status : null
+  const branch = currentStatus?.branch ?? 'No branch'
+  const canOpenOrigin = Boolean(currentStatus?.originUrl)
+  const canCommit = Boolean(currentStatus?.staged.length) && Boolean(commitMessage.trim())
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -335,8 +380,8 @@ export function WorkspaceSourceControl({ workspaceId, sourceControlViewMode, onW
         {canOpenOrigin ? (
           <button
             className="min-w-0 flex-1 truncate text-left text-sm text-text-display hover:underline"
-            onClick={() => { void window.electron.shell.openExternal(status!.originUrl!) }}
-            title={status?.originUrl}
+            onClick={() => { void window.electron.shell.openExternal(currentStatus!.originUrl!) }}
+            title={currentStatus?.originUrl}
           >
             {branch}
           </button>
@@ -360,8 +405,8 @@ export function WorkspaceSourceControl({ workspaceId, sourceControlViewMode, onW
         <button
           className="inline-flex h-7 items-center gap-1 rounded px-2 text-xs text-text-secondary hover:bg-hover-bg hover:text-text-display disabled:opacity-50"
           onClick={() => void handleSync()}
-          disabled={!status?.upstream || actionPending}
-          title={status?.upstream ? `Sync ${status.upstream}` : 'Sync requires an upstream branch'}
+          disabled={!currentStatus?.upstream || actionPending}
+          title={currentStatus?.upstream ? `Sync ${currentStatus.upstream}` : 'Sync requires an upstream branch'}
         >
           <Upload size={14} /> Sync
         </button>
@@ -370,27 +415,27 @@ export function WorkspaceSourceControl({ workspaceId, sourceControlViewMode, onW
         </button>
       </div>
       <div className="min-h-0 flex-1 overflow-auto">
-        {loading && !status ? <div className="px-4 py-3 text-sm text-text-disabled">Loading source control…</div> : status?.isRepository ? (
+        {loading && !currentStatus ? <div className="px-4 py-3 text-sm text-text-disabled">Loading source control…</div> : currentStatus?.isRepository ? (
           <>
-            {status.upstream && (
+            {currentStatus.upstream && (
               <div className="border-b border-border px-4 py-2 text-xs text-text-secondary">
-                {status.upstream}{status.ahead > 0 ? ` · ${status.ahead} ahead` : ''}{status.behind > 0 ? ` · ${status.behind} behind` : ''}
+                {currentStatus.upstream}{currentStatus.ahead > 0 ? ` · ${currentStatus.ahead} ahead` : ''}{currentStatus.behind > 0 ? ` · ${currentStatus.behind} behind` : ''}
               </div>
             )}
-            <CommitHistoryAccordion history={history} upstream={status.upstream} expanded={commitsExpanded} onToggle={() => setCommitsExpanded((expanded) => !expanded)} />
-            <ChangeSection title="Staged Changes" changes={status.staged} staged viewMode={sourceControlViewMode} disabled={actionPending} onToggle={handleToggle} />
-            <ChangeSection title="Changes" changes={status.unstaged} staged={false} viewMode={sourceControlViewMode} disabled={actionPending} onToggle={handleToggle} />
+            <CommitHistoryAccordion history={history} upstream={currentStatus.upstream} expanded={commitsExpanded} onToggle={handleCommitsToggle} />
+            <ChangeSection title="Staged Changes" changes={currentStatus.staged} staged viewMode={sourceControlViewMode} disabled={actionPending} onToggle={handleToggle} />
+            <ChangeSection title="Changes" changes={currentStatus.unstaged} staged={false} viewMode={sourceControlViewMode} disabled={actionPending} onToggle={handleToggle} />
           </>
         ) : (
           <div className="px-4 py-4 text-sm text-text-secondary">
-            <p>{status?.error ?? 'This workspace is not a Git repository.'}</p>
+            <p>{currentStatus?.error ?? 'This workspace is not a Git repository.'}</p>
             <button className="mt-3 inline-flex items-center gap-1.5 text-sm text-text-display hover:underline" onClick={() => void refresh()}>
               <RefreshCw size={14} /> Retry
             </button>
           </div>
         )}
       </div>
-      {status?.isRepository && (
+      {currentStatus?.isRepository && (
         <div className="shrink-0 border-t border-border p-3">
           <label htmlFor="source-control-commit-message" className="sr-only">Commit message</label>
           <textarea

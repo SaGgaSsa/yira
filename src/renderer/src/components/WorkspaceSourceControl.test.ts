@@ -12,7 +12,7 @@ if (!source.includes('window.electron.git.status')) {
 if (!source.includes('window.electron.git.history(workspaceId)')) {
   throw new Error('source control must load commit history through the restricted Git bridge')
 }
-const refreshBody = source.match(/const refresh = useCallback\(async \(\) => \{([\s\S]*?)\n  \}, \[workspaceId\]\)/)?.[1]
+const refreshBody = source.match(/const refresh = useCallback\(async [\s\S]*?=> \{([\s\S]*?)\n  \}, \[workspaceId\]\)/)?.[1]
 if (!refreshBody?.includes('window.electron.git.status(workspaceId)') || !refreshBody.includes('window.electron.git.history(workspaceId)')) {
   throw new Error('every Source Control refresh must request both status and history')
 }
@@ -43,7 +43,7 @@ for (const requiredLabel of ['Commit', 'Sync', 'Commit message']) {
 if (!source.includes('disabled={!canCommit || actionPending}')) {
   throw new Error('commit must be disabled without staged changes, a message, or while Git is busy')
 }
-if (!source.includes('disabled={!status?.upstream || actionPending}')) {
+if (!source.includes('disabled={!status?.upstream || actionPending}') && !source.includes('disabled={!currentStatus?.upstream || actionPending}')) {
   throw new Error('sync must require an upstream and respect pending work')
 }
 if (!source.includes('Commits')) {
@@ -66,4 +66,19 @@ if (!source.includes('.slice(0, 5)')) {
 }
 if (!source.includes('Date.parse')) {
   throw new Error('commit dates must be parsed defensively for relative display')
+}
+if (!source.includes('activeWorkspaceRef.current = workspaceId') || !source.includes('activeWorkspaceRef.current !== workspaceId') || !source.includes('statusWorkspaceRef.current === workspaceId')) {
+  throw new Error('source control async work must be scoped to the active workspace')
+}
+if (!source.includes('const actionWorkspaceId = workspaceId') || !source.includes('const updateWorkspaceId = workspaceId')) {
+  throw new Error('Git and workspace update completions must retain their originating workspace identity')
+}
+for (const resetCall of ['setStatus(null)', 'setHistory(null)', 'setCommitMessage(\'\')', 'setRetryAction(null)', 'setActionPending(false)']) {
+  if (!source.includes(resetCall)) throw new Error(`workspace changes must clear ${resetCall}`)
+}
+if (!source.includes('manualCommitsToggleRef') || !source.includes('manualCommitsToggleRef.current.has(workspaceId)')) {
+  throw new Error('manual commit accordion toggles must be tracked per workspace')
+}
+if (!source.includes('preserveActionError') || !source.includes('await refresh({ preserveActionError:')) {
+  throw new Error('mutation failures must refresh status/history without replacing the original error')
 }
