@@ -19,6 +19,8 @@ test('registers restricted agent availability, snapshot/subscription, and histor
   assert.match(text, /ipcMain\.handle\('agents:history'/)
   assert.match(text, /normalizeAgentHistoryQuery/)
   assert.match(text, /getWorkspaceRootFolderById/)
+  assert.match(text, /try\s*\{[\s\S]*sender\.send\(/)
+  assert.match(text, /removeListener\('destroyed'/)
   assert.doesNotMatch(text, /rootPath:\s*(?:query|input)/)
 })
 

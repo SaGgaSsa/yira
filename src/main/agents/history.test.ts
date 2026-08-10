@@ -31,12 +31,11 @@ test('reads Claude JSONL sessions into bounded normalized metadata', async () =>
 
     const result = await readClaudeSessionHistory({ rootPath: join(root, 'claude') })
     assert.equal(result.hasMore, false)
-    assert.deepEqual(result.items.map(({ identifier, provider, cwd: itemCwd, model, messageCount, title, preview, startedAt, lastActivityAt }) => ({
-      identifier, provider, cwd: itemCwd, model, messageCount, title, preview, startedAt, lastActivityAt,
+    assert.deepEqual(result.items.map(({ identifier, provider, model, messageCount, title, preview, startedAt, lastActivityAt }) => ({
+      identifier, provider, model, messageCount, title, preview, startedAt, lastActivityAt,
     })), [{
       identifier: 'session-claude',
       provider: 'claude',
-      cwd,
       model: 'sonnet',
       messageCount: 2,
       title: 'Plan the release',
@@ -44,6 +43,7 @@ test('reads Claude JSONL sessions into bounded normalized metadata', async () =>
       startedAt: '2026-08-10T12:00:01.000Z',
       lastActivityAt: '2026-08-10T12:00:02.000Z',
     }])
+    assert.equal(result.items[0].cwd, undefined)
   } finally {
     await fs.rm(root, { recursive: true, force: true })
   }
@@ -72,7 +72,6 @@ test('reads Codex rollout metadata and tolerates malformed or unknown files', as
     assert.deepEqual(result.items[0], {
       identifier: 'session-codex',
       provider: 'codex',
-      cwd,
       model: 'o3',
       messageCount: 2,
       title: 'Review this change',
@@ -80,6 +79,7 @@ test('reads Codex rollout metadata and tolerates malformed or unknown files', as
       startedAt: '2026-08-10T13:00:01.000Z',
       lastActivityAt: '2026-08-10T13:00:03.000Z',
     })
+    assert.equal(result.items[0].cwd, undefined)
     assert.equal(result.items[1].cwd, undefined)
   } finally {
     await fs.rm(root, { recursive: true, force: true })
@@ -108,7 +108,28 @@ test('filters history to a canonical workspace root and enforces result limits',
     })
     assert.equal(result.items.length, 1)
     assert.equal(result.items[0].identifier, 'inside-1')
+    assert.equal(result.items[0].cwd, '.')
     assert.equal(result.hasMore, true)
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
+test('isolates pathological transcript payloads to their individual files', async () => {
+  const root = await makeFixtureRoot()
+  try {
+    const cwd = join(root, 'project')
+    await fs.mkdir(cwd, { recursive: true })
+    await writeJsonLines(join(root, 'claude', 'good.jsonl'), [
+      { type: 'system', sessionId: 'good-session', cwd, timestamp: '2026-08-10T15:00:00.000Z' },
+      { type: 'user', sessionId: 'good-session', cwd, timestamp: '2026-08-10T15:00:01.000Z', message: { role: 'user', content: 'Keep this session' } },
+    ])
+    const nested = `${'{"text":'.repeat(12_000)}"ignored"${'}'.repeat(12_000)}`
+    const pathological = `{"type":"assistant","sessionId":"pathological-session","message":{"role":"assistant","content":${nested}}}`
+    await fs.writeFile(join(root, 'claude', 'pathological.jsonl'), `${pathological}\n`, 'utf8')
+
+    const result = await readClaudeSessionHistory({ rootPath: join(root, 'claude') })
+    assert.deepEqual(result.items.map((item) => item.identifier), ['good-session'])
   } finally {
     await fs.rm(root, { recursive: true, force: true })
   }

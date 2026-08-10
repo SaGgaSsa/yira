@@ -93,6 +93,7 @@ export interface AgentHistoryResult {
 export interface AgentSessionHistoryItem {
   identifier: string
   provider: AgentProvider
+  /** Workspace-relative cwd when a workspace-scoped query supplied one. */
   cwd?: string
   startedAt: string
   lastActivityAt: string

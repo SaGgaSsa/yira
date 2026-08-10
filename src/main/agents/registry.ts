@@ -134,7 +134,7 @@ export class AgentSessionRegistry {
         })
       : subscriber
     this.subscribers.add(callback)
-    callback(this.snapshot())
+    this.notifySubscriber(callback, this.snapshot())
     return () => this.subscribers.delete(callback)
   }
 
@@ -144,7 +144,7 @@ export class AgentSessionRegistry {
     const tile = normalizeAgentOpaqueId(tileId)
     if (!workspace || !tile) return false
     const session = this.sessions.get(sessionKey(workspace, tile))
-    if (!session || session.status === status) return false
+    if (!session || session.status === 'exited' || session.status === status) return false
     session.status = status
     session.lastActivityAt = timestamp(this.now)
     this.emit()
@@ -153,7 +153,7 @@ export class AgentSessionRegistry {
 
   markWorking(workspaceId: string, tileId: string): boolean {
     const session = this.get(workspaceId, tileId)
-    if (!session) return false
+    if (!session || session.status === 'exited') return false
     const changed = this.updateStatus(workspaceId, tileId, 'working')
     this.alerts.clearOnInput(tileId)
     return changed
@@ -165,7 +165,7 @@ export class AgentSessionRegistry {
     const tile = normalizeAgentOpaqueId(tileId)
     if (!workspace || !tile) return false
     const session = this.sessions.get(sessionKey(workspace, tile))
-    if (!session) return false
+    if (!session || session.status === 'exited') return false
     session.status = 'working'
     session.lastActivityAt = timestamp(this.now)
     this.alerts.clearOnInput(tile)
@@ -183,7 +183,7 @@ export class AgentSessionRegistry {
 
   markExited(workspaceId: string, tileId: string): boolean {
     const session = this.get(workspaceId, tileId)
-    if (!session) return false
+    if (!session || session.status === 'exited') return false
     const changed = this.updateStatus(workspaceId, tileId, 'exited')
     this.alerts.clearOnDestroy(tileId)
     return changed
@@ -198,6 +198,7 @@ export class AgentSessionRegistry {
         (workspaceId === undefined || session.workspaceId === workspaceId)
     })
     if (matching.length !== 1) return false
+    if (matching[0].status === 'exited') return false
     if (!this.alerts.report(alert)) return false
     const session = matching[0]
     const status: AgentSessionStatus = alert.event === 'completed' ? 'done' : 'needs-input'
@@ -230,7 +231,17 @@ export class AgentSessionRegistry {
 
   private emit(): void {
     const snapshot = this.snapshot()
-    for (const subscriber of this.subscribers) subscriber(cloneSnapshot(snapshot))
+    for (const subscriber of this.subscribers) this.notifySubscriber(subscriber, snapshot)
+  }
+
+  private notifySubscriber(subscriber: AgentSessionSnapshotSubscriber, snapshot: AgentActiveSessionSnapshot): void {
+    try {
+      subscriber(cloneSnapshot(snapshot))
+    } catch {
+      // Renderer teardown and transport failures must not break main-process
+      // session lifecycle updates. Drop the failed subscriber to avoid leaks.
+      this.subscribers.delete(subscriber)
+    }
   }
 }
 

@@ -40,6 +40,7 @@ test('detects provider executables from PATH without invoking either provider', 
   const root = await fs.mkdtemp(join(process.cwd(), '.tmp-agent-provider-'))
   try {
     await fs.writeFile(join(root, 'claude'), '#!/bin/sh\nexit 0', { mode: 0o755 })
+    await fs.mkdir(join(root, 'codex'))
     const available = await detectInstalledAgentProviders({
       platform: 'linux',
       env: { PATH: root },

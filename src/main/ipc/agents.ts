@@ -19,6 +19,7 @@ export const AGENT_SESSIONS_CHANGED_CHANNEL = 'agents:sessions:changed'
 interface AgentSubscription {
   sender: WebContents
   unsubscribe: () => void
+  onDestroyed: () => void
 }
 export interface AgentIPCOptions {
   registry?: AgentSessionRegistry
@@ -37,12 +38,25 @@ function removeSubscription(senderId: number): void {
   const subscription = subscriptions.get(senderId)
   if (!subscription) return
   subscriptions.delete(senderId)
-  subscription.unsubscribe()
+  try {
+    subscription.sender.removeListener('destroyed', subscription.onDestroyed)
+  } catch {
+    // WebContents can finish tearing down while explicit unsubscribe runs.
+  }
+  try {
+    subscription.unsubscribe()
+  } catch {
+    // A renderer teardown must not make an IPC lifecycle operation throw.
+  }
 }
 
 function sendSnapshot(sender: WebContents, snapshot: AgentActiveSessionSnapshot): void {
-  if (sender.isDestroyed()) return
-  sender.send(AGENT_SESSIONS_CHANGED_CHANNEL, snapshot)
+  try {
+    if (sender.isDestroyed()) return
+    sender.send(AGENT_SESSIONS_CHANGED_CHANNEL, snapshot)
+  } catch {
+    // A renderer may disappear between isDestroyed and send.
+  }
 }
 
 function normalizedWorkspaceId(value: unknown): string | undefined {
@@ -52,6 +66,7 @@ function normalizedWorkspaceId(value: unknown): string | undefined {
 async function historyForQuery(input: unknown, readHistory: AgentIPCOptions['history']): Promise<AgentSessionHistoryResult> {
   if (!isSafeAgentHistoryQueryInput(input)) return { items: [], hasMore: false }
   const query = normalizeAgentHistoryQuery(input)
+  if (!query) return { items: [], hasMore: false }
   let workspaceRoot: string | undefined
   if (query.workspaceId) {
     workspaceRoot = await getWorkspaceRootFolderById(query.workspaceId) ?? ''
@@ -87,8 +102,9 @@ export function registerAgentsIPC(options: AgentIPCOptions = {}): void {
         sessions: snapshot.sessions.filter((session) => session.workspaceId === normalized),
       } : snapshot),
     )
-    subscriptions.set(event.sender.id, { sender: event.sender, unsubscribe })
-    event.sender.once('destroyed', () => removeSubscription(event.sender.id))
+    const onDestroyed = () => removeSubscription(event.sender.id)
+    subscriptions.set(event.sender.id, { sender: event.sender, unsubscribe, onDestroyed })
+    event.sender.once('destroyed', onDestroyed)
     return true
   })
 

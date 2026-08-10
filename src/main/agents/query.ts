@@ -40,8 +40,9 @@ function normalizeLimit(value: unknown): number {
 }
 
 /** Normalize untrusted renderer history input to a small, data-only query. */
-export function normalizeAgentHistoryQuery(input: unknown): NormalizedAgentHistoryQuery {
-  const value = isRecord(input) ? input : {}
+export function normalizeAgentHistoryQuery(input: unknown): NormalizedAgentHistoryQuery | null {
+  if (input !== undefined && !isRecord(input)) return null
+  const value = input === undefined ? {} : input
   const query: NormalizedAgentHistoryQuery = { limit: normalizeLimit(value.limit) }
   const workspaceId = normalizeAgentOpaqueId(value.workspaceId)
   if (workspaceId) query.workspaceId = workspaceId
@@ -53,7 +54,8 @@ export function normalizeAgentHistoryQuery(input: unknown): NormalizedAgentHisto
 
 /** Explicitly reject invalid enum/identifier fields instead of broadening scope. */
 export function isSafeAgentHistoryQueryInput(input: unknown): boolean {
-  if (!isRecord(input)) return true
+  if (input === undefined) return true
+  if (!isRecord(input)) return false
   if (input.workspaceId !== undefined && !normalizeAgentOpaqueId(input.workspaceId)) return false
   if (input.provider !== undefined && !isAgentProvider(input.provider)) return false
   if (input.search !== undefined && typeof input.search !== 'string') return false

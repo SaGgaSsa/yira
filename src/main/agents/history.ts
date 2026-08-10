@@ -18,6 +18,7 @@ const MAX_TRANSCRIPT_FILES = 1_000
 const MAX_TRANSCRIPT_DEPTH = 8
 const MAX_TITLE_LENGTH = 120
 const MAX_PREVIEW_LENGTH = 280
+const MAX_CONTENT_DEPTH = 32
 
 export interface AgentHistoryRoots {
   claude?: string
@@ -86,7 +87,8 @@ function readNestedTimestamp(row: Record<string, unknown>, payload?: Record<stri
   return readTimestamp(row) ?? (payload ? readTimestamp(payload) : undefined)
 }
 
-function textFromContent(value: unknown): string | undefined {
+function textFromContent(value: unknown, depth = 0): string | undefined {
+  if (depth > MAX_CONTENT_DEPTH) return undefined
   if (typeof value === 'string') return stringValue(value)
   if (Array.isArray(value)) {
     const parts = value
@@ -94,12 +96,12 @@ function textFromContent(value: unknown): string | undefined {
         if (!isRecord(entry)) return undefined
         const type = typeof entry.type === 'string' ? entry.type : ''
         if (type && type !== 'text' && type !== 'output_text' && type !== 'input_text') return undefined
-        return textFromContent(entry.text ?? entry.content)
+        return textFromContent(entry.text ?? entry.content, depth + 1)
       })
       .filter((entry): entry is string => Boolean(entry))
     return stringValue(parts.join(' '))
   }
-  if (isRecord(value)) return textFromContent(value.text ?? value.content ?? value.message)
+  if (isRecord(value)) return textFromContent(value.text ?? value.content ?? value.message, depth + 1)
   return undefined
 }
 
@@ -132,11 +134,13 @@ function firstString(...values: unknown[]): string | undefined {
 }
 
 function addMessage(parsed: ParsedSession, text: string | undefined, timestamp: string | undefined): void {
+  // A role marker without readable content is usually a partial or
+  // provider-internal record. Do not let it make an otherwise incomplete
+  // transcript look like a valid session.
+  if (!text) return
   parsed.messageCount += 1
-  if (text) {
-    parsed.title ??= text
-    parsed.preview = text
-  }
+  parsed.title ??= text
+  parsed.preview = text
   if (timestamp) parsed.messageTimes.push(timestamp)
 }
 
@@ -290,6 +294,17 @@ function pathWithinRoot(candidate: string, root: string): boolean {
   return relativePath !== '' && !relativePath.startsWith('..') && !isAbsolute(relativePath)
 }
 
+function relativeCwdWithinRoot(candidate: string | undefined, root: string | undefined): string | undefined {
+  if (!candidate || !root || !pathWithinRoot(candidate, root)) return undefined
+  const normalizedCandidate = normalizeComparisonPath(candidate)
+  const normalizedRoot = normalizeComparisonPath(root)
+  const windowsPath = /^[A-Za-z]:[\\/]/.test(normalizedRoot) || normalizedRoot.startsWith('\\\\') || normalizedRoot.startsWith('//')
+  const relativePath = windowsPath
+    ? win32.relative(normalizedRoot, normalizedCandidate)
+    : relative(normalizedRoot, normalizedCandidate)
+  return relativePath ? relativePath.replace(/\\/g, '/') : '.'
+}
+
 async function canonicalCwd(value: string | undefined): Promise<string | undefined> {
   if (!value) return undefined
   try {
@@ -322,7 +337,7 @@ function resultItem(
   parsed: ParsedSession,
   provider: AgentProvider,
   modifiedAt: string,
-  cwd: string | undefined,
+  presentationCwd: string | undefined,
 ): AgentSessionHistoryItem {
   const timestamps = parsed.messageTimes
   const startedAt = timestamps[0] ?? modifiedAt
@@ -330,7 +345,7 @@ function resultItem(
   return {
     identifier: parsed.identifier,
     provider,
-    ...(cwd ? { cwd } : {}),
+    ...(presentationCwd ? { cwd: presentationCwd } : {}),
     startedAt,
     lastActivityAt,
     ...(parsed.title ? { title: parsed.title.slice(0, MAX_TITLE_LENGTH) } : {}),
@@ -358,30 +373,31 @@ async function readProviderSessionHistory(
   const sessions = new Map<string, AgentSessionHistoryItem>()
 
   for (const file of files) {
-    let text: string
     try {
-      text = await fs.readFile(file.path, 'utf8')
+      const text = await fs.readFile(file.path, 'utf8')
+      if (Buffer.byteLength(text, 'utf8') > MAX_TRANSCRIPT_BYTES) continue
+      const rows: unknown[] = []
+      for (const line of text.split(/\r?\n/)) {
+        if (!line || line.length > MAX_TRANSCRIPT_LINE_LENGTH) continue
+        try {
+          rows.push(JSON.parse(line))
+        } catch {
+          // Providers may leave a partial final line while writing. Ignore it.
+        }
+      }
+      const parsed = provider === 'claude' ? parseClaudeRows(rows) : parseCodexRows(rows)
+      if (!parsed) continue
+      const cwd = await canonicalCwd(parsed.cwd)
+      if (workspaceRoot && (!cwd || !pathWithinRoot(cwd, workspaceRoot))) continue
+      const item = resultItem(parsed, provider, file.modifiedAt, relativeCwdWithinRoot(cwd, workspaceRoot ?? undefined))
+      if (!matchesSearch(item, search)) continue
+      const current = sessions.get(item.identifier)
+      if (!current || current.lastActivityAt < item.lastActivityAt) sessions.set(item.identifier, item)
     } catch {
+      // A malformed or pathological individual transcript must not abort the
+      // rest of the provider history query.
       continue
     }
-    if (Buffer.byteLength(text, 'utf8') > MAX_TRANSCRIPT_BYTES) continue
-    const rows: unknown[] = []
-    for (const line of text.split(/\r?\n/)) {
-      if (!line || line.length > MAX_TRANSCRIPT_LINE_LENGTH) continue
-      try {
-        rows.push(JSON.parse(line))
-      } catch {
-        // Providers may leave a partial final line while writing. Ignore it.
-      }
-    }
-    const parsed = provider === 'claude' ? parseClaudeRows(rows) : parseCodexRows(rows)
-    if (!parsed) continue
-    const cwd = await canonicalCwd(parsed.cwd)
-    if (workspaceRoot && (!cwd || !pathWithinRoot(cwd, workspaceRoot))) continue
-    const item = resultItem(parsed, provider, file.modifiedAt, cwd)
-    if (!matchesSearch(item, search)) continue
-    const current = sessions.get(item.identifier)
-    if (!current || current.lastActivityAt < item.lastActivityAt) sessions.set(item.identifier, item)
   }
 
   const sorted = [...sessions.values()].sort((left, right) => {

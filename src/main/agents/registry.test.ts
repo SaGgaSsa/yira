@@ -72,3 +72,23 @@ test('records activity for an already-working session without changing its state
   assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'working')
   assert.equal(registry.get('workspace-1', 'tile-1')?.lastActivityAt, new Date(2_250).toISOString())
 })
+
+test('keeps exited sessions exited when late activity or hooks arrive', () => {
+  const registry = new AgentSessionRegistry()
+  registry.register(session)
+  assert.equal(registry.markExited('workspace-1', 'tile-1'), true)
+
+  assert.equal(registry.recordActivity('workspace-1', 'tile-1'), false)
+  assert.equal(registry.markWorking('workspace-1', 'tile-1'), false)
+  assert.equal(registry.markNeedsInput('workspace-1', 'tile-1'), false)
+  assert.equal(registry.markDone('workspace-1', 'tile-1'), false)
+  assert.equal(registry.reportAgentAlert({ provider: 'codex', event: 'permission', tileId: 'tile-1' }), false)
+  assert.equal(registry.alerts.has('tile-1'), false)
+  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'exited')
+})
+
+test('contains subscriber failures so registry lifecycle calls remain safe', () => {
+  const registry = new AgentSessionRegistry()
+  assert.doesNotThrow(() => registry.subscribe(() => { throw new Error('renderer teardown') }))
+  assert.doesNotThrow(() => registry.register(session))
+})

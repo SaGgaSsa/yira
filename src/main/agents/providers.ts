@@ -79,7 +79,8 @@ export async function detectInstalledCommand(
   for (const candidate of pathEntries(command, options)) {
     try {
       await fs.access(candidate, accessMode)
-      return true
+      const stats = await fs.stat(candidate)
+      if (stats.isFile()) return true
     } catch {
       // Continue through PATH entries. A missing or non-executable candidate
       // is not an error for provider availability.
