@@ -1,4 +1,5 @@
 import { strict as assert } from 'node:assert'
+import { EventEmitter } from 'node:events'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import type { ChildProcess, SpawnOptions } from 'node:child_process'
 import { createRequire } from 'node:module'
@@ -11,6 +12,42 @@ interface SpawnCall {
   command: string
   args: readonly string[]
   options: SpawnOptions
+}
+
+class FakeChild extends EventEmitter {
+  unrefCount = 0
+  didSpawn = false
+
+  unref(): this {
+    this.unrefCount += 1
+    return this
+  }
+
+  emitSpawn(): void {
+    this.didSpawn = true
+    this.emit('spawn')
+  }
+
+  emitError(error: Error): void {
+    if (this.listenerCount('error') > 0) this.emit('error', error)
+  }
+}
+
+function createFakeSpawn(
+  outcome: 'spawn' | 'error',
+  calls: SpawnCall[],
+  children: FakeChild[],
+): typeof spawn {
+  return ((command: string, args: readonly string[], options: SpawnOptions) => {
+    const child = new FakeChild()
+    calls.push({ command, args, options })
+    children.push(child)
+    queueMicrotask(() => {
+      if (outcome === 'spawn') child.emitSpawn()
+      else child.emitError(new Error('launcher process failed to spawn'))
+    })
+    return child as unknown as ChildProcess
+  }) as typeof spawn
 }
 
 function loadUpdaterRouting(): typeof import('./updater') {
@@ -51,12 +88,14 @@ function loadUpdaterRouting(): typeof import('./updater') {
 async function run(): Promise<void> {
   const tempRoot = await mkdtemp(join(tmpdir(), 'yira-linux-deb-update-launcher-'))
   const packagePath = join(tempRoot, 'update.deb')
+  const launcherPath = join(tempRoot, 'linux-deb-update-launcher.sh')
   const directoryPath = join(tempRoot, 'directory.deb')
   const appImagePath = join(tempRoot, 'update.AppImage')
   const uppercaseDebPath = join(tempRoot, 'update.DEB')
 
   try {
     await writeFile(packagePath, 'debian package fixture')
+    await writeFile(launcherPath, '#!/bin/sh\n')
     await mkdir(directoryPath)
     await writeFile(appImagePath, 'app image fixture')
     await writeFile(uppercaseDebPath, 'uppercase extension fixture')
@@ -86,18 +125,11 @@ async function run(): Promise<void> {
     assert.equal(shouldUseLinuxDebUpdateLauncher('linux', appImagePath), false)
 
     const calls: SpawnCall[] = []
-    let unrefCount = 0
-    const fakeSpawn = ((command: string, args: readonly string[], options: SpawnOptions) => {
-      calls.push({ command, args, options })
-      return {
-        unref: () => {
-          unrefCount += 1
-        },
-      } as ChildProcess
-    }) as typeof spawn
+    const children: FakeChild[] = []
+    const fakeSpawn = createFakeSpawn('spawn', calls, children)
 
     await startLinuxDebUpdateLauncher({
-      launcherPath: '/opt/Yira/resources/linux-deb-update-launcher.sh',
+      launcherPath,
       packagePath,
       diagnosticsPath: '/home/alice/.yira/logs/updater.log',
       diagnosticsEnabled: true,
@@ -108,16 +140,18 @@ async function run(): Promise<void> {
     assert.deepEqual(calls[0], {
       command: '/bin/sh',
       args: [
-        '/opt/Yira/resources/linux-deb-update-launcher.sh', packagePath,
+        launcherPath, packagePath,
         '/home/alice/.yira/logs/updater.log', '1', '0.1.51', '/usr/bin/yira',
       ],
       options: { detached: true, stdio: 'ignore' },
     })
-    assert.equal(unrefCount, 1)
+    assert.equal(children.length, 1)
+    assert.equal(children[0]?.didSpawn, true)
+    assert.equal(children[0]?.unrefCount, 1)
 
     await assert.rejects(
       () => startLinuxDebUpdateLauncher({
-        launcherPath: '/opt/Yira/resources/linux-deb-update-launcher.sh',
+        launcherPath,
         packagePath: appImagePath,
         diagnosticsPath: '/home/alice/.yira/logs/updater.log',
         diagnosticsEnabled: true,
@@ -127,6 +161,40 @@ async function run(): Promise<void> {
       { message: 'Downloaded Linux update is not a Debian package' },
     )
     assert.equal(calls.length, 1)
+
+    const missingLauncherCalls: SpawnCall[] = []
+    const missingLauncherChildren: FakeChild[] = []
+    const missingLauncherPath = join(tempRoot, 'missing-launcher.sh')
+    await assert.rejects(
+      () => startLinuxDebUpdateLauncher({
+        launcherPath: missingLauncherPath,
+        packagePath,
+        diagnosticsPath: '/home/alice/.yira/logs/updater.log',
+        diagnosticsEnabled: true,
+        version: '0.1.51',
+        spawn: createFakeSpawn('spawn', missingLauncherCalls, missingLauncherChildren),
+      }),
+      /launcher/,
+    )
+    assert.equal(missingLauncherCalls.length, 0)
+    assert.equal(missingLauncherChildren.length, 0)
+
+    const errorCalls: SpawnCall[] = []
+    const errorChildren: FakeChild[] = []
+    await assert.rejects(
+      () => startLinuxDebUpdateLauncher({
+        launcherPath,
+        packagePath,
+        diagnosticsPath: '/home/alice/.yira/logs/updater.log',
+        diagnosticsEnabled: true,
+        version: '0.1.51',
+        spawn: createFakeSpawn('error', errorCalls, errorChildren),
+      }),
+      { message: 'launcher process failed to spawn' },
+    )
+    assert.equal(errorCalls.length, 1)
+    assert.equal(errorChildren[0]?.didSpawn, false)
+    assert.equal(errorChildren[0]?.unrefCount, 0)
 
     await assert.rejects(
       () => startLinuxDebUpdateLauncher({

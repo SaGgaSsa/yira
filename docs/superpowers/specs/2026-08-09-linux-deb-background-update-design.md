@@ -22,7 +22,8 @@ file name from the updater cache.
 For installed Linux `.deb` builds, Yira will replace the direct
 `autoUpdater.quitAndInstall()` call with a detached, unprivileged launcher.
 The launcher is packaged with the application, is executed as the current
-desktop user, and receives only the verified downloaded `.deb` path.
+desktop user, and receives the verified downloaded `.deb` path together with
+the diagnostics path, diagnostics flag, and version.
 
 The launcher will:
 
@@ -39,8 +40,9 @@ The launcher will:
    retry.
 
 The main process will save user changes through its existing close-preparation
-bridge, start the launcher with `detached: true` and ignored stdio, hide the
-main window, then quit. It does not wait for `pkexec` or `dpkg`.
+bridge, start the launcher with `detached: true` and ignored stdio, wait only
+for the child process's successful `spawn` event, then call `app.quit()`
+immediately. It does not wait for `pkexec`, `dpkg`, or the relaunch.
 
 Windows and AppImage builds retain their existing `electron-updater`
 `quitAndInstall` behavior.
@@ -50,8 +52,8 @@ Windows and AppImage builds retain their existing `electron-updater`
 ```
 Yira: downloaded .deb
   -> prepare unsaved renderer state
-  -> start detached user launcher
-  -> hide window and quit immediately
+  -> start detached user launcher and await `spawn`
+  -> call `app.quit()` immediately
 launcher: pkexec -> dpkg
   -> success: exec /usr/bin/yira
   -> error/cancel: log outcome and exit
@@ -81,7 +83,7 @@ is not started.
 - `src/main/linuxDebUpdateLauncher.ts`: validates the downloaded artifact,
   creates the detached launcher process, and converts failures into safe
   update states/diagnostics.
-- `resources/linux-deb-update-launcher.mjs`: unprivileged detached process
+- `resources/linux-deb-update-launcher.sh`: unprivileged detached process
   that starts `pkexec`, waits for `dpkg`, writes lifecycle events, and relaunches
   `/usr/bin/yira` on success.
 - `src/main/updater.ts`: retains `event.downloadedFile`, routes only packaged
@@ -92,13 +94,19 @@ is not started.
 
 ## Verification
 
-- Unit tests cover artifact validation, platform routing, detached process
-  arguments, launcher success, authorization cancellation, installer failure,
-  and relaunch behavior.
-- `npx tsc --noEmit` and `npm test` pass.
+- `src/main/linuxDebUpdateLauncher.test.ts` covers artifact validation,
+  platform routing, detached process arguments, successful child spawn,
+  missing launcher rejection, and asynchronous spawn failure.
+- `scripts/linux-packaging.test.mjs` covers packaging the `.sh` resource,
+  installer command policy, and the existing AppImage wrapper behavior.
+- `src/main/updateDiagnostics.test.ts` covers sanitized launcher diagnostic
+  categories alongside the existing diagnostics behavior. Full updater event
+  ordering and app-quit lifecycle coverage is not currently present because
+  the updater module owns global Electron state and would require a broader
+  dependency-injection refactor.
+- Run `npx tsc --noEmit` and `npm test` as repository verification.
 - Build a Linux `.deb` with `npm run dist:linux`; inspect the package to verify
   the launcher is included.
 - Manually update an installed older build: after confirming the restart,
   Yira's window must disappear immediately, Polkit must appear if needed, and
   Yira must relaunch at the new version with no GNOME unresponsive dialog.
-

@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { stat } from 'node:fs/promises'
+import { access, constants, stat } from 'node:fs/promises'
 import { isAbsolute } from 'node:path'
 
 export interface LinuxDebUpdateLauncherInput {
@@ -26,6 +26,13 @@ export async function startLinuxDebUpdateLauncher(input: LinuxDebUpdateLauncherI
     throw new Error('Linux update launcher path must be absolute')
   }
 
+  try {
+    if (!(await stat(input.launcherPath)).isFile()) throw new Error('not a regular file')
+    await access(input.launcherPath, constants.R_OK)
+  } catch {
+    throw new Error('Linux update launcher path must be an existing readable regular file')
+  }
+
   if (!await isLinuxDebUpdatePath(input.packagePath)) {
     throw new Error('Downloaded Linux update is not a Debian package')
   }
@@ -41,5 +48,27 @@ export async function startLinuxDebUpdateLauncher(input: LinuxDebUpdateLauncherI
     detached: true,
     stdio: 'ignore',
   })
-  child.unref()
+
+  await new Promise<void>((resolve, reject) => {
+    const cleanup = (): void => {
+      child.removeListener('spawn', handleSpawn)
+      child.removeListener('error', handleError)
+    }
+    const handleSpawn = (): void => {
+      cleanup()
+      try {
+        child.unref()
+        resolve()
+      } catch (error) {
+        reject(error)
+      }
+    }
+    const handleError = (error: Error): void => {
+      cleanup()
+      reject(error)
+    }
+
+    child.once('spawn', handleSpawn)
+    child.once('error', handleError)
+  })
 }
