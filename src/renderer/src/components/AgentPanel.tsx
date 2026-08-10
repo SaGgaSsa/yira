@@ -48,7 +48,7 @@ type HistoryState = {
 type SessionSubscription = {
   generation: number
   disposed: boolean
-  subscribed: boolean
+  token: string | null
 }
 
 function providerLabel(provider: AgentProvider): string {
@@ -238,7 +238,7 @@ export function AgentPanel({
     const subscription: SessionSubscription = {
       generation: (sessionSubscriptionRef.current?.generation ?? 0) + 1,
       disposed: false,
-      subscribed: false,
+      token: null,
     }
     sessionSubscriptionRef.current = subscription
 
@@ -256,12 +256,13 @@ export function AgentPanel({
 
     void window.electron.agents.subscribeSessions(workspaceId)
       .then((result) => {
-        if (subscription.disposed) {
-          if (result && sessionSubscriptionRef.current === null) void window.electron.agents.unsubscribeSessions()
+        const token = typeof result === 'string' ? result : null
+        if (!token) return
+        if (subscription.disposed || sessionSubscriptionRef.current !== subscription || sessionSubscriptionRef.current.generation !== subscription.generation) {
+          void window.electron.agents.unsubscribeSessions(token)
           return
         }
-        if (sessionSubscriptionRef.current !== subscription || sessionSubscriptionRef.current.generation !== subscription.generation) return
-        subscription.subscribed = result
+        subscription.token = token
       })
       .catch(() => undefined)
 
@@ -271,7 +272,9 @@ export function AgentPanel({
       removeListener()
       if (sessionSubscriptionRef.current !== subscription || sessionSubscriptionRef.current.generation !== subscription.generation) return
       sessionSubscriptionRef.current = null
-      if (subscription.subscribed) void window.electron.agents.unsubscribeSessions()
+      const token = subscription.token
+      subscription.token = null
+      if (token) void window.electron.agents.unsubscribeSessions(token)
     }
   }, [selectedProvider, workspaceId])
 

@@ -69,8 +69,8 @@ interface ElectronWorld {
     getAvailability: () => Promise<AgentProviderAvailabilitySnapshot>
     sessionsSnapshot: (workspaceId?: string) => Promise<AgentActiveSessionSnapshot>
     getSessions: (workspaceId?: string) => Promise<AgentActiveSessionSnapshot>
-    subscribeSessions: (workspaceId?: string) => Promise<boolean>
-    unsubscribeSessions: () => Promise<boolean>
+    subscribeSessions: (workspaceId?: string) => Promise<string | false>
+    unsubscribeSessions: (token: string) => Promise<boolean>
     onSessionsChanged: (callback: (snapshot: AgentActiveSessionSnapshot) => void) => () => void
     history: (query?: AgentSessionHistoryQuery) => Promise<AgentSessionHistoryResult>
     queryHistory: (query?: AgentSessionHistoryQuery) => Promise<AgentSessionHistoryResult>

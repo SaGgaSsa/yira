@@ -7,7 +7,7 @@ for (const requiredBridgeCall of [
   'window.electron.agents.availability()',
   'window.electron.agents.sessionsSnapshot(workspaceId)',
   'window.electron.agents.subscribeSessions(workspaceId)',
-  'window.electron.agents.unsubscribeSessions()',
+  'window.electron.agents.unsubscribeSessions(token)',
   'window.electron.agents.history(query)',
 ]) {
   if (!source.includes(requiredBridgeCall)) throw new Error(`Agents panel must use ${requiredBridgeCall}`)
@@ -43,4 +43,5 @@ if (!source.includes('resumeDisabled={!canResume(item.provider)}')) throw new Er
 if (!source.includes('}, [historySearch, workspaceId, selectedProvider])')) throw new Error('search changes must invalidate in-flight history requests')
 if (!source.includes('sessionSubscriptionRef')) throw new Error('session cleanup must be tied to a subscription generation')
 if (!source.includes('sessionSubscriptionRef.current !== subscription')) throw new Error('stale subscription cleanup must not unsubscribe a newer subscription')
+if (source.includes('unsubscribeSessions()')) throw new Error('session teardown must always pass its own subscription token')
 if (!workspacePanelSource.includes('key={`${workspaceId}:${agentProvider ?? \'none\'}`}')) throw new Error('Agents panel must remount when its workspace provider scope changes')

@@ -31,8 +31,9 @@ contextBridge.exposeInMainWorld('electron', {
     getSessions: (workspaceId?: string) =>
       ipcRenderer.invoke('agents:sessions:snapshot', workspaceId) as Promise<AgentActiveSessionSnapshot>,
     subscribeSessions: (workspaceId?: string) =>
-      ipcRenderer.invoke('agents:sessions:subscribe', workspaceId) as Promise<boolean>,
-    unsubscribeSessions: () => ipcRenderer.invoke('agents:sessions:unsubscribe') as Promise<boolean>,
+      ipcRenderer.invoke('agents:sessions:subscribe', workspaceId) as Promise<string | false>,
+    unsubscribeSessions: (token: string) =>
+      ipcRenderer.invoke('agents:sessions:unsubscribe', token) as Promise<boolean>,
     onSessionsChanged: (callback: (snapshot: AgentActiveSessionSnapshot) => void) => {
       const handler = (_event: unknown, snapshot: AgentActiveSessionSnapshot) => callback(snapshot)
       ipcRenderer.on('agents:sessions:changed', handler)

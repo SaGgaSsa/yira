@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { ipcMain, type WebContents } from 'electron'
 import type {
   AgentProviderAvailabilitySnapshot,
@@ -18,6 +19,7 @@ export const AGENT_SESSIONS_CHANGED_CHANNEL = 'agents:sessions:changed'
 
 interface AgentSubscription {
   sender: WebContents
+  token: string
   unsubscribe: () => void
   onDestroyed: () => void
 }
@@ -34,9 +36,9 @@ export interface AgentIPCOptions {
 
 const subscriptions = new Map<number, AgentSubscription>()
 
-function removeSubscription(senderId: number): void {
+function removeSubscription(senderId: number, token?: string): boolean {
   const subscription = subscriptions.get(senderId)
-  if (!subscription) return
+  if (!subscription || (token !== undefined && subscription.token !== token)) return false
   subscriptions.delete(senderId)
   try {
     subscription.sender.removeListener('destroyed', subscription.onDestroyed)
@@ -48,6 +50,7 @@ function removeSubscription(senderId: number): void {
   } catch {
     // A renderer teardown must not make an IPC lifecycle operation throw.
   }
+  return true
 }
 
 function sendSnapshot(sender: WebContents, snapshot: AgentActiveSessionSnapshot): void {
@@ -93,25 +96,25 @@ export function registerAgentsIPC(options: AgentIPCOptions = {}): void {
     return registry.snapshot(normalized)
   })
 
-  ipcMain.handle('agents:sessions:subscribe', (event, workspaceId: unknown): boolean => {
+  ipcMain.handle('agents:sessions:subscribe', (event, workspaceId: unknown): string | false => {
     const normalized = normalizedWorkspaceId(workspaceId)
     if (workspaceId !== undefined && !normalized) return false
     removeSubscription(event.sender.id)
+    const token = randomUUID()
     const unsubscribe = registry.subscribe(
       (snapshot) => sendSnapshot(event.sender, normalized ? {
         sessions: snapshot.sessions.filter((session) => session.workspaceId === normalized),
       } : snapshot),
     )
-    const onDestroyed = () => removeSubscription(event.sender.id)
-    subscriptions.set(event.sender.id, { sender: event.sender, unsubscribe, onDestroyed })
+    const onDestroyed = () => removeSubscription(event.sender.id, token)
+    subscriptions.set(event.sender.id, { sender: event.sender, token, unsubscribe, onDestroyed })
     event.sender.once('destroyed', onDestroyed)
-    return true
+    return token
   })
 
-  ipcMain.handle('agents:sessions:unsubscribe', (event): boolean => {
-    const hadSubscription = subscriptions.has(event.sender.id)
-    removeSubscription(event.sender.id)
-    return hadSubscription
+  ipcMain.handle('agents:sessions:unsubscribe', (event, token: unknown): boolean => {
+    if (typeof token !== 'string' || !token) return false
+    return removeSubscription(event.sender.id, token)
   })
 
   ipcMain.handle('agents:history', async (_event, input: unknown): Promise<AgentSessionHistoryResult> => {
