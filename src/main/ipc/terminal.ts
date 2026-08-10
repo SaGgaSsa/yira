@@ -9,8 +9,10 @@ import { buildRemoteSshLaunch } from '../remote-ssh'
 import { AgentAlertBridge } from '../agentAlertBridge'
 import { SemanticAgentAlertState, type AgentAlertState } from '../agentAlerts'
 import { agentSessionRegistry } from '../agents/registry'
+import { normalizeAgentOpaqueId } from '../agents/query'
 import {
   buildAgentTerminalLaunch,
+  createAgentTerminalExitGate,
   createAgentTerminalLifecycle,
   type AgentTerminalLaunch,
   type AgentTerminalLifecycle,
@@ -70,6 +72,11 @@ function resolveProfile(shellProfileId: string): ShellProfile | undefined {
   return profiles.find(p => p.id === shellProfileId)
 }
 
+function resolveTerminalId(tileId: string): string {
+  if (terminals.has(tileId)) return tileId
+  return normalizeAgentOpaqueId(tileId) ?? tileId
+}
+
 export function initShellProfiles(): void {
   profiles = detectShellProfiles()
   sshClient = detectSshClient()
@@ -84,15 +91,20 @@ export function registerTerminalIPC(): void {
   ipcMain.handle('terminal:sshAvailable', async () => sshClient !== null)
 
   ipcMain.handle('terminal:create', async (event, tileId: string, options: TerminalCreateOptions) => {
+    const isAgent = options.agent !== undefined
+    const runtimeTileId = isAgent ? normalizeAgentOpaqueId(tileId) ?? '' : tileId
+    const runtimeWorkspaceId = isAgent ? normalizeAgentOpaqueId(options.workspaceId) : options.workspaceId
+    if (isAgent && !runtimeTileId) throw new Error('Invalid agent tile id')
+    if (isAgent && !runtimeWorkspaceId) throw new Error('Invalid agent workspace id')
+
     // Check for existing session (reattach)
-    const existing = terminals.get(tileId)
+    const existing = terminals.get(runtimeTileId)
     if (existing) {
       existing.listeners.add(event.sender)
       return { cols: 80, rows: 24, buffer: existing.buffer }
     }
 
     const isRemoteSsh = options.connection === 'remote-ssh'
-    const isAgent = options.agent !== undefined
     if (isRemoteSsh && isAgent) {
       throw new Error('Agent terminals cannot use remote SSH')
     }
@@ -109,13 +121,13 @@ export function registerTerminalIPC(): void {
 
     const spawnEnv: Record<string, string> = { ...process.env as Record<string, string> }
     await agentAlertBridge.start()
-    if (isRemoteSsh) agentAlertBridge.registerRemoteTerminal(tileId)
-    else Object.assign(spawnEnv, agentAlertBridge.registerLocalTerminal(tileId))
-    const workspacePath = !isRemoteSsh && !isAgent && options.workspaceId
-      ? await getWorkspacePathById(options.workspaceId)
+    if (isRemoteSsh) agentAlertBridge.registerRemoteTerminal(runtimeTileId)
+    else Object.assign(spawnEnv, agentAlertBridge.registerLocalTerminal(runtimeTileId))
+    const workspacePath = !isRemoteSsh && !isAgent && runtimeWorkspaceId
+      ? await getWorkspacePathById(runtimeWorkspaceId)
       : null
-    const workspaceRootFolderPath = !isRemoteSsh && options.workspaceId
-      ? await getWorkspaceRootFolderById(options.workspaceId)
+    const workspaceRootFolderPath = !isRemoteSsh && runtimeWorkspaceId
+      ? await getWorkspaceRootFolderById(runtimeWorkspaceId)
       : options.workspaceDir
     const terminalRoot = profile
       ? resolveTerminalWorkspaceRoot({
@@ -126,7 +138,7 @@ export function registerTerminalIPC(): void {
       : null
     const historySetup = profile && !isAgent ? buildTerminalHistorySetup({
       shellProfileId: profile.id,
-      workspaceId: options.workspaceId,
+      workspaceId: runtimeWorkspaceId,
       workspacePath: workspacePath ?? undefined,
       enabled: options.terminalHistoryEnabled,
     }) : null
@@ -140,8 +152,8 @@ export function registerTerminalIPC(): void {
     try {
       agentLaunch = isAgent
         ? buildAgentTerminalLaunch({
-          tileId,
-          workspaceId: options.workspaceId ?? '',
+          tileId: runtimeTileId,
+          workspaceId: runtimeWorkspaceId ?? '',
           agent: options.agent!,
           providerConfig: options.agentProviderConfig,
           workspaceRoot: workspaceRootFolderPath ?? options.workspaceDir,
@@ -149,7 +161,7 @@ export function registerTerminalIPC(): void {
         })
         : null
     } catch (error) {
-      agentAlertBridge.unregisterTerminal(tileId)
+      agentAlertBridge.unregisterTerminal(runtimeTileId)
       throw error
     }
     const spawnArgs = isRemoteSsh
@@ -172,35 +184,46 @@ export function registerTerminalIPC(): void {
         env: spawnEnv,
       })
     } catch (err) {
-      agentAlertBridge.unregisterTerminal(tileId)
+      agentAlertBridge.unregisterTerminal(runtimeTileId)
       throw new Error(`Failed to spawn ${label}: ${err instanceof Error ? err.message : String(err)}`)
     }
+
+    const agentLifecycle = agentLaunch
+      ? createAgentTerminalLifecycle({
+        registry: agentSessionRegistry,
+        tileId: runtimeTileId,
+        workspaceId: runtimeWorkspaceId!,
+      })
+      : undefined
+    const agentExitGate = agentLifecycle
+      ? createAgentTerminalExitGate(() => {
+        agentLifecycle.onExit()
+        agentAlertBridge.unregisterTerminal(runtimeTileId)
+        agentAlerts.clearOnDestroy(runtimeTileId)
+      })
+      : null
+    agentExitGate && term.onExit?.(agentExitGate.handle)
 
     const session: TerminalSession = {
       pty: term,
       listeners: new Set([event.sender]),
       buffer: '',
-      agentLifecycle: agentLaunch
-        ? createAgentTerminalLifecycle({
-          registry: agentSessionRegistry,
-          tileId,
-          workspaceId: options.workspaceId!,
-        })
-        : undefined,
+      agentLifecycle,
     }
-    terminals.set(tileId, session)
+    terminals.set(runtimeTileId, session)
 
     if (agentLaunch) {
       try {
         agentSessionRegistry.register({
           sessionId: agentLaunch.sessionId,
-          tileId,
-          workspaceId: options.workspaceId!,
+          tileId: runtimeTileId,
+          workspaceId: runtimeWorkspaceId!,
           provider: agentLaunch.provider,
         })
+        agentExitGate?.markRegistered()
       } catch (error) {
-        terminals.delete(tileId)
-        agentAlertBridge.unregisterTerminal(tileId)
+        terminals.delete(runtimeTileId)
+        agentAlertBridge.unregisterTerminal(runtimeTileId)
         try { term.kill() } catch { /* ignore */ }
         throw error
       }
@@ -216,7 +239,7 @@ export function registerTerminalIPC(): void {
       for (const listener of [...session.listeners]) {
         try {
           if (!listener.isDestroyed()) {
-            listener.send(`terminal:data:${tileId}`, data)
+            listener.send(`terminal:data:${runtimeTileId}`, data)
           } else {
             session.listeners.delete(listener)
           }
@@ -226,13 +249,11 @@ export function registerTerminalIPC(): void {
       }
     })
 
-    term.onExit?.(() => {
-      session.agentLifecycle?.onExit()
-      if (session.agentLifecycle) {
-        agentAlertBridge.unregisterTerminal(tileId)
-        agentAlerts.clearOnDestroy(tileId)
-      }
-    })
+    if (!agentExitGate) {
+      term.onExit?.(() => {
+        session.agentLifecycle?.onExit()
+      })
+    }
 
     if (historySetup?.prependCommand) {
       term.write(`${historySetup.prependCommand}\r`)
@@ -246,17 +267,19 @@ export function registerTerminalIPC(): void {
   })
 
   ipcMain.handle('terminal:write', (_, tileId: string, data: string) => {
-    const session = terminals.get(tileId)
+    const runtimeTileId = resolveTerminalId(tileId)
+    const session = terminals.get(runtimeTileId)
     if (data) {
-      agentAlerts.clearOnInput(tileId)
+      agentAlerts.clearOnInput(runtimeTileId)
       session?.agentLifecycle?.onInput(data)
     }
     session?.pty.write(data)
   })
 
   ipcMain.handle('terminal:acknowledgeAgentAlert', (_, tileId: string) => {
-    agentAlerts.clearOnFocus(tileId)
-    terminals.get(tileId)?.agentLifecycle?.onFocus()
+    const runtimeTileId = resolveTerminalId(tileId)
+    agentAlerts.clearOnFocus(runtimeTileId)
+    terminals.get(runtimeTileId)?.agentLifecycle?.onFocus()
   })
 
   ipcMain.handle('terminal:setAgentAlertsEnabled', (_, enabled: boolean) => {
@@ -265,25 +288,26 @@ export function registerTerminalIPC(): void {
 
   ipcMain.handle('terminal:resize', (_, tileId: string, cols: number, rows: number) => {
     if (cols > 0 && rows > 0) {
-      terminals.get(tileId)?.pty.resize(Math.floor(cols), Math.floor(rows))
+      terminals.get(resolveTerminalId(tileId))?.pty.resize(Math.floor(cols), Math.floor(rows))
     }
   })
 
   ipcMain.handle('terminal:destroy', (_, tileId: string) => {
-    const session = terminals.get(tileId)
+    const runtimeTileId = resolveTerminalId(tileId)
+    const session = terminals.get(runtimeTileId)
     if (session) {
       session.agentLifecycle?.onExit()
       try { session.pty.kill() } catch { /* ignore */ }
-      terminals.delete(tileId)
+      terminals.delete(runtimeTileId)
     }
-    agentAlertBridge.unregisterTerminal(tileId)
-    agentAlerts.clearOnDestroy(tileId)
+    agentAlertBridge.unregisterTerminal(runtimeTileId)
+    agentAlerts.clearOnDestroy(runtimeTileId)
   })
 
   // terminal:detach — disconnects PTY but doesn't kill the process
   // (not used yet, but kept for future session persistence)
   ipcMain.handle('terminal:detach', (event, tileId: string) => {
-    const session = terminals.get(tileId)
+    const session = terminals.get(resolveTerminalId(tileId))
     if (session) {
       session.listeners.delete(event.sender)
     }

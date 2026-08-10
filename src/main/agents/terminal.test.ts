@@ -4,6 +4,7 @@ import test from 'node:test'
 import { AgentSessionRegistry } from './registry'
 import {
   buildAgentTerminalLaunch,
+  createAgentTerminalExitGate,
   createAgentTerminalLifecycle,
 } from './terminal'
 
@@ -92,4 +93,53 @@ test('maps agent alerts, input, and PTY exit into runtime lifecycle without mark
   assert.equal(lifecycle.onExit(), true)
   assert.equal(registry.get('workspace-1', 'tile-4')?.status, 'exited')
   assert.equal(lifecycle.onInput('late input'), false)
+})
+
+test('defers an immediate PTY exit until the runtime session registration is complete', () => {
+  const registry = new AgentSessionRegistry()
+  registry.register({
+    sessionId: 'session-5',
+    tileId: 'tile-5',
+    workspaceId: 'workspace-1',
+    provider: 'claude',
+  })
+  const lifecycle = createAgentTerminalLifecycle({
+    registry,
+    tileId: 'tile-5',
+    workspaceId: 'workspace-1',
+  })
+  const gate = createAgentTerminalExitGate(() => lifecycle.onExit())
+  let registered = false
+  const term = {
+    onExit: (callback: () => void) => {
+      callback()
+      assert.equal(registered, false)
+    },
+  }
+
+  term.onExit(gate.handle)
+  assert.equal(registry.get('workspace-1', 'tile-5')?.status, 'working')
+  registered = true
+  gate.markRegistered()
+  assert.equal(registry.get('workspace-1', 'tile-5')?.status, 'exited')
+})
+
+test('normalizes padded workspace and tile IDs before lifecycle registry calls', () => {
+  const registry = new AgentSessionRegistry()
+  registry.register({
+    sessionId: 'session-6',
+    tileId: 'tile-6',
+    workspaceId: 'workspace-1',
+    provider: 'codex',
+  })
+  const lifecycle = createAgentTerminalLifecycle({
+    registry,
+    tileId: ' tile-6 ',
+    workspaceId: ' workspace-1 ',
+  })
+
+  assert.equal(lifecycle.onAlert({ provider: 'codex', event: 'permission', tileId: ' tile-6 ' }), true)
+  assert.equal(registry.get('workspace-1', 'tile-6')?.status, 'needs-input')
+  assert.equal(lifecycle.onInput('yes\r'), true)
+  assert.equal(registry.get('workspace-1', 'tile-6')?.status, 'working')
 })

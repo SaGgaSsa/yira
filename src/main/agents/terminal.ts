@@ -45,6 +45,13 @@ export interface AgentTerminalLifecycle {
   onExit: () => boolean
 }
 
+export interface AgentTerminalExitGate {
+  /** Attach this callback directly to the PTY before session registration. */
+  handle: () => void
+  /** Complete registration and replay an exit observed during the gap. */
+  markRegistered: () => void
+}
+
 function normalizeCwdValue(value: unknown): string | undefined {
   if (value === undefined) return undefined
   if (typeof value !== 'string' || /[\u0000\u0001-\u001f\u007f]/.test(value)) {
@@ -120,6 +127,34 @@ export function buildAgentTerminalLaunch(input: AgentTerminalLaunchInput): Agent
 }
 
 /**
+ * PTYs can report an exit before the runtime registry has accepted the
+ * session. Hold that signal until registration completes so it cannot be
+ * lost during the launch handoff.
+ */
+export function createAgentTerminalExitGate(onExit: () => void): AgentTerminalExitGate {
+  let registered = false
+  let exited = false
+  let delivered = false
+
+  const deliver = () => {
+    if (delivered) return
+    delivered = true
+    onExit()
+  }
+
+  return {
+    handle: () => {
+      exited = true
+      if (registered) deliver()
+    },
+    markRegistered: () => {
+      registered = true
+      if (exited) deliver()
+    },
+  }
+}
+
+/**
  * Adapt PTY lifecycle signals to the shared runtime registry. Focus clears
  * semantic attention only; it deliberately never changes the session status.
  */
@@ -128,16 +163,21 @@ export function createAgentTerminalLifecycle({
   tileId,
   workspaceId,
 }: AgentTerminalLifecycleOptions): AgentTerminalLifecycle {
+  const normalizedTileId = normalizeAgentOpaqueId(tileId)
+  const normalizedWorkspaceId = normalizeAgentOpaqueId(workspaceId)
+  if (!normalizedTileId) throw new Error('Invalid agent tile id')
+  if (!normalizedWorkspaceId) throw new Error('Invalid agent workspace id')
+
   let exited = false
 
   return {
-    onAlert: (alert: unknown) => registry.reportAgentAlert(alert, workspaceId),
-    onInput: (data: string) => data.length > 0 && registry.recordActivity(workspaceId, tileId),
-    onFocus: () => registry.alerts.clearOnFocus(tileId),
+    onAlert: (alert: unknown) => registry.reportAgentAlert(alert, normalizedWorkspaceId),
+    onInput: (data: string) => data.length > 0 && registry.recordActivity(normalizedWorkspaceId, normalizedTileId),
+    onFocus: () => registry.alerts.clearOnFocus(normalizedTileId),
     onExit: () => {
       if (exited) return false
       exited = true
-      return registry.markExited(workspaceId, tileId)
+      return registry.markExited(normalizedWorkspaceId, normalizedTileId)
     },
   }
 }
