@@ -20,6 +20,10 @@ export function normalizeSourceControlViewMode(value: unknown): SourceControlVie
   return value === 'tree' ? 'tree' : 'list'
 }
 
+export function normalizeWorkspaceAgentProvider(value: unknown): AgentProvider | undefined {
+  return value === 'claude' || value === 'codex' ? value : undefined
+}
+
 function normalizeRemoteTerminal(value: Partial<RemoteTerminalConfig> | undefined): RemoteTerminalConfig | undefined {
   const host = typeof value?.host === 'string' ? value.host.trim() : undefined
   const user = typeof value?.user === 'string' ? value.user.trim() : undefined
@@ -109,6 +113,7 @@ export function normalizeWorkspaceConfig(config: WorkspaceConfigInput | undefine
     initialCommand: initialCommand || undefined,
     terminalHistoryEnabled: config?.terminalHistoryEnabled !== false,
     remoteTerminal: normalizeRemoteTerminal(config?.remoteTerminal),
+    agentProvider: normalizeWorkspaceAgentProvider(config?.agentProvider),
     agentProviders: normalizeAgentProvidersConfig(config?.agentProviders),
   }
 }

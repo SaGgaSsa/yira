@@ -203,7 +203,10 @@ type TranslationResources = {
     linuxUser: string
     sshPort: string
     terminalHistory: string
+    agentProvider: string
     agentProviders: string
+    noAgentProvider: string
+    agentProviderHelp: string
     claude: string
     codex: string
     agentProviderArgs: string
@@ -542,7 +545,10 @@ const en: TranslationResources = {
     linuxUser: 'Linux user',
     sshPort: 'SSH port',
     terminalHistory: 'Workspace terminal history',
+    agentProvider: 'Agent provider',
     agentProviders: 'Agent providers',
+    noAgentProvider: 'No agent provider',
+    agentProviderHelp: 'Choose one provider for this workspace. Its arguments stay saved when you switch providers.',
     claude: 'Claude',
     codex: 'Codex',
     agentProviderArgs: 'Arguments (one per line)',
@@ -881,7 +887,10 @@ const es: TranslationResources = {
     linuxUser: 'Usuario de Linux',
     sshPort: 'Puerto SSH',
     terminalHistory: 'Historial de terminal del espacio de trabajo',
+    agentProvider: 'Proveedor de agente',
     agentProviders: 'Proveedores de agentes',
+    noAgentProvider: 'Sin proveedor de agente',
+    agentProviderHelp: 'Elige un proveedor para este espacio de trabajo. Sus argumentos se conservan al cambiar de proveedor.',
     claude: 'Claude',
     codex: 'Codex',
     agentProviderArgs: 'Argumentos (uno por línea)',

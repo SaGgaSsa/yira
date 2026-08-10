@@ -156,10 +156,12 @@ export interface WorkspaceConfig {
   initialCommand?: string
   terminalHistoryEnabled?: boolean
   remoteTerminal?: RemoteTerminalConfig
+  agentProvider?: AgentProvider
   agentProviders: AgentProvidersConfig
 }
 
 export type WorkspaceConfigInput = Omit<Partial<WorkspaceConfig>, 'agentProviders'> & {
+  agentProvider?: AgentProvider
   agentProviders?: AgentProvidersConfigInput
 }
 
@@ -172,6 +174,7 @@ export interface WorkspaceCreateInput {
   initialCommand?: string
   terminalHistoryEnabled?: boolean
   remoteTerminal?: RemoteTerminalConfig
+  agentProvider?: AgentProvider
   agentProviders?: AgentProvidersConfigInput
 }
 
@@ -185,6 +188,7 @@ export interface WorkspaceManagementEntry {
   initialCommand?: string
   terminalHistoryEnabled?: boolean
   remoteTerminal?: RemoteTerminalConfig
+  agentProvider?: AgentProvider
   agentProviders?: AgentProvidersConfigInput
 }
 

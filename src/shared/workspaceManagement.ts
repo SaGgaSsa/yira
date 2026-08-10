@@ -73,6 +73,7 @@ export function applyWorkspaceManagementChanges({
         initialCommand: entry.initialCommand,
         terminalHistoryEnabled: entry.terminalHistoryEnabled,
         remoteTerminal: entry.remoteTerminal,
+        agentProvider: entry.agentProvider,
         agentProviders: mergeAgentProvidersConfig(existing.config.agentProviders, entry.agentProviders),
       })
 
@@ -91,6 +92,7 @@ export function applyWorkspaceManagementChanges({
       initialCommand: entry.initialCommand,
       terminalHistoryEnabled: entry.terminalHistoryEnabled,
       remoteTerminal: entry.remoteTerminal,
+      agentProvider: entry.agentProvider,
       agentProviders: entry.agentProviders,
     })
 

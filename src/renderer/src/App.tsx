@@ -710,6 +710,7 @@ export default function App(): React.ReactElement {
             initialCommand: '',
             terminalHistoryEnabled: true,
             remoteTerminal: { host: '', user: '' },
+            agentProvider: undefined,
             agentProviders: createDefaultAgentProvidersConfig(),
           },
         },
@@ -951,6 +952,7 @@ export default function App(): React.ReactElement {
           initialCommand: workspace.config.initialCommand ?? '',
           terminalHistoryEnabled: workspace.config.terminalHistoryEnabled !== false,
           remoteTerminal: workspace.config.remoteTerminal ?? { host: '', user: '' },
+          agentProvider: workspace.config.agentProvider,
           agentProviders: workspace.config.agentProviders,
         },
       },
@@ -1489,6 +1491,7 @@ export default function App(): React.ReactElement {
         initialCommand: value.initialCommand || undefined,
         terminalHistoryEnabled: value.terminalHistoryEnabled,
         remoteTerminal: value.remoteTerminal,
+        agentProvider: value.agentProvider,
         agentProviders: value.agentProviders,
       })
       await refreshWorkspaceMetadata()
@@ -1504,6 +1507,7 @@ export default function App(): React.ReactElement {
         initialCommand: value.initialCommand || undefined,
         terminalHistoryEnabled: value.terminalHistoryEnabled,
         remoteTerminal: value.remoteTerminal,
+        agentProvider: value.agentProvider,
         agentProviders: value.agentProviders,
       },
     })
@@ -1561,6 +1565,7 @@ export default function App(): React.ReactElement {
             initialCommand: '',
             terminalHistoryEnabled: true,
             remoteTerminal: { host: '', user: '' },
+            agentProvider: undefined,
             agentProviders: createDefaultAgentProvidersConfig(),
           },
         },
@@ -1593,6 +1598,7 @@ export default function App(): React.ReactElement {
           initialCommand: '',
           terminalHistoryEnabled: true,
           remoteTerminal: { host: '', user: '' },
+          agentProvider: undefined,
           agentProviders: createDefaultAgentProvidersConfig(),
         },
       },

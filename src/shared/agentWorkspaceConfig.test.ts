@@ -3,22 +3,26 @@ import { normalizeWorkspaceConfig } from './workspaceConfig'
 import type { AgentProvider, Workspace } from './types'
 
 const defaultConfig = normalizeWorkspaceConfig({})
-if (defaultConfig.agentProviders.claude.enabled !== true) {
-  throw new Error('Claude must be enabled by default')
-}
-if (defaultConfig.agentProviders.codex.enabled !== true) {
-  throw new Error('Codex must be enabled by default')
+if (defaultConfig.agentProvider !== undefined) {
+  throw new Error('default workspace config must not select an agent provider')
 }
 if (defaultConfig.agentProviders.claude.args.length !== 0 || defaultConfig.agentProviders.codex.args.length !== 0) {
   throw new Error('default agent provider arguments must be empty')
 }
 
 const legacy = normalizeWorkspaceConfig({
-  type: 'canvas',
-  rootFolderPath: '/repo',
+  agentProviders: {
+    claude: { enabled: true, args: ['--model', 'haiku'] },
+    codex: { enabled: false, args: ['--profile', 'work'] },
+  },
 })
-if (legacy.agentProviders.claude.args.length !== 0 || legacy.agentProviders.codex.args.length !== 0) {
-  throw new Error('legacy workspace config must migrate to empty provider arguments')
+if (legacy.agentProvider !== undefined) {
+  throw new Error('legacy workspace config must not select an agent provider')
+}
+
+const configured = normalizeWorkspaceConfig({ agentProvider: 'codex' })
+if (configured.agentProvider !== 'codex') {
+  throw new Error('explicit workspace agent selection must be preserved')
 }
 
 const normalized = normalizeWorkspaceConfig({
@@ -35,16 +39,20 @@ if (normalized.agentProviders.codex.args.join('|') !== '--profile|work') {
   throw new Error('Codex arguments must be trimmed')
 }
 
-function workspace(id: string, agentProviders?: Workspace['config']['agentProviders']): Workspace {
+function workspace(
+  id: string,
+  agentProvider?: AgentProvider,
+  agentProviders?: Workspace['config']['agentProviders'],
+): Workspace {
   return {
     id,
     name: id,
     path: `/tmp/yira/workspaces/${id}`,
-    config: normalizeWorkspaceConfig({ agentProviders }),
+    config: normalizeWorkspaceConfig({ agentProvider, agentProviders }),
   }
 }
 
-const existing = workspace('existing', {
+const existing = workspace('existing', 'claude', {
   claude: { enabled: false, args: ['--model', 'haiku'] },
   codex: { enabled: true, args: ['--profile', 'work'] },
 })
@@ -55,6 +63,7 @@ const managed = applyWorkspaceManagementChanges({
     {
       id: existing.id,
       name: 'Renamed',
+      agentProvider: 'claude',
       agentProviders: {
         claude: { enabled: true, args: ['--model', 'opus'] },
         codex: { enabled: false, args: [] },
@@ -71,8 +80,11 @@ if (managed.workspaces[0].config.agentProviders.claude.args.join('|') !== '--mod
 if (managed.workspaces[0].config.agentProviders.codex.enabled !== false) {
   throw new Error('workspace management must persist provider enabled state')
 }
-if (managed.workspaces[1].config.agentProviders.claude.enabled !== true || managed.workspaces[1].config.agentProviders.codex.enabled !== true) {
-  throw new Error('new workspaces must receive enabled provider defaults')
+if (managed.workspaces[0].config.agentProvider !== 'claude') {
+  throw new Error('workspace management must persist selected agent provider')
+}
+if (managed.workspaces[1].config.agentProvider !== undefined) {
+  throw new Error('new workspaces must not select an agent provider by default')
 }
 
 const partialManaged = applyWorkspaceManagementChanges({

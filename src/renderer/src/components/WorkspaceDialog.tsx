@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { FolderOpen, Grid3X3, History, Info, LayoutGrid, TerminalSquare, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { AgentProvider, AgentProvidersConfig, RemoteTerminalConfig, WorkspaceType } from '@shared/types'
-import { normalizeAgentProvidersConfig } from '@shared/workspaceConfig'
+import { normalizeAgentProvidersConfig, normalizeWorkspaceAgentProvider } from '@shared/workspaceConfig'
 
 export interface WorkspaceDialogValue {
   type: WorkspaceType
@@ -12,6 +12,7 @@ export interface WorkspaceDialogValue {
   initialCommand: string
   terminalHistoryEnabled: boolean
   remoteTerminal: RemoteTerminalConfig
+  agentProvider?: AgentProvider
   agentProviders: AgentProvidersConfig
 }
 
@@ -43,6 +44,7 @@ function normalizeValue(value: WorkspaceDialogValue): WorkspaceDialogValue {
       user: value.remoteTerminal.user.trim(),
       ...(value.remoteTerminal.port === undefined ? {} : { port: value.remoteTerminal.port }),
     },
+    agentProvider: normalizeWorkspaceAgentProvider(value.agentProvider),
     agentProviders: normalizeAgentProvidersConfig(value.agentProviders),
   }
 }
@@ -92,16 +94,21 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
   const canCancel = request.canCancel !== false
   const canSubmit = Boolean(value.name.trim())
   const typeEditable = request.typeEditable === true
-  const providerEntries: AgentProvider[] = ['claude', 'codex']
+  const providerOptions: Array<{ provider: AgentProvider | undefined; label: string }> = [
+    { provider: undefined, label: t('workspace.noAgentProvider') },
+    { provider: 'claude', label: t('workspace.claude') },
+    { provider: 'codex', label: t('workspace.codex') },
+  ]
+  const selectedProvider = value.agentProvider
 
-  const updateProvider = (provider: AgentProvider, patch: Partial<AgentProvidersConfig[AgentProvider]>) => {
+  const updateProviderArgs = (provider: AgentProvider, args: string[]) => {
     setValue((current) => current ? {
       ...current,
       agentProviders: {
         ...current.agentProviders,
         [provider]: {
           ...current.agentProviders[provider],
-          ...patch,
+          args,
         },
       },
     } : current)
@@ -225,40 +232,44 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
           <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
             <div className="mb-4 flex items-center gap-2">
               <TerminalSquare size={14} className="text-text-secondary" />
-              <span className="nd-label text-text-secondary">{t('workspace.agentProviders')}</span>
+              <span className="nd-label text-text-secondary">{t('workspace.agentProvider')}</span>
             </div>
-            <div className="space-y-3">
-              {providerEntries.map((provider) => {
-                const providerConfig = value.agentProviders[provider]
-                const providerLabel = provider === 'claude' ? t('workspace.claude') : t('workspace.codex')
+            <p className="mb-4 text-sm leading-6 text-text-secondary">{t('workspace.agentProviderHelp')}</p>
+            <div className="space-y-3" role="radiogroup" aria-label={t('workspace.agentProvider')}>
+              {providerOptions.map((option) => {
+                const active = selectedProvider === option.provider
                 return (
-                  <div key={provider} className="rounded-[18px] border border-border-visible bg-bg-primary px-4 py-3">
-                    <label className="flex items-center justify-between gap-4">
-                      <span className="text-sm text-text-display">{providerLabel}</span>
-                      <input
-                        type="checkbox"
-                        className="h-5 w-5 shrink-0 accent-[var(--text-primary)]"
-                        checked={providerConfig.enabled}
-                        onChange={(event) => updateProvider(provider, { enabled: event.target.checked })}
-                      />
-                    </label>
-                    <label className="mt-3 block">
-                      <span className="nd-label mb-2 block text-text-secondary">{t('workspace.agentProviderArgs')}</span>
-                      <textarea
-                        className="min-h-[72px] w-full resize-y rounded-[14px] border border-border-visible bg-bg-secondary px-3 py-2 font-mono text-xs text-text-display outline-none"
-                        value={providerConfig.args.join('\n')}
-                        onChange={(event) => updateProvider(provider, {
-                          args: event.target.value.split(/\r?\n/),
-                        })}
-                        placeholder={t('workspace.agentProviderArgsPlaceholder')}
-                        spellCheck={false}
-                        aria-label={`${providerLabel} ${t('workspace.agentProviderArgs')}`}
-                      />
-                    </label>
-                  </div>
+                  <label
+                    key={option.provider ?? 'none'}
+                    className={`flex cursor-pointer items-center gap-3 rounded-[18px] border px-4 py-3 transition-colors ${
+                      active ? 'border-text-display bg-bg-primary text-text-display' : 'border-border-visible text-text-secondary hover:bg-hover-bg hover:text-text-display'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="workspace-agent-provider"
+                      className="h-4 w-4 shrink-0 accent-[var(--text-primary)]"
+                      checked={active}
+                      onChange={() => setValue((current) => current ? { ...current, agentProvider: option.provider } : current)}
+                    />
+                    <span className="text-sm">{option.label}</span>
+                  </label>
                 )
               })}
             </div>
+            {selectedProvider && (
+              <label className="mt-4 block">
+                <span className="nd-label mb-2 block text-text-secondary">{t('workspace.agentProviderArgs')}</span>
+                <textarea
+                  className="min-h-[72px] w-full resize-y rounded-[14px] border border-border-visible bg-bg-secondary px-3 py-2 font-mono text-xs text-text-display outline-none"
+                  value={value.agentProviders[selectedProvider].args.join('\n')}
+                  onChange={(event) => updateProviderArgs(selectedProvider, event.target.value.split(/\r?\n/))}
+                  placeholder={t('workspace.agentProviderArgsPlaceholder')}
+                  spellCheck={false}
+                  aria-label={`${selectedProvider === 'claude' ? t('workspace.claude') : t('workspace.codex')} ${t('workspace.agentProviderArgs')}`}
+                />
+              </label>
+            )}
           </section>
 
           <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
