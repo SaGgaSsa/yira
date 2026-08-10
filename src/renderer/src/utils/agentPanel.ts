@@ -40,10 +40,11 @@ export function shouldRequestAgentData(selectedProvider: AgentProvider | undefin
 /** Filter a runtime snapshot to the selected provider, or hide it when unset. */
 export function filterAgentSessions(
   snapshot: AgentActiveSessionSnapshot,
+  workspaceId: string,
   selectedProvider: AgentProvider | undefined,
 ): AgentActiveSessionSnapshot['sessions'] {
   if (!shouldRequestAgentData(selectedProvider)) return []
-  return snapshot.sessions.filter((session) => session.provider === selectedProvider)
+  return snapshot.sessions.filter((session) => session.workspaceId === workspaceId && session.provider === selectedProvider)
 }
 
 /** Build the restricted bridge query used by the Agents panel. */

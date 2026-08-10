@@ -111,6 +111,7 @@ export function WorkspacePanel({
         {tab === 'explorer' && <WorkspaceExplorer rootPath={rootPath} activeFilePath={activeFilePath} onOpenFile={onOpenFile} />}
         {tab === 'agents' && (
           <AgentPanel
+            key={`${workspaceId}:${agentProvider ?? 'none'}`}
             workspaceId={workspaceId}
             selectedProvider={agentProvider}
             agentProviders={agentProviders}

@@ -243,12 +243,12 @@ export function AgentPanel({
     sessionSubscriptionRef.current = subscription
 
     const removeListener = window.electron.agents.onSessionsChanged((snapshot) => {
-      if (!cancelled) setSessions(filterAgentSessions(snapshot, selectedProvider))
+      if (!cancelled) setSessions(filterAgentSessions(snapshot, workspaceId, selectedProvider))
     })
 
     void window.electron.agents.sessionsSnapshot(workspaceId)
       .then((snapshot) => {
-        if (!cancelled) setSessions(filterAgentSessions(snapshot, selectedProvider))
+        if (!cancelled) setSessions(filterAgentSessions(snapshot, workspaceId, selectedProvider))
       })
       .catch(() => {
         if (!cancelled) setSessions([])

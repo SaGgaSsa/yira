@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 
 const source = readFileSync(new URL('./AgentPanel.tsx', import.meta.url), 'utf8')
+const workspacePanelSource = readFileSync(new URL('./WorkspacePanel.tsx', import.meta.url), 'utf8')
 
 for (const requiredBridgeCall of [
   'window.electron.agents.availability()',
@@ -42,3 +43,4 @@ if (!source.includes('resumeDisabled={!canResume(item.provider)}')) throw new Er
 if (!source.includes('}, [historySearch, workspaceId, selectedProvider])')) throw new Error('search changes must invalidate in-flight history requests')
 if (!source.includes('sessionSubscriptionRef')) throw new Error('session cleanup must be tied to a subscription generation')
 if (!source.includes('sessionSubscriptionRef.current !== subscription')) throw new Error('stale subscription cleanup must not unsubscribe a newer subscription')
+if (!workspacePanelSource.includes('key={`${workspaceId}:${agentProvider ?? \'none\'}`}')) throw new Error('Agents panel must remount when its workspace provider scope changes')

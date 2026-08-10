@@ -61,7 +61,7 @@ test('agent data requests require a selected provider', () => {
   assert.equal(shouldRequestAgentData('claude'), true)
 })
 
-test('filterAgentSessions keeps only the selected provider and hides unselected data', () => {
+test('filterAgentSessions keeps only the selected provider in the current workspace', () => {
   const snapshot: AgentActiveSessionSnapshot = {
     sessions: [
       {
@@ -82,11 +82,21 @@ test('filterAgentSessions keeps only the selected provider and hides unselected 
         startedAt: '2026-08-10T12:00:00.000Z',
         lastActivityAt: '2026-08-10T12:01:00.000Z',
       },
+      {
+        sessionId: 'other-workspace-session',
+        tileId: 'other-workspace-tile',
+        workspaceId: 'workspace-2',
+        provider: 'claude',
+        status: 'working',
+        startedAt: '2026-08-10T12:00:00.000Z',
+        lastActivityAt: '2026-08-10T12:01:00.000Z',
+      },
     ],
   }
 
-  assert.deepEqual(filterAgentSessions(snapshot, 'claude'), [snapshot.sessions[0]])
-  assert.deepEqual(filterAgentSessions(snapshot, undefined), [])
+  assert.deepEqual(filterAgentSessions(snapshot, 'workspace-1', 'claude'), [snapshot.sessions[0]])
+  assert.deepEqual(filterAgentSessions(snapshot, 'workspace-2', 'claude'), [snapshot.sessions[2]])
+  assert.deepEqual(filterAgentSessions(snapshot, 'workspace-1', undefined), [])
 })
 
 test('sanitizeAgentCwd only returns safe workspace-relative paths', () => {
