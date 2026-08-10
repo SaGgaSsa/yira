@@ -13,6 +13,7 @@ import { registerGitIPC } from './ipc/git'
 import { clearWindowAttention, registerNotificationIPC } from './ipc/notifications'
 import { registerWindowIPC, type WindowClosePreparationBridge } from './ipc/window'
 import { registerFloatingTilesIPC } from './ipc/floatingTiles'
+import { registerAgentsIPC } from './ipc/agents'
 import { APP_ID, APP_NAME, DEV_APP_NAME, YIRA_HOME } from './paths'
 import { registerUpdateIPC, scheduleStartupUpdateCheck } from './updater'
 import { loadWindowState, saveWindowState } from './windowState'
@@ -188,6 +189,7 @@ app.whenReady().then(async () => {
 
   // Register all IPC handlers
   registerWorkspaceIPC()
+  registerAgentsIPC()
   registerCanvasIPC()
   registerTerminalIPC()
   registerSettingsIPC()

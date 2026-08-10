@@ -31,6 +31,10 @@ import type {
   FloatingNavigationRequest,
   GitCommitHistoryResult,
   GitStatusResult,
+  AgentActiveSessionSnapshot,
+  AgentProviderAvailabilitySnapshot,
+  AgentSessionHistoryQuery,
+  AgentSessionHistoryResult,
   NoteBlocks,
   MarkdownViewMode,
   NoteKind,
@@ -59,6 +63,17 @@ interface ElectronWorld {
     getActive: () => Promise<Workspace | null>
     openFolder: () => Promise<WorkspaceOpenFolderResult>
     commitManagementChanges: (input: WorkspaceManagementCommitInput) => Promise<WorkspaceManagementCommitResult>
+  }
+  agents: {
+    availability: () => Promise<AgentProviderAvailabilitySnapshot>
+    getAvailability: () => Promise<AgentProviderAvailabilitySnapshot>
+    sessionsSnapshot: (workspaceId?: string) => Promise<AgentActiveSessionSnapshot>
+    getSessions: (workspaceId?: string) => Promise<AgentActiveSessionSnapshot>
+    subscribeSessions: (workspaceId?: string) => Promise<boolean>
+    unsubscribeSessions: () => Promise<boolean>
+    onSessionsChanged: (callback: (snapshot: AgentActiveSessionSnapshot) => void) => () => void
+    history: (query?: AgentSessionHistoryQuery) => Promise<AgentSessionHistoryResult>
+    queryHistory: (query?: AgentSessionHistoryQuery) => Promise<AgentSessionHistoryResult>
   }
   settings: {
     load: () => Promise<UserSettings | null>

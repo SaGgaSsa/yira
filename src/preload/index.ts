@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { BoardTask, FileListOptions, FileSearchResult, FileWriteInput, FloatingNavigationEvent, FloatingNavigationRequest, GitCommitHistoryResult, GitStatusResult, NotificationAttentionOptions, TerminalCreateOptions, UpdateState, WindowBounds, WindowClosePreparationRequest, WindowClosePreparationResponse, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
+import type { AgentActiveSessionSnapshot, AgentProviderAvailabilitySnapshot, AgentSessionHistoryQuery, AgentSessionHistoryResult, BoardTask, FileListOptions, FileSearchResult, FileWriteInput, FloatingNavigationEvent, FloatingNavigationRequest, GitCommitHistoryResult, GitStatusResult, NotificationAttentionOptions, TerminalCreateOptions, UpdateState, WindowBounds, WindowClosePreparationRequest, WindowClosePreparationResponse, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
 import { createSerialTaskQueue } from '@shared/serialTaskQueue'
 
 console.log('[preload] Loading...')
@@ -20,6 +20,28 @@ contextBridge.exposeInMainWorld('electron', {
     openFolder: () => ipcRenderer.invoke('workspace:openFolder'),
     commitManagementChanges: (input: WorkspaceManagementCommitInput) =>
       ipcRenderer.invoke('workspace:commitManagementChanges', input),
+  },
+
+  // Agent sessions and bounded local history
+  agents: {
+    availability: () => ipcRenderer.invoke('agents:availability') as Promise<AgentProviderAvailabilitySnapshot>,
+    getAvailability: () => ipcRenderer.invoke('agents:availability') as Promise<AgentProviderAvailabilitySnapshot>,
+    sessionsSnapshot: (workspaceId?: string) =>
+      ipcRenderer.invoke('agents:sessions:snapshot', workspaceId) as Promise<AgentActiveSessionSnapshot>,
+    getSessions: (workspaceId?: string) =>
+      ipcRenderer.invoke('agents:sessions:snapshot', workspaceId) as Promise<AgentActiveSessionSnapshot>,
+    subscribeSessions: (workspaceId?: string) =>
+      ipcRenderer.invoke('agents:sessions:subscribe', workspaceId) as Promise<boolean>,
+    unsubscribeSessions: () => ipcRenderer.invoke('agents:sessions:unsubscribe') as Promise<boolean>,
+    onSessionsChanged: (callback: (snapshot: AgentActiveSessionSnapshot) => void) => {
+      const handler = (_event: unknown, snapshot: AgentActiveSessionSnapshot) => callback(snapshot)
+      ipcRenderer.on('agents:sessions:changed', handler)
+      return () => ipcRenderer.removeListener('agents:sessions:changed', handler)
+    },
+    history: (query?: AgentSessionHistoryQuery) =>
+      ipcRenderer.invoke('agents:history', query) as Promise<AgentSessionHistoryResult>,
+    queryHistory: (query?: AgentSessionHistoryQuery) =>
+      ipcRenderer.invoke('agents:history', query) as Promise<AgentSessionHistoryResult>,
   },
 
   // Settings

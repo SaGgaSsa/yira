@@ -84,6 +84,45 @@ export interface AgentHistoryResult {
   hasMore: boolean
 }
 
+/**
+ * Safe, renderer-facing metadata for one provider transcript.
+ *
+ * The main process deliberately returns no transcript path or message body;
+ * title and preview are bounded snippets derived from the local transcript.
+ */
+export interface AgentSessionHistoryItem {
+  identifier: string
+  provider: AgentProvider
+  cwd?: string
+  startedAt: string
+  lastActivityAt: string
+  title?: string
+  preview?: string
+  model?: string
+  messageCount: number
+}
+
+export interface AgentSessionHistoryResult {
+  items: AgentSessionHistoryItem[]
+  hasMore: boolean
+}
+
+export interface AgentSessionHistoryQuery {
+  workspaceId?: string
+  provider?: AgentProvider
+  search?: string
+  limit?: number
+}
+
+export interface AgentProviderAvailability {
+  provider: AgentProvider
+  command: string
+  configured: boolean
+  available: boolean
+}
+
+export type AgentProviderAvailabilitySnapshot = Record<AgentProvider, AgentProviderAvailability>
+
 // ─── Workspace ─────────────────────────────────────────────────────────────
 
 export type WorkspaceType = 'canvas' | 'grid'
