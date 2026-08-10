@@ -45,6 +45,40 @@ type TranslationResources = {
     collapse: string
     open: string
   }
+  agents: {
+    title: string
+    newSession: string
+    available: string
+    unavailable: string
+    disabled: string
+    loading: string
+    running: string
+    noRunning: string
+    history: string
+    loadHistory: string
+    refreshHistory: string
+    scope: string
+    workspace: string
+    allLocal: string
+    searchPlaceholder: string
+    idleHistory: string
+    loadingHistory: string
+    historyError: string
+    noHistory: string
+    noSearchResults: string
+    historyMore: string
+    resume: string
+    openSettings: string
+    setupDescription: string
+    noShell: string
+    unknownTitle: string
+    unknownDate: string
+    cwdUnavailable: string
+    model: string
+    messages: string
+    started: string
+    lastActivity: string
+  }
   settings: {
     active: string
     agentAlerts: string
@@ -349,6 +383,40 @@ const en: TranslationResources = {
     collapse: 'Collapse sidebar',
     open: 'Open sidebar',
   },
+  agents: {
+    title: 'Agents',
+    newSession: 'New agent session',
+    available: 'Available',
+    unavailable: 'Unavailable',
+    disabled: 'Disabled in workspace',
+    loading: 'Checking…',
+    running: 'Running sessions',
+    noRunning: 'No running agent sessions',
+    history: 'History',
+    loadHistory: 'Load history',
+    refreshHistory: 'Refresh history',
+    scope: 'Scope',
+    workspace: 'Workspace',
+    allLocal: 'All local',
+    searchPlaceholder: 'Search title or preview',
+    idleHistory: 'History is loaded on demand.',
+    loadingHistory: 'Loading local history…',
+    historyError: 'Unable to load local history.',
+    noHistory: 'No agent history found.',
+    noSearchResults: 'No history matches this search.',
+    historyMore: 'More local sessions are available.',
+    resume: 'Resume',
+    openSettings: 'Open Settings',
+    setupDescription: 'Install or configure a provider, then refresh availability.',
+    noShell: 'No available shell profile can launch an agent.',
+    unknownTitle: 'Untitled session',
+    unknownDate: 'Unknown date',
+    cwdUnavailable: 'cwd unavailable',
+    model: 'Model',
+    messages: 'Messages',
+    started: 'Started',
+    lastActivity: 'Last activity',
+  },
   settings: {
     active: 'ACTIVE',
     agentAlerts: 'Agent alerts',
@@ -652,6 +720,40 @@ const es: TranslationResources = {
     workspaceActions: 'Acciones del espacio de trabajo',
     collapse: 'Contraer barra lateral',
     open: 'Abrir barra lateral',
+  },
+  agents: {
+    title: 'Agentes',
+    newSession: 'Nueva sesión de agente',
+    available: 'Disponible',
+    unavailable: 'No disponible',
+    disabled: 'Desactivado en el espacio de trabajo',
+    loading: 'Comprobando…',
+    running: 'Sesiones activas',
+    noRunning: 'No hay sesiones de agentes activas',
+    history: 'Historial',
+    loadHistory: 'Cargar historial',
+    refreshHistory: 'Actualizar historial',
+    scope: 'Ámbito',
+    workspace: 'Espacio de trabajo',
+    allLocal: 'Todo local',
+    searchPlaceholder: 'Buscar título o vista previa',
+    idleHistory: 'El historial se carga bajo demanda.',
+    loadingHistory: 'Cargando historial local…',
+    historyError: 'No se pudo cargar el historial local.',
+    noHistory: 'No se encontró historial de agentes.',
+    noSearchResults: 'Ningún historial coincide con esta búsqueda.',
+    historyMore: 'Hay más sesiones locales disponibles.',
+    resume: 'Reanudar',
+    openSettings: 'Abrir configuración',
+    setupDescription: 'Instala o configura un proveedor y actualiza su disponibilidad.',
+    noShell: 'No hay un perfil de shell disponible para iniciar un agente.',
+    unknownTitle: 'Sesión sin título',
+    unknownDate: 'Fecha desconocida',
+    cwdUnavailable: 'cwd no disponible',
+    model: 'Modelo',
+    messages: 'Mensajes',
+    started: 'Inicio',
+    lastActivity: 'Última actividad',
   },
   settings: {
     active: 'ACTIVO',

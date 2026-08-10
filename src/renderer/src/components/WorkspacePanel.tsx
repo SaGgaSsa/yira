@@ -1,5 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import type { SourceControlViewMode, Workspace } from '@shared/types'
+import type {
+  AgentProvidersConfig,
+  ShellProfileId,
+  SourceControlViewMode,
+  TerminalAgentMetadata,
+  TileState,
+  Workspace,
+} from '@shared/types'
+import { AgentPanel } from './AgentPanel'
 import { WorkspaceExplorer } from './WorkspaceExplorer'
 import { WorkspaceSourceControl } from './WorkspaceSourceControl'
 
@@ -16,9 +24,30 @@ interface WorkspacePanelProps {
   onWorkspaceUpdated: (workspace: Workspace) => void
   activeFilePath: string | null
   onOpenFile: (relativePath: string) => Promise<void>
+  agentProviders: AgentProvidersConfig
+  availableProfiles: Array<{ id: ShellProfileId; label: string; available: boolean }>
+  tiles: TileState[]
+  terminalTitles: Record<string, string>
+  addTerminal: (profileId: ShellProfileId, agent?: TerminalAgentMetadata) => string | null
+  onFocusTile: (tileId: string) => void
+  onOpenSettings: () => void
 }
 
-export function WorkspacePanel({ rootPath, workspaceId, sourceControlViewMode, onWorkspaceUpdated, activeFilePath, onOpenFile }: WorkspacePanelProps): React.ReactElement {
+export function WorkspacePanel({
+  rootPath,
+  workspaceId,
+  sourceControlViewMode,
+  onWorkspaceUpdated,
+  activeFilePath,
+  onOpenFile,
+  agentProviders,
+  availableProfiles,
+  tiles,
+  terminalTitles,
+  addTerminal,
+  onFocusTile,
+  onOpenSettings,
+}: WorkspacePanelProps): React.ReactElement {
   const [width, setWidth] = useState(PANEL_DEFAULT)
   const [resizing, setResizing] = useState(false)
   const [tab, setTab] = useState<WorkspacePanelTab>('explorer')
@@ -77,6 +106,18 @@ export function WorkspacePanel({ rootPath, workspaceId, sourceControlViewMode, o
       </div>
       <div className="min-h-0 flex-1">
         {tab === 'explorer' && <WorkspaceExplorer rootPath={rootPath} activeFilePath={activeFilePath} onOpenFile={onOpenFile} />}
+        {tab === 'agents' && (
+          <AgentPanel
+            workspaceId={workspaceId}
+            agentProviders={agentProviders}
+            availableProfiles={availableProfiles}
+            tiles={tiles}
+            terminalTitles={terminalTitles}
+            addTerminal={addTerminal}
+            onFocusTile={onFocusTile}
+            onOpenSettings={onOpenSettings}
+          />
+        )}
         {tab === 'source-control' && (
           <WorkspaceSourceControl
             workspaceId={workspaceId}

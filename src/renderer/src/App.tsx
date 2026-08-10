@@ -2285,6 +2285,13 @@ export default function App(): React.ReactElement {
                   onWorkspaceUpdated={handleWorkspaceConfigUpdated}
                   activeFilePath={activeFilePath}
                   onOpenFile={openFileTile}
+                  agentProviders={activeWorkspaceConfig.agentProviders}
+                  availableProfiles={availableProfiles}
+                  tiles={tiles}
+                  terminalTitles={terminalTitles}
+                  addTerminal={addTerminal}
+                  onFocusTile={focusTile}
+                  onOpenSettings={() => setShowSettings(true)}
                 />
               )}
             </div>
