@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { FolderOpen, Grid3X3, History, Info, LayoutGrid, TerminalSquare, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import type { RemoteTerminalConfig, WorkspaceType } from '@shared/types'
+import type { AgentProvider, AgentProvidersConfig, RemoteTerminalConfig, WorkspaceType } from '@shared/types'
+import { normalizeAgentProvidersConfig } from '@shared/workspaceConfig'
 
 export interface WorkspaceDialogValue {
   type: WorkspaceType
@@ -11,6 +12,7 @@ export interface WorkspaceDialogValue {
   initialCommand: string
   terminalHistoryEnabled: boolean
   remoteTerminal: RemoteTerminalConfig
+  agentProviders: AgentProvidersConfig
 }
 
 export interface WorkspaceDialogRequest {
@@ -41,6 +43,7 @@ function normalizeValue(value: WorkspaceDialogValue): WorkspaceDialogValue {
       user: value.remoteTerminal.user.trim(),
       ...(value.remoteTerminal.port === undefined ? {} : { port: value.remoteTerminal.port }),
     },
+    agentProviders: normalizeAgentProvidersConfig(value.agentProviders),
   }
 }
 
@@ -89,6 +92,20 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
   const canCancel = request.canCancel !== false
   const canSubmit = Boolean(value.name.trim())
   const typeEditable = request.typeEditable === true
+  const providerEntries: AgentProvider[] = ['claude', 'codex']
+
+  const updateProvider = (provider: AgentProvider, patch: Partial<AgentProvidersConfig[AgentProvider]>) => {
+    setValue((current) => current ? {
+      ...current,
+      agentProviders: {
+        ...current.agentProviders,
+        [provider]: {
+          ...current.agentProviders[provider],
+          ...patch,
+        },
+      },
+    } : current)
+  }
 
   return createPortal(
     <div className="fixed inset-0 z-[10050] flex items-center justify-center bg-black/80">
@@ -203,6 +220,45 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
               placeholder={t('workspace.optionalCommand')}
               spellCheck={false}
             />
+          </section>
+
+          <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
+            <div className="mb-4 flex items-center gap-2">
+              <TerminalSquare size={14} className="text-text-secondary" />
+              <span className="nd-label text-text-secondary">{t('workspace.agentProviders')}</span>
+            </div>
+            <div className="space-y-3">
+              {providerEntries.map((provider) => {
+                const providerConfig = value.agentProviders[provider]
+                const providerLabel = provider === 'claude' ? t('workspace.claude') : t('workspace.codex')
+                return (
+                  <div key={provider} className="rounded-[18px] border border-border-visible bg-bg-primary px-4 py-3">
+                    <label className="flex items-center justify-between gap-4">
+                      <span className="text-sm text-text-display">{providerLabel}</span>
+                      <input
+                        type="checkbox"
+                        className="h-5 w-5 shrink-0 accent-[var(--text-primary)]"
+                        checked={providerConfig.enabled}
+                        onChange={(event) => updateProvider(provider, { enabled: event.target.checked })}
+                      />
+                    </label>
+                    <label className="mt-3 block">
+                      <span className="nd-label mb-2 block text-text-secondary">{t('workspace.agentProviderArgs')}</span>
+                      <textarea
+                        className="min-h-[72px] w-full resize-y rounded-[14px] border border-border-visible bg-bg-secondary px-3 py-2 font-mono text-xs text-text-display outline-none"
+                        value={providerConfig.args.join('\n')}
+                        onChange={(event) => updateProvider(provider, {
+                          args: event.target.value.split(/\r?\n/),
+                        })}
+                        placeholder={t('workspace.agentProviderArgsPlaceholder')}
+                        spellCheck={false}
+                        aria-label={`${providerLabel} ${t('workspace.agentProviderArgs')}`}
+                      />
+                    </label>
+                  </div>
+                )
+              })}
+            </div>
           </section>
 
           <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">

@@ -28,6 +28,7 @@ import { useFontSize } from './hooks/useFontSize'
 import { useUpdateStore } from './store/updateStore'
 import { findMergeTargetGroup, getGroupingBlockedReason } from './utils/grouping'
 import { GRID_MAX_TILES, GROUP_COLOR_ORDER, getDefaultTileSize, type BoardState, type BoardTask, type TileState, type CanvasState, type GridWorkspaceState, type Workspace, type WorkspaceMetadata, type TileGroup, type ViewMode, type SplitPanelId, type SplitViewState, type WorkspaceManagementEntry, type WorkspaceType } from '@shared/types'
+import { createDefaultAgentProvidersConfig } from '@shared/workspaceConfig'
 import { createEmptyGridWorkspaceState, normalizeGridWorkspaceState } from '@shared/gridWorkspaceState'
 import {
   reconcileCanvasStateWithSharedTiles,
@@ -690,7 +691,7 @@ export default function App(): React.ReactElement {
       }
 
       skipNextAutosaveRef.current = true
-      setWorkspace('', '', { type: 'canvas', workspacePanelOpen: true, sourceControlViewMode: 'list' })
+      setWorkspace('', '', { type: 'canvas', workspacePanelOpen: true, sourceControlViewMode: 'list', agentProviders: createDefaultAgentProvidersConfig() })
       restoreState(createEmptyCanvasState())
       const dialogCopy = startupFirstWorkspaceDialogCopyRef.current
       setWorkspaceEditor({
@@ -708,6 +709,7 @@ export default function App(): React.ReactElement {
             initialCommand: '',
             terminalHistoryEnabled: true,
             remoteTerminal: { host: '', user: '' },
+            agentProviders: createDefaultAgentProvidersConfig(),
           },
         },
       })
@@ -943,6 +945,7 @@ export default function App(): React.ReactElement {
           initialCommand: workspace.config.initialCommand ?? '',
           terminalHistoryEnabled: workspace.config.terminalHistoryEnabled !== false,
           remoteTerminal: workspace.config.remoteTerminal ?? { host: '', user: '' },
+          agentProviders: workspace.config.agentProviders,
         },
       },
     })
@@ -1474,6 +1477,7 @@ export default function App(): React.ReactElement {
         initialCommand: value.initialCommand || undefined,
         terminalHistoryEnabled: value.terminalHistoryEnabled,
         remoteTerminal: value.remoteTerminal,
+        agentProviders: value.agentProviders,
       })
       await refreshWorkspaceMetadata()
       setWorkspaceEditor(null)
@@ -1488,6 +1492,7 @@ export default function App(): React.ReactElement {
         initialCommand: value.initialCommand || undefined,
         terminalHistoryEnabled: value.terminalHistoryEnabled,
         remoteTerminal: value.remoteTerminal,
+        agentProviders: value.agentProviders,
       },
     })
     if (!updated) return
@@ -1526,7 +1531,7 @@ export default function App(): React.ReactElement {
 
     if (!result.activeWorkspace) {
       skipNextAutosaveRef.current = true
-      setWorkspace('', '', { type: 'canvas', workspacePanelOpen: true, sourceControlViewMode: 'list' })
+      setWorkspace('', '', { type: 'canvas', workspacePanelOpen: true, sourceControlViewMode: 'list', agentProviders: createDefaultAgentProvidersConfig() })
       restoreState(createEmptyCanvasState())
       const dialogCopy = getWorkspaceDialogCopy('first', t)
       setWorkspaceEditor({
@@ -1544,6 +1549,7 @@ export default function App(): React.ReactElement {
             initialCommand: '',
             terminalHistoryEnabled: true,
             remoteTerminal: { host: '', user: '' },
+            agentProviders: createDefaultAgentProvidersConfig(),
           },
         },
       })
@@ -1575,6 +1581,7 @@ export default function App(): React.ReactElement {
           initialCommand: '',
           terminalHistoryEnabled: true,
           remoteTerminal: { host: '', user: '' },
+          agentProviders: createDefaultAgentProvidersConfig(),
         },
       },
     })

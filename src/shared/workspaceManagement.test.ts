@@ -1,18 +1,19 @@
 import { applyWorkspaceManagementChanges, setWorkspaceType } from './workspaceManagement'
 import type { Workspace } from './types'
+import { normalizeWorkspaceConfig } from './workspaceConfig'
 
 function workspace(id: string, name: string, rootFolderPath?: string, type: Workspace['config']['type'] = 'canvas'): Workspace {
   return {
     id,
     name,
     path: `/tmp/yira/workspaces/${id}`,
-    config: {
+    config: normalizeWorkspaceConfig({
       type,
       rootFolderPath,
       workspacePanelOpen: true,
       sourceControlViewMode: 'list',
       terminalHistoryEnabled: true,
-    },
+    }),
   }
 }
 

@@ -168,6 +168,11 @@ type TranslationResources = {
     linuxUser: string
     sshPort: string
     terminalHistory: string
+    agentProviders: string
+    claude: string
+    codex: string
+    agentProviderArgs: string
+    agentProviderArgsPlaceholder: string
     closeRemoteTerminalHelp: string
     gotIt: string
     editWorkspace: string
@@ -467,6 +472,11 @@ const en: TranslationResources = {
     linuxUser: 'Linux user',
     sshPort: 'SSH port',
     terminalHistory: 'Workspace terminal history',
+    agentProviders: 'Agent providers',
+    claude: 'Claude',
+    codex: 'Codex',
+    agentProviderArgs: 'Arguments (one per line)',
+    agentProviderArgsPlaceholder: '--model\nvalue',
     closeRemoteTerminalHelp: 'Close remote terminal help',
     gotIt: 'Got it',
     editWorkspace: 'Edit workspace',
@@ -766,6 +776,11 @@ const es: TranslationResources = {
     linuxUser: 'Usuario de Linux',
     sshPort: 'Puerto SSH',
     terminalHistory: 'Historial de terminal del espacio de trabajo',
+    agentProviders: 'Proveedores de agentes',
+    claude: 'Claude',
+    codex: 'Codex',
+    agentProviderArgs: 'Argumentos (uno por línea)',
+    agentProviderArgsPlaceholder: '--model\nvalor',
     closeRemoteTerminalHelp: 'Cerrar ayuda de terminal remota',
     gotIt: 'Entendido',
     editWorkspace: 'Editar espacio de trabajo',

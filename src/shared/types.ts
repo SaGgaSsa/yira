@@ -1,5 +1,89 @@
 import type { TerminalThemeId } from './terminalThemes'
 
+// ─── Agents ────────────────────────────────────────────────────────────────
+
+/** Providers supported by Yira's agent terminal integration. */
+export type AgentProvider = 'claude' | 'codex'
+
+export const AGENT_PROVIDERS: readonly AgentProvider[] = ['claude', 'codex']
+
+/** Provider commands are fixed by the main process; only arguments are configurable. */
+export const AGENT_PROVIDER_COMMANDS: Readonly<Record<AgentProvider, string>> = {
+  claude: 'claude',
+  codex: 'codex',
+}
+
+export interface AgentProviderConfig {
+  enabled: boolean
+  args: string[]
+}
+
+export type AgentProviderConfigInput = Partial<AgentProviderConfig>
+export type AgentProvidersConfig = Record<AgentProvider, AgentProviderConfig>
+export type AgentProvidersConfigInput = Partial<Record<AgentProvider, AgentProviderConfigInput>>
+
+/** Defaults are deliberately data-only so older workspace files can be migrated safely. */
+export const DEFAULT_AGENT_PROVIDERS_CONFIG: AgentProvidersConfig = {
+  claude: { enabled: true, args: [] },
+  codex: { enabled: true, args: [] },
+}
+
+/** Alias for callers that refer to the provider map as settings. */
+export type AgentProviderSettings = AgentProvidersConfig
+
+export type AgentSessionStatus = 'working' | 'needs-input' | 'done' | 'exited'
+
+/** Metadata retained on a terminal tile that was launched for an agent session. */
+export interface TerminalAgentMetadata {
+  provider: AgentProvider
+  sessionId?: string
+}
+
+/** Backwards-compatible name for consumers that call this agent terminal metadata. */
+export type AgentTerminalMetadata = TerminalAgentMetadata
+
+export interface AgentActiveSession {
+  sessionId: string
+  tileId: string
+  workspaceId: string
+  provider: AgentProvider
+  status: AgentSessionStatus
+  startedAt: string
+  lastActivityAt: string
+}
+
+export type ActiveAgentSession = AgentActiveSession
+
+export interface AgentActiveSessionSnapshot {
+  sessions: AgentActiveSession[]
+}
+
+export interface AgentHistoryEntry {
+  sessionId: string
+  provider: AgentProvider
+  workspaceId?: string
+  workspaceName?: string
+  title?: string
+  status?: AgentSessionStatus
+  startedAt?: string
+  endedAt?: string
+  summary?: string
+}
+
+export type AgentHistoryItem = AgentHistoryEntry
+
+export interface AgentHistoryQuery {
+  workspaceId?: string
+  provider?: AgentProvider
+  search?: string
+  limit?: number
+}
+
+export interface AgentHistoryResult {
+  entries: AgentHistoryEntry[]
+  hasMore: boolean
+}
+
 // ─── Workspace ─────────────────────────────────────────────────────────────
 
 export type WorkspaceType = 'canvas' | 'grid'
@@ -30,6 +114,11 @@ export interface WorkspaceConfig {
   initialCommand?: string
   terminalHistoryEnabled?: boolean
   remoteTerminal?: RemoteTerminalConfig
+  agentProviders: AgentProvidersConfig
+}
+
+export type WorkspaceConfigInput = Omit<Partial<WorkspaceConfig>, 'agentProviders'> & {
+  agentProviders?: AgentProvidersConfigInput
 }
 
 export interface WorkspaceCreateInput {
@@ -41,6 +130,7 @@ export interface WorkspaceCreateInput {
   initialCommand?: string
   terminalHistoryEnabled?: boolean
   remoteTerminal?: RemoteTerminalConfig
+  agentProviders?: AgentProvidersConfigInput
 }
 
 export interface WorkspaceManagementEntry {
@@ -53,6 +143,7 @@ export interface WorkspaceManagementEntry {
   initialCommand?: string
   terminalHistoryEnabled?: boolean
   remoteTerminal?: RemoteTerminalConfig
+  agentProviders?: AgentProvidersConfigInput
 }
 
 export interface WorkspaceManagementCommitInput {
@@ -76,7 +167,7 @@ export interface WorkspaceOpenFolderResult {
 }
 
 export type WorkspaceUpdatePatch = Partial<Pick<Workspace, 'name'>> & {
-  config?: Partial<WorkspaceConfig>
+  config?: WorkspaceConfigInput
 }
 
 // ─── Source Control ───────────────────────────────────────────────────────
@@ -281,6 +372,7 @@ export interface TerminalCreateOptions {
   connection?: TerminalConnectionKind
   remoteTerminal?: RemoteTerminalConfig
   remoteStartupCommand?: string
+  agent?: TerminalAgentMetadata
 }
 
 // ─── Files ─────────────────────────────────────────────────────────────────
@@ -585,6 +677,7 @@ export interface TileState {
   shellProfileId?: ShellProfileId
   terminalConnection?: TerminalConnectionKind
   startupCommand?: string
+  agent?: TerminalAgentMetadata
 
   // Note-specific
   noteKind?: NoteKind

@@ -1,4 +1,5 @@
 import type { WorkspaceMetadata } from '@shared/types'
+import { normalizeWorkspaceConfig } from '@shared/workspaceConfig'
 import {
   buildUnknownWorkspaceFolderResult,
   findWorkspaceByRootFolder,
@@ -10,13 +11,13 @@ function workspace(id: string, name: string, rootFolderPath?: string): Workspace
     id,
     name,
     path: `/internal/${id}`,
-    config: {
+    config: normalizeWorkspaceConfig({
       type: 'canvas',
       rootFolderPath,
       workspacePanelOpen: true,
       sourceControlViewMode: 'list',
       terminalHistoryEnabled: true,
-    },
+    }),
   }
 }
 

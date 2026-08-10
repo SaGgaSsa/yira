@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { ArrowDown, ArrowUp, Grid3X3, LayoutGrid, Pencil, RotateCcw, Save, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { WorkspaceManagementEntry, WorkspaceMetadata } from '@shared/types'
+import { createDefaultAgentProvidersConfig, normalizeAgentProvidersConfig } from '@shared/workspaceConfig'
 import { WorkspaceDialog, type WorkspaceDialogRequest, type WorkspaceDialogValue } from './WorkspaceDialog'
 
 interface WorkspaceManagementDialogProps {
@@ -33,6 +34,7 @@ function workspaceToDraft(workspace: WorkspaceMetadata): WorkspaceDraft {
     initialCommand: workspace.config.initialCommand ?? '',
     terminalHistoryEnabled: workspace.config.terminalHistoryEnabled !== false,
     remoteTerminal: workspace.config.remoteTerminal,
+    agentProviders: workspace.config.agentProviders,
     markedForRemoval: false,
     removalText: '',
   }
@@ -46,6 +48,7 @@ function draftToDialogValue(draft?: WorkspaceDraft): WorkspaceDialogValue {
     initialCommand: draft?.initialCommand ?? '',
     terminalHistoryEnabled: draft?.terminalHistoryEnabled ?? true,
     remoteTerminal: draft?.remoteTerminal ?? { host: '', user: '' },
+    agentProviders: normalizeAgentProvidersConfig(draft?.agentProviders ?? createDefaultAgentProvidersConfig()),
   }
 }
 
@@ -57,6 +60,7 @@ function dialogValueToDraftValue(value: WorkspaceDialogValue): WorkspaceManageme
     initialCommand: value.initialCommand || undefined,
     terminalHistoryEnabled: value.terminalHistoryEnabled,
     remoteTerminal: value.remoteTerminal,
+    agentProviders: value.agentProviders,
   }
 }
 
@@ -141,6 +145,7 @@ export function WorkspaceManagementDialog({
         initialCommand: draft.initialCommand || undefined,
         terminalHistoryEnabled: draft.terminalHistoryEnabled,
         remoteTerminal: draft.remoteTerminal,
+        agentProviders: draft.agentProviders,
       })))
     } catch (err) {
       setError(err instanceof Error ? err.message : t('workspace.saveChangesFailed'))

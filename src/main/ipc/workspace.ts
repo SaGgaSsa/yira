@@ -3,7 +3,7 @@ import { promises as fs, readFileSync } from 'fs'
 import { isAbsolute, join, relative, resolve } from 'path'
 import type { Config, Workspace, AppSettings, WorkspaceConfig, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceOpenFolderResult, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
 import { DEFAULT_SETTINGS } from '@shared/types'
-import { normalizeWorkspaceConfig } from '@shared/workspaceConfig'
+import { mergeAgentProvidersConfig, normalizeWorkspaceConfig } from '@shared/workspaceConfig'
 import { applyWorkspaceManagementChanges, setWorkspaceType } from '@shared/workspaceManagement'
 import { YIRA_HOME, CONFIG_PATH, WORKSPACES_DIR } from '../paths'
 import {
@@ -42,6 +42,7 @@ function normalizeWorkspace(workspace: Partial<Workspace> & { id: string; name?:
     initialCommand: workspace.config?.initialCommand,
     terminalHistoryEnabled: workspace.config?.terminalHistoryEnabled,
     remoteTerminal: workspace.config?.remoteTerminal,
+    agentProviders: workspace.config?.agentProviders,
   })
 
   return {
@@ -137,6 +138,7 @@ function createWorkspaceFromInput(input: WorkspaceCreateInput): Workspace {
       initialCommand: input.initialCommand,
       terminalHistoryEnabled: input.terminalHistoryEnabled,
       remoteTerminal: input.remoteTerminal,
+      agentProviders: input.agentProviders,
     }),
   }
 }
@@ -156,6 +158,7 @@ function updateWorkspace(workspace: Workspace, patch: WorkspaceUpdatePatch): Wor
     initialCommand: patch.config?.initialCommand ?? workspace.config.initialCommand,
     terminalHistoryEnabled: patch.config?.terminalHistoryEnabled ?? workspace.config.terminalHistoryEnabled,
     remoteTerminal: patch.config?.remoteTerminal ?? workspace.config.remoteTerminal,
+    agentProviders: mergeAgentProvidersConfig(workspace.config.agentProviders, patch.config?.agentProviders),
   })
 
   return workspace

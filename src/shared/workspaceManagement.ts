@@ -4,7 +4,7 @@ import type {
   WorkspaceManagementEntry,
   WorkspaceType,
 } from './types'
-import { normalizeWorkspaceConfig } from './workspaceConfig'
+import { mergeAgentProvidersConfig, normalizeWorkspaceConfig } from './workspaceConfig'
 
 interface ApplyWorkspaceManagementChangesInput {
   existingWorkspaces: Workspace[]
@@ -73,6 +73,7 @@ export function applyWorkspaceManagementChanges({
         initialCommand: entry.initialCommand,
         terminalHistoryEnabled: entry.terminalHistoryEnabled,
         remoteTerminal: entry.remoteTerminal,
+        agentProviders: mergeAgentProvidersConfig(existing.config.agentProviders, entry.agentProviders),
       })
 
       return {
@@ -90,6 +91,7 @@ export function applyWorkspaceManagementChanges({
       initialCommand: entry.initialCommand,
       terminalHistoryEnabled: entry.terminalHistoryEnabled,
       remoteTerminal: entry.remoteTerminal,
+      agentProviders: entry.agentProviders,
     })
 
     let id = nextWorkspaceId()
