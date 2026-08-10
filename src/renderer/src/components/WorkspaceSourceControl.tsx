@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { ChevronDown, File, Folder, GitBranch, List, RefreshCw, SquarePlus, SquareMinus, TreePine, Upload } from 'lucide-react'
-import type { GitFileChange, GitStatusResult, SourceControlViewMode, Workspace } from '@shared/types'
+import type { GitCommitHistoryResult, GitCommitSummary, GitFileChange, GitStatusResult, SourceControlViewMode, Workspace } from '@shared/types'
 import { buildSourceControlTree, type SourceControlTreeNode } from '@/utils/sourceControlTree'
 
 interface WorkspaceSourceControlProps {
@@ -16,6 +16,34 @@ type SourceControlAction =
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Unable to load source control status'
+}
+
+function historyErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Unable to load commit history'
+}
+
+function relativeCommitDate(commitDate: string | null | undefined): string {
+  const timestamp = typeof commitDate === 'string' ? Date.parse(commitDate) : Number.NaN
+  if (!Number.isFinite(timestamp)) return 'fecha desconocida'
+
+  const elapsedSeconds = Math.round((Date.now() - timestamp) / 1000)
+  const elapsed = Math.abs(elapsedSeconds)
+  if (elapsed < 60) return elapsedSeconds < 0 ? 'en un momento' : 'hace un momento'
+
+  const units = [
+    { seconds: 31_536_000, singular: 'año', plural: 'años' },
+    { seconds: 2_592_000, singular: 'mes', plural: 'meses' },
+    { seconds: 604_800, singular: 'semana', plural: 'semanas' },
+    { seconds: 86_400, singular: 'día', plural: 'días' },
+    { seconds: 3_600, singular: 'hora', plural: 'horas' },
+    { seconds: 60, singular: 'minuto', plural: 'minutos' },
+  ]
+  const unit = units.find(({ seconds }) => elapsed >= seconds)
+  if (!unit) return elapsedSeconds < 0 ? 'en un momento' : 'hace un momento'
+
+  const value = Math.max(1, Math.floor(elapsed / unit.seconds))
+  const label = value === 1 ? unit.singular : unit.plural
+  return elapsedSeconds < 0 ? `en ${value} ${label}` : `hace ${value} ${label}`
 }
 
 function statusLabel(status: GitFileChange['status']): string {
@@ -106,29 +134,138 @@ function ChangeSection({ title, changes, staged, viewMode, disabled, onToggle }:
   )
 }
 
+function CommitRow({ commit }: { commit: GitCommitSummary }): React.ReactElement {
+  const subject = typeof commit.subject === 'string' && commit.subject ? commit.subject : '(sin asunto)'
+  const shortHash = typeof commit.shortHash === 'string' && commit.shortHash ? commit.shortHash : '—'
+  const commitDate = typeof commit.commitDate === 'string' && commit.commitDate ? commit.commitDate : undefined
+
+  return (
+    <div className="flex min-w-0 items-center gap-2 px-4 py-1.5 text-xs text-text-secondary" title={subject}>
+      <span className="shrink-0 font-mono text-[11px] text-text-disabled">{shortHash}</span>
+      <span className="min-w-0 flex-1 truncate">{subject}</span>
+      <time className="shrink-0 text-[11px] text-text-disabled" dateTime={commitDate} title={commitDate ?? 'Fecha desconocida'}>
+        {relativeCommitDate(commit.commitDate)}
+      </time>
+    </div>
+  )
+}
+
+function CommitSection({ title, commits }: { title: string; commits: GitCommitSummary[] }): React.ReactElement {
+  return (
+    <section className="border-t border-border py-2 first:border-t-0">
+      <div className="nd-label px-4 py-1.5 text-text-secondary">{title}</div>
+      {commits.length === 0 ? (
+        <div className="px-4 py-2 text-xs text-text-disabled">No hay commits</div>
+      ) : (
+        <div>{commits.map((commit, index) => <CommitRow key={`${commit.shortHash}-${index}`} commit={commit} />)}</div>
+      )}
+    </section>
+  )
+}
+
+function CommitHistoryAccordion({ history, upstream, expanded, onToggle }: {
+  history: GitCommitHistoryResult | null
+  upstream?: string
+  expanded: boolean
+  onToggle: () => void
+}): React.ReactElement {
+  const outgoing = history?.outgoing ?? []
+  const upstreamCommits = history?.upstream ?? []
+  const localCommits = history?.local ?? []
+  const hasUpstream = Boolean(upstream)
+
+  return (
+    <section className="border-b border-border">
+      <h2 className="m-0">
+        <button
+          type="button"
+          className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-text-display hover:bg-hover-bg"
+          onClick={onToggle}
+          aria-expanded={expanded}
+          aria-controls="source-control-commits"
+        >
+          <ChevronDown size={14} className={`shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+          <span>Commits</span>
+        </button>
+      </h2>
+      {expanded && (
+        <div id="source-control-commits" role="region" aria-label="Commits">
+          {history === null ? (
+            <div className="px-4 py-2 text-xs text-text-disabled">Cargando historial…</div>
+          ) : (
+            <>
+              {history.error && (
+                <div className="px-4 py-2 text-xs text-red-300" role="status">
+                  No se pudo cargar el historial: {history.error}
+                </div>
+              )}
+              {hasUpstream ? (
+                <>
+                  <CommitSection title={`Por subir (${outgoing.length})`} commits={outgoing} />
+                  <CommitSection title="Últimos en remoto" commits={upstreamCommits.slice(0, 5)} />
+                </>
+              ) : (
+                <>
+                  <div className="px-4 py-2 text-xs text-text-secondary">No hay comparación remota</div>
+                  <CommitSection title="Últimos locales" commits={localCommits.slice(0, 5)} />
+                </>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </section>
+  )
+}
+
 export function WorkspaceSourceControl({ workspaceId, sourceControlViewMode, onWorkspaceUpdated }: WorkspaceSourceControlProps): React.ReactElement {
   const [status, setStatus] = useState<GitStatusResult | null>(null)
+  const [history, setHistory] = useState<GitCommitHistoryResult | null>(null)
+  const [commitsExpanded, setCommitsExpanded] = useState(false)
   const [loading, setLoading] = useState(true)
   const [actionError, setActionError] = useState<string | null>(null)
   const [actionPending, setActionPending] = useState(false)
   const [commitMessage, setCommitMessage] = useState('')
   const [retryAction, setRetryAction] = useState<SourceControlAction | null>(null)
+  const historyLoadedWorkspaceRef = useRef<string | null>(null)
+  const refreshVersionRef = useRef(0)
 
   const refresh = useCallback(async () => {
     setLoading(true)
     setActionError(null)
-    try {
-      setStatus(await window.electron.git.status(workspaceId))
-    } catch (error) {
-      setStatus({ isRepository: false, branch: null, ahead: 0, behind: 0, staged: [], unstaged: [], error: errorMessage(error) })
-    } finally {
-      setLoading(false)
+    const refreshVersion = refreshVersionRef.current + 1
+    refreshVersionRef.current = refreshVersion
+    const [statusResult, historyResult] = await Promise.allSettled([
+      Promise.resolve().then(() => window.electron.git.status(workspaceId)),
+      Promise.resolve().then(() => window.electron.git.history(workspaceId)),
+    ])
+    if (refreshVersion !== refreshVersionRef.current) return
+
+    if (statusResult.status === 'fulfilled') {
+      setStatus(statusResult.value)
+    } else {
+      setStatus({ isRepository: false, branch: null, ahead: 0, behind: 0, staged: [], unstaged: [], error: errorMessage(statusResult.reason) })
     }
+
+    if (historyResult.status === 'fulfilled') {
+      const nextHistory = historyResult.value
+      setHistory(nextHistory)
+      if (statusResult.status === 'fulfilled' && statusResult.value.isRepository && !nextHistory.error && historyLoadedWorkspaceRef.current !== workspaceId) {
+        historyLoadedWorkspaceRef.current = workspaceId
+        setCommitsExpanded(nextHistory.outgoing.length > 0)
+      }
+    } else {
+      setHistory({ outgoing: [], upstream: [], local: [], error: historyErrorMessage(historyResult.reason) })
+    }
+    setLoading(false)
   }, [workspaceId])
 
   useEffect(() => {
+    historyLoadedWorkspaceRef.current = null
+    setHistory(null)
+    setCommitsExpanded(false)
     void refresh()
-  }, [refresh])
+  }, [refresh, workspaceId])
 
   const runAction = useCallback(async (action: SourceControlAction): Promise<boolean> => {
     setActionError(null)
@@ -240,6 +377,7 @@ export function WorkspaceSourceControl({ workspaceId, sourceControlViewMode, onW
                 {status.upstream}{status.ahead > 0 ? ` · ${status.ahead} ahead` : ''}{status.behind > 0 ? ` · ${status.behind} behind` : ''}
               </div>
             )}
+            <CommitHistoryAccordion history={history} upstream={status.upstream} expanded={commitsExpanded} onToggle={() => setCommitsExpanded((expanded) => !expanded)} />
             <ChangeSection title="Staged Changes" changes={status.staged} staged viewMode={sourceControlViewMode} disabled={actionPending} onToggle={handleToggle} />
             <ChangeSection title="Changes" changes={status.unstaged} staged={false} viewMode={sourceControlViewMode} disabled={actionPending} onToggle={handleToggle} />
           </>
