@@ -1,7 +1,7 @@
 import { execFile } from 'child_process'
 import { promises as fs } from 'fs'
 import { dirname, isAbsolute, relative, resolve, sep } from 'path'
-import type { GitChangeStatus, GitFileChange, GitStatusResult } from '@shared/types'
+import type { GitChangeStatus, GitCommitHistoryResult, GitCommitSummary, GitFileChange, GitStatusResult } from '@shared/types'
 
 export interface GitCommandResult {
   stdout: string
@@ -204,6 +204,20 @@ async function runGitAtRoot(rootPath: string, args: string[], executor: GitComma
   return executor('git', ['-C', rootPath, ...args])
 }
 
+const GIT_COMMIT_LOG_FORMAT = '--format=%h%x00%s%x00%cI'
+
+export function parseGitCommitLog(output: string): GitCommitSummary[] {
+  return output.split(/\r?\n/).flatMap((record) => {
+    const [shortHash, subject, commitDate] = record.split('\0')
+    if (!shortHash || !commitDate) return []
+    return [{ shortHash, subject, commitDate }]
+  })
+}
+
+function emptyGitCommitHistory(error?: string): GitCommitHistoryResult {
+  return { outgoing: [], upstream: [], local: [], ...(error ? { error } : {}) }
+}
+
 export async function getGitStatus(rootPathInput: string, executor: GitCommandExecutor = execGitCommand): Promise<GitStatusResult> {
   let rootPath: string
   try {
@@ -229,6 +243,53 @@ export async function getGitStatus(rootPathInput: string, executor: GitCommandEx
   }
 
   return { isRepository: true, ...parsed, ...(originUrl ? { originUrl } : {}) }
+}
+
+export async function getGitCommitHistory(
+  rootPathInput: string,
+  executor: GitCommandExecutor = execGitCommand,
+): Promise<GitCommitHistoryResult> {
+  let rootPath: string
+  try {
+    rootPath = await resolveGitRootPath(rootPathInput)
+  } catch (error) {
+    return emptyGitCommitHistory(toErrorMessage(error))
+  }
+
+  let upstream: string | undefined
+  try {
+    const result = await runGitAtRoot(rootPath, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'], executor)
+    upstream = result.stdout.trim() || undefined
+  } catch {
+    // A missing upstream is expected for local branches. The log command below
+    // determines whether the branch has any commits to report.
+  }
+
+  if (!upstream) {
+    try {
+      const result = await runGitAtRoot(rootPath, ['log', '-5', GIT_COMMIT_LOG_FORMAT, 'HEAD'], executor)
+      return { ...emptyGitCommitHistory(), local: parseGitCommitLog(result.stdout) }
+    } catch (error) {
+      return emptyGitCommitHistory(toErrorMessage(error))
+    }
+  }
+
+  const history = emptyGitCommitHistory()
+  try {
+    const result = await runGitAtRoot(rootPath, ['log', GIT_COMMIT_LOG_FORMAT, `${upstream}..HEAD`], executor)
+    history.outgoing = parseGitCommitLog(result.stdout)
+  } catch (error) {
+    history.error = toErrorMessage(error)
+  }
+
+  try {
+    const result = await runGitAtRoot(rootPath, ['log', '-5', GIT_COMMIT_LOG_FORMAT, upstream], executor)
+    history.upstream = parseGitCommitLog(result.stdout)
+  } catch (error) {
+    history.error ??= toErrorMessage(error)
+  }
+
+  return history
 }
 
 export async function stageGitFile(

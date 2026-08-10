@@ -101,6 +101,19 @@ export interface GitStatusResult {
   error?: string
 }
 
+export interface GitCommitSummary {
+  shortHash: string
+  subject: string
+  commitDate: string
+}
+
+export interface GitCommitHistoryResult {
+  outgoing: GitCommitSummary[]
+  upstream: GitCommitSummary[]
+  local: GitCommitSummary[]
+  error?: string
+}
+
 export interface Config {
   workspaces: WorkspaceMetadata[]
   activeWorkspaceId: string

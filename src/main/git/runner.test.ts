@@ -11,6 +11,8 @@ import {
   stageGitFiles,
   stageGitFile,
   unstageGitFile,
+  getGitCommitHistory,
+  parseGitCommitLog,
   type GitCommandExecutor,
 } from './runner'
 
@@ -181,6 +183,81 @@ try {
   })
   if (unavailableGit.isRepository || unavailableGit.error !== 'Git is not available') {
     throw new Error('missing Git must return an availability error')
+  }
+
+  const punctuationHistory = parseGitCommitLog('abc1234\u0000Fix punctuation: commas, [brackets], pipe | and %\u00002026-08-09T12:00:00-03:00\n')
+  if (punctuationHistory.length !== 1 || punctuationHistory[0].shortHash !== 'abc1234' || punctuationHistory[0].subject !== 'Fix punctuation: commas, [brackets], pipe | and %' || punctuationHistory[0].commitDate !== '2026-08-09T12:00:00-03:00') {
+    throw new Error('commit history parser must preserve short hashes, punctuation in subjects, and dates')
+  }
+
+  const outgoingLog = [
+    'local6\u0000Local commit 6\u00002026-08-09T12:06:00-03:00',
+    'local5\u0000Local commit 5\u00002026-08-09T12:05:00-03:00',
+    'local4\u0000Local commit 4\u00002026-08-09T12:04:00-03:00',
+    'local3\u0000Local commit 3\u00002026-08-09T12:03:00-03:00',
+    'local2\u0000Local commit 2\u00002026-08-09T12:02:00-03:00',
+    'local1\u0000Local commit 1\u00002026-08-09T12:01:00-03:00',
+  ].join('\n')
+  const upstreamLog = [
+    'remote5\u0000Remote commit 5\u00002026-08-09T11:05:00-03:00',
+    'remote4\u0000Remote commit 4\u00002026-08-09T11:04:00-03:00',
+    'remote3\u0000Remote commit 3\u00002026-08-09T11:03:00-03:00',
+    'remote2\u0000Remote commit 2\u00002026-08-09T11:02:00-03:00',
+    'remote1\u0000Remote commit 1\u00002026-08-09T11:01:00-03:00',
+  ].join('\n')
+  const localLog = [
+    'local5\u0000Local commit 5\u00002026-08-09T12:05:00-03:00',
+    'local4\u0000Local commit 4\u00002026-08-09T12:04:00-03:00',
+    'local3\u0000Local commit 3\u00002026-08-09T12:03:00-03:00',
+    'local2\u0000Local commit 2\u00002026-08-09T12:02:00-03:00',
+    'local1\u0000Local commit 1\u00002026-08-09T12:01:00-03:00',
+  ].join('\n')
+  const upstreamHistoryCalls: string[][] = []
+  const upstreamHistory = await getGitCommitHistory(tempRoot, async (_command, args) => {
+    upstreamHistoryCalls.push(args)
+    if (args.includes('rev-parse')) return { stdout: 'origin/main\n', stderr: '' }
+    if (args.includes('origin/main..HEAD')) return { stdout: outgoingLog, stderr: '' }
+    if (args.includes('origin/main')) return { stdout: upstreamLog, stderr: '' }
+    throw new Error(`unexpected history command: ${args.join('|')}`)
+  })
+  if (upstreamHistory.error || upstreamHistory.outgoing.length !== 6 || upstreamHistory.upstream.length !== 5 || upstreamHistory.local.length !== 0) {
+    throw new Error('history with an upstream must return all outgoing commits, five upstream commits, and no local fallback history')
+  }
+  if (upstreamHistory.outgoing[0].shortHash !== 'local6' || upstreamHistory.upstream[0].shortHash !== 'remote5' || upstreamHistory.upstream[4].shortHash !== 'remote1') {
+    throw new Error('history with an upstream must preserve Git log order and commit summaries')
+  }
+  if (upstreamHistoryCalls.length !== 3 || upstreamHistoryCalls[1].includes('-5') || !upstreamHistoryCalls[2].includes('-5')) {
+    throw new Error('history commands must leave outgoing commits uncapped and limit upstream history to five')
+  }
+
+  const localHistoryCalls: string[][] = []
+  const noUpstreamHistory = await getGitCommitHistory(tempRoot, async (_command, args) => {
+    localHistoryCalls.push(args)
+    if (args.includes('rev-parse')) throw new Error('fatal: no upstream configured')
+    if (args.includes('HEAD')) return { stdout: localLog, stderr: '' }
+    throw new Error(`unexpected local history command: ${args.join('|')}`)
+  })
+  if (noUpstreamHistory.error || noUpstreamHistory.outgoing.length !== 0 || noUpstreamHistory.upstream.length !== 0 || noUpstreamHistory.local.length !== 5) {
+    throw new Error('history without an upstream must return five local commits and empty upstream/outgoing lists')
+  }
+  if (noUpstreamHistory.local[0].shortHash !== 'local5' || localHistoryCalls.length !== 2 || !localHistoryCalls[1].includes('-5')) {
+    throw new Error('history without an upstream must read recent HEAD commits with a five-commit limit')
+  }
+
+  const noCommitHistory = await getGitCommitHistory(tempRoot, async (_command, args) => {
+    if (args.includes('rev-parse')) throw new Error('fatal: no upstream configured')
+    throw new Error('fatal: your current branch does not have any commits yet')
+  })
+  if (noCommitHistory.outgoing.length !== 0 || noCommitHistory.upstream.length !== 0 || noCommitHistory.local.length !== 0 || !noCommitHistory.error?.includes('does not have any commits yet')) {
+    throw new Error('empty repositories must return empty history with an informative non-fatal error')
+  }
+
+  const failedHistory = await getGitCommitHistory(tempRoot, async (_command, args) => {
+    if (args.includes('rev-parse')) return { stdout: 'origin/main\n', stderr: '' }
+    throw new Error('fatal: unable to read commit history')
+  })
+  if (failedHistory.outgoing.length !== 0 || failedHistory.upstream.length !== 0 || failedHistory.local.length !== 0 || failedHistory.error !== 'fatal: unable to read commit history') {
+    throw new Error('history command failures must return empty lists and preserve an informative error')
   }
 } finally {
   await rm(tempRoot, { recursive: true, force: true })
