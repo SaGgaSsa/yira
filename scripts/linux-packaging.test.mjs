@@ -44,6 +44,31 @@ test('configures the Linux after-pack hook and Debian installer script', async (
   assert.doesNotMatch(desktopExec, /--no-sandbox/)
 })
 
+test('packages the unprivileged Debian update launcher with safe installer policy', async () => {
+  const packageJson = await readPackageJson()
+  const launcher = await readFile(new URL('../resources/linux-deb-update-launcher.sh', import.meta.url), 'utf8')
+
+  assert.ok(packageJson.build.extraResources.some(resource => (
+    resource.from === 'resources/linux-deb-update-launcher.sh' &&
+    resource.to === 'linux-deb-update-launcher.sh'
+  )))
+  assert.match(launcher, /pkexec --disable-internal-agent \/usr\/bin\/dpkg -i -- "\$package_path"/)
+  assert.match(launcher, /exec "\$relaunch_command"/)
+  assert.doesNotMatch(launcher, /bash -c/)
+  assert.doesNotMatch(launcher, /eval /)
+
+  const recordEvents = [...launcher.matchAll(/\brecord (linux-deb-[a-z-]+) /g)].map(match => match[1])
+  assert.deepEqual(recordEvents, [
+    'linux-deb-installer-started',
+    'linux-deb-installer-failed',
+    'linux-deb-installer-succeeded',
+  ])
+
+  assert.match(launcher, /record\(\) \{\n  event=\$1\n  status=\$2\n  \[ "\$diagnostics_enabled" = '1' \] \|\| return 0/)
+  const printfLines = launcher.split('\n').filter(line => line.includes('printf'))
+  assert.ok(printfLines.every(line => !line.includes('$package_path')))
+})
+
 test('wraps the Linux launcher without changing the Electron binary contents', async () => {
   const { afterPack } = await import(new URL('../build/linux/after-pack.cjs', import.meta.url))
   const appOutDir = await mkdtemp(join(tmpdir(), 'yira-linux-packaging-'))

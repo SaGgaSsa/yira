@@ -90,6 +90,10 @@
       {
         "from": "resources/agent-hook-client.mjs",
         "to": "agent-hook-client.mjs"
+      },
+      {
+        "from": "resources/linux-deb-update-launcher.sh",
+        "to": "linux-deb-update-launcher.sh"
       }
     ],
     "asar": true,
