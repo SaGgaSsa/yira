@@ -82,3 +82,18 @@ if (!source.includes('manualCommitsToggleRef') || !source.includes('manualCommit
 if (!source.includes('preserveActionError') || !source.includes('await refresh({ preserveActionError:')) {
   throw new Error('mutation failures must refresh status/history without replacing the original error')
 }
+if (!source.includes('setRetryAction({ workspaceId: actionWorkspaceId, action })')) {
+  throw new Error('retry actions must retain their originating workspace')
+}
+if (!source.includes('const currentRetryAction = retryAction?.workspaceId === workspaceId')) {
+  throw new Error('retry actions must be derived only for the active workspace')
+}
+if (!source.includes('retryAction.workspaceId !== workspaceId')) {
+  throw new Error('retry handler must reject actions from another workspace')
+}
+if (!source.includes('const currentActionError = actionError?.workspaceId === workspaceId')) {
+  throw new Error('action errors must be scoped to the active workspace')
+}
+if (!source.includes('{currentActionError &&') || !source.includes('{currentRetryAction &&')) {
+  throw new Error('stale workspace errors and retry controls must not render')
+}

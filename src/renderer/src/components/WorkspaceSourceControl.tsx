@@ -18,6 +18,16 @@ interface SourceControlRefreshOptions {
   preserveActionError?: boolean
 }
 
+interface WorkspaceActionError {
+  workspaceId: string
+  message: string
+}
+
+interface WorkspaceRetryAction {
+  workspaceId: string
+  action: SourceControlAction
+}
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Unable to load source control status'
 }
@@ -227,10 +237,10 @@ export function WorkspaceSourceControl({ workspaceId, sourceControlViewMode, onW
   const [history, setHistory] = useState<GitCommitHistoryResult | null>(null)
   const [commitsExpanded, setCommitsExpanded] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [actionError, setActionError] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<WorkspaceActionError | null>(null)
   const [actionPending, setActionPending] = useState(false)
   const [commitMessage, setCommitMessage] = useState('')
-  const [retryAction, setRetryAction] = useState<SourceControlAction | null>(null)
+  const [retryAction, setRetryAction] = useState<WorkspaceRetryAction | null>(null)
   const activeWorkspaceRef = useRef(workspaceId)
   const statusWorkspaceRef = useRef<string | null>(null)
   const historyLoadedWorkspaceRef = useRef<string | null>(null)
@@ -310,8 +320,8 @@ export function WorkspaceSourceControl({ workspaceId, sourceControlViewMode, onW
 
     if (activeWorkspaceRef.current === actionWorkspaceId) {
       if (mutationFailed) {
-        setActionError(errorMessage(mutationError))
-        setRetryAction(action)
+        setActionError({ workspaceId: actionWorkspaceId, message: errorMessage(mutationError) })
+        setRetryAction({ workspaceId: actionWorkspaceId, action })
       }
       await refresh({ preserveActionError: mutationFailed })
     }
@@ -339,11 +349,11 @@ export function WorkspaceSourceControl({ workspaceId, sourceControlViewMode, onW
   }, [actionPending, runAction, status?.upstream, workspaceId])
 
   const handleRetryAction = useCallback(async () => {
-    if (!retryAction || actionPending) return
-    if (await runAction(retryAction)) {
-      if (retryAction.type === 'commit') setCommitMessage('')
+    if (!retryAction || retryAction.workspaceId !== workspaceId || actionPending) return
+    if (await runAction(retryAction.action)) {
+      if (retryAction.action.type === 'commit') setCommitMessage('')
     }
-  }, [actionPending, retryAction, runAction])
+  }, [actionPending, retryAction, runAction, workspaceId])
 
   const handleCommitsToggle = useCallback(() => {
     if (activeWorkspaceRef.current !== workspaceId) return
@@ -364,11 +374,13 @@ export function WorkspaceSourceControl({ workspaceId, sourceControlViewMode, onW
         onWorkspaceUpdated(workspace)
       })
       .catch((error: unknown) => {
-        if (activeWorkspaceRef.current === updateWorkspaceId) setActionError(errorMessage(error))
+        if (activeWorkspaceRef.current === updateWorkspaceId) setActionError({ workspaceId: updateWorkspaceId, message: errorMessage(error) })
       })
   }, [onWorkspaceUpdated, sourceControlViewMode, workspaceId])
 
   const currentStatus = statusWorkspaceRef.current === workspaceId ? status : null
+  const currentActionError = actionError?.workspaceId === workspaceId ? actionError.message : null
+  const currentRetryAction = retryAction?.workspaceId === workspaceId ? retryAction.action : null
   const branch = currentStatus?.branch ?? 'No branch'
   const canOpenOrigin = Boolean(currentStatus?.originUrl)
   const canCommit = Boolean(currentStatus?.staged.length) && Boolean(commitMessage.trim())
@@ -457,10 +469,10 @@ export function WorkspaceSourceControl({ workspaceId, sourceControlViewMode, onW
           </div>
         </div>
       )}
-      {actionError && (
+      {currentActionError && (
         <div className="flex shrink-0 items-center gap-3 border-t border-border px-3 py-2 text-xs text-red-300">
-          <span className="min-w-0 flex-1">{actionError}</span>
-          {retryAction && (
+          <span className="min-w-0 flex-1">{currentActionError}</span>
+          {currentRetryAction && (
             <button className="shrink-0 text-text-display hover:underline" onClick={() => void handleRetryAction()} disabled={actionPending}>
               Retry operation
             </button>
