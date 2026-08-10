@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import type {
-  AgentProvidersConfig,
+  AgentProvider,
   ShellProfileId,
   SourceControlViewMode,
   TerminalAgentMetadata,
@@ -24,13 +24,13 @@ interface WorkspacePanelProps {
   onWorkspaceUpdated: (workspace: Workspace) => void
   activeFilePath: string | null
   onOpenFile: (relativePath: string) => Promise<void>
-  agentProviders: AgentProvidersConfig
+  agentProvider?: AgentProvider
   availableProfiles: Array<{ id: ShellProfileId; label: string; available: boolean }>
   tiles: TileState[]
   terminalTitles: Record<string, string>
   addTerminal: (profileId: ShellProfileId, agent?: TerminalAgentMetadata) => string | null
   onFocusTile: (tileId: string) => void
-  onOpenSettings: () => void
+  onOpenWorkspaceSettings: () => void
 }
 
 export function WorkspacePanel({
@@ -40,13 +40,13 @@ export function WorkspacePanel({
   onWorkspaceUpdated,
   activeFilePath,
   onOpenFile,
-  agentProviders,
+  agentProvider,
   availableProfiles,
   tiles,
   terminalTitles,
   addTerminal,
   onFocusTile,
-  onOpenSettings,
+  onOpenWorkspaceSettings,
 }: WorkspacePanelProps): React.ReactElement {
   const [width, setWidth] = useState(PANEL_DEFAULT)
   const [resizing, setResizing] = useState(false)
@@ -109,13 +109,13 @@ export function WorkspacePanel({
         {tab === 'agents' && (
           <AgentPanel
             workspaceId={workspaceId}
-            agentProviders={agentProviders}
+            selectedProvider={agentProvider}
             availableProfiles={availableProfiles}
             tiles={tiles}
             terminalTitles={terminalTitles}
             addTerminal={addTerminal}
             onFocusTile={onFocusTile}
-            onOpenSettings={onOpenSettings}
+            onOpenWorkspaceSettings={onOpenWorkspaceSettings}
           />
         )}
         {tab === 'source-control' && (

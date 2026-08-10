@@ -1,11 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Bot, Clock3, History, Play, RefreshCw, Search, Settings, Terminal } from 'lucide-react'
+import { Bot, Clock3, History, Play, RefreshCw, Search, Settings } from 'lucide-react'
 import type {
   AgentActiveSession,
   AgentProvider,
-  AgentProviderAvailabilitySnapshot,
-  AgentProvidersConfig,
   AgentSessionHistoryItem,
   AgentSessionStatus,
   ShellProfileId,
@@ -14,10 +12,9 @@ import type {
 } from '@shared/types'
 import {
   buildAgentHistoryQuery,
-  canLaunchAgent,
+  canResumeAgent,
   formatAgentAge,
   sanitizeAgentCwd,
-  type AgentHistoryScope,
 } from '@/utils/agentPanel'
 
 interface AgentPanelProfile {
@@ -28,13 +25,13 @@ interface AgentPanelProfile {
 
 export interface AgentPanelProps {
   workspaceId: string
-  agentProviders: AgentProvidersConfig
+  selectedProvider?: AgentProvider
   availableProfiles: AgentPanelProfile[]
   tiles: TileState[]
   terminalTitles: Record<string, string>
   addTerminal: (profileId: ShellProfileId, agent?: TerminalAgentMetadata) => string | null
   onFocusTile: (tileId: string) => void
-  onOpenSettings: () => void
+  onOpenWorkspaceSettings: () => void
 }
 
 type HistoryState = {
@@ -48,8 +45,6 @@ type SessionSubscription = {
   disposed: boolean
   subscribed: boolean
 }
-
-const PROVIDERS: readonly AgentProvider[] = ['claude', 'codex']
 
 function providerLabel(provider: AgentProvider): string {
   return provider === 'claude' ? 'Claude' : 'Codex'
@@ -71,22 +66,6 @@ function statusClassName(status: AgentSessionStatus): string {
     case 'exited': return 'text-text-disabled'
     default: return 'text-text-display'
   }
-}
-
-function availabilityLabel(
-  provider: AgentProvider,
-  providers: AgentProvidersConfig,
-  availability: AgentProviderAvailabilitySnapshot | null,
-  availabilityError: boolean,
-  loadingLabel: string,
-  availableLabel: string,
-  unavailableLabel: string,
-  disabledLabel: string,
-): string {
-  if (providers[provider]?.enabled === false) return disabledLabel
-  if (availabilityError) return unavailableLabel
-  if (!availability) return loadingLabel
-  return availability[provider]?.available ? availableLabel : unavailableLabel
 }
 
 function displayDate(value: string | undefined, unknownLabel: string): string {
@@ -207,24 +186,19 @@ function HistoryCard({
 
 export function AgentPanel({
   workspaceId,
-  agentProviders,
+  selectedProvider,
   availableProfiles,
   tiles,
   terminalTitles,
   addTerminal,
   onFocusTile,
-  onOpenSettings,
+  onOpenWorkspaceSettings,
 }: AgentPanelProps): React.ReactElement {
   const { t } = useTranslation()
-  const [availability, setAvailability] = useState<AgentProviderAvailabilitySnapshot | null>(null)
-  const [availabilityError, setAvailabilityError] = useState(false)
-  const [availabilityLoading, setAvailabilityLoading] = useState(false)
   const [sessions, setSessions] = useState<AgentActiveSession[]>([])
-  const [historyScope, setHistoryScope] = useState<AgentHistoryScope>('workspace')
   const [historySearch, setHistorySearch] = useState('')
   const [historyState, setHistoryState] = useState<HistoryState>({ status: 'idle', items: [], hasMore: false })
   const historyRequestRef = useRef(0)
-  const availabilityRequestRef = useRef(0)
   const sessionSubscriptionRef = useRef<SessionSubscription | null>(null)
 
   const availableProfile = useMemo(
@@ -232,35 +206,10 @@ export function AgentPanel({
     [availableProfiles],
   )
 
-  const refreshAvailability = useCallback(async () => {
-    const requestId = ++availabilityRequestRef.current
-    setAvailability(null)
-    setAvailabilityError(false)
-    setAvailabilityLoading(true)
-
-    try {
-      const result = await window.electron.agents.availability()
-      if (requestId !== availabilityRequestRef.current) return
-      setAvailability(result)
-    } catch {
-      if (requestId !== availabilityRequestRef.current) return
-      setAvailabilityError(true)
-    } finally {
-      if (requestId !== availabilityRequestRef.current) return
-      setAvailabilityLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    void refreshAvailability()
-    return () => {
-      availabilityRequestRef.current += 1
-    }
-  }, [refreshAvailability])
-
   useEffect(() => {
     let cancelled = false
     setSessions([])
+    if (!selectedProvider) return
 
     const subscription: SessionSubscription = {
       generation: (sessionSubscriptionRef.current?.generation ?? 0) + 1,
@@ -270,12 +219,12 @@ export function AgentPanel({
     sessionSubscriptionRef.current = subscription
 
     const removeListener = window.electron.agents.onSessionsChanged((snapshot) => {
-      if (!cancelled) setSessions(snapshot.sessions)
+      if (!cancelled) setSessions(snapshot.sessions.filter((session) => session.provider === selectedProvider))
     })
 
     void window.electron.agents.sessionsSnapshot(workspaceId)
       .then((snapshot) => {
-        if (!cancelled) setSessions(snapshot.sessions)
+        if (!cancelled) setSessions(snapshot.sessions.filter((session) => session.provider === selectedProvider))
       })
       .catch(() => {
         if (!cancelled) setSessions([])
@@ -300,20 +249,24 @@ export function AgentPanel({
       sessionSubscriptionRef.current = null
       if (subscription.subscribed) void window.electron.agents.unsubscribeSessions()
     }
-  }, [workspaceId])
+  }, [selectedProvider, workspaceId])
 
   useEffect(() => {
     historyRequestRef.current += 1
     setHistoryState({ status: 'idle', items: [], hasMore: false })
-  }, [historySearch, historyScope, workspaceId])
+  }, [historySearch, workspaceId, selectedProvider])
 
-  const canLaunch = useCallback((provider: AgentProvider): boolean => {
-    return canLaunchAgent(provider, agentProviders, availabilityError ? null : availability, Boolean(availableProfile))
-  }, [agentProviders, availability, availabilityError, availableProfile])
+  const canResume = useCallback((provider: AgentProvider): boolean => {
+    return canResumeAgent(provider, selectedProvider, Boolean(availableProfile))
+  }, [availableProfile, selectedProvider])
 
   const loadHistory = useCallback(async () => {
+    if (!selectedProvider) return
     const requestId = ++historyRequestRef.current
-    const query = buildAgentHistoryQuery(historyScope, workspaceId, historySearch)
+    const query = {
+      ...buildAgentHistoryQuery(workspaceId, selectedProvider, historySearch),
+      provider: selectedProvider,
+    }
     setHistoryState({ status: 'loading', items: [], hasMore: false })
 
     try {
@@ -324,16 +277,10 @@ export function AgentPanel({
       if (requestId !== historyRequestRef.current) return
       setHistoryState({ status: 'error', items: [], hasMore: false })
     }
-  }, [historyScope, historySearch, workspaceId])
-
-  const launchAgent = useCallback((provider: AgentProvider) => {
-    if (!canLaunch(provider) || !availableProfile) return
-    const tileId = addTerminal(availableProfile.id, { provider })
-    if (tileId) onFocusTile(tileId)
-  }, [addTerminal, availableProfile, canLaunch, onFocusTile])
+  }, [historySearch, workspaceId, selectedProvider])
 
   const resumeAgent = useCallback((item: AgentSessionHistoryItem) => {
-    if (!canLaunch(item.provider) || !availableProfile) return
+    if (!canResume(item.provider) || !availableProfile) return
     const cwd = sanitizeAgentCwd(item.cwd)
     const metadata: TerminalAgentMetadata = {
       provider: item.provider,
@@ -342,29 +289,19 @@ export function AgentPanel({
     }
     const tileId = addTerminal(availableProfile.id, metadata)
     if (tileId) onFocusTile(tileId)
-  }, [addTerminal, availableProfile, canLaunch, onFocusTile])
+  }, [addTerminal, availableProfile, canResume, onFocusTile])
 
   const tileById = useMemo(() => new Map(tiles.map((tile) => [tile.id, tile])), [tiles])
-  const setupNeeded = availabilityError || (availability !== null && PROVIDERS.some((provider) => (
-    agentProviders[provider]?.enabled !== false && availability[provider]?.available !== true
-  )))
 
   const copy = {
     title: t('agents.title', 'Agents'),
-    newSession: t('agents.newSession', 'New agent session'),
-    refreshAvailability: t('agents.refreshAvailability', 'Refresh provider availability'),
-    available: t('agents.available', 'Available'),
-    unavailable: t('agents.unavailable', 'Unavailable'),
-    disabled: t('agents.disabled', 'Disabled in workspace'),
-    loading: t('agents.loading', 'Checking…'),
+    unconfigured: t('agents.unconfigured', 'Choose an agent provider in this workspace to view its sessions and history.'),
+    configureWorkspace: t('agents.configureWorkspace', 'Configure workspace'),
     running: t('agents.running', 'Running sessions'),
     noRunning: t('agents.noRunning', 'No running agent sessions'),
     history: t('agents.history', 'History'),
     loadHistory: t('agents.loadHistory', 'Load history'),
     refreshHistory: t('agents.refreshHistory', 'Refresh history'),
-    scope: t('agents.scope', 'Scope'),
-    workspace: t('agents.workspace', 'Workspace'),
-    allLocal: t('agents.allLocal', 'All local'),
     searchPlaceholder: t('agents.searchPlaceholder', 'Search title or preview'),
     idleHistory: t('agents.idleHistory', 'History is loaded on demand.'),
     loadingHistory: t('agents.loadingHistory', 'Loading local history…'),
@@ -373,9 +310,6 @@ export function AgentPanel({
     noSearchResults: t('agents.noSearchResults', 'No history matches this search.'),
     historyMore: t('agents.historyMore', 'More local sessions are available.'),
     resume: t('agents.resume', 'Resume'),
-    openSettings: t('agents.openSettings', 'Open Settings'),
-    setupDescription: t('agents.setupDescription', 'Install or configure a provider, then refresh availability.'),
-    noShell: t('agents.noShell', 'No available shell profile can launch an agent.'),
     unknownTitle: t('agents.unknownTitle', 'Untitled session'),
     unknownDate: t('agents.unknownDate', 'Unknown date'),
     cwdUnavailable: t('agents.cwdUnavailable', 'cwd unavailable'),
@@ -391,71 +325,25 @@ export function AgentPanel({
         <div className="flex items-center gap-2">
           <Bot size={16} className="text-text-secondary" />
           <div className="nd-label flex-1 text-text-display">{copy.title}</div>
-          <button
-            type="button"
-            className="inline-flex h-7 w-7 items-center justify-center rounded text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display disabled:cursor-not-allowed disabled:opacity-50"
-            onClick={() => void refreshAvailability()}
-            disabled={availabilityLoading}
-            title={copy.refreshAvailability}
-            aria-label={copy.refreshAvailability}
-          >
-            <RefreshCw size={14} className={availabilityLoading ? 'animate-spin' : ''} />
-          </button>
         </div>
-        <div className="mt-1 text-xs text-text-secondary">{copy.newSession}</div>
-        <div className="mt-3 grid gap-2">
-          {PROVIDERS.map((provider) => {
-            const enabled = agentProviders[provider]?.enabled !== false
-            const isAvailable = availability?.[provider]?.available === true
-            const canStart = canLaunch(provider)
-            const providerState = availabilityLabel(
-              provider,
-              agentProviders,
-              availability,
-              availabilityError,
-              copy.loading,
-              copy.available,
-              copy.unavailable,
-              copy.disabled,
-            )
-            return (
-              <button
-                key={provider}
-                type="button"
-                className="flex items-center gap-3 rounded-[16px] border border-border-visible bg-bg-primary px-3 py-2.5 text-left transition-colors hover:border-text-secondary hover:bg-hover-bg disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={!canStart}
-                onClick={() => launchAgent(provider)}
-                aria-label={`Start ${providerLabel(provider)} agent`}
-              >
-                <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border-visible text-text-secondary">
-                  <Terminal size={14} />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm text-text-display">{providerLabel(provider)}</span>
-                  <span className="mt-0.5 block text-[11px] text-text-secondary">{providerState}</span>
-                </span>
-                <Play size={14} className={enabled && isAvailable && availableProfile ? 'text-text-display' : 'text-text-disabled'} />
-              </button>
-            )
-          })}
-        </div>
-        {!availableProfile && <p className="mt-2 text-xs text-text-disabled">{copy.noShell}</p>}
-        {setupNeeded && (
-          <div className="mt-3 rounded-[14px] border border-border-visible bg-bg-primary px-3 py-2.5">
-            <p className="text-xs leading-5 text-text-secondary">{copy.setupDescription}</p>
-            <button
-              type="button"
-              className="mt-2 inline-flex items-center gap-1.5 text-xs text-text-display underline decoration-border-visible underline-offset-4 hover:decoration-text-display"
-              onClick={onOpenSettings}
-            >
-              <Settings size={13} />
-              {copy.openSettings}
-            </button>
-          </div>
-        )}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto">
+      {!selectedProvider ? (
+        <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto px-4 py-6">
+          <div className="max-w-[280px] text-center">
+            <Settings size={18} className="mx-auto text-text-secondary" />
+            <p className="mt-3 text-sm leading-6 text-text-secondary">{copy.unconfigured}</p>
+            <button
+              type="button"
+              className="mt-4 inline-flex items-center rounded-full border border-border-visible px-3 py-2 text-xs text-text-display transition-colors hover:border-text-secondary hover:bg-hover-bg"
+              onClick={onOpenWorkspaceSettings}
+            >
+              {copy.configureWorkspace}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="min-h-0 flex-1 overflow-auto">
         <section className="border-b border-border px-4 py-3">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
@@ -510,18 +398,6 @@ export function AgentPanel({
                 className="w-full rounded-full border border-border-visible bg-bg-primary py-2 pl-9 pr-3 text-xs text-text-display outline-none placeholder:text-text-disabled focus:border-text-secondary"
               />
             </label>
-            <label className="flex items-center justify-between gap-3 rounded-full border border-border-visible bg-bg-primary px-3 py-2 text-xs text-text-secondary">
-              <span>{copy.scope}</span>
-              <select
-                value={historyScope}
-                onChange={(event) => setHistoryScope(event.target.value as AgentHistoryScope)}
-                className="bg-transparent text-right text-xs text-text-display outline-none"
-                aria-label={copy.scope}
-              >
-                <option value="workspace">{copy.workspace}</option>
-                <option value="all">{copy.allLocal}</option>
-              </select>
-            </label>
           </div>
 
           <div className="mt-3 space-y-2">
@@ -542,7 +418,7 @@ export function AgentPanel({
                 key={`${item.provider}-${item.identifier}`}
                 item={item}
                 onResume={resumeAgent}
-                resumeDisabled={!canLaunch(item.provider)}
+                resumeDisabled={!canResume(item.provider)}
                 unknownTitle={copy.unknownTitle}
                 unknownDate={copy.unknownDate}
                 cwdUnavailableLabel={copy.cwdUnavailable}
@@ -558,7 +434,8 @@ export function AgentPanel({
             )}
           </div>
         </section>
-      </div>
+        </div>
+      )}
     </div>
   )
 }

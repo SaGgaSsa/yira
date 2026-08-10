@@ -5,9 +5,7 @@ import type {
   AgentSessionHistoryQuery,
 } from '@shared/types'
 
-export type AgentHistoryScope = 'workspace' | 'all'
-
-/** Gate both fresh and resumed sessions with the same provider checks. */
+/** Gate an agent session when its provider configuration and availability are known. */
 export function canLaunchAgent(
   provider: AgentProvider,
   providers: AgentProvidersConfig,
@@ -19,15 +17,25 @@ export function canLaunchAgent(
     availability?.[provider]?.available === true
 }
 
+/** Resume only the selected provider through an available shell profile. */
+export function canResumeAgent(
+  provider: AgentProvider,
+  selectedProvider: AgentProvider | undefined,
+  hasAvailableProfile: boolean,
+): boolean {
+  return provider === selectedProvider && hasAvailableProfile
+}
+
 /** Build the restricted bridge query used by the Agents panel. */
 export function buildAgentHistoryQuery(
-  scope: AgentHistoryScope,
   workspaceId: string,
+  provider: AgentProvider,
   search: string,
 ): AgentSessionHistoryQuery {
   const normalizedSearch = search.trim().replace(/\s+/g, ' ')
   return {
-    ...(scope === 'workspace' ? { workspaceId } : {}),
+    workspaceId,
+    provider,
     ...(normalizedSearch ? { search: normalizedSearch } : {}),
   }
 }

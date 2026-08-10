@@ -4,6 +4,7 @@ import test from 'node:test'
 import {
   buildAgentHistoryQuery,
   canLaunchAgent,
+  canResumeAgent,
   formatAgentAge,
   sanitizeAgentCwd,
 } from './agentPanel'
@@ -19,19 +20,15 @@ const providerAvailability: AgentProviderAvailabilitySnapshot = {
   codex: { provider: 'codex', command: 'codex', configured: true, available: false },
 }
 
-test('buildAgentHistoryQuery scopes workspace history and omits blank search text', () => {
-  assert.deepEqual(buildAgentHistoryQuery('workspace', 'workspace-1', '  release notes  '), {
+test('buildAgentHistoryQuery includes the workspace provider and omits blank search text', () => {
+  assert.deepEqual(buildAgentHistoryQuery('workspace-1', 'claude', ' release notes '), {
     workspaceId: 'workspace-1',
+    provider: 'claude',
     search: 'release notes',
   })
-  assert.deepEqual(buildAgentHistoryQuery('workspace', 'workspace-1', '   '), {
+  assert.deepEqual(buildAgentHistoryQuery('workspace-1', 'claude', '   '), {
     workspaceId: 'workspace-1',
-  })
-})
-
-test('buildAgentHistoryQuery leaves workspaceId out for all-local history', () => {
-  assert.deepEqual(buildAgentHistoryQuery('all', 'workspace-1', 'fix auth'), {
-    search: 'fix auth',
+    provider: 'claude',
   })
 })
 
@@ -40,6 +37,13 @@ test('canLaunchAgent gates new and resumed sessions by provider configuration an
   assert.equal(canLaunchAgent('codex', providerConfig, providerAvailability, true), false)
   assert.equal(canLaunchAgent('claude', { ...providerConfig, claude: { enabled: false, args: [] } }, providerAvailability, true), false)
   assert.equal(canLaunchAgent('claude', providerConfig, providerAvailability, false), false)
+})
+
+test('canResumeAgent only enables the selected provider with an available shell profile', () => {
+  assert.equal(canResumeAgent('claude', 'claude', true), true)
+  assert.equal(canResumeAgent('codex', 'claude', true), false)
+  assert.equal(canResumeAgent('claude', undefined, true), false)
+  assert.equal(canResumeAgent('claude', 'claude', false), false)
 })
 
 test('sanitizeAgentCwd only returns safe workspace-relative paths', () => {

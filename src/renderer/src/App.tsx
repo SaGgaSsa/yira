@@ -959,6 +959,12 @@ export default function App(): React.ReactElement {
     })
   }, [t])
 
+  const openActiveWorkspaceEditor = useCallback(() => {
+    if (!activeWorkspaceId) return
+    const workspace = workspaceMetadata.find((entry) => entry.id === activeWorkspaceId)
+    if (workspace) openWorkspaceEditor(workspace)
+  }, [activeWorkspaceId, openWorkspaceEditor, workspaceMetadata])
+
   const toggleWorkspacePanel = useCallback(() => {
     if (!activeWorkspaceId || !hasWorkspacePanel) return
 
@@ -2303,13 +2309,13 @@ export default function App(): React.ReactElement {
                   onWorkspaceUpdated={handleWorkspaceConfigUpdated}
                   activeFilePath={activeFilePath}
                   onOpenFile={openFileTile}
-                  agentProviders={activeWorkspaceConfig.agentProviders}
+                  agentProvider={activeWorkspaceConfig.agentProvider}
                   availableProfiles={availableProfiles}
                   tiles={tiles}
                   terminalTitles={terminalTitles}
                   addTerminal={addTerminal}
                   onFocusTile={focusAgentTile}
-                  onOpenSettings={() => openSettings('advanced')}
+                  onOpenWorkspaceSettings={openActiveWorkspaceEditor}
                 />
               )}
             </div>
