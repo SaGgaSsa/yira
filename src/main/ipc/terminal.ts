@@ -42,7 +42,8 @@ const agentAlerts = new SemanticAgentAlertState({ onChange: broadcastAgentAlert 
 const agentAlertBridge = new AgentAlertBridge({
   onAlert: (alert) => {
     const session = terminals.get(alert.tileId)
-    if (!session?.agentLifecycle?.onAlert(alert)) return
+    if (!session) return
+    if (session.agentLifecycle && !session.agentLifecycle.onAlert(alert)) return
     agentAlerts.report(alert)
   },
 })
