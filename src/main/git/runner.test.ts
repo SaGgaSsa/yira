@@ -215,6 +215,8 @@ try {
   const upstreamHistoryCalls: string[][] = []
   const upstreamHistory = await getGitCommitHistory(tempRoot, async (_command, args) => {
     upstreamHistoryCalls.push(args)
+    if (args.includes('config')) return { stdout: 'branch.main.remote\norigin\0branch.main.merge\nrefs/heads/main\0', stderr: '' }
+    if (args.includes('symbolic-ref')) return { stdout: 'main\n', stderr: '' }
     if (args.includes('rev-parse')) return { stdout: 'origin/main\n', stderr: '' }
     if (args.includes('origin/main..HEAD')) return { stdout: outgoingLog, stderr: '' }
     if (args.includes('origin/main')) return { stdout: upstreamLog, stderr: '' }
@@ -226,13 +228,17 @@ try {
   if (upstreamHistory.outgoing[0].shortHash !== 'local6' || upstreamHistory.upstream[0].shortHash !== 'remote5' || upstreamHistory.upstream[4].shortHash !== 'remote1') {
     throw new Error('history with an upstream must preserve Git log order and commit summaries')
   }
-  if (upstreamHistoryCalls.length !== 3 || upstreamHistoryCalls[1].includes('-5') || !upstreamHistoryCalls[2].includes('-5')) {
+  const outgoingHistoryCall = upstreamHistoryCalls.find((args) => args.includes('origin/main..HEAD'))
+  const upstreamHistoryCall = upstreamHistoryCalls.find((args) => args.includes('origin/main') && !args.includes('origin/main..HEAD'))
+  if (upstreamHistoryCalls.length !== 5 || outgoingHistoryCall?.includes('-5') || !upstreamHistoryCall?.includes('-5')) {
     throw new Error('history commands must leave outgoing commits uncapped and limit upstream history to five')
   }
 
   const localHistoryCalls: string[][] = []
   const noUpstreamHistory = await getGitCommitHistory(tempRoot, async (_command, args) => {
     localHistoryCalls.push(args)
+    if (args.includes('config')) return { stdout: '', stderr: '' }
+    if (args.includes('symbolic-ref')) return { stdout: 'main\n', stderr: '' }
     if (args.includes('rev-parse')) throw new Error('fatal: no upstream configured')
     if (args.includes('HEAD')) return { stdout: localLog, stderr: '' }
     throw new Error(`unexpected local history command: ${args.join('|')}`)
@@ -240,11 +246,13 @@ try {
   if (noUpstreamHistory.error || noUpstreamHistory.outgoing.length !== 0 || noUpstreamHistory.upstream.length !== 0 || noUpstreamHistory.local.length !== 5) {
     throw new Error('history without an upstream must return five local commits and empty upstream/outgoing lists')
   }
-  if (noUpstreamHistory.local[0].shortHash !== 'local5' || localHistoryCalls.length !== 2 || !localHistoryCalls[1].includes('-5')) {
+  if (noUpstreamHistory.local[0].shortHash !== 'local5' || localHistoryCalls.length !== 3 || !localHistoryCalls[2].includes('-5')) {
     throw new Error('history without an upstream must read recent HEAD commits with a five-commit limit')
   }
 
   const noCommitHistory = await getGitCommitHistory(tempRoot, async (_command, args) => {
+    if (args.includes('config')) return { stdout: '', stderr: '' }
+    if (args.includes('symbolic-ref')) return { stdout: 'main\n', stderr: '' }
     if (args.includes('rev-parse')) throw new Error('fatal: no upstream configured')
     throw new Error('fatal: your current branch does not have any commits yet')
   })
@@ -253,11 +261,26 @@ try {
   }
 
   const failedHistory = await getGitCommitHistory(tempRoot, async (_command, args) => {
+    if (args.includes('config')) return { stdout: 'branch.main.remote\norigin\0branch.main.merge\nrefs/heads/main\0', stderr: '' }
+    if (args.includes('symbolic-ref')) return { stdout: 'main\n', stderr: '' }
     if (args.includes('rev-parse')) return { stdout: 'origin/main\n', stderr: '' }
     throw new Error('fatal: unable to read commit history')
   })
   if (failedHistory.outgoing.length !== 0 || failedHistory.upstream.length !== 0 || failedHistory.local.length !== 0 || failedHistory.error !== 'fatal: unable to read commit history') {
     throw new Error('history command failures must return empty lists and preserve an informative error')
+  }
+
+  const goneHistoryCalls: string[][] = []
+  const goneUpstreamHistory = await getGitCommitHistory(tempRoot, async (_command, args) => {
+    goneHistoryCalls.push(args)
+    if (args.includes('config')) return { stdout: 'branch.main.remote\norigin\0branch.main.merge\nrefs/heads/main\0', stderr: '' }
+    if (args.includes('symbolic-ref')) return { stdout: 'main\n', stderr: '' }
+    if (args.includes('rev-parse')) throw new Error("fatal: upstream branch 'origin/main' is gone")
+    if (args.includes('HEAD')) return { stdout: localLog, stderr: '' }
+    throw new Error(`unexpected gone-upstream history command: ${args.join('|')}`)
+  })
+  if (!goneUpstreamHistory.error?.includes('gone') || goneUpstreamHistory.outgoing.length !== 0 || goneUpstreamHistory.upstream.length !== 0 || goneUpstreamHistory.local.length !== 0 || goneHistoryCalls.some((args) => args.includes('log') && args.includes('HEAD'))) {
+    throw new Error('configured but missing upstreams must return an informative error without falling back to HEAD history')
   }
 } finally {
   await rm(tempRoot, { recursive: true, force: true })

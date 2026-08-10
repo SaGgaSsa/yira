@@ -218,6 +218,61 @@ function emptyGitCommitHistory(error?: string): GitCommitHistoryResult {
   return { outgoing: [], upstream: [], local: [], ...(error ? { error } : {}) }
 }
 
+interface GitUpstreamDiscovery {
+  upstream?: string
+  configured: boolean
+  error?: string
+}
+
+function parseGitConfigValues(output: string, branch: string): Map<'remote' | 'merge', string> {
+  const values = new Map<'remote' | 'merge', string>()
+  const branchPrefix = `branch.${branch}.`
+  for (const record of output.split('\0')) {
+    const separator = record.indexOf('\n')
+    if (separator < 0) continue
+    const key = record.slice(0, separator)
+    const value = record.slice(separator + 1)
+    if (key === `${branchPrefix}remote` || key === `${branchPrefix}merge`) {
+      values.set(key.slice(branchPrefix.length) as 'remote' | 'merge', value)
+    }
+  }
+  return values
+}
+
+async function discoverGitUpstream(rootPath: string, executor: GitCommandExecutor): Promise<GitUpstreamDiscovery> {
+  let config: GitCommandResult
+  try {
+    config = await runGitAtRoot(rootPath, ['config', '--local', '--null', '--list'], executor)
+  } catch (error) {
+    return { configured: true, error: toErrorMessage(error) }
+  }
+
+  let branch: string
+  try {
+    const result = await runGitAtRoot(rootPath, ['symbolic-ref', '--quiet', '--short', 'HEAD'], executor)
+    branch = result.stdout.trim()
+  } catch (error) {
+    if (toErrorMessage(error) === 'Git is not available') return { configured: true, error: 'Git is not available' }
+    return { configured: false }
+  }
+  if (!branch) return { configured: false }
+
+  const values = parseGitConfigValues(config.stdout, branch)
+  const remote = values.get('remote')
+  const merge = values.get('merge')
+  if (remote === undefined && merge === undefined) return { configured: false }
+  if (!remote || !merge) return { configured: true, error: 'Current branch has an incomplete upstream configuration' }
+
+  try {
+    const result = await runGitAtRoot(rootPath, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'], executor)
+    const upstream = result.stdout.trim()
+    if (!upstream) return { configured: true, error: 'Configured upstream could not be resolved' }
+    return { configured: true, upstream }
+  } catch (error) {
+    return { configured: true, error: `Configured upstream could not be resolved: ${toErrorMessage(error)}` }
+  }
+}
+
 export async function getGitStatus(rootPathInput: string, executor: GitCommandExecutor = execGitCommand): Promise<GitStatusResult> {
   let rootPath: string
   try {
@@ -256,16 +311,10 @@ export async function getGitCommitHistory(
     return emptyGitCommitHistory(toErrorMessage(error))
   }
 
-  let upstream: string | undefined
-  try {
-    const result = await runGitAtRoot(rootPath, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'], executor)
-    upstream = result.stdout.trim() || undefined
-  } catch {
-    // A missing upstream is expected for local branches. The log command below
-    // determines whether the branch has any commits to report.
-  }
+  const discovery = await discoverGitUpstream(rootPath, executor)
+  if (discovery.error) return emptyGitCommitHistory(discovery.error)
 
-  if (!upstream) {
+  if (!discovery.configured) {
     try {
       const result = await runGitAtRoot(rootPath, ['log', '-5', GIT_COMMIT_LOG_FORMAT, 'HEAD'], executor)
       return { ...emptyGitCommitHistory(), local: parseGitCommitLog(result.stdout) }
@@ -274,16 +323,18 @@ export async function getGitCommitHistory(
     }
   }
 
+  if (!discovery.upstream) return emptyGitCommitHistory('Configured upstream could not be resolved')
+
   const history = emptyGitCommitHistory()
   try {
-    const result = await runGitAtRoot(rootPath, ['log', GIT_COMMIT_LOG_FORMAT, `${upstream}..HEAD`], executor)
+    const result = await runGitAtRoot(rootPath, ['log', GIT_COMMIT_LOG_FORMAT, `${discovery.upstream}..HEAD`], executor)
     history.outgoing = parseGitCommitLog(result.stdout)
   } catch (error) {
     history.error = toErrorMessage(error)
   }
 
   try {
-    const result = await runGitAtRoot(rootPath, ['log', '-5', GIT_COMMIT_LOG_FORMAT, upstream], executor)
+    const result = await runGitAtRoot(rootPath, ['log', '-5', GIT_COMMIT_LOG_FORMAT, discovery.upstream], executor)
     history.upstream = parseGitCommitLog(result.stdout)
   } catch (error) {
     history.error ??= toErrorMessage(error)
