@@ -1,4 +1,5 @@
 import type {
+  AgentActiveSessionSnapshot,
   AgentProvider,
   AgentProviderAvailabilitySnapshot,
   AgentProvidersConfig,
@@ -21,9 +22,28 @@ export function canLaunchAgent(
 export function canResumeAgent(
   provider: AgentProvider,
   selectedProvider: AgentProvider | undefined,
+  providers: AgentProvidersConfig,
+  availability: AgentProviderAvailabilitySnapshot | null,
   hasAvailableProfile: boolean,
 ): boolean {
-  return provider === selectedProvider && hasAvailableProfile
+  return provider === selectedProvider &&
+    hasAvailableProfile &&
+    providers[provider]?.enabled !== false &&
+    availability?.[provider]?.available === true
+}
+
+/** Keep all agent bridge work behind an explicit workspace provider selection. */
+export function shouldRequestAgentData(selectedProvider: AgentProvider | undefined): selectedProvider is AgentProvider {
+  return selectedProvider !== undefined
+}
+
+/** Filter a runtime snapshot to the selected provider, or hide it when unset. */
+export function filterAgentSessions(
+  snapshot: AgentActiveSessionSnapshot,
+  selectedProvider: AgentProvider | undefined,
+): AgentActiveSessionSnapshot['sessions'] {
+  if (!shouldRequestAgentData(selectedProvider)) return []
+  return snapshot.sessions.filter((session) => session.provider === selectedProvider)
 }
 
 /** Build the restricted bridge query used by the Agents panel. */

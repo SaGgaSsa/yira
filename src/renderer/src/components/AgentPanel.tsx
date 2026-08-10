@@ -4,6 +4,8 @@ import { Bot, Clock3, History, Play, RefreshCw, Search, Settings } from 'lucide-
 import type {
   AgentActiveSession,
   AgentProvider,
+  AgentProviderAvailabilitySnapshot,
+  AgentProvidersConfig,
   AgentSessionHistoryItem,
   AgentSessionStatus,
   ShellProfileId,
@@ -13,8 +15,10 @@ import type {
 import {
   buildAgentHistoryQuery,
   canResumeAgent,
+  filterAgentSessions,
   formatAgentAge,
   sanitizeAgentCwd,
+  shouldRequestAgentData,
 } from '@/utils/agentPanel'
 
 interface AgentPanelProfile {
@@ -26,6 +30,7 @@ interface AgentPanelProfile {
 export interface AgentPanelProps {
   workspaceId: string
   selectedProvider?: AgentProvider
+  agentProviders: AgentProvidersConfig
   availableProfiles: AgentPanelProfile[]
   tiles: TileState[]
   terminalTitles: Record<string, string>
@@ -187,6 +192,7 @@ function HistoryCard({
 export function AgentPanel({
   workspaceId,
   selectedProvider,
+  agentProviders,
   availableProfiles,
   tiles,
   terminalTitles,
@@ -195,10 +201,12 @@ export function AgentPanel({
   onOpenWorkspaceSettings,
 }: AgentPanelProps): React.ReactElement {
   const { t } = useTranslation()
+  const [availability, setAvailability] = useState<AgentProviderAvailabilitySnapshot | null>(null)
   const [sessions, setSessions] = useState<AgentActiveSession[]>([])
   const [historySearch, setHistorySearch] = useState('')
   const [historyState, setHistoryState] = useState<HistoryState>({ status: 'idle', items: [], hasMore: false })
   const historyRequestRef = useRef(0)
+  const availabilityRequestRef = useRef(0)
   const sessionSubscriptionRef = useRef<SessionSubscription | null>(null)
 
   const availableProfile = useMemo(
@@ -207,9 +215,25 @@ export function AgentPanel({
   )
 
   useEffect(() => {
+    const requestId = ++availabilityRequestRef.current
+    setAvailability(null)
+    if (!shouldRequestAgentData(selectedProvider)) return
+
+    void window.electron.agents.availability()
+      .then((result) => {
+        if (requestId === availabilityRequestRef.current) setAvailability(result)
+      })
+      .catch(() => undefined)
+
+    return () => {
+      availabilityRequestRef.current += 1
+    }
+  }, [selectedProvider])
+
+  useEffect(() => {
     let cancelled = false
     setSessions([])
-    if (!selectedProvider) return
+    if (!shouldRequestAgentData(selectedProvider)) return
 
     const subscription: SessionSubscription = {
       generation: (sessionSubscriptionRef.current?.generation ?? 0) + 1,
@@ -219,12 +243,12 @@ export function AgentPanel({
     sessionSubscriptionRef.current = subscription
 
     const removeListener = window.electron.agents.onSessionsChanged((snapshot) => {
-      if (!cancelled) setSessions(snapshot.sessions.filter((session) => session.provider === selectedProvider))
+      if (!cancelled) setSessions(filterAgentSessions(snapshot, selectedProvider))
     })
 
     void window.electron.agents.sessionsSnapshot(workspaceId)
       .then((snapshot) => {
-        if (!cancelled) setSessions(snapshot.sessions.filter((session) => session.provider === selectedProvider))
+        if (!cancelled) setSessions(filterAgentSessions(snapshot, selectedProvider))
       })
       .catch(() => {
         if (!cancelled) setSessions([])
@@ -257,11 +281,11 @@ export function AgentPanel({
   }, [historySearch, workspaceId, selectedProvider])
 
   const canResume = useCallback((provider: AgentProvider): boolean => {
-    return canResumeAgent(provider, selectedProvider, Boolean(availableProfile))
-  }, [availableProfile, selectedProvider])
+    return canResumeAgent(provider, selectedProvider, agentProviders, availability, Boolean(availableProfile))
+  }, [agentProviders, availability, availableProfile, selectedProvider])
 
   const loadHistory = useCallback(async () => {
-    if (!selectedProvider) return
+    if (!shouldRequestAgentData(selectedProvider)) return
     const requestId = ++historyRequestRef.current
     const query = {
       ...buildAgentHistoryQuery(workspaceId, selectedProvider, historySearch),

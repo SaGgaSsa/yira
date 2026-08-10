@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   AgentProvider,
+  AgentProvidersConfig,
   ShellProfileId,
   SourceControlViewMode,
   TerminalAgentMetadata,
@@ -25,6 +26,7 @@ interface WorkspacePanelProps {
   activeFilePath: string | null
   onOpenFile: (relativePath: string) => Promise<void>
   agentProvider?: AgentProvider
+  agentProviders: AgentProvidersConfig
   availableProfiles: Array<{ id: ShellProfileId; label: string; available: boolean }>
   tiles: TileState[]
   terminalTitles: Record<string, string>
@@ -41,6 +43,7 @@ export function WorkspacePanel({
   activeFilePath,
   onOpenFile,
   agentProvider,
+  agentProviders,
   availableProfiles,
   tiles,
   terminalTitles,
@@ -110,6 +113,7 @@ export function WorkspacePanel({
           <AgentPanel
             workspaceId={workspaceId}
             selectedProvider={agentProvider}
+            agentProviders={agentProviders}
             availableProfiles={availableProfiles}
             tiles={tiles}
             terminalTitles={terminalTitles}

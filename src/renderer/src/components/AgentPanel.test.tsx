@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 const source = readFileSync(new URL('./AgentPanel.tsx', import.meta.url), 'utf8')
 
 for (const requiredBridgeCall of [
+  'window.electron.agents.availability()',
   'window.electron.agents.sessionsSnapshot(workspaceId)',
   'window.electron.agents.subscribeSessions(workspaceId)',
   'window.electron.agents.unsubscribeSessions()',
@@ -22,14 +23,17 @@ for (const requiredCopy of [
 }
 
 if (!source.includes('selectedProvider')) throw new Error('Agents panel must use the selected workspace provider')
+if (!source.includes('agentProviders')) throw new Error('resume must use workspace provider configuration')
+if (!source.includes('availability')) throw new Error('resume must use provider availability')
 if (!source.includes('provider: selectedProvider')) throw new Error('history queries must include the selected provider')
 if (!source.includes('onOpenWorkspaceSettings')) throw new Error('unconfigured state must offer workspace configuration')
 if (source.includes('New agent session')) throw new Error('Agents panel must not render new session launch UI')
 if (source.includes('All local')) throw new Error('Agents panel must not offer all-local history')
 if (source.includes('historyScope')) throw new Error('Agents panel must not track a history scope')
 if (source.includes('launchAgent')) throw new Error('Agents panel must not launch new sessions')
-if (source.includes('agents.availability()')) throw new Error('Agents panel must not query provider availability')
 if (!source.includes('buildAgentHistoryQuery')) throw new Error('history refresh must build a scoped bridge query')
+if (!source.includes('shouldRequestAgentData')) throw new Error('agent data requests must be gated by provider selection')
+if (!source.includes('filterAgentSessions')) throw new Error('session snapshots must use a testable provider filter')
 if (!source.includes('sanitizeAgentCwd')) throw new Error('history cwd must be sanitized before display and resume')
 if (!source.includes('onSessionsChanged')) throw new Error('running sessions must subscribe to live changes')
 if (!source.includes('onFocusTile(session.tileId)')) throw new Error('running cards must focus their terminal tile')

@@ -2310,6 +2310,7 @@ export default function App(): React.ReactElement {
                   activeFilePath={activeFilePath}
                   onOpenFile={openFileTile}
                   agentProvider={activeWorkspaceConfig.agentProvider}
+                  agentProviders={activeWorkspaceConfig.agentProviders}
                   availableProfiles={availableProfiles}
                   tiles={tiles}
                   terminalTitles={terminalTitles}

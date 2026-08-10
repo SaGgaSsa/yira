@@ -5,10 +5,12 @@ import {
   buildAgentHistoryQuery,
   canLaunchAgent,
   canResumeAgent,
+  filterAgentSessions,
   formatAgentAge,
   sanitizeAgentCwd,
+  shouldRequestAgentData,
 } from './agentPanel'
-import type { AgentProviderAvailabilitySnapshot, AgentProvidersConfig } from '@shared/types'
+import type { AgentActiveSessionSnapshot, AgentProviderAvailabilitySnapshot, AgentProvidersConfig } from '@shared/types'
 
 const providerConfig: AgentProvidersConfig = {
   claude: { enabled: true, args: [] },
@@ -40,10 +42,51 @@ test('canLaunchAgent gates new and resumed sessions by provider configuration an
 })
 
 test('canResumeAgent only enables the selected provider with an available shell profile', () => {
-  assert.equal(canResumeAgent('claude', 'claude', true), true)
-  assert.equal(canResumeAgent('codex', 'claude', true), false)
-  assert.equal(canResumeAgent('claude', undefined, true), false)
-  assert.equal(canResumeAgent('claude', 'claude', false), false)
+  assert.equal(canResumeAgent('claude', 'claude', providerConfig, providerAvailability, true), true)
+  assert.equal(canResumeAgent('codex', 'claude', providerConfig, providerAvailability, true), false)
+  assert.equal(canResumeAgent('claude', undefined, providerConfig, providerAvailability, true), false)
+  assert.equal(canResumeAgent('claude', 'claude', providerConfig, providerAvailability, false), false)
+  assert.equal(canResumeAgent('claude', 'claude', {
+    ...providerConfig,
+    claude: { enabled: false, args: [] },
+  }, providerAvailability, true), false)
+  assert.equal(canResumeAgent('claude', 'claude', providerConfig, {
+    ...providerAvailability,
+    claude: { ...providerAvailability.claude, available: false },
+  }, true), false)
+})
+
+test('agent data requests require a selected provider', () => {
+  assert.equal(shouldRequestAgentData(undefined), false)
+  assert.equal(shouldRequestAgentData('claude'), true)
+})
+
+test('filterAgentSessions keeps only the selected provider and hides unselected data', () => {
+  const snapshot: AgentActiveSessionSnapshot = {
+    sessions: [
+      {
+        sessionId: 'claude-session',
+        tileId: 'claude-tile',
+        workspaceId: 'workspace-1',
+        provider: 'claude',
+        status: 'working',
+        startedAt: '2026-08-10T12:00:00.000Z',
+        lastActivityAt: '2026-08-10T12:01:00.000Z',
+      },
+      {
+        sessionId: 'codex-session',
+        tileId: 'codex-tile',
+        workspaceId: 'workspace-1',
+        provider: 'codex',
+        status: 'working',
+        startedAt: '2026-08-10T12:00:00.000Z',
+        lastActivityAt: '2026-08-10T12:01:00.000Z',
+      },
+    ],
+  }
+
+  assert.deepEqual(filterAgentSessions(snapshot, 'claude'), [snapshot.sessions[0]])
+  assert.deepEqual(filterAgentSessions(snapshot, undefined), [])
 })
 
 test('sanitizeAgentCwd only returns safe workspace-relative paths', () => {
