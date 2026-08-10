@@ -7,10 +7,11 @@ function normalizeCommand(command?: string): string | undefined {
 }
 
 export function buildTerminalStartupCommand(
-  tile: Pick<TileState, 'type' | 'shellProfileId' | 'startupCommand'>,
+  tile: Pick<TileState, 'type' | 'shellProfileId' | 'startupCommand' | 'agent'>,
   workspaceConfig?: WorkspaceConfig,
 ): string | undefined {
   if (tile.type !== 'terminal') return undefined
+  if (tile.agent) return undefined
 
   const commands: string[] = []
   const workspaceCommand = normalizeCommand(workspaceConfig?.initialCommand)

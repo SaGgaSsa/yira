@@ -37,6 +37,8 @@ export type AgentSessionStatus = 'working' | 'needs-input' | 'done' | 'exited'
 export interface TerminalAgentMetadata {
   provider: AgentProvider
   sessionId?: string
+  /** Workspace-relative directory used when resuming a history session. */
+  cwd?: string
 }
 
 /** Backwards-compatible name for consumers that call this agent terminal metadata. */
@@ -413,6 +415,8 @@ export interface TerminalCreateOptions {
   remoteTerminal?: RemoteTerminalConfig
   remoteStartupCommand?: string
   agent?: TerminalAgentMetadata
+  /** Normalized workspace provider settings used by the main-process adapter. */
+  agentProviderConfig?: AgentProviderConfig
 }
 
 // ─── Files ─────────────────────────────────────────────────────────────────

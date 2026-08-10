@@ -6,7 +6,7 @@ import { buildDuplicateTerminalTile, insertDuplicateIntoSplitPanel } from '@/uti
 import { getBrowserTileUrl } from '@/utils/browserUrl'
 import type { ConfirmDialogOptions } from '@/components/AppDialog'
 import { GRID_MAX_TILES, getDefaultTileSize } from '@shared/types'
-import type { TileState, ShellProfileId, NoteColor, NoteKind, SplitPanelId } from '@shared/types'
+import type { TileState, ShellProfileId, NoteColor, NoteKind, SplitPanelId, TerminalAgentMetadata } from '@shared/types'
 
 const TILE_TYPE_LABELS: Record<TileState['type'], string> = {
   terminal: 'Terminal',
@@ -139,7 +139,7 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
   )
 
   const addTerminal = useCallback(
-    (profileId: ShellProfileId) => {
+    (profileId: ShellProfileId, agent?: TerminalAgentMetadata) => {
       const state = useCanvasStore.getState()
       const targetGroup = groupsEnabled ? findSelectedGroup(state.groups, state.selectedTileIds) : null
       const size = getDefaultTileSize('terminal')
@@ -154,10 +154,12 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
         height: size.height,
         zIndex: state.nextZIndex,
         shellProfileId: profileId,
+        ...(agent ? { agent } : {}),
         groupId: targetGroup?.id,
       }
 
-      finalizeAddedTile(tile, targetGroup?.id)
+      if (!finalizeAddedTile(tile, targetGroup?.id)) return null
+      return tile.id
     },
     [finalizeAddedTile, getSpawnPos, groupsEnabled],
   )

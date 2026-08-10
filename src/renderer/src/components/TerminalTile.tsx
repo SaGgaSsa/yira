@@ -282,6 +282,10 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
         wslStartInHome: !isRemoteSsh && tile.shellProfileId === 'wsl' && !workspaceConfig.rootFolderPath,
         initialCommand,
         terminalHistoryEnabled: workspaceConfig.terminalHistoryEnabled !== false,
+        agent: isRemoteSsh ? undefined : tile.agent,
+        agentProviderConfig: !isRemoteSsh && tile.agent
+          ? workspaceConfig.agentProviders[tile.agent.provider]
+          : undefined,
       })
       .then(({ buffer }) => {
         if (cancelled) return
@@ -346,7 +350,15 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
       termRef.current = null
       fitRef.current = null
     }
-  }, [tile.id, tile.shellProfileId, clearAttentionIfAttended, doFit])
+  }, [
+    clearAttentionIfAttended,
+    doFit,
+    tile.agent?.cwd,
+    tile.agent?.provider,
+    tile.agent?.sessionId,
+    tile.id,
+    tile.shellProfileId,
+  ])
 
   useEffect(() => {
     if (!isVisible) {
