@@ -61,6 +61,14 @@ async function run(): Promise<void> {
       throw new Error('privilege logger failures must retain only their safe category and exit code')
     }
 
+    assert.deepEqual(getSafeUpdaterLogData('Linux Debian update launcher started'), {
+      category: 'linux-deb-launcher-started',
+    })
+    assert.deepEqual(getSafeUpdaterLogData('Linux Debian update launcher failed with exit code 126'), {
+      category: 'linux-deb-launcher-failed',
+      exitCode: 126,
+    })
+
     const unknownUpdaterMessage = getSafeUpdaterLogData('A future updater message with private details')
     if (JSON.stringify(unknownUpdaterMessage) !== JSON.stringify({ category: 'updater-message' })) {
       throw new Error('unknown updater messages must not be persisted verbatim')

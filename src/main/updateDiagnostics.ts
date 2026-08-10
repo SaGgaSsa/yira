@@ -104,6 +104,20 @@ export function getSafeUpdateErrorData(error: unknown): SafeUpdateErrorData {
 }
 
 export function getSafeUpdaterLogData(message: unknown): SafeUpdateErrorData {
+  if (message === 'Linux Debian update launcher started') {
+    return { category: 'linux-deb-launcher-started' }
+  }
+
+  const launcherFailure = typeof message === 'string'
+    ? /^Linux Debian update launcher failed with exit code (\d+)$/.exec(message)
+    : null
+  if (launcherFailure) {
+    const exitCode = Number(launcherFailure[1])
+    return Number.isSafeInteger(exitCode)
+      ? { category: 'linux-deb-launcher-failed', exitCode }
+      : { category: 'linux-deb-launcher-failed' }
+  }
+
   const text = typeof message === 'string' ? message.toLowerCase() : ''
   const privilegeFailure = getPrivilegeCommandFailure(text)
 

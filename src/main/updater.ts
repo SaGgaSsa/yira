@@ -1,9 +1,11 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import electronUpdater from 'electron-updater'
 import type { AppUpdater, ProgressInfo, UpdateDownloadedEvent, UpdateInfo } from 'electron-updater'
+import { join } from 'node:path'
 import type { UpdateState } from '@shared/types'
 import { getUpdateErrorMessage } from './updateErrorMessage'
 import { getSafeUpdateErrorData, getSafeUpdaterLogData, UpdateDiagnostics, waitForUpdateDiagnosticTask } from './updateDiagnostics'
+import { startLinuxDebUpdateLauncher } from './linuxDebUpdateLauncher'
 import { loadStoredUserSettings } from './ipc/settings'
 import { YIRA_HOME } from './paths'
 
@@ -21,6 +23,7 @@ let updaterRegistered = false
 let startupCheckScheduled = false
 let checkInFlight = false
 let updateDiagnosticsInitialization: Promise<void> | null = null
+let downloadedUpdateFile: string | null = null
 
 const updateDiagnostics = new UpdateDiagnostics({
   homeDir: YIRA_HOME,
@@ -67,6 +70,13 @@ function createInitialState(): UpdateState {
 
 function getUpdater(): AppUpdater {
   return autoUpdater
+}
+
+export function shouldUseLinuxDebUpdateLauncher(
+  platform: string,
+  downloadedFile: string | null | undefined,
+): boolean {
+  return platform === 'linux' && typeof downloadedFile === 'string' && downloadedFile.endsWith('.deb')
 }
 
 function broadcastUpdateState(): void {
@@ -125,6 +135,10 @@ function handleDownloadProgress(progress: ProgressInfo): void {
 }
 
 function handleUpdateDownloaded(event: UpdateDownloadedEvent): void {
+  downloadedUpdateFile = event.downloadedFile
+  getUpdater().autoInstallOnAppQuit = shouldUseLinuxDebUpdateLauncher(process.platform, downloadedUpdateFile)
+    ? false
+    : true
   void recordUpdateDiagnostic('update-downloaded', { version: event.version ?? updateState.availableVersion })
   setUpdateState({
     status: 'downloaded',
@@ -220,6 +234,25 @@ async function installDownloadedUpdate(prepareToClose?: () => Promise<boolean>):
   }
 
   if (prepareToClose && !await prepareToClose()) return
+
+  if (shouldUseLinuxDebUpdateLauncher(process.platform, downloadedUpdateFile) && downloadedUpdateFile) {
+    try {
+      await startLinuxDebUpdateLauncher({
+        launcherPath: join(process.resourcesPath, 'linux-deb-update-launcher.sh'),
+        packagePath: downloadedUpdateFile,
+        diagnosticsPath: join(YIRA_HOME, 'logs', 'updater.log'),
+        diagnosticsEnabled: updateDiagnostics.isEnabled(),
+        version: app.getVersion(),
+      })
+    } catch (error) {
+      handleUpdateError(error)
+      return
+    }
+
+    void recordUpdateDiagnostic('linux-deb-launcher-started')
+    app.quit()
+    return
+  }
 
   const quitAndInstallRequest = recordUpdateDiagnostic('quit-and-install-requested')
   await waitForUpdateDiagnosticTask(quitAndInstallRequest, INSTALL_DIAGNOSTIC_FLUSH_TIMEOUT_MS)

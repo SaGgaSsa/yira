@@ -1,6 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import type { ChildProcess, SpawnOptions } from 'node:child_process'
+import { createRequire } from 'node:module'
 import { spawn } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -10,6 +11,41 @@ interface SpawnCall {
   command: string
   args: readonly string[]
   options: SpawnOptions
+}
+
+function loadUpdaterRouting(): typeof import('./updater') {
+  const nodeRequire = createRequire(import.meta.url)
+  const nodeModule = nodeRequire('node:module') as {
+    _load: (request: string, parent: unknown, isMain: boolean) => unknown
+  }
+  const originalLoad = nodeModule._load
+  const fakeElectron = {
+    app: {
+      isPackaged: false,
+      getVersion: () => '0.1.50',
+      getLocale: () => 'en-US',
+    },
+    BrowserWindow: { getAllWindows: () => [] },
+    ipcMain: { handle: () => undefined },
+  }
+  const fakeUpdater = {
+    autoUpdater: {
+      autoInstallOnAppQuit: true,
+      on: () => undefined,
+    },
+  }
+
+  nodeModule._load = function(request, parent, isMain) {
+    if (request === 'electron') return fakeElectron
+    if (request === 'electron-updater') return fakeUpdater
+    return originalLoad.call(this, request, parent, isMain)
+  }
+
+  try {
+    return nodeRequire('./updater.ts') as typeof import('./updater')
+  } finally {
+    nodeModule._load = originalLoad
+  }
 }
 
 async function run(): Promise<void> {
@@ -43,6 +79,11 @@ async function run(): Promise<void> {
     if (await isLinuxDebUpdatePath(null)) {
       throw new Error('a missing update path must be rejected')
     }
+
+    const { shouldUseLinuxDebUpdateLauncher } = loadUpdaterRouting()
+    assert.equal(shouldUseLinuxDebUpdateLauncher('linux', packagePath), true)
+    assert.equal(shouldUseLinuxDebUpdateLauncher('win32', packagePath), false)
+    assert.equal(shouldUseLinuxDebUpdateLauncher('linux', appImagePath), false)
 
     const calls: SpawnCall[] = []
     let unrefCount = 0
