@@ -134,3 +134,45 @@ test('isolates pathological transcript payloads to their individual files', asyn
     await fs.rm(root, { recursive: true, force: true })
   }
 })
+
+test('normalizes multiline provider messages while retaining counts and timestamps', async () => {
+  const root = await makeFixtureRoot()
+  try {
+    await writeJsonLines(join(root, 'claude', 'multiline-claude.jsonl'), [
+      { type: 'system', sessionId: 'multiline-claude', timestamp: '2026-08-10T16:00:00.000Z' },
+      { type: 'user', sessionId: 'multiline-claude', timestamp: '2026-08-10T16:00:01.000Z', message: { role: 'user', content: 'First line\nSecond\tline' } },
+      { type: 'assistant', sessionId: 'multiline-claude', timestamp: '2026-08-10T16:00:02.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'Reply line\r\nnext' }] } },
+    ])
+    await writeJsonLines(join(root, 'codex', 'multiline-codex.jsonl'), [
+      { type: 'session_meta', timestamp: '2026-08-10T16:01:00.000Z', payload: { id: 'multiline-codex' } },
+      { type: 'event_msg', timestamp: '2026-08-10T16:01:01.000Z', payload: { type: 'user_message', message: 'Codex\tquestion\ncontinued' } },
+      { type: 'response_item', timestamp: '2026-08-10T16:01:02.000Z', payload: { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Codex answer\nnext' }] } },
+    ])
+    await writeJsonLines(join(root, 'claude', 'unsafe-control.jsonl'), [
+      { type: 'user', sessionId: 'unsafe-control', timestamp: '2026-08-10T16:02:01.000Z', message: { role: 'user', content: 'unsafe\u0000content' } },
+    ])
+
+    const claude = await readClaudeSessionHistory({ rootPath: join(root, 'claude') })
+    const codex = await readCodexSessionHistory({ rootPath: join(root, 'codex') })
+    assert.deepEqual(claude.items, [{
+      identifier: 'multiline-claude',
+      provider: 'claude',
+      startedAt: '2026-08-10T16:00:01.000Z',
+      lastActivityAt: '2026-08-10T16:00:02.000Z',
+      title: 'First line Second line',
+      preview: 'Reply line next',
+      messageCount: 2,
+    }])
+    assert.deepEqual(codex.items, [{
+      identifier: 'multiline-codex',
+      provider: 'codex',
+      startedAt: '2026-08-10T16:01:01.000Z',
+      lastActivityAt: '2026-08-10T16:01:02.000Z',
+      title: 'Codex question continued',
+      preview: 'Codex answer next',
+      messageCount: 2,
+    }])
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})

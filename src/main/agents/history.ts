@@ -59,7 +59,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function stringValue(value: unknown, maxLength = 1_024): string | undefined {
-  if (typeof value !== 'string' || /[\u0000-\u001f\u007f]/.test(value)) return undefined
+  // Tabs, line feeds, and carriage returns are ordinary in provider message
+  // bodies. Normalize those whitespace controls below, while rejecting other
+  // control characters that should never reach renderer-facing metadata.
+  if (typeof value !== 'string' || /[\u0000-\u0008\u000b-\u000c\u000e-\u001f\u007f]/.test(value)) return undefined
   const normalized = value.replace(/\s+/g, ' ').trim()
   return normalized ? normalized.slice(0, maxLength) : undefined
 }
