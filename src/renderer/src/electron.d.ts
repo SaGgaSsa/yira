@@ -29,6 +29,7 @@ import type {
   FileWriteResult,
   FloatingNavigationEvent,
   FloatingNavigationRequest,
+  GitCommitHistoryResult,
   GitStatusResult,
   NoteBlocks,
   MarkdownViewMode,
@@ -91,6 +92,7 @@ interface ElectronWorld {
   }
   git: {
     status: (workspaceId: string) => Promise<GitStatusResult>
+    history: (workspaceId: string) => Promise<GitCommitHistoryResult>
     stage: (workspaceId: string, relativePath: string, originalPath?: string) => Promise<void>
     unstage: (workspaceId: string, relativePath: string, originalPath?: string) => Promise<void>
     commit: (workspaceId: string, message: string) => Promise<void>

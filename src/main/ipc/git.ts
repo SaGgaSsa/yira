@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
-import type { GitStatusResult } from '@shared/types'
-import { commitGitChanges, getGitStatus, stageGitFiles, syncGitRepository, unstageGitFiles } from '../git/runner'
+import type { GitCommitHistoryResult, GitStatusResult } from '@shared/types'
+import { commitGitChanges, getGitCommitHistory, getGitStatus, stageGitFiles, syncGitRepository, unstageGitFiles } from '../git/runner'
 import { getWorkspaceRootFolderById } from './workspace'
 
 async function getWorkspaceGitRoot(workspaceId: string): Promise<string> {
@@ -28,6 +28,19 @@ export function registerGitIPC(): void {
         behind: 0,
         staged: [],
         unstaged: [],
+        error: error instanceof Error ? error.message : 'Workspace root folder is unavailable',
+      }
+    }
+  })
+
+  ipcMain.handle('git:history', async (_event, workspaceId: string): Promise<GitCommitHistoryResult> => {
+    try {
+      return await getGitCommitHistory(await getWorkspaceGitRoot(workspaceId))
+    } catch (error) {
+      return {
+        outgoing: [],
+        upstream: [],
+        local: [],
         error: error instanceof Error ? error.message : 'Workspace root folder is unavailable',
       }
     }

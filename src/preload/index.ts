@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { BoardTask, FileListOptions, FileSearchResult, FileWriteInput, FloatingNavigationEvent, FloatingNavigationRequest, GitStatusResult, NotificationAttentionOptions, TerminalCreateOptions, UpdateState, WindowBounds, WindowClosePreparationRequest, WindowClosePreparationResponse, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
+import type { BoardTask, FileListOptions, FileSearchResult, FileWriteInput, FloatingNavigationEvent, FloatingNavigationRequest, GitCommitHistoryResult, GitStatusResult, NotificationAttentionOptions, TerminalCreateOptions, UpdateState, WindowBounds, WindowClosePreparationRequest, WindowClosePreparationResponse, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
 import { createSerialTaskQueue } from '@shared/serialTaskQueue'
 
 console.log('[preload] Loading...')
@@ -77,6 +77,7 @@ contextBridge.exposeInMainWorld('electron', {
 
   git: {
     status: (workspaceId: string) => ipcRenderer.invoke('git:status', workspaceId) as Promise<GitStatusResult>,
+    history: (workspaceId: string) => ipcRenderer.invoke('git:history', workspaceId) as Promise<GitCommitHistoryResult>,
     stage: (workspaceId: string, relativePath: string, originalPath?: string) => ipcRenderer.invoke('git:stage', workspaceId, relativePath, originalPath),
     unstage: (workspaceId: string, relativePath: string, originalPath?: string) => ipcRenderer.invoke('git:unstage', workspaceId, relativePath, originalPath),
     commit: (workspaceId: string, message: string) => ipcRenderer.invoke('git:commit', workspaceId, message),
