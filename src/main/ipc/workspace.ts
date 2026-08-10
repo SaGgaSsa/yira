@@ -1,4 +1,4 @@
-import { ipcMain, dialog, BrowserWindow } from 'electron'
+import * as electron from 'electron'
 import { promises as fs, readFileSync } from 'fs'
 import { isAbsolute, join, relative, resolve } from 'path'
 import type { Config, Workspace, AppSettings, WorkspaceConfig, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceOpenFolderResult, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
@@ -11,6 +11,8 @@ import {
   canonicalizeRootFolderPath,
   findWorkspaceByRootFolder,
 } from '../workspace-root'
+
+const { ipcMain, dialog, BrowserWindow } = electron
 
 async function ensureDir(dir: string): Promise<void> {
   await fs.mkdir(dir, { recursive: true })
@@ -28,7 +30,7 @@ function isInsideWorkspacesDir(path: string): boolean {
   return relativePath === '' || (!relativePath.startsWith('..') && !isAbsolute(relativePath))
 }
 
-function normalizeWorkspace(workspace: Partial<Workspace> & { id: string; name?: string; path?: string }): Workspace {
+export function normalizeWorkspace(workspace: Partial<Workspace> & { id: string; name?: string; path?: string }): Workspace {
   const storagePath = internalWorkspacePath(workspace.id)
   const migratedRootFolderPath =
     workspace.path && !isInsideWorkspacesDir(workspace.path)
@@ -42,6 +44,7 @@ function normalizeWorkspace(workspace: Partial<Workspace> & { id: string; name?:
     initialCommand: workspace.config?.initialCommand,
     terminalHistoryEnabled: workspace.config?.terminalHistoryEnabled,
     remoteTerminal: workspace.config?.remoteTerminal,
+    agentProvider: workspace.config?.agentProvider,
     agentProviders: workspace.config?.agentProviders,
   })
 
@@ -118,7 +121,7 @@ function parseWorkspaceCreateInput(input: string | WorkspaceCreateInput): Worksp
   return input
 }
 
-function createWorkspaceFromInput(input: WorkspaceCreateInput): Workspace {
+export function createWorkspaceFromInput(input: WorkspaceCreateInput): Workspace {
   const trimmedName = input.name.trim()
   if (!trimmedName) {
     throw new Error('Workspace name cannot be empty')
@@ -138,16 +141,21 @@ function createWorkspaceFromInput(input: WorkspaceCreateInput): Workspace {
       initialCommand: input.initialCommand,
       terminalHistoryEnabled: input.terminalHistoryEnabled,
       remoteTerminal: input.remoteTerminal,
+      agentProvider: input.agentProvider,
       agentProviders: input.agentProviders,
     }),
   }
 }
 
-function updateWorkspace(workspace: Workspace, patch: WorkspaceUpdatePatch): Workspace {
+export function updateWorkspace(workspace: Workspace, patch: WorkspaceUpdatePatch): Workspace {
   const nextName = patch.name === undefined ? workspace.name : patch.name.trim()
   if (!nextName) {
     throw new Error('Workspace name cannot be empty')
   }
+
+  const hasAgentProviderPatch = patch.config !== undefined
+    && patch.config !== null
+    && Object.prototype.hasOwnProperty.call(patch.config, 'agentProvider')
 
   workspace.name = nextName
   workspace.config = normalizeWorkspaceConfig({
@@ -158,6 +166,7 @@ function updateWorkspace(workspace: Workspace, patch: WorkspaceUpdatePatch): Wor
     initialCommand: patch.config?.initialCommand ?? workspace.config.initialCommand,
     terminalHistoryEnabled: patch.config?.terminalHistoryEnabled ?? workspace.config.terminalHistoryEnabled,
     remoteTerminal: patch.config?.remoteTerminal ?? workspace.config.remoteTerminal,
+    agentProvider: hasAgentProviderPatch ? patch.config?.agentProvider : workspace.config.agentProvider,
     agentProviders: mergeAgentProvidersConfig(workspace.config.agentProviders, patch.config?.agentProviders),
   })
 
