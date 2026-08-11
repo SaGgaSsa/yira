@@ -77,6 +77,15 @@ export function handleTerminalOutput({
   markActivity()
 }
 
+/**
+ * Agent alerts are handled semantically by the main process. Keep them out of
+ * the PTY stream so Yira never appends its own status text to the terminal.
+ */
+export function handleTerminalAgentAlert(
+  _state: unknown,
+  _term: { write: (data: string) => void },
+): void {}
+
 export function registerTerminalInputFocusListener({
   terminalInput,
   textarea,
@@ -313,11 +322,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
         })
 
         agentAlertUnsub = window.electron.terminal.onAgentAlert(tile.id, (state: unknown) => {
-          if (!state || typeof state !== 'object') return
-          const alert = state as { provider?: unknown; event?: unknown }
-          if (typeof alert.provider !== 'string' || typeof alert.event !== 'string') return
-          const reason = alert.event === 'completed' ? 'completed' : alert.event === 'permission' ? 'needs permission' : 'needs input'
-          term.write(`\r\n\x1b[33m[Yira] ${alert.provider}: ${reason}\x1b[0m\r\n`)
+          handleTerminalAgentAlert(state, term)
         })
 
         // Send user input to PTY

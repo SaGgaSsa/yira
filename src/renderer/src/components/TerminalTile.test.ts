@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module'
+import { fileURLToPath } from 'node:url'
 import type { CanvasState, TileState } from '@shared/types'
 import { useCanvasStore } from '@/store/canvasStore'
 
@@ -7,7 +8,7 @@ const cssExtensions = require.extensions as Record<string, (module: NodeModule, 
 cssExtensions['.css'] = () => {}
 const { transformSync } = require('esbuild') as typeof import('esbuild')
 
-const loadWithJiti = require('jiti')(__filename, {
+const loadWithJiti = require('jiti')(fileURLToPath(import.meta.url), {
   extensions: ['.js', '.mjs', '.cjs', '.ts', '.tsx', '.mts', '.cts', '.json'],
   transform: ({ source, filename }: { source: string; filename: string }) => ({
     code: transformSync(source, {
@@ -19,7 +20,7 @@ const loadWithJiti = require('jiti')(__filename, {
   }),
 }) as <T>(id: string) => T
 const { getTileNotificationCopy } = loadWithJiti<typeof import('./TileEditorDialog')>('./TileEditorDialog.tsx')
-const { handleTerminalOutput, registerTerminalInputFocusListener } = loadWithJiti<typeof import('./TerminalTile')>('./TerminalTile.tsx')
+const { handleTerminalAgentAlert, handleTerminalOutput, registerTerminalInputFocusListener } = loadWithJiti<typeof import('./TerminalTile')>('./TerminalTile.tsx')
 
 const terminalTile: TileState = {
   id: 'terminal',
@@ -146,6 +147,15 @@ try {
   }
   if (focusedTerminal.writes.length !== 1) {
     throw new Error('focusing the xterm textarea must clear activity without another PTY output event')
+  }
+
+  const agentAlertTerminal = createMockTerminal()
+  if (typeof handleTerminalAgentAlert !== 'function') {
+    throw new Error('agent alerts must be handled without appending a Yira message to the terminal')
+  }
+  handleTerminalAgentAlert({ provider: 'claude', event: 'completed' }, agentAlertTerminal)
+  if (agentAlertTerminal.writes.length !== 0) {
+    throw new Error('agent alerts must not append Yira status text to terminal output')
   }
 
   let nativeRequests = 0
