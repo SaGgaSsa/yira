@@ -6,6 +6,21 @@ import type {
   AgentSessionHistoryQuery,
 } from '@shared/types'
 
+const HISTORY_SEARCH_DEBOUNCE_MS = 250
+
+type AgentHistoryRefreshTimer = number
+
+export interface AgentHistoryRefreshTimers {
+  setTimeout: (callback: () => void, delay: number) => AgentHistoryRefreshTimer
+  clearTimeout: (timer: AgentHistoryRefreshTimer) => void
+}
+
+export interface AgentHistoryRefreshScheduler {
+  schedule: (delay: number, callback: () => void) => void
+  runNow: (callback: () => void) => void
+  cancel: () => void
+}
+
 /** Gate an agent session when its provider configuration and availability are known. */
 export function canLaunchAgent(
   provider: AgentProvider,
@@ -35,6 +50,47 @@ export function canResumeAgent(
 /** Keep all agent bridge work behind an explicit workspace provider selection. */
 export function shouldRequestAgentData(selectedProvider: AgentProvider | undefined): selectedProvider is AgentProvider {
   return selectedProvider !== undefined
+}
+
+export function getAgentHistoryRefreshDelay(search: string): number {
+  return search.trim() ? HISTORY_SEARCH_DEBOUNCE_MS : 0
+}
+
+export function shouldShowAgentHistoryMore(
+  status: 'idle' | 'loading' | 'ready' | 'error',
+  hasMore: boolean,
+): boolean {
+  return hasMore && (status === 'loading' || status === 'ready')
+}
+
+export function createAgentHistoryRefreshScheduler(
+  timers: AgentHistoryRefreshTimers = {
+    setTimeout: (callback, delay) => window.setTimeout(callback, delay),
+    clearTimeout: (timer) => window.clearTimeout(timer),
+  },
+): AgentHistoryRefreshScheduler {
+  let pendingTimer: AgentHistoryRefreshTimer | null = null
+
+  const cancel = (): void => {
+    if (pendingTimer === null) return
+    timers.clearTimeout(pendingTimer)
+    pendingTimer = null
+  }
+
+  return {
+    schedule: (delay, callback) => {
+      cancel()
+      pendingTimer = timers.setTimeout(() => {
+        pendingTimer = null
+        callback()
+      }, delay)
+    },
+    runNow: (callback) => {
+      cancel()
+      callback()
+    },
+    cancel,
+  }
 }
 
 /** Filter a runtime snapshot to the selected provider, or hide it when unset. */

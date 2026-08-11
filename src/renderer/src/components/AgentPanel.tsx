@@ -15,9 +15,12 @@ import type {
 import {
   buildAgentHistoryQuery,
   canResumeAgent,
+  createAgentHistoryRefreshScheduler,
   filterAgentSessions,
   formatAgentAge,
+  getAgentHistoryRefreshDelay,
   sanitizeAgentCwd,
+  shouldShowAgentHistoryMore,
   shouldRequestAgentData,
 } from '@/utils/agentPanel'
 
@@ -206,6 +209,7 @@ export function AgentPanel({
   const [historySearch, setHistorySearch] = useState('')
   const [historyState, setHistoryState] = useState<HistoryState>({ status: 'idle', items: [], hasMore: false })
   const historyRequestRef = useRef(0)
+  const historyRefreshSchedulerRef = useRef(createAgentHistoryRefreshScheduler())
   const availabilityRequestRef = useRef(0)
   const sessionSubscriptionRef = useRef<SessionSubscription | null>(null)
 
@@ -278,11 +282,6 @@ export function AgentPanel({
     }
   }, [selectedProvider, workspaceId])
 
-  useEffect(() => {
-    historyRequestRef.current += 1
-    setHistoryState({ status: 'idle', items: [], hasMore: false })
-  }, [historySearch, workspaceId, selectedProvider])
-
   const canResume = useCallback((provider: AgentProvider): boolean => {
     return canResumeAgent(provider, selectedProvider, agentProviders, availability, Boolean(availableProfile))
   }, [agentProviders, availability, availableProfile, selectedProvider])
@@ -294,7 +293,7 @@ export function AgentPanel({
       ...buildAgentHistoryQuery(workspaceId, selectedProvider, historySearch),
       provider: selectedProvider,
     }
-    setHistoryState({ status: 'loading', items: [], hasMore: false })
+    setHistoryState((current) => ({ ...current, status: 'loading' }))
 
     try {
       const result = await window.electron.agents.history(query)
@@ -305,6 +304,19 @@ export function AgentPanel({
       setHistoryState({ status: 'error', items: [], hasMore: false })
     }
   }, [historySearch, workspaceId, selectedProvider])
+
+  useEffect(() => {
+    if (!shouldRequestAgentData(selectedProvider)) return
+    const delay = getAgentHistoryRefreshDelay(historySearch)
+    const scheduler = historyRefreshSchedulerRef.current
+    scheduler.schedule(delay, () => {
+      void loadHistory()
+    })
+    return () => {
+      scheduler.cancel()
+      historyRequestRef.current += 1
+    }
+  }, [historySearch, loadHistory, selectedProvider, workspaceId])
 
   const resumeAgent = useCallback((item: AgentSessionHistoryItem) => {
     if (!canResume(item.provider) || !availableProfile) return
@@ -404,7 +416,7 @@ export function AgentPanel({
             <button
               type="button"
               className="inline-flex h-7 items-center gap-1.5 rounded-full border border-border-visible px-2.5 text-xs text-text-secondary transition-colors hover:border-text-secondary hover:text-text-display disabled:cursor-not-allowed disabled:opacity-50"
-              onClick={() => void loadHistory()}
+              onClick={() => historyRefreshSchedulerRef.current.runNow(() => void loadHistory())}
               disabled={historyState.status === 'loading'}
               title={historyState.status === 'idle' ? copy.loadHistory : copy.refreshHistory}
             >
@@ -456,7 +468,7 @@ export function AgentPanel({
                 activeLabel={copy.lastActivity}
               />
             ))}
-            {historyState.status === 'ready' && historyState.hasMore && (
+            {shouldShowAgentHistoryMore(historyState.status, historyState.hasMore) && (
               <p className="pt-1 text-center text-[11px] text-text-disabled">{copy.historyMore}</p>
             )}
           </div>

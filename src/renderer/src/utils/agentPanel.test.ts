@@ -5,9 +5,12 @@ import {
   buildAgentHistoryQuery,
   canLaunchAgent,
   canResumeAgent,
+  createAgentHistoryRefreshScheduler,
   filterAgentSessions,
   formatAgentAge,
+  getAgentHistoryRefreshDelay,
   sanitizeAgentCwd,
+  shouldShowAgentHistoryMore,
   shouldRequestAgentData,
 } from './agentPanel'
 import type { AgentActiveSessionSnapshot, AgentProviderAvailabilitySnapshot, AgentProvidersConfig } from '@shared/types'
@@ -115,4 +118,52 @@ test('formatAgentAge handles invalid, future, and elapsed timestamps defensively
   assert.equal(formatAgentAge('2026-08-10T12:00:30.000Z', now), 'in a moment')
   assert.equal(formatAgentAge('2026-08-10T11:58:00.000Z', now), '2 minutes ago')
   assert.equal(formatAgentAge('2026-08-10T10:00:00.000Z', now), '2 hours ago')
+})
+
+test('agent history refresh delay is immediate for defaults and debounced for searches', () => {
+  if (getAgentHistoryRefreshDelay('') !== 0) {
+    throw new Error('default history must refresh immediately')
+  }
+  if (getAgentHistoryRefreshDelay('   ') !== 0) {
+    throw new Error('cleared history search must refresh immediately')
+  }
+  if (getAgentHistoryRefreshDelay('release notes') !== 250) {
+    throw new Error('history searches must wait briefly before refreshing')
+  }
+})
+
+test('agent history refresh runNow cancels pending scheduled callbacks', () => {
+  const callbacks = new Map<number, () => void>()
+  let nextTimer = 0
+  const scheduler = createAgentHistoryRefreshScheduler({
+    setTimeout: (callback) => {
+      const timer = ++nextTimer
+      callbacks.set(timer, callback)
+      return timer
+    },
+    clearTimeout: (timer) => callbacks.delete(timer),
+  })
+  let scheduledRuns = 0
+  let immediateRuns = 0
+
+  scheduler.schedule(250, () => {
+    scheduledRuns += 1
+  })
+  scheduler.runNow(() => {
+    immediateRuns += 1
+  })
+
+  for (const callback of callbacks.values()) callback()
+  if (scheduledRuns !== 0 || immediateRuns !== 1) {
+    throw new Error('an immediate history refresh must cancel delayed work')
+  }
+})
+
+test('agent history more indicator stays visible while retained history is loading', () => {
+  assert.equal(shouldShowAgentHistoryMore('idle', true), false)
+  assert.equal(shouldShowAgentHistoryMore('loading', true), true)
+  assert.equal(shouldShowAgentHistoryMore('ready', true), true)
+  assert.equal(shouldShowAgentHistoryMore('error', true), false)
+  assert.equal(shouldShowAgentHistoryMore('loading', false), false)
+  assert.equal(shouldShowAgentHistoryMore('ready', false), false)
 })
