@@ -1,7 +1,44 @@
+import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import test from 'node:test'
+import React from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import type { AgentProvidersConfig } from '@shared/types'
+import { AgentPanel } from './AgentPanel'
+import { initializeI18n } from '../i18n'
+
+await initializeI18n()
 
 const source = readFileSync(new URL('./AgentPanel.tsx', import.meta.url), 'utf8')
 const workspacePanelSource = readFileSync(new URL('./WorkspacePanel.tsx', import.meta.url), 'utf8')
+
+const configuredAgentProviders: AgentProvidersConfig = {
+  claude: { enabled: true, args: [] },
+  codex: { enabled: false, args: [] },
+}
+
+function renderConfiguredAgentPanel(): string {
+  return renderToStaticMarkup(
+    <AgentPanel
+      workspaceId="workspace-1"
+      selectedProvider="claude"
+      agentProviders={configuredAgentProviders}
+      availableProfiles={[{ id: 'bash', label: 'Bash', available: true }]}
+      tiles={[]}
+      terminalTitles={{}}
+      addTerminal={() => null}
+      onFocusTile={() => undefined}
+      onOpenWorkspaceSettings={() => undefined}
+    />,
+  )
+}
+
+test('renders configured agent history without a standalone Agents heading', () => {
+  const markup = renderConfiguredAgentPanel()
+
+  assert.doesNotMatch(markup, /class="nd-label flex-1 text-text-display">Agents<\/div>/)
+  assert.match(markup, /<h3 class="nd-label text-text-display">History<\/h3>/)
+})
 
 const standaloneAgentsHeader = `      <div className="shrink-0 border-b border-border px-4 py-4">
         <div className="flex items-center gap-2">
