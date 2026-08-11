@@ -47,14 +47,23 @@ function findLimitsContainer(input) {
 }
 
 function normalizeWindow(input, keys) {
-  const value = findKnownValue(input, keys)
-  if (value === MISSING) return undefined
-  if (!isRecord(value)) return null
+  const presentKeys = keys.filter((key) => Object.prototype.hasOwnProperty.call(input, key))
+  if (presentKeys.length === 0) return undefined
 
-  const usedPercentage = parseKnownValue(inputValueKeys(value, ['used_percentage', 'usedPercentage', 'percentage', 'percent', 'utilization']), parsePercentage)
-  const resetsAt = parseKnownValue(inputValueKeys(value, ['resets_at', 'resetsAt', 'reset_at', 'resetAt', 'reset_time', 'resetTime']), parseResetTime)
-  if (usedPercentage === null || resetsAt === null) return null
-  return { usedPercentage, resetsAt }
+  let normalized = null
+  for (const key of presentKeys) {
+    const value = input[key]
+    if (!isRecord(value)) return null
+
+    const usedPercentage = parseKnownValue(inputValueKeys(value, ['used_percentage', 'usedPercentage', 'percentage', 'percent', 'utilization']), parsePercentage)
+    const resetsAt = parseKnownValue(inputValueKeys(value, ['resets_at', 'resetsAt', 'reset_at', 'resetAt', 'reset_time', 'resetTime']), parseResetTime)
+    if (usedPercentage === null || resetsAt === null) return null
+
+    const candidate = { usedPercentage, resetsAt }
+    if (normalized && (normalized.usedPercentage !== candidate.usedPercentage || normalized.resetsAt !== candidate.resetsAt)) return null
+    normalized = candidate
+  }
+  return normalized
 }
 
 function inputValueKeys(input, keys) {
@@ -71,13 +80,6 @@ function parseKnownValue(values, parser) {
     result = parsed
   }
   return result
-}
-
-function findKnownValue(input, keys) {
-  for (const key of keys) {
-    if (Object.prototype.hasOwnProperty.call(input, key)) return input[key]
-  }
-  return MISSING
 }
 
 function parsePercentage(value) {
@@ -131,5 +133,4 @@ async function main() {
   await writeAtomic(snapshot, cachePath)
 }
 
-const MISSING = Symbol('missing')
 void main().catch(() => undefined)

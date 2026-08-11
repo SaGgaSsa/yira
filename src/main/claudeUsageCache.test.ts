@@ -145,6 +145,7 @@ test('ignores malformed cache text without exposing it to callers', async () => 
 test('status-line resource persists only accepted normalized values through the test path override', async () => {
   await withTempDirectory(async (directory) => {
     const cachePath = join(directory, 'claude-usage.json')
+    const startedAt = Date.now()
     const result = await runStatusLine(JSON.stringify({
       rate_limits: {
         five_hour: { used_percentage: 54, resets_at: FIVE_HOUR_RESET_SECONDS },
@@ -156,12 +157,43 @@ test('status-line resource persists only accepted normalized values through the 
     assert.equal(result.code, 0)
     assert.equal(result.stdout, '')
     assert.equal(result.stderr, '')
-    assert.deepEqual(JSON.parse(await readFile(cachePath, 'utf8')), {
-      capturedAt: (JSON.parse(await readFile(cachePath, 'utf8')) as { capturedAt: number }).capturedAt,
+    const persisted = JSON.parse(await readFile(cachePath, 'utf8')) as { capturedAt: unknown; fiveHour: unknown; sevenDay: unknown }
+    const { capturedAt, ...usage } = persisted
+    assert.equal(typeof capturedAt, 'number')
+    assert.ok((capturedAt as number) >= startedAt)
+    assert.ok((capturedAt as number) <= Date.now())
+    assert.deepEqual(usage, {
       fiveHour: { usedPercentage: 54, resetsAt: FIVE_HOUR_RESET_SECONDS * 1000 },
       sevenDay: { usedPercentage: 21, resetsAt: SEVEN_DAY_RESET_SECONDS * 1000 },
     })
     assert.equal((await stat(cachePath)).mode & 0o777, 0o600)
+  })
+})
+
+test('rejects invalid or conflicting duplicate aliases for one logical usage window', async () => {
+  const invalidDuplicate = {
+    rate_limits: {
+      five_hour: { used_percentage: 42, resets_at: FIVE_HOUR_RESET_SECONDS },
+      fiveHour: { used_percentage: 101, resets_at: FIVE_HOUR_RESET_SECONDS },
+    },
+  }
+  assert.equal(normalizeClaudeUsagePayload(invalidDuplicate, NOW), null)
+
+  const conflictingDuplicate = {
+    rateLimits: {
+      sevenDay: { usedPercentage: 17, resetsAt: SEVEN_DAY_RESET_SECONDS },
+      seven_day: { used_percentage: 18, resets_at: SEVEN_DAY_RESET_SECONDS },
+    },
+  }
+  assert.equal(normalizeClaudeUsagePayload(conflictingDuplicate, NOW), null)
+
+  await withTempDirectory(async (directory) => {
+    const cachePath = join(directory, 'claude-usage.json')
+    const result = await runStatusLine(JSON.stringify(invalidDuplicate), cachePath)
+    assert.equal(result.code, 0)
+    assert.equal(result.stdout, '')
+    assert.equal(result.stderr, '')
+    await assert.rejects(readFile(cachePath, 'utf8'), { code: 'ENOENT' })
   })
 })
 

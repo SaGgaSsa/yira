@@ -10,7 +10,6 @@ export const CLAUDE_USAGE_CACHE_MAX_AGE_MS = 5 * 60 * 1000
 export const CLAUDE_USAGE_CACHE_PATH_ENV = 'YIRA_CLAUDE_USAGE_CACHE_PATH'
 
 const DEFAULT_CLAUDE_USAGE_CACHE_PATH = join(homedir(), '.yira', 'claude-usage.json')
-const MISSING = Symbol('missing')
 
 export interface ClaudeUsageWindow {
   readonly usedPercentage: number
@@ -190,14 +189,23 @@ function normalizeWindow(
   input: Record<string, unknown>,
   keys: readonly string[],
 ): ClaudeUsageWindow | null | undefined {
-  const value = findKnownValue(input, keys)
-  if (value === MISSING) return undefined
-  if (!isRecord(value)) return null
+  const presentKeys = keys.filter((key) => Object.prototype.hasOwnProperty.call(input, key))
+  if (presentKeys.length === 0) return undefined
 
-  const usedPercentage = parseKnownPercentage(value)
-  const resetsAt = parseKnownResetTime(value)
-  if (usedPercentage === null || resetsAt === null) return null
-  return { usedPercentage, resetsAt }
+  let normalized: ClaudeUsageWindow | null = null
+  for (const key of presentKeys) {
+    const value = input[key]
+    if (!isRecord(value)) return null
+
+    const usedPercentage = parseKnownPercentage(value)
+    const resetsAt = parseKnownResetTime(value)
+    if (usedPercentage === null || resetsAt === null) return null
+
+    const candidate = { usedPercentage, resetsAt }
+    if (normalized && (normalized.usedPercentage !== candidate.usedPercentage || normalized.resetsAt !== candidate.resetsAt)) return null
+    normalized = candidate
+  }
+  return normalized
 }
 
 function parseKnownPercentage(input: Record<string, unknown>): number | null {
@@ -224,13 +232,6 @@ function parseConsistentKnownValue<T>(
     result = parsed
   }
   return found ? result : null
-}
-
-function findKnownValue(input: Record<string, unknown>, keys: readonly string[]): unknown | typeof MISSING {
-  for (const key of keys) {
-    if (Object.prototype.hasOwnProperty.call(input, key)) return input[key]
-  }
-  return MISSING
 }
 
 function parsePercentage(value: unknown): number | null {
