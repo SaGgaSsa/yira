@@ -175,6 +175,13 @@ function parseClaudeRows(rows: unknown[]): ParsedSession | null {
   return parsed && parsed.messageCount > 0 ? parsed : null
 }
 
+function isCodexWorkerSession(payload: Record<string, unknown> | undefined): boolean {
+  if (payload && Object.prototype.hasOwnProperty.call(payload, 'thread_source')) {
+    return stringValue(payload.thread_source)?.toLowerCase() !== 'user'
+  }
+  return isRecord(payload?.source) && isRecord(payload.source.subagent)
+}
+
 function parseCodexRows(rows: unknown[]): ParsedSession | null {
   let parsed: ParsedSession | null = null
   for (const value of rows) {
@@ -183,6 +190,7 @@ function parseCodexRows(rows: unknown[]): ParsedSession | null {
     const payload = isRecord(value.payload) ? value.payload : undefined
 
     if (type === 'session_meta') {
+      if (isCodexWorkerSession(payload)) return null
       const id = sessionId(payload?.id ?? payload?.session_id ?? value.sessionId ?? value.session_id)
       if (id && !parsed) parsed = { identifier: id, messageCount: 0, messageTimes: [] }
       if (parsed && id && parsed.identifier !== id) continue

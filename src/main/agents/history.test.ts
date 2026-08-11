@@ -86,6 +86,64 @@ test('reads Codex rollout metadata and tolerates malformed or unknown files', as
   }
 })
 
+test('omits current and legacy Codex subagent transcripts', async () => {
+  const root = await makeFixtureRoot()
+  try {
+    const cwd = join(root, 'repo')
+    await fs.mkdir(cwd, { recursive: true })
+    await writeJsonLines(join(root, 'codex', 'user.jsonl'), [
+      { type: 'session_meta', payload: { id: 'user-session', cwd, thread_source: 'user' } },
+      { type: 'event_msg', payload: { type: 'user_message', message: 'Top-level task' } },
+    ])
+    await writeJsonLines(join(root, 'codex', 'worker.jsonl'), [
+      { type: 'session_meta', payload: { id: 'worker-session', cwd, thread_source: 'subagent' } },
+      { type: 'event_msg', payload: { type: 'user_message', message: 'Internal task' } },
+    ])
+    await writeJsonLines(join(root, 'codex', 'legacy-worker.jsonl'), [
+      { type: 'session_meta', payload: { id: 'legacy-worker-session', cwd, source: { subagent: {} } } },
+      { type: 'event_msg', payload: { type: 'user_message', message: 'Legacy internal task' } },
+    ])
+
+    const result = await readCodexSessionHistory({ rootPath: join(root, 'codex') })
+    assert.deepEqual(result.items.map((item) => item.identifier), ['user-session'])
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
+test('accepts case-insensitive user sources and rejects invalid present thread_source values', async () => {
+  const root = await makeFixtureRoot()
+  try {
+    const cwd = join(root, 'repo')
+    await fs.mkdir(cwd, { recursive: true })
+    await writeJsonLines(join(root, 'codex', 'uppercase-user.jsonl'), [
+      { type: 'session_meta', payload: { id: 'uppercase-user-session', cwd, thread_source: 'USER' } },
+      { type: 'event_msg', payload: { type: 'user_message', message: 'Top-level task' } },
+    ])
+    await writeJsonLines(join(root, 'codex', 'invalid-empty.jsonl'), [
+      { type: 'session_meta', payload: { id: 'invalid-empty-session', cwd, thread_source: '' } },
+      { type: 'event_msg', payload: { type: 'user_message', message: 'Invalid empty source' } },
+    ])
+    await writeJsonLines(join(root, 'codex', 'invalid-null.jsonl'), [
+      { type: 'session_meta', payload: { id: 'invalid-null-session', cwd, thread_source: null } },
+      { type: 'event_msg', payload: { type: 'user_message', message: 'Invalid null source' } },
+    ])
+    await writeJsonLines(join(root, 'codex', 'invalid-type.jsonl'), [
+      { type: 'session_meta', payload: { id: 'invalid-type-session', cwd, thread_source: { value: 'user' } } },
+      { type: 'event_msg', payload: { type: 'user_message', message: 'Invalid typed source' } },
+    ])
+    await writeJsonLines(join(root, 'codex', 'invalid-control.jsonl'), [
+      { type: 'session_meta', payload: { id: 'invalid-control-session', cwd, thread_source: '\u0000' } },
+      { type: 'event_msg', payload: { type: 'user_message', message: 'Invalid control source' } },
+    ])
+
+    const result = await readCodexSessionHistory({ rootPath: join(root, 'codex') })
+    assert.deepEqual(result.items.map((item) => item.identifier), ['uppercase-user-session'])
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
 test('filters history to a canonical workspace root and enforces result limits', async () => {
   const root = await makeFixtureRoot()
   try {
