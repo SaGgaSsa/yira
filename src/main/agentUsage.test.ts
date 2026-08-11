@@ -89,7 +89,7 @@ test('normalizes Codex five-hour and weekly rate-limit windows into the safe con
   })
 })
 
-test('returns an unavailable but bounded snapshot when Codex windows are missing', () => {
+test('returns an available incomplete snapshot when one Codex window is missing', () => {
   const snapshot = normalizeCodexRateLimits({
     result: {
       rateLimits: {
@@ -103,7 +103,7 @@ test('returns an unavailable but bounded snapshot when Codex windows are missing
     },
   })
 
-  assert.equal(snapshot.status, 'unavailable')
+  assert.equal(snapshot.status, 'available')
   assert.deepEqual(snapshot.windows, [
     { kind: 'fiveHour', usedPercent: 10, resetsAt: new Date(FIRST_RESET * 1000).toISOString() },
   ])

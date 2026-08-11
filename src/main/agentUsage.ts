@@ -257,7 +257,7 @@ function stateToSnapshot(state: RawRateLimitsState, now: () => number): AgentUsa
     provider: 'codex',
     windows: uniqueWindows,
     ...(uniqueWindows.length > 0 ? { updatedAt: snapshotTimestamp(now) } : {}),
-    status: uniqueWindows.length === WINDOW_KINDS.length ? 'available' : 'unavailable',
+    status: uniqueWindows.length > 0 ? 'available' : 'unavailable',
   }
 }
 
@@ -290,7 +290,7 @@ function sanitizeProviderSnapshot(provider: AgentProvider, value: unknown): Agen
     provider,
     windows,
     ...(updatedAt ? { updatedAt } : {}),
-    status: windows.length === WINDOW_KINDS.length && value.status === 'available' ? 'available' : 'unavailable',
+    status: windows.length > 0 ? 'available' : 'unavailable',
   }
 }
 
