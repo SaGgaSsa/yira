@@ -3,6 +3,17 @@ import { readFileSync } from 'node:fs'
 const source = readFileSync(new URL('./AgentPanel.tsx', import.meta.url), 'utf8')
 const workspacePanelSource = readFileSync(new URL('./WorkspacePanel.tsx', import.meta.url), 'utf8')
 
+const standaloneAgentsHeader = `      <div className="shrink-0 border-b border-border px-4 py-4">
+        <div className="flex items-center gap-2">
+          <Bot size={16} className="text-text-secondary" />
+          <div className="nd-label flex-1 text-text-display">{copy.title}</div>
+        </div>
+      </div>
+`
+
+if (source.includes(standaloneAgentsHeader)) throw new Error('configured Agents panel must not render a standalone Agents header')
+if (!source.includes('<h3 className="nd-label text-text-display">{copy.history}</h3>')) throw new Error('configured Agents panel must keep its History content')
+
 for (const requiredBridgeCall of [
   'window.electron.agents.availability()',
   'window.electron.agents.sessionsSnapshot(workspaceId)',

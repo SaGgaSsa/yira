@@ -333,7 +333,6 @@ export function AgentPanel({
   const tileById = useMemo(() => new Map(tiles.map((tile) => [tile.id, tile])), [tiles])
 
   const copy = {
-    title: t('agents.title', 'Agents'),
     unconfigured: t('agents.unconfigured', 'Choose an agent provider in this workspace to view its sessions and history.'),
     configureWorkspace: t('agents.configureWorkspace', 'Configure workspace'),
     running: t('agents.running', 'Running sessions'),
@@ -360,13 +359,6 @@ export function AgentPanel({
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <div className="shrink-0 border-b border-border px-4 py-4">
-        <div className="flex items-center gap-2">
-          <Bot size={16} className="text-text-secondary" />
-          <div className="nd-label flex-1 text-text-display">{copy.title}</div>
-        </div>
-      </div>
-
       {!selectedProvider ? (
         <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto px-4 py-6">
           <div className="max-w-[280px] text-center">
