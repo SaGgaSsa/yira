@@ -349,15 +349,6 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
               {agentHookMessage && <p className="mt-3 text-sm text-text-secondary">{agentHookMessage}</p>}
             </div>
 
-            <div className="rounded-[20px] border border-border-visible bg-bg-primary px-4 py-4">
-              <span className="nd-label block text-text-display">Claude usage status line</span>
-              <p className="mt-2 text-sm leading-6 text-text-secondary">Caches Claude 5-hour and weekly usage locally while Claude Code is active.</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button className="rounded-full border border-border-visible px-3 py-2 text-xs text-text-display" onClick={() => void window.electron.settings.installClaudeUsageStatusLine().then((result) => setAgentHookMessage(result.message)).catch((error: unknown) => setAgentHookMessage(String(error)))}>{t('settings.configure')} Claude status line</button>
-                <button className="rounded-full border border-border-visible px-3 py-2 text-xs text-text-secondary" onClick={() => void window.electron.settings.uninstallClaudeUsageStatusLine().then((result) => setAgentHookMessage(result.message)).catch((error: unknown) => setAgentHookMessage(String(error)))}>{t('settings.uninstall')} Claude status line</button>
-              </div>
-            </div>
-
             <label className="flex items-center justify-between gap-4 rounded-[20px] border border-border-visible bg-bg-primary px-4 py-4">
               <span>
                 <span className="nd-label block text-text-display">{t('settings.agentAlerts')}</span>

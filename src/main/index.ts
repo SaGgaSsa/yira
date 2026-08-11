@@ -15,7 +15,7 @@ import { registerWindowIPC, type WindowClosePreparationBridge } from './ipc/wind
 import { registerFloatingTilesIPC } from './ipc/floatingTiles'
 import { registerAgentsIPC } from './ipc/agents'
 import { AgentUsageService } from './agentUsage'
-import { readClaudeUsageCache } from './claudeUsageCache'
+import { readClaudeUsageStatusLinePayload } from './claudeUsageStatusLinePayload'
 import { APP_ID, APP_NAME, DEV_APP_NAME, YIRA_HOME } from './paths'
 import { registerUpdateIPC, scheduleStartupUpdateCheck } from './updater'
 import { loadWindowState, saveWindowState } from './windowState'
@@ -190,13 +190,13 @@ app.whenReady().then(async () => {
     getConfiguredProviders: getConfiguredAgentProviders,
     providerReaders: {
       claude: async () => {
-        const cached = await readClaudeUsageCache()
-        if (!cached) return null
+        const payload = await readClaudeUsageStatusLinePayload()
+        if (!payload) return null
         return {
           status: 'available',
           windows: [
-            ...(cached.fiveHour ? [{ kind: 'fiveHour', usedPercent: cached.fiveHour.usedPercentage, resetsAt: cached.fiveHour.resetsAt }] : []),
-            ...(cached.sevenDay ? [{ kind: 'weekly', usedPercent: cached.sevenDay.usedPercentage, resetsAt: cached.sevenDay.resetsAt }] : []),
+            ...(payload.fiveHour ? [{ kind: 'fiveHour', usedPercent: payload.fiveHour.usedPercentage, resetsAt: payload.fiveHour.resetsAt }] : []),
+            ...(payload.sevenDay ? [{ kind: 'weekly', usedPercent: payload.sevenDay.usedPercentage, resetsAt: payload.sevenDay.resetsAt }] : []),
           ],
         }
       },

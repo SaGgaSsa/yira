@@ -83,8 +83,6 @@ interface ElectronWorld {
     save: (settings: UserSettings) => Promise<void>
     configureAgentHooks: (provider: 'codex' | 'claude') => Promise<{ message: string }>
     uninstallAgentHooks: (provider: 'codex' | 'claude') => Promise<{ message: string }>
-    installClaudeUsageStatusLine: () => Promise<{ message: string }>
-    uninstallClaudeUsageStatusLine: () => Promise<{ message: string }>
   }
   note: {
     save: (tileId: string, data: NoteData) => Promise<void>

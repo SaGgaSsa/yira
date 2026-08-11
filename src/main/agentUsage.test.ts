@@ -217,6 +217,34 @@ test('deduplicates configured providers and never starts Codex when it is not co
   await unconfigured.stop()
 })
 
+test('passes the safe Claude snapshot from the passive reader through unchanged', async () => {
+  const service = new AgentUsageService({
+    getConfiguredProviders: () => ['claude'],
+    providerReaders: {
+      claude: () => ({
+        status: 'available',
+        windows: [
+          { kind: 'fiveHour', usedPercent: 42.5, resetsAt: '2026-08-11T18:00:00.000Z' },
+          { kind: 'weekly', usedPercent: 17, resetsAt: '2026-08-16T00:00:00.000Z' },
+        ],
+      }),
+    },
+  })
+
+  await service.start()
+
+  assert.deepEqual(service.getSnapshot().claude, {
+    provider: 'claude',
+    status: 'available',
+    windows: [
+      { kind: 'fiveHour', usedPercent: 42.5, resetsAt: '2026-08-11T18:00:00.000Z' },
+      { kind: 'weekly', usedPercent: 17, resetsAt: '2026-08-16T00:00:00.000Z' },
+    ],
+  })
+
+  await service.stop()
+})
+
 test('refreshes Codex on start, at the 60-second interval, and on update notifications', async () => {
   const client = new FakeCodexClient(fullRateLimits(), fullRateLimits(30, 70), fullRateLimits(35, 75))
   let scheduledRefresh: (() => void) | undefined
