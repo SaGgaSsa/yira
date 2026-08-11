@@ -27,7 +27,7 @@ import { useTheme } from './hooks/useTheme'
 import { useFontSize } from './hooks/useFontSize'
 import { useUpdateStore } from './store/updateStore'
 import { findMergeTargetGroup, getGroupingBlockedReason } from './utils/grouping'
-import { GRID_MAX_TILES, GROUP_COLOR_ORDER, getDefaultTileSize, type BoardState, type BoardTask, type TileState, type CanvasState, type GridWorkspaceState, type Workspace, type WorkspaceMetadata, type TileGroup, type ViewMode, type SplitPanelId, type SplitViewState, type WorkspaceManagementEntry, type WorkspaceType } from '@shared/types'
+import { GRID_MAX_TILES, GROUP_COLOR_ORDER, getDefaultTileSize, type AgentUsageSnapshot, type BoardState, type BoardTask, type TileState, type CanvasState, type GridWorkspaceState, type Workspace, type WorkspaceMetadata, type TileGroup, type ViewMode, type SplitPanelId, type SplitViewState, type WorkspaceManagementEntry, type WorkspaceType } from '@shared/types'
 import { createDefaultAgentProvidersConfig } from '@shared/workspaceConfig'
 import { createEmptyGridWorkspaceState, normalizeGridWorkspaceState } from '@shared/gridWorkspaceState'
 import {
@@ -268,6 +268,7 @@ export default function App(): React.ReactElement {
   if (rendererMode === 'floating-tile') return <FloatingTileWindow />
 
   const { t } = useTranslation()
+  const [agentUsage, setAgentUsage] = useState<AgentUsageSnapshot | null>(null)
   // Keep startup copy stable: this effect must stay mount-only to avoid reloading persisted workspace state on language changes.
   const startupFirstWorkspaceDialogCopyRef = useRef(getInitialWorkspaceDialogCopy(t))
 
@@ -328,6 +329,18 @@ export default function App(): React.ReactElement {
   const clearTerminalTitle = useCanvasStore((s) => s.clearTerminalTitle)
   const clearAllTerminalAttention = useCanvasStore((s) => s.clearAllTerminalAttention)
   const activeWorkspaceType: WorkspaceType = activeWorkspaceConfig.type
+
+  useEffect(() => {
+    let active = true
+    void window.electron.agents.usageSnapshot().then((snapshot) => {
+      if (active) setAgentUsage(snapshot)
+    }).catch(() => {
+      if (active) setAgentUsage(null)
+    })
+    return window.electron.agents.onUsageChanged((snapshot) => {
+      if (active) setAgentUsage(snapshot)
+    })
+  }, [activeWorkspaceConfig.agentProvider])
   const attachedTiles = useMemo(() => getAttachedTiles(tiles), [tiles])
   const shouldKeepSidebarOpen = shouldKeepSidebarOpenForWorkspace(attachedTiles)
   const sortedAttachedTiles = useMemo(
@@ -1972,6 +1985,8 @@ export default function App(): React.ReactElement {
         canSplitView={attachedTiles.length >= 2}
         sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={() => setSidebarCollapsed(c => !c)}
+        agentProvider={activeWorkspaceConfig.agentProvider}
+        agentUsage={agentUsage}
         hasWorkspacePanel={hasWorkspacePanel}
         workspacePanelOpen={activeWorkspaceConfig.workspacePanelOpen}
         onToggleWorkspacePanel={toggleWorkspacePanel}

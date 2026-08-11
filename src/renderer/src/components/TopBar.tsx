@@ -1,7 +1,8 @@
 import React from 'react'
 import { Settings, Grid3X3, LayoutGrid, Columns, PanelLeft, PanelRight, SplitSquareHorizontal, SplitSquareVertical, ClipboardList } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import type { SplitOrientation, ViewMode, WorkspaceType } from '@shared/types'
+import type { AgentProvider, AgentUsageSnapshot, SplitOrientation, ViewMode, WorkspaceType } from '@shared/types'
+import { AgentUsageIndicator } from './AgentUsageIndicator'
 
 interface TopBarProps {
   hasWorkspace: boolean
@@ -15,6 +16,8 @@ interface TopBarProps {
   canSplitView: boolean
   sidebarCollapsed: boolean
   onToggleSidebar: () => void
+  agentProvider?: AgentProvider
+  agentUsage: AgentUsageSnapshot | null
   hasWorkspacePanel: boolean
   workspacePanelOpen: boolean
   onToggleWorkspacePanel: () => void
@@ -80,6 +83,8 @@ export function TopBar({
   canSplitView,
   sidebarCollapsed,
   onToggleSidebar,
+  agentProvider,
+  agentUsage,
   hasWorkspacePanel,
   workspacePanelOpen,
   onToggleWorkspacePanel,
@@ -97,7 +102,7 @@ export function TopBar({
     <header className="window-titlebar nd-panel relative flex shrink-0 items-center border-x-0 border-t-0">
       {hasWorkspace && (
         <>
-          <div className="flex items-center gap-1">
+          <div className="flex max-w-[calc(50%-6rem)] items-center gap-1 overflow-hidden">
             <button
               className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
               onClick={onToggleSidebar}
@@ -106,6 +111,7 @@ export function TopBar({
             >
               <PanelLeft size={14} />
             </button>
+            {agentProvider && <AgentUsageIndicator provider={agentProvider} snapshot={agentUsage?.[agentProvider]} />}
           </div>
 
           <div className="absolute left-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1 rounded-md border border-border-visible bg-bg-secondary px-0.5 top-1/2">

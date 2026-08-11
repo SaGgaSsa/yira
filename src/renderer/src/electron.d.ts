@@ -35,6 +35,7 @@ import type {
   AgentProviderAvailabilitySnapshot,
   AgentSessionHistoryQuery,
   AgentSessionHistoryResult,
+  AgentUsageSnapshot,
   NoteBlocks,
   MarkdownViewMode,
   NoteKind,
@@ -72,6 +73,8 @@ interface ElectronWorld {
     subscribeSessions: (workspaceId?: string) => Promise<string | false>
     unsubscribeSessions: (token: string) => Promise<boolean>
     onSessionsChanged: (callback: (snapshot: AgentActiveSessionSnapshot) => void) => () => void
+    usageSnapshot: () => Promise<AgentUsageSnapshot | null>
+    onUsageChanged: (callback: (snapshot: AgentUsageSnapshot) => void) => () => void
     history: (query?: AgentSessionHistoryQuery) => Promise<AgentSessionHistoryResult>
     queryHistory: (query?: AgentSessionHistoryQuery) => Promise<AgentSessionHistoryResult>
   }
@@ -80,6 +83,8 @@ interface ElectronWorld {
     save: (settings: UserSettings) => Promise<void>
     configureAgentHooks: (provider: 'codex' | 'claude') => Promise<{ message: string }>
     uninstallAgentHooks: (provider: 'codex' | 'claude') => Promise<{ message: string }>
+    installClaudeUsageStatusLine: () => Promise<{ message: string }>
+    uninstallClaudeUsageStatusLine: () => Promise<{ message: string }>
   }
   note: {
     save: (tileId: string, data: NoteData) => Promise<void>

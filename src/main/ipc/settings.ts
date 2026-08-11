@@ -8,6 +8,7 @@ import type { UserSettings } from '@shared/types'
 import { normalizeUserSettings } from '@shared/userSettings'
 import { resolveSupportedLanguage } from '@shared/language'
 import { installClaudeHookConfiguration, installCodexHookConfiguration, uninstallClaudeHookConfiguration, uninstallCodexHookConfiguration, type AgentHookProvider } from '../agentHookConfiguration'
+import { installClaudeUsageStatusLineConfiguration, uninstallClaudeUsageStatusLineConfiguration } from '../claudeUsageStatusLineConfiguration'
 
 const SETTINGS_PATH = join(YIRA_HOME, 'settings.json')
 
@@ -17,6 +18,13 @@ function getAgentHookPath(provider: AgentHookProvider): string {
 
 function getAgentHookClientCommand(): string {
   return is.dev ? `node ${JSON.stringify(join(process.cwd(), 'resources', 'agent-hook-client.mjs'))}` : `node ${JSON.stringify(join(process.resourcesPath, 'agent-hook-client.mjs'))}`
+}
+
+function getClaudeUsageStatusLineCommand(): string {
+  const scriptPath = is.dev
+    ? join(process.cwd(), 'resources', 'claude-usage-status-line.mjs')
+    : join(process.resourcesPath, 'claude-usage-status-line.mjs')
+  return `node ${JSON.stringify(scriptPath)}`
 }
 
 async function mutateAgentHooks(provider: AgentHookProvider, operation: 'install' | 'uninstall') {
@@ -29,6 +37,24 @@ async function mutateAgentHooks(provider: AgentHookProvider, operation: 'install
   const result = provider === 'codex'
     ? operation === 'install' ? installCodexHookConfiguration(text, command) : uninstallCodexHookConfiguration(text, command)
     : operation === 'install' ? installClaudeHookConfiguration(text, command) : uninstallClaudeHookConfiguration(text, command)
+  if (result.ok && result.changed) {
+    await fs.mkdir(join(path, '..'), { recursive: true })
+    await fs.writeFile(path, result.text, 'utf8')
+  }
+  return result
+}
+
+async function mutateClaudeUsageStatusLine(operation: 'install' | 'uninstall') {
+  const path = join(homedir(), '.claude', 'settings.json')
+  let text = '{}'
+  try { text = await fs.readFile(path, 'utf8') } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+  }
+
+  const command = getClaudeUsageStatusLineCommand()
+  const result = operation === 'install'
+    ? installClaudeUsageStatusLineConfiguration(text, command)
+    : uninstallClaudeUsageStatusLineConfiguration(text, command)
   if (result.ok && result.changed) {
     await fs.mkdir(join(path, '..'), { recursive: true })
     await fs.writeFile(path, result.text, 'utf8')
@@ -89,4 +115,6 @@ export function registerSettingsIPC(): void {
 
   ipcMain.handle('agentHooks:configure', async (_, provider: AgentHookProvider) => mutateAgentHooks(provider, 'install'))
   ipcMain.handle('agentHooks:uninstall', async (_, provider: AgentHookProvider) => mutateAgentHooks(provider, 'uninstall'))
+  ipcMain.handle('agentUsage:claudeStatusLine:install', async () => mutateClaudeUsageStatusLine('install'))
+  ipcMain.handle('agentUsage:claudeStatusLine:uninstall', async () => mutateClaudeUsageStatusLine('uninstall'))
 }

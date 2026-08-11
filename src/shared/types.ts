@@ -126,6 +126,29 @@ export interface AgentProviderAvailability {
 
 export type AgentProviderAvailabilitySnapshot = Record<AgentProvider, AgentProviderAvailability>
 
+export type AgentUsageWindowKind = 'fiveHour' | 'weekly'
+
+/** Sanitized usage for one provider quota window. */
+export interface AgentUsageWindow {
+  kind: AgentUsageWindowKind
+  usedPercent: number
+  resetsAt: string
+}
+
+/** Safe usage state exposed to renderer-facing consumers. */
+export interface AgentUsageProviderSnapshot {
+  provider: AgentProvider
+  windows: AgentUsageWindow[]
+  updatedAt?: string
+  status: 'available' | 'unavailable'
+}
+
+/** Global usage state always includes a safe entry for each supported provider. */
+export interface AgentUsageSnapshot {
+  claude: AgentUsageProviderSnapshot
+  codex: AgentUsageProviderSnapshot
+}
+
 // ─── Workspace ─────────────────────────────────────────────────────────────
 
 export type WorkspaceType = 'canvas' | 'grid'

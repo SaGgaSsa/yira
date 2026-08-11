@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AgentActiveSessionSnapshot, AgentProviderAvailabilitySnapshot, AgentSessionHistoryQuery, AgentSessionHistoryResult, BoardTask, FileListOptions, FileSearchResult, FileWriteInput, FloatingNavigationEvent, FloatingNavigationRequest, GitCommitHistoryResult, GitStatusResult, NotificationAttentionOptions, TerminalCreateOptions, UpdateState, WindowBounds, WindowClosePreparationRequest, WindowClosePreparationResponse, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
+import type { AgentActiveSessionSnapshot, AgentProviderAvailabilitySnapshot, AgentSessionHistoryQuery, AgentSessionHistoryResult, AgentUsageSnapshot, BoardTask, FileListOptions, FileSearchResult, FileWriteInput, FloatingNavigationEvent, FloatingNavigationRequest, GitCommitHistoryResult, GitStatusResult, NotificationAttentionOptions, TerminalCreateOptions, UpdateState, WindowBounds, WindowClosePreparationRequest, WindowClosePreparationResponse, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
 import { createSerialTaskQueue } from '@shared/serialTaskQueue'
 
 console.log('[preload] Loading...')
@@ -39,6 +39,12 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.on('agents:sessions:changed', handler)
       return () => ipcRenderer.removeListener('agents:sessions:changed', handler)
     },
+    usageSnapshot: () => ipcRenderer.invoke('agents:usage:snapshot') as Promise<AgentUsageSnapshot | null>,
+    onUsageChanged: (callback: (snapshot: AgentUsageSnapshot) => void) => {
+      const handler = (_event: unknown, snapshot: AgentUsageSnapshot) => callback(snapshot)
+      ipcRenderer.on('agents:usage:changed', handler)
+      return () => ipcRenderer.removeListener('agents:usage:changed', handler)
+    },
     history: (query?: AgentSessionHistoryQuery) =>
       ipcRenderer.invoke('agents:history', query) as Promise<AgentSessionHistoryResult>,
     queryHistory: (query?: AgentSessionHistoryQuery) =>
@@ -51,6 +57,8 @@ contextBridge.exposeInMainWorld('electron', {
     save: (settings: unknown) => ipcRenderer.invoke('settings:save', settings),
     configureAgentHooks: (provider: 'codex' | 'claude') => ipcRenderer.invoke('agentHooks:configure', provider),
     uninstallAgentHooks: (provider: 'codex' | 'claude') => ipcRenderer.invoke('agentHooks:uninstall', provider),
+    installClaudeUsageStatusLine: () => ipcRenderer.invoke('agentUsage:claudeStatusLine:install'),
+    uninstallClaudeUsageStatusLine: () => ipcRenderer.invoke('agentUsage:claudeStatusLine:uninstall'),
   },
 
   // Notes

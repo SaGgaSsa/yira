@@ -30,6 +30,21 @@ test('registers restricted agent availability, snapshot/subscription, and histor
   assert.doesNotMatch(text, /rootPath:\s*(?:query|input)/)
 })
 
+test('registers a sanitized global usage bridge without reset or credit controls', async () => {
+  const text = await source('src/main/ipc/agents.ts')
+  const preload = await source('src/preload/index.ts')
+  const declaration = await source('src/renderer/src/electron.d.ts')
+
+  assert.match(text, /agents:usage:snapshot/)
+  assert.match(text, /agents:usage:changed/)
+  assert.match(preload, /usageSnapshot/)
+  assert.match(preload, /onUsageChanged/)
+  assert.match(declaration, /usageSnapshot/)
+  assert.match(declaration, /onUsageChanged/)
+  assert.doesNotMatch(preload, /rateLimitResetCredit|sendAddCreditsNudgeEmail/)
+  assert.doesNotMatch(declaration, /rateLimitResetCredit|sendAddCreditsNudgeEmail/)
+})
+
 test('exposes only normalized agent contracts through preload', async () => {
   const text = await source('src/preload/index.ts')
   assert.match(text, /agents:\s*\{/)
@@ -52,7 +67,7 @@ test('declares the agent bridge and registers it from main', async () => {
   assert.match(preload, /AgentSessionHistoryResult/)
   assert.match(preload, /subscribeSessions:[\s\S]*Promise<string \| false>/)
   assert.match(preload, /unsubscribeSessions: \(token: string\)/)
-  assert.match(main, /registerAgentsIPC\(\)/)
+  assert.match(main, /registerAgentsIPC\(\{ usageService: agentUsageService \}\)/)
 })
 
 type IpcHandler = (event: { sender: FakeWebContents }, ...args: unknown[]) => unknown

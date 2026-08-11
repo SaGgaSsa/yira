@@ -2,7 +2,7 @@ import { app, BrowserWindow, shell, ipcMain, Menu, clipboard, dialog } from 'ele
 import { join } from 'path'
 import { existsSync } from 'fs'
 import { is } from '@electron-toolkit/utils'
-import { initWorkspaces, registerWorkspaceIPC } from './ipc/workspace'
+import { getConfiguredAgentProviders, initWorkspaces, registerWorkspaceIPC } from './ipc/workspace'
 import { registerCanvasIPC } from './ipc/canvas'
 import { registerTerminalIPC, initShellProfiles } from './ipc/terminal'
 import { registerSettingsIPC } from './ipc/settings'
@@ -14,6 +14,8 @@ import { clearWindowAttention, registerNotificationIPC } from './ipc/notificatio
 import { registerWindowIPC, type WindowClosePreparationBridge } from './ipc/window'
 import { registerFloatingTilesIPC } from './ipc/floatingTiles'
 import { registerAgentsIPC } from './ipc/agents'
+import { AgentUsageService } from './agentUsage'
+import { readClaudeUsageCache } from './claudeUsageCache'
 import { APP_ID, APP_NAME, DEV_APP_NAME, YIRA_HOME } from './paths'
 import { registerUpdateIPC, scheduleStartupUpdateCheck } from './updater'
 import { loadWindowState, saveWindowState } from './windowState'
@@ -184,12 +186,30 @@ app.whenReady().then(async () => {
   // Ensure app dirs
   await initWorkspaces()
 
+  const agentUsageService = new AgentUsageService({
+    getConfiguredProviders: getConfiguredAgentProviders,
+    providerReaders: {
+      claude: async () => {
+        const cached = await readClaudeUsageCache()
+        if (!cached) return null
+        return {
+          status: 'available',
+          windows: [
+            ...(cached.fiveHour ? [{ kind: 'fiveHour', usedPercent: cached.fiveHour.usedPercentage, resetsAt: cached.fiveHour.resetsAt }] : []),
+            ...(cached.sevenDay ? [{ kind: 'weekly', usedPercent: cached.sevenDay.usedPercentage, resetsAt: cached.sevenDay.resetsAt }] : []),
+          ],
+        }
+      },
+    },
+  })
+  void agentUsageService.start().catch(() => undefined)
+
   // Detect available shells
   initShellProfiles()
 
   // Register all IPC handlers
   registerWorkspaceIPC()
-  registerAgentsIPC()
+  registerAgentsIPC({ usageService: agentUsageService })
   registerCanvasIPC()
   registerTerminalIPC()
   registerSettingsIPC()
