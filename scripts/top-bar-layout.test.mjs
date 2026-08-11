@@ -33,6 +33,19 @@ test('places the title bar globally and leaves an empty draggable strip without 
   assert.doesNotMatch(app, /\{activeWorkspaceId \? \(\s*<>\s*<TopBar/)
 })
 
+test('places the global agent usage indicator after the sidebar toggle', () => {
+  assert.match(topBar, /AgentUsageIndicator/)
+  assert.match(topBar, /<PanelLeft size=\{14\} \/>[\s\S]*?<AgentUsageIndicator/)
+  assert.match(topBar, /max-w-\[calc\(50%-6rem\)\][^"]*overflow-hidden/)
+  assert.match(app, /agentUsage=\{agentUsage\}/)
+  assert.match(app, /agentProvider=\{activeWorkspaceConfig\.agentProvider\}/)
+})
+
+test('does not block window creation on a usage refresh', () => {
+  assert.match(main, /void agentUsageService\.start\(\)\.catch\(\(\) => undefined\)/)
+  assert.doesNotMatch(main, /await agentUsageService\.start\(\)/)
+})
+
 test('configures and synchronizes the native title bar overlay through a typed IPC bridge', () => {
   assert.match(main, /process\.platform === 'win32' \|\| process\.platform === 'linux'/)
   assert.match(main, /titleBarStyle: 'hidden'/)

@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { AgentUsageIndicator, type AgentUsageProviderSnapshot } from './AgentUsageIndicator'
+import type { AgentUsageProviderSnapshot } from '@shared/types'
+import { AgentUsageIndicator } from './AgentUsageIndicator'
 
 const resetAt = '2026-08-12T15:30:00.000Z'
 
-function renderIndicator(snapshot: AgentUsageProviderSnapshot | null | undefined, provider: 'codex' | 'claude' = 'codex'): string {
+function renderIndicator(snapshot: Omit<AgentUsageProviderSnapshot, 'provider'> | null | undefined, provider: 'codex' | 'claude' = 'codex'): string {
   return renderToStaticMarkup(
-    <AgentUsageIndicator provider={provider} snapshot={snapshot} />,
+    <AgentUsageIndicator provider={provider} snapshot={snapshot ? { provider, ...snapshot } : snapshot} />,
   )
 }
 

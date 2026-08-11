@@ -1,32 +1,10 @@
 import React from 'react'
 import { Code2, Sparkles } from 'lucide-react'
-
-export type AgentUsageProvider = 'codex' | 'claude'
-export type AgentUsageWindowKind = 'fiveHour' | 'weekly'
-export type AgentUsageSnapshotStatus = 'available' | 'unavailable' | 'loading' | 'error'
-
-export interface AgentUsageWindow {
-  kind: AgentUsageWindowKind
-  usedPercent?: number | null
-  resetsAt?: string | number | Date | null
-}
-
-/**
- * A renderer-local mirror of the shared provider snapshot contract.
- *
- * The optional fields keep the indicator safe while a provider is loading or
- * unavailable, and let it consume snapshots received over the preload bridge
- * without trusting their shape at render time.
- */
-export interface AgentUsageProviderSnapshot {
-  status?: AgentUsageSnapshotStatus
-  windows?: readonly AgentUsageWindow[]
-}
+import type { AgentProvider, AgentUsageProviderSnapshot, AgentUsageWindow, AgentUsageWindowKind } from '@shared/types'
 
 export interface AgentUsageIndicatorProps {
-  provider: AgentUsageProvider
+  provider: AgentProvider
   snapshot?: AgentUsageProviderSnapshot | null
-  status?: AgentUsageSnapshotStatus
 }
 
 type UsageThreshold = 'neutral' | 'warning' | 'critical' | 'unavailable'
@@ -58,7 +36,7 @@ const thresholdStyles: Record<UsageThreshold, ThresholdStyle> = {
 const ringRadius = 8
 const ringCircumference = 2 * Math.PI * ringRadius
 
-const providerDetails: Record<AgentUsageProvider, {
+const providerDetails: Record<AgentProvider, {
   label: string
   Icon: typeof Code2
 }> = {
@@ -66,7 +44,7 @@ const providerDetails: Record<AgentUsageProvider, {
   claude: { label: 'Claude', Icon: Sparkles },
 }
 
-function clampPercent(value: number | null | undefined): number | null {
+function clampPercent(value: number): number | null {
   if (typeof value !== 'number' || !Number.isFinite(value)) return null
   return Math.round(Math.max(0, Math.min(100, value)))
 }
@@ -79,9 +57,7 @@ function thresholdFor(percent: number | null): UsageThreshold {
 }
 
 function formatResetAt(value: AgentUsageWindow['resetsAt']): string | null {
-  if (value === null || value === undefined) return null
-
-  const date = value instanceof Date ? value : new Date(value)
+  const date = new Date(value)
   if (Number.isNaN(date.getTime())) return null
 
   return new Intl.DateTimeFormat(undefined, {
@@ -93,11 +69,7 @@ function formatResetAt(value: AgentUsageWindow['resetsAt']): string | null {
 }
 
 function resetDataValue(value: AgentUsageWindow['resetsAt']): string | undefined {
-  if (value === null || value === undefined) return undefined
-  if (value instanceof Date) {
-    return Number.isNaN(value.getTime()) ? undefined : value.toISOString()
-  }
-  return String(value)
+  return Number.isNaN(new Date(value).getTime()) ? undefined : value
 }
 
 function windowLabel(kind: AgentUsageWindowKind): string {
@@ -190,14 +162,13 @@ function UsageWindow({
 export function AgentUsageIndicator({
   provider,
   snapshot,
-  status,
 }: AgentUsageIndicatorProps): React.ReactElement {
   const details = providerDetails[provider]
   const Icon = details.Icon
-  const resolvedStatus = status ?? snapshot?.status ?? (snapshot?.windows?.length ? 'available' : 'unavailable')
+  const resolvedStatus = snapshot?.status ?? 'unavailable'
   const available = resolvedStatus === 'available'
-  const windows = available
-    ? (snapshot?.windows ?? []).filter(isUsageWindow).slice(0, 2)
+  const windows = available && snapshot
+    ? snapshot.windows.filter(isUsageWindow).slice(0, 2)
     : []
 
   return (

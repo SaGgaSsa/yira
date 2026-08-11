@@ -110,6 +110,7 @@ export async function readClaudeUsageCache(options: ClaudeUsageCacheReadOptions 
   const now = options.now ?? Date.now()
   const maxAgeMs = options.maxAgeMs ?? CLAUDE_USAGE_CACHE_MAX_AGE_MS
   if (!isFiniteTimestamp(now) || !Number.isFinite(maxAgeMs) || maxAgeMs < 0) return null
+  if (snapshot.capturedAt > now) return null
   if (now - snapshot.capturedAt >= maxAgeMs) return null
 
   return snapshot

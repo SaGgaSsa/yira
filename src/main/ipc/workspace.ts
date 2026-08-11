@@ -1,7 +1,7 @@
 import * as electron from 'electron'
 import { promises as fs, readFileSync } from 'fs'
 import { isAbsolute, join, relative, resolve } from 'path'
-import type { Config, Workspace, AppSettings, WorkspaceConfig, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceOpenFolderResult, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
+import type { AgentProvider, Config, Workspace, AppSettings, WorkspaceConfig, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceOpenFolderResult, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
 import { DEFAULT_SETTINGS } from '@shared/types'
 import { mergeAgentProvidersConfig, normalizeWorkspaceConfig } from '@shared/workspaceConfig'
 import { applyWorkspaceManagementChanges, setWorkspaceType } from '@shared/workspaceManagement'
@@ -100,6 +100,12 @@ export async function getWorkspacePathById(workspaceId: string): Promise<string 
 export async function getWorkspaceRootFolderById(workspaceId: string): Promise<string | null> {
   const config = await readConfig()
   return config.workspaces.find(w => w.id === workspaceId)?.config.rootFolderPath ?? null
+}
+
+/** Returns the selected providers once per workspace; callers own deduplication. */
+export async function getConfiguredAgentProviders(): Promise<AgentProvider[]> {
+  const config = await readConfig()
+  return config.workspaces.flatMap((workspace) => workspace.config.agentProvider ? [workspace.config.agentProvider] : [])
 }
 
 export async function initWorkspaces(): Promise<void> {

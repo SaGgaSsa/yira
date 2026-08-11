@@ -131,6 +131,9 @@ test('reads only a fresh safe snapshot and rejects an expired cache', async () =
 
     await writeClaudeUsageCache(completeSnapshot(NOW - CLAUDE_USAGE_CACHE_MAX_AGE_MS), { path: cachePath })
     assert.equal(await readClaudeUsageCache({ path: cachePath, now: NOW }), null)
+
+    await writeClaudeUsageCache(completeSnapshot(NOW + 1), { path: cachePath })
+    assert.equal(await readClaudeUsageCache({ path: cachePath, now: NOW }), null)
   })
 })
 

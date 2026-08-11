@@ -14,7 +14,7 @@
     "yira-board-mcp": "dist/mcp/board-mcp.js"
   },
   "scripts": {
-    "test": "node --test scripts/*.test.mjs && tsx --test scripts/*.test.ts src/main/agentAlerts.test.ts src/main/agentAlertBridge.test.ts src/main/agentHookConfiguration.test.ts src/main/ipc/files.test.ts src/main/git/runner.test.ts src/main/ipc/git.test.ts src/shared/fileSearch.test.ts src/shared/userSettings.test.ts src/renderer/src/components/WorkspaceExplorer.test.tsx src/renderer/src/components/WorkspaceSourceControl.test.ts src/renderer/src/utils/shortcutResolver.test.ts src/renderer/src/hooks/useKeyboardShortcuts.test.ts src/renderer/src/utils/shortcutCatalog.test.ts src/renderer/src/utils/workspaceExplorerSearch.test.ts src/renderer/src/utils/workspaceExplorerTree.test.ts",
+    "test": "node --test scripts/*.test.mjs && tsx --test scripts/*.test.ts src/main/agentAlerts.test.ts src/main/agentAlertBridge.test.ts src/main/agentHookConfiguration.test.ts src/main/agentUsage.test.ts src/main/claudeUsageCache.test.ts src/main/claudeUsageStatusLineConfiguration.test.ts src/main/ipc/agents.test.ts src/main/ipc/files.test.ts src/main/ipc/settings.test.ts src/main/git/runner.test.ts src/main/ipc/git.test.ts src/shared/fileSearch.test.ts src/shared/userSettings.test.ts src/renderer/src/components/AgentUsageIndicator.test.tsx src/renderer/src/components/WorkspaceExplorer.test.tsx src/renderer/src/components/WorkspaceSourceControl.test.ts src/renderer/src/utils/shortcutResolver.test.ts src/renderer/src/hooks/useKeyboardShortcuts.test.ts src/renderer/src/utils/shortcutCatalog.test.ts src/renderer/src/utils/workspaceExplorerSearch.test.ts src/renderer/src/utils/workspaceExplorerTree.test.ts",
     "dev": "node ./scripts/dev-workspace.mjs",
     "build:main": "node ./scripts/electron-vite-build.mjs main",
     "build:preload": "node ./scripts/electron-vite-build.mjs preload",
@@ -90,6 +90,10 @@
       {
         "from": "resources/agent-hook-client.mjs",
         "to": "agent-hook-client.mjs"
+      },
+      {
+        "from": "resources/claude-usage-status-line.mjs",
+        "to": "claude-usage-status-line.mjs"
       },
       {
         "from": "resources/linux-deb-update-launcher.sh",
