@@ -106,16 +106,19 @@ function firstField(record: RecordValue, names: readonly string[]): unknown {
   return undefined
 }
 
-function parseRawWindow(value: unknown): RawWindowState {
+function parseRawWindow(value: unknown): RawWindowState | null {
   if (!isRecord(value)) return {}
-  const durationMinutes = normalizeDuration(firstField(value, [
+  const durationFields = [
     'windowDurationMins',
     'windowDurationMinutes',
     'window_duration_mins',
     'window_duration_minutes',
     'durationMins',
     'durationMinutes',
-  ]))
+  ] as const
+  const suppliedDuration = durationFields.some((name) => Object.prototype.hasOwnProperty.call(value, name))
+  const durationMinutes = normalizeDuration(firstField(value, durationFields))
+  if (suppliedDuration && durationMinutes === null) return null
   const usedPercent = normalizePercent(firstField(value, [
     'usedPercent',
     'usedPercentage',
@@ -173,14 +176,15 @@ function extractRawState(value: unknown): RawRateLimitsState {
   for (const record of rateLimitRecords(value)) {
     const primary = parseRawWindow(record.primary)
     const secondary = parseRawWindow(record.secondary)
-    if (hasRawFields(primary)) state.primary = primary
-    if (hasRawFields(secondary)) state.secondary = secondary
+    if (primary && hasRawFields(primary)) state.primary = primary
+    if (secondary && hasRawFields(secondary)) state.secondary = secondary
 
     for (const name of ['windows', 'limits'] as const) {
       const entries = record[name]
       if (!Array.isArray(entries)) continue
       for (const entry of entries) {
         const parsed = parseRawWindow(entry)
+        if (!parsed) continue
         if (parsed.durationMinutes === FIVE_HOUR_MINUTES) state.primary = parsed
         if (parsed.durationMinutes === WEEKLY_MINUTES) state.secondary = parsed
       }

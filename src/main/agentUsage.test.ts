@@ -155,6 +155,37 @@ test('merges a sparse Codex update before refreshing the complete snapshot', asy
   await service.stop()
 })
 
+test('ignores sparse Codex updates with unsupported durations', async () => {
+  const client = new FakeCodexClient(fullRateLimits(), fullRateLimits(45, 65))
+  const service = new AgentUsageService({
+    getConfiguredProviders: () => ['codex'],
+    codexClientFactory: async () => client,
+  })
+  const received: AgentUsageSnapshot[] = []
+  service.subscribe((snapshot) => received.push(snapshot))
+
+  await service.start()
+  client.emit('account/rateLimits/updated', {
+    rateLimits: {
+      primary: {
+        usedPercent: 99,
+        windowDurationMins: 301,
+        resetsAt: FIRST_RESET + 1,
+      },
+    },
+  })
+  await flush()
+
+  assert.equal(client.methods.length, 2)
+  assert.equal(received.some((snapshot) => snapshot.codex.windows.some((window) => window.usedPercent === 99)), false)
+  assert.deepEqual(received.at(-1)?.codex.windows, [
+    { kind: 'fiveHour', usedPercent: 45, resetsAt: new Date(FIRST_RESET * 1000).toISOString() },
+    { kind: 'weekly', usedPercent: 65, resetsAt: new Date(SECOND_RESET * 1000).toISOString() },
+  ])
+
+  await service.stop()
+})
+
 test('deduplicates configured providers and never starts Codex when it is not configured', async () => {
   let factoryCalls = 0
   const client = new FakeCodexClient(fullRateLimits())
