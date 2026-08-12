@@ -199,6 +199,7 @@ test('registers discovery by root path for unsaved workspace roots', async () =>
   registerGitIPC(ipcMain, {
     getWorkspaceGitConfigById: async () => null,
     discoverGitRepositories: async (rootPath) => {
+      if (typeof rootPath !== 'string') throw new Error('Root path must be text')
       roots.push(rootPath)
       return [{ relativePath: '.', name: 'new-root' }]
     },
