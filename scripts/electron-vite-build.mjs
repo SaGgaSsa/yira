@@ -1,10 +1,13 @@
 import { spawn } from 'node:child_process'
+import { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const rootDir = dirname(dirname(fileURLToPath(import.meta.url)))
 const target = process.argv[2] ?? 'all'
-const electronViteCli = resolve(rootDir, 'node_modules', 'electron-vite', 'bin', 'electron-vite.js')
+const require = createRequire(import.meta.url)
+const electronViteEntry = require.resolve('electron-vite')
+const electronViteCli = resolve(dirname(electronViteEntry), '..', 'bin', 'electron-vite.js')
 
 const child = spawn(process.execPath, [electronViteCli, 'build'], {
   cwd: rootDir,
