@@ -1,4 +1,4 @@
-export type ClosePreparationPhase = 'flush' | 'persist'
+export type ClosePreparationPhase = 'flush' | 'persist' | 'terminals'
 export type CloseFailureDecision = 'retry' | 'discard' | 'cancel'
 export type ClosePreparationResult = 'proceed' | 'cancel'
 
@@ -10,6 +10,7 @@ export interface ClosePreparationFailure {
 export interface WindowCloseCoordinatorOptions {
   flushRenderers: () => Promise<void>
   persistPrimary: () => Promise<void>
+  drainTerminals: () => Promise<void>
   promptFailure: (failure: ClosePreparationFailure) => Promise<CloseFailureDecision>
   timeoutMs: number
 }
@@ -52,6 +53,8 @@ export async function coordinateWindowClose(
       await runPhase('flush', options.flushRenderers, options.timeoutMs)
       phase = 'persist'
       await runPhase('persist', options.persistPrimary, options.timeoutMs)
+      phase = 'terminals'
+      await runPhase('terminals', options.drainTerminals, options.timeoutMs)
       return 'proceed'
     } catch (error) {
       failure = { phase, error }
@@ -59,6 +62,14 @@ export async function coordinateWindowClose(
 
     const decision = await options.promptFailure(failure)
     if (decision === 'retry') continue
-    return decision === 'discard' ? 'proceed' : 'cancel'
+    if (decision === 'cancel') return 'cancel'
+    if (failure.phase !== 'terminals') {
+      try {
+        await runPhase('terminals', options.drainTerminals, options.timeoutMs)
+      } catch {
+        // Discard permits close after a bounded terminal shutdown failure.
+      }
+    }
+    return 'proceed'
   }
 }

@@ -4,7 +4,7 @@ import { existsSync } from 'fs'
 import { is } from '@electron-toolkit/utils'
 import { getConfiguredAgentProviders, initWorkspaces, registerWorkspaceIPC } from './ipc/workspace'
 import { registerCanvasIPC } from './ipc/canvas'
-import { registerTerminalIPC, initShellProfiles } from './ipc/terminal'
+import { registerTerminalIPC, initShellProfiles, shutdownTerminalSessions } from './ipc/terminal'
 import { registerSettingsIPC } from './ipc/settings'
 import { registerNotesIPC } from './ipc/notes'
 import { registerBoardsIPC } from './ipc/boards'
@@ -37,14 +37,16 @@ let closePreparationApproved = false
 let closePreparationInFlight: Promise<boolean> | null = null
 const CLOSE_PREPARATION_TIMEOUT_MS = 5_000
 
-async function promptClosePreparationFailure(phase: 'flush' | 'persist', error: unknown): Promise<CloseFailureDecision> {
+async function promptClosePreparationFailure(phase: 'flush' | 'persist' | 'terminals', error: unknown): Promise<CloseFailureDecision> {
   const detail = error instanceof Error ? error.message : String(error)
   const options = {
     type: 'warning' as const,
     title: 'Unsaved file drafts',
     message: phase === 'flush'
       ? 'Yira could not collect every open file draft.'
-      : 'Yira could not save the current workspace.',
+      : phase === 'persist'
+        ? 'Yira could not save the current workspace.'
+        : 'Yira could not close every terminal session.',
     detail,
     buttons: ['Retry', 'Close without saving', 'Cancel'],
     defaultId: 0,
@@ -74,6 +76,7 @@ async function prepareApplicationClose(): Promise<boolean> {
     const result = await coordinateWindowClose({
       flushRenderers: () => bridge.requestAll('flush', CLOSE_PREPARATION_TIMEOUT_MS),
       persistPrimary: () => bridge.requestPrimary('persist', CLOSE_PREPARATION_TIMEOUT_MS),
+      drainTerminals: async () => { await shutdownTerminalSessions() },
       promptFailure: ({ phase, error }) => promptClosePreparationFailure(phase, error),
       timeoutMs: CLOSE_PREPARATION_TIMEOUT_MS,
     })

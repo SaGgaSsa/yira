@@ -17,6 +17,11 @@ import {
   type AgentTerminalLaunch,
   type AgentTerminalLifecycle,
 } from '../agents/terminal'
+import {
+  TerminalSessionManager,
+  type ManagedTerminalSession,
+  type TerminalShutdownResult,
+} from '../terminalSessions'
 
 // node-pty must be required (not imported) due to native module ESM issues
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -30,20 +35,20 @@ interface PtyInstance {
   onExit?: (cb: () => void) => void
 }
 
-interface TerminalSession {
+interface TerminalSession extends ManagedTerminalSession {
   pty: PtyInstance
   listeners: Set<WebContents>
   buffer: string
   agentLifecycle?: AgentTerminalLifecycle
 }
 
-const terminals = new Map<string, TerminalSession>()
+const terminalSessionManager = new TerminalSessionManager()
 let profiles: ShellProfile[] = []
 let sshClient: string | null = null
 const agentAlerts = new SemanticAgentAlertState({ onChange: broadcastAgentAlert })
 const agentAlertBridge = new AgentAlertBridge({
   onAlert: (alert) => {
-    const session = terminals.get(alert.tileId)
+    const session = getTerminalSession(alert.tileId)
     if (!session) return
     if (session.agentLifecycle && !session.agentLifecycle.onAlert(alert)) return
     agentAlerts.report(alert)
@@ -51,7 +56,7 @@ const agentAlertBridge = new AgentAlertBridge({
 })
 
 function broadcastAgentAlert(tileId: string, state: AgentAlertState | null): void {
-  const session = terminals.get(tileId)
+  const session = getTerminalSession(tileId)
   if (session) {
     for (const listener of [...session.listeners]) {
       if (listener.isDestroyed()) session.listeners.delete(listener)
@@ -68,12 +73,20 @@ export function setAgentAlertsEnabled(enabled: boolean): void {
   agentAlerts.setEnabled(enabled)
 }
 
+export function shutdownTerminalSessions(): Promise<TerminalShutdownResult> {
+  return terminalSessionManager.shutdownAll()
+}
+
+function getTerminalSession(tileId: string): TerminalSession | undefined {
+  return terminalSessionManager.get(tileId) as TerminalSession | undefined
+}
+
 function resolveProfile(shellProfileId: string): ShellProfile | undefined {
   return profiles.find(p => p.id === shellProfileId)
 }
 
 function resolveTerminalId(tileId: string): string {
-  if (terminals.has(tileId)) return tileId
+  if (terminalSessionManager.get(tileId)) return tileId
   return normalizeAgentOpaqueId(tileId) ?? tileId
 }
 
@@ -96,9 +109,8 @@ export function registerTerminalIPC(): void {
     const runtimeWorkspaceId = isAgent ? normalizeAgentOpaqueId(options.workspaceId) : options.workspaceId
     if (isAgent && !runtimeTileId) throw new Error('Invalid agent tile id')
     if (isAgent && !runtimeWorkspaceId) throw new Error('Invalid agent workspace id')
-
     // Check for existing session (reattach)
-    const existing = terminals.get(runtimeTileId)
+    const existing = getTerminalSession(runtimeTileId)
     if (existing) {
       existing.listeners.add(event.sender)
       return { cols: 80, rows: 24, buffer: existing.buffer }
@@ -174,9 +186,14 @@ export function registerTerminalIPC(): void {
 
     const executable = isRemoteSsh ? sshClient! : agentLaunch?.command ?? profile!.shell
     const label = isRemoteSsh ? 'Remote SSH' : agentLaunch ? `${agentLaunch.provider} agent` : profile!.label
-    let term: PtyInstance
+    if (!terminalSessionManager.isAcceptingSessions()) {
+      agentAlertBridge.unregisterTerminal(runtimeTileId)
+      throw new Error('Terminal sessions are shutting down')
+    }
+
+    let spawnedTerm: PtyInstance
     try {
-      term = pty.spawn(executable, spawnArgs, {
+      spawnedTerm = pty.spawn(executable, spawnArgs, {
         name: 'xterm-256color',
         cols: 80,
         rows: 24,
@@ -188,6 +205,23 @@ export function registerTerminalIPC(): void {
       throw new Error(`Failed to spawn ${label}: ${err instanceof Error ? err.message : String(err)}`)
     }
 
+    let ptyExited = false
+    spawnedTerm.onExit?.(() => {
+      ptyExited = true
+    })
+    const term: PtyInstance = {
+      write: (data) => spawnedTerm.write(data),
+      resize: (cols, rows) => spawnedTerm.resize(cols, rows),
+      kill: () => spawnedTerm.kill(),
+      onData: (callback) => spawnedTerm.onData(callback),
+      onExit: spawnedTerm.onExit
+        ? (callback) => {
+          spawnedTerm.onExit?.(callback)
+          if (ptyExited) callback()
+        }
+        : undefined,
+    }
+
     const agentLifecycle = agentLaunch
       ? createAgentTerminalLifecycle({
         registry: agentSessionRegistry,
@@ -195,22 +229,26 @@ export function registerTerminalIPC(): void {
         workspaceId: runtimeWorkspaceId!,
       })
       : undefined
-    const agentExitGate = agentLifecycle
-      ? createAgentTerminalExitGate(() => {
-        agentLifecycle.onExit()
-        agentAlertBridge.unregisterTerminal(runtimeTileId)
-        agentAlerts.clearOnDestroy(runtimeTileId)
-      })
-      : null
-    agentExitGate && term.onExit?.(agentExitGate.handle)
-
+    let cleanedUp = false
     const session: TerminalSession = {
       pty: term,
       listeners: new Set([event.sender]),
       buffer: '',
       agentLifecycle,
+      onCleanup: () => {
+        if (cleanedUp) return
+        cleanedUp = true
+        session.agentLifecycle?.onExit()
+        agentAlertBridge.unregisterTerminal(runtimeTileId)
+        agentAlerts.clearOnDestroy(runtimeTileId)
+        session.listeners.clear()
+      },
     }
-    terminals.set(runtimeTileId, session)
+    const agentExitGate = agentLifecycle
+      ? createAgentTerminalExitGate(() => session.onCleanup())
+      : null
+    if (agentExitGate) term.onExit?.(agentExitGate.handle)
+    else term.onExit?.(() => session.onCleanup())
 
     if (agentLaunch) {
       try {
@@ -220,14 +258,22 @@ export function registerTerminalIPC(): void {
           workspaceId: runtimeWorkspaceId!,
           provider: agentLaunch.provider,
         })
-        agentExitGate?.markRegistered()
       } catch (error) {
-        terminals.delete(runtimeTileId)
         agentAlertBridge.unregisterTerminal(runtimeTileId)
         try { term.kill() } catch { /* ignore */ }
         throw error
       }
     }
+
+    try {
+      terminalSessionManager.add(runtimeTileId, session)
+    } catch (error) {
+      if (agentLaunch) agentSessionRegistry.remove(runtimeWorkspaceId!, runtimeTileId)
+      agentAlertBridge.unregisterTerminal(runtimeTileId)
+      try { term.kill() } catch { /* ignore */ }
+      throw error
+    }
+    agentExitGate?.markRegistered()
 
     // Clean up listeners when renderer is destroyed
     event.sender.once('destroyed', () => {
@@ -268,7 +314,7 @@ export function registerTerminalIPC(): void {
 
   ipcMain.handle('terminal:write', (_, tileId: string, data: string) => {
     const runtimeTileId = resolveTerminalId(tileId)
-    const session = terminals.get(runtimeTileId)
+    const session = getTerminalSession(runtimeTileId)
     if (data) {
       agentAlerts.clearOnInput(runtimeTileId)
       session?.agentLifecycle?.onInput(data)
@@ -279,7 +325,7 @@ export function registerTerminalIPC(): void {
   ipcMain.handle('terminal:acknowledgeAgentAlert', (_, tileId: string) => {
     const runtimeTileId = resolveTerminalId(tileId)
     agentAlerts.clearOnFocus(runtimeTileId)
-    terminals.get(runtimeTileId)?.agentLifecycle?.onFocus()
+    getTerminalSession(runtimeTileId)?.agentLifecycle?.onFocus()
   })
 
   ipcMain.handle('terminal:setAgentAlertsEnabled', (_, enabled: boolean) => {
@@ -288,26 +334,27 @@ export function registerTerminalIPC(): void {
 
   ipcMain.handle('terminal:resize', (_, tileId: string, cols: number, rows: number) => {
     if (cols > 0 && rows > 0) {
-      terminals.get(resolveTerminalId(tileId))?.pty.resize(Math.floor(cols), Math.floor(rows))
+      getTerminalSession(resolveTerminalId(tileId))?.pty.resize(Math.floor(cols), Math.floor(rows))
     }
   })
 
   ipcMain.handle('terminal:destroy', (_, tileId: string) => {
     const runtimeTileId = resolveTerminalId(tileId)
-    const session = terminals.get(runtimeTileId)
-    if (session) {
-      session.agentLifecycle?.onExit()
-      try { session.pty.kill() } catch { /* ignore */ }
-      terminals.delete(runtimeTileId)
+    const deletion = terminalSessionManager.delete(runtimeTileId)
+    if (deletion) {
+      if (!deletion.killRequested) {
+        try { deletion.session.pty.kill() } catch { /* ignore */ }
+      }
+    } else {
+      agentAlertBridge.unregisterTerminal(runtimeTileId)
+      agentAlerts.clearOnDestroy(runtimeTileId)
     }
-    agentAlertBridge.unregisterTerminal(runtimeTileId)
-    agentAlerts.clearOnDestroy(runtimeTileId)
   })
 
   // terminal:detach — disconnects PTY but doesn't kill the process
   // (not used yet, but kept for future session persistence)
   ipcMain.handle('terminal:detach', (event, tileId: string) => {
-    const session = terminals.get(resolveTerminalId(tileId))
+    const session = getTerminalSession(resolveTerminalId(tileId))
     if (session) {
       session.listeners.delete(event.sender)
     }
