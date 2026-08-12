@@ -36,11 +36,15 @@ test('connects tabs to explicit tab panels', () => {
   assert.match(source, /id=\{`workspace-dialog-panel-\$\{activeTab\}`\}/)
 })
 
+test('supports opening the Source Control tab directly', () => {
+  assert.match(source, /initialTab/)
+})
+
 test('passes workspace identity and repository paths through management and app saves', () => {
   assert.match(managementSource, /workspaceId: draft\?\.id/)
   assert.match(managementSource, /sourceControlRepositoryPaths: value\.sourceControlRepositoryPaths/)
   assert.match(managementSource, /sourceControlRepositoryPaths: draft\.sourceControlRepositoryPaths/)
-  assert.match(appSource, /workspaceId: workspace\.id,\n        value:/)
+  assert.match(appSource, /workspaceId: workspace\.id,[\s\S]*?value:/)
   assert.match(appSource, /sourceControlRepositoryPaths: workspace\.config\.sourceControlRepositoryPaths/)
   assert.match(appSource, /sourceControlRepositoryPaths: value\.sourceControlRepositoryPaths/)
 })

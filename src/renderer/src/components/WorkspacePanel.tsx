@@ -33,7 +33,7 @@ interface WorkspacePanelProps {
   terminalTitles: Record<string, string>
   addTerminal: (profileId: ShellProfileId, agent?: TerminalAgentMetadata) => string | null
   onFocusTile: (tileId: string) => void
-  onOpenWorkspaceSettings: () => void
+  onOpenWorkspaceSettings: (initialTab?: 'sourceControl') => void
 }
 
 export function WorkspacePanel({

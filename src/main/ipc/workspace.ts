@@ -180,18 +180,24 @@ export function updateWorkspace(workspace: Workspace, patch: WorkspaceUpdatePatc
   const hasAgentProviderPatch = patch.config !== undefined
     && patch.config !== null
     && Object.prototype.hasOwnProperty.call(patch.config, 'agentProvider')
+  const hasRootFolderPathPatch = patch.config !== undefined
+    && patch.config !== null
+    && Object.prototype.hasOwnProperty.call(patch.config, 'rootFolderPath')
+  const hasRepositoryPathsPatch = patch.config !== undefined
+    && patch.config !== null
+    && Object.prototype.hasOwnProperty.call(patch.config, 'sourceControlRepositoryPaths')
   const nextRootFolderPath = normalizeWorkspaceRootFolderPath(
-    patch.config?.rootFolderPath ?? workspace.config.rootFolderPath,
+    hasRootFolderPathPatch ? patch.config?.rootFolderPath : workspace.config.rootFolderPath,
   )
   const rootFolderPathChanged = nextRootFolderPath !== normalizeWorkspaceRootFolderPath(workspace.config.rootFolderPath)
 
   workspace.name = nextName
   workspace.config = normalizeWorkspaceConfig({
     type: workspace.config.type,
-    rootFolderPath: patch.config?.rootFolderPath ?? workspace.config.rootFolderPath,
-    sourceControlRepositoryPaths: rootFolderPathChanged
-      ? []
-      : patch.config?.sourceControlRepositoryPaths ?? workspace.config.sourceControlRepositoryPaths,
+    rootFolderPath: hasRootFolderPathPatch ? patch.config?.rootFolderPath : workspace.config.rootFolderPath,
+    sourceControlRepositoryPaths: hasRepositoryPathsPatch
+      ? patch.config?.sourceControlRepositoryPaths
+      : rootFolderPathChanged ? [] : workspace.config.sourceControlRepositoryPaths,
     workspacePanelOpen: patch.config?.workspacePanelOpen ?? workspace.config.workspacePanelOpen,
     sourceControlViewMode: patch.config?.sourceControlViewMode ?? workspace.config.sourceControlViewMode,
     initialCommand: patch.config?.initialCommand ?? workspace.config.initialCommand,

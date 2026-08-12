@@ -100,8 +100,8 @@ if (!source.includes('{currentActionError &&') || !source.includes('{currentRetr
   throw new Error('stale workspace errors and retry controls must not render')
 }
 
-if (!source.includes('window.electron.workspace.getActive()')) {
-  throw new Error('source control must load the active workspace repository configuration')
+if (source.includes('window.electron.workspace.getActive()')) {
+  throw new Error('source control must use the supplied workspace repository configuration')
 }
 if (!source.includes('window.electron.git.discoverRepositories(workspaceId)')) {
   throw new Error('source control must discover repository names when it mounts')
@@ -109,13 +109,19 @@ if (!source.includes('window.electron.git.discoverRepositories(workspaceId)')) {
 if (!source.includes('sourceControlRepositoryPaths')) {
   throw new Error('source control must use the configured repository paths')
 }
+if (!source.includes("t('workspace.noRepositoriesConfigured')") || !source.includes("t('workspace.configureSourceControl')")) {
+  throw new Error('source control must use translated repository configuration copy')
+}
+if (!source.includes('candidate.name === repository.name')) {
+  throw new Error('source control repository options must distinguish duplicate names by path')
+}
 if (!source.includes('sortRepositories(configuredRepositories)')) {
   throw new Error('source control repositories must be ordered by name')
 }
 if (!source.includes('source-control-repository')) {
   throw new Error('source control must render a repository selector')
 }
-if (!source.includes('No hay repositorios configurados')) {
+if (!source.includes("t('workspace.noRepositoriesConfigured')")) {
   throw new Error('source control must render the exact unconfigured state')
 }
 if (!source.includes('onOpenWorkspaceSettings')) {

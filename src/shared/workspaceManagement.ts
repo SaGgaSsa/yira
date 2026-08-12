@@ -71,12 +71,13 @@ export function applyWorkspaceManagementChanges({
       desiredExistingIds.add(entry.id)
       const rootFolderPathChanged = normalizeWorkspaceRootFolderPath(entry.rootFolderPath)
         !== normalizeWorkspaceRootFolderPath(existing.config.rootFolderPath)
+      const hasRepositoryPathsPatch = Object.prototype.hasOwnProperty.call(entry, 'sourceControlRepositoryPaths')
       const config = normalizeWorkspaceConfig({
         type: existing.config.type,
         rootFolderPath: entry.rootFolderPath,
-        sourceControlRepositoryPaths: rootFolderPathChanged
-          ? []
-          : entry.sourceControlRepositoryPaths ?? existing.config.sourceControlRepositoryPaths,
+        sourceControlRepositoryPaths: hasRepositoryPathsPatch
+          ? entry.sourceControlRepositoryPaths
+          : rootFolderPathChanged ? [] : existing.config.sourceControlRepositoryPaths,
         workspacePanelOpen: entry.workspacePanelOpen ?? existing.config.workspacePanelOpen,
         sourceControlViewMode: entry.sourceControlViewMode ?? existing.config.sourceControlViewMode,
         initialCommand: entry.initialCommand,

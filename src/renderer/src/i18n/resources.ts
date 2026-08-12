@@ -174,6 +174,7 @@ type TranslationResources = {
     repository: string
     selectRepositories: string
     noRepositoriesConfigured: string
+    configureSourceControl: string
     canvas: string
     grid: string
     workspace: string
@@ -513,6 +514,7 @@ const en: TranslationResources = {
     repository: 'Repository',
     selectRepositories: 'Select repositories',
     noRepositoriesConfigured: 'No repositories configured',
+    configureSourceControl: 'Configure Source Control',
     canvas: 'Canvas',
     grid: 'Grid',
     workspace: 'Workspace',
@@ -852,6 +854,7 @@ const es: TranslationResources = {
     repository: 'Repositorio',
     selectRepositories: 'Seleccionar repositorios',
     noRepositoriesConfigured: 'No hay repositorios configurados',
+    configureSourceControl: 'Configurar Source Control',
     canvas: 'Lienzo',
     grid: 'Cuadrícula',
     workspace: 'Espacio de trabajo',

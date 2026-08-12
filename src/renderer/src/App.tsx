@@ -949,7 +949,7 @@ export default function App(): React.ReactElement {
     setShowSettings(true)
   }, [])
 
-  const openWorkspaceEditor = useCallback((workspace: WorkspaceMetadata) => {
+  const openWorkspaceEditor = useCallback((workspace: WorkspaceMetadata, initialTab?: WorkspaceDialogRequest['initialTab']) => {
     setShowWorkspacePicker(false)
     setWorkspaceEditor({
       mode: 'edit',
@@ -960,6 +960,7 @@ export default function App(): React.ReactElement {
         confirmLabel: t('workspace.saveWorkspace'),
         typeEditable: false,
         workspaceId: workspace.id,
+        initialTab,
         value: {
           type: workspace.config.type,
           name: workspace.name,
@@ -975,10 +976,10 @@ export default function App(): React.ReactElement {
     })
   }, [t])
 
-  const openActiveWorkspaceEditor = useCallback(() => {
+  const openActiveWorkspaceEditor = useCallback((initialTab?: WorkspaceDialogRequest['initialTab']) => {
     if (!activeWorkspaceId) return
     const workspace = workspaceMetadata.find((entry) => entry.id === activeWorkspaceId)
-    if (workspace) openWorkspaceEditor(workspace)
+    if (workspace) openWorkspaceEditor(workspace, initialTab)
   }, [activeWorkspaceId, openWorkspaceEditor, workspaceMetadata])
 
   const toggleWorkspacePanel = useCallback(() => {

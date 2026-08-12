@@ -58,5 +58,11 @@ test('normalizes selected repositories through workspace creation and update', (
   const changed = updateWorkspace(unchanged, {
     config: { rootFolderPath: '/other-repo', sourceControlRepositoryPaths: ['still/unsafe?'] },
   } as Parameters<typeof updateWorkspace>[1])
-  assert.deepEqual(sourceControlPaths(changed), [])
+  assert.deepEqual(sourceControlPaths(changed), ['still/unsafe?'])
+
+  const cleared = updateWorkspace(changed, {
+    config: { rootFolderPath: undefined },
+  } as Parameters<typeof updateWorkspace>[1])
+  assert.equal(cleared.config.rootFolderPath, undefined)
+  assert.deepEqual(sourceControlPaths(cleared), [])
 })

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { ChevronDown, File, Folder, GitBranch, List, RefreshCw, SquarePlus, SquareMinus, TreePine, Upload } from 'lucide-react'
 import type { GitCommitHistoryResult, GitCommitSummary, GitFileChange, GitRepository, GitStatusResult, SourceControlViewMode, Workspace } from '@shared/types'
+import { useTranslation } from 'react-i18next'
 import { buildSourceControlTree, type SourceControlTreeNode } from '@/utils/sourceControlTree'
 
 interface WorkspaceSourceControlProps {
@@ -8,7 +9,7 @@ interface WorkspaceSourceControlProps {
   sourceControlRepositoryPaths: string[]
   sourceControlViewMode: SourceControlViewMode
   onWorkspaceUpdated: (workspace: Workspace) => void
-  onOpenWorkspaceSettings: () => void
+  onOpenWorkspaceSettings: (initialTab?: 'sourceControl') => void
 }
 
 type SourceControlAction =
@@ -246,6 +247,7 @@ function CommitHistoryAccordion({ history, upstream, expanded, onToggle }: {
 }
 
 export function WorkspaceSourceControl({ workspaceId, sourceControlRepositoryPaths, sourceControlViewMode, onWorkspaceUpdated, onOpenWorkspaceSettings }: WorkspaceSourceControlProps): React.ReactElement {
+  const { t } = useTranslation()
   const [repositories, setRepositories] = useState<GitRepository[]>([])
   const [repositoriesLoading, setRepositoriesLoading] = useState(true)
   const [activeRepositoryPath, setActiveRepositoryPathState] = useState<string | null>(null)
@@ -280,19 +282,16 @@ export function WorkspaceSourceControl({ workspaceId, sourceControlRepositoryPat
     repositoryLoadVersionRef.current = loadVersion
     setRepositoriesLoading(true)
 
-    const [workspaceResult, discoveryResult] = await Promise.allSettled([
-      Promise.resolve().then(() => window.electron.workspace.getActive()),
-      Promise.resolve().then(() => window.electron.git.discoverRepositories(workspaceId)),
-    ])
+    let discoveredRepositories: GitRepository[] = []
+    try {
+      const discoveryResult = await window.electron.git.discoverRepositories(workspaceId)
+      discoveredRepositories = Array.isArray(discoveryResult) ? discoveryResult : []
+    } catch {
+      // Configured paths can still be shown with their normalized fallback names.
+    }
     if (loadVersion !== repositoryLoadVersionRef.current || activeWorkspaceRef.current !== loadWorkspaceId) return null
 
-    const activeWorkspace = workspaceResult.status === 'fulfilled' && workspaceResult.value?.id === loadWorkspaceId
-      ? workspaceResult.value
-      : null
-    const configuredRepositoryPaths = Array.isArray(activeWorkspace?.config.sourceControlRepositoryPaths)
-      ? activeWorkspace.config.sourceControlRepositoryPaths.filter((path): path is string => typeof path === 'string' && path.length > 0)
-      : []
-    const discoveredRepositories = discoveryResult.status === 'fulfilled' ? discoveryResult.value : []
+    const configuredRepositoryPaths = sourceControlRepositoryPaths.filter((path): path is string => typeof path === 'string' && path.length > 0)
     const discoveredByPath = new Map(discoveredRepositories.map((repository) => [repository.relativePath, repository]))
     const configuredRepositories = configuredRepositoryPaths.map((relativePath) => discoveredByPath.get(relativePath) ?? {
       relativePath,
@@ -308,7 +307,7 @@ export function WorkspaceSourceControl({ workspaceId, sourceControlRepositoryPat
     setActiveRepositoryPath(nextPath)
     setRepositoriesLoading(false)
     return nextPath
-  }, [setActiveRepositoryPath, workspaceId])
+  }, [setActiveRepositoryPath, sourceControlRepositoryPathsKey, workspaceId])
 
   const refresh = useCallback(async ({ preserveActionError = false }: SourceControlRefreshOptions = {}) => {
     if (activeWorkspaceRef.current !== workspaceId) return
@@ -494,9 +493,9 @@ export function WorkspaceSourceControl({ workspaceId, sourceControlRepositoryPat
     <div className="flex h-full min-h-0 flex-col">
       {repositoriesLoading ? <div className="min-h-0 flex-1 overflow-auto px-4 py-3 text-sm text-text-disabled">Loading source control…</div> : repositories.length === 0 ? (
         <div className="min-h-0 flex-1 overflow-auto px-4 py-4 text-sm text-text-secondary">
-          <p>No hay repositorios configurados</p>
-          <button className="mt-3 inline-flex items-center gap-1.5 text-sm text-text-display hover:underline" onClick={onOpenWorkspaceSettings}>
-            <GitBranch size={14} /> Configurar Source Control
+          <p>{t('workspace.noRepositoriesConfigured')}</p>
+          <button className="mt-3 inline-flex items-center gap-1.5 text-sm text-text-display hover:underline" onClick={() => onOpenWorkspaceSettings('sourceControl')}>
+            <GitBranch size={14} /> {t('workspace.configureSourceControl')}
           </button>
         </div>
       ) : (
@@ -504,16 +503,19 @@ export function WorkspaceSourceControl({ workspaceId, sourceControlRepositoryPat
           <div className="flex shrink-0 items-center gap-1 border-b border-border px-3 py-2">
             {repositories.length > 1 && (
               <label className="min-w-0 max-w-[45%]">
-                <span className="sr-only">Repository</span>
+                <span className="sr-only">{t('workspace.repository')}</span>
                 <select
                   id="source-control-repository"
                   className="h-7 max-w-full rounded border border-border-visible bg-bg-primary px-2 text-xs text-text-display outline-none disabled:opacity-50"
                   value={activeRepositoryPath ?? ''}
                   onChange={(event) => setActiveRepositoryPath(event.target.value || null)}
                   disabled={loading || actionPending}
-                  aria-label="Repository"
+                  aria-label={t('workspace.repository')}
                 >
-                  {repositories.map((repository) => <option key={repository.relativePath} value={repository.relativePath}>{repository.name}</option>)}
+                  {repositories.map((repository) => {
+                    const hasDuplicateName = repositories.filter((candidate) => candidate.name === repository.name).length > 1
+                    return <option key={repository.relativePath} value={repository.relativePath}>{hasDuplicateName ? `${repository.name} — ${repository.relativePath}` : repository.name}</option>
+                  })}
                 </select>
               </label>
             )}

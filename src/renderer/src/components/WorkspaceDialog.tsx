@@ -25,6 +25,7 @@ export interface WorkspaceDialogRequest {
   canCancel?: boolean
   typeEditable?: boolean
   workspaceId?: string
+  initialTab?: WorkspaceDialogTabId
   value: WorkspaceDialogValue
 }
 
@@ -66,7 +67,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
   useEffect(() => {
     setValue(request?.value ?? null)
     setShowRemoteHelp(false)
-    setActiveTab('general')
+    setActiveTab(request?.initialTab ?? 'general')
     setRepositories([])
     setRepositoriesLoading(false)
 
