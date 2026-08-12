@@ -132,3 +132,7 @@ for (const requiredRepositoryCall of [
 if (!source.includes('setActiveRepositoryPath')) {
   throw new Error('source control must retain the selected repository during refresh and actions')
 }
+const repositoryLoadEffectDependencies = source.match(/void loadRepositories\(\)\n  \}, \[([^\]]+)\]\)/)?.[1] ?? ''
+if (repositoryLoadEffectDependencies.includes('onOpenWorkspaceSettings')) {
+  throw new Error('repository loading must not restart when the settings callback identity changes')
+}

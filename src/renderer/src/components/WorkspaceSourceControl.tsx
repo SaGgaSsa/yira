@@ -372,7 +372,7 @@ export function WorkspaceSourceControl({ workspaceId, sourceControlViewMode, onW
     setCommitMessage('')
     setRetryAction(null)
     void loadRepositories()
-  }, [loadRepositories, onOpenWorkspaceSettings, setActiveRepositoryPath, workspaceId])
+  }, [loadRepositories, setActiveRepositoryPath, workspaceId])
 
   useEffect(() => {
     if (!activeRepositoryPath) return
