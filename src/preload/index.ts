@@ -106,6 +106,7 @@ contextBridge.exposeInMainWorld('electron', {
 
   git: {
     discoverRepositories: (workspaceId: string) => ipcRenderer.invoke('git:discoverRepositories', workspaceId) as Promise<GitRepository[]>,
+    discoverRepositoriesAtRoot: (rootFolderPath: string) => ipcRenderer.invoke('git:discoverRepositoriesAtRoot', rootFolderPath) as Promise<GitRepository[]>,
     status: (workspaceId: string, repositoryPath: string) => ipcRenderer.invoke('git:status', workspaceId, repositoryPath) as Promise<GitStatusResult>,
     history: (workspaceId: string, repositoryPath: string) => ipcRenderer.invoke('git:history', workspaceId, repositoryPath) as Promise<GitCommitHistoryResult>,
     stage: (workspaceId: string, repositoryPath: string, relativePath: string, originalPath?: string) => ipcRenderer.invoke('git:stage', workspaceId, repositoryPath, relativePath, originalPath),

@@ -89,3 +89,16 @@ test('exposes repository discovery and repository-path Git signatures through th
   assert.match(preload, /sync: \(workspaceId: string, repositoryPath: string\) => ipcRenderer\.invoke\('git:sync', workspaceId, repositoryPath\)/)
   assert.match(rendererTypes, /sync: \(workspaceId: string, repositoryPath: string\) => Promise<void>/)
 })
+
+test('registers discovery by a validated root path for unsaved workspace roots', async () => {
+  const main = await readRepositoryFile('src/main/ipc/git.ts')
+  const preload = await readRepositoryFile('src/preload/index.ts')
+  const rendererTypes = await readRepositoryFile('src/renderer/src/electron.d.ts')
+
+  assert.match(
+    main,
+    /ipcMain\.handle\('git:discoverRepositoriesAtRoot', async \(_event, rootFolderPath: string\): Promise<GitRepository\[\]> => \{[\s\S]*?discoverGitRepositories\(rootFolderPath\)/,
+  )
+  assert.match(preload, /discoverRepositoriesAtRoot: \(rootFolderPath: string\) => ipcRenderer\.invoke\('git:discoverRepositoriesAtRoot', rootFolderPath\) as Promise<GitRepository\[\]>/)
+  assert.match(rendererTypes, /discoverRepositoriesAtRoot: \(rootFolderPath: string\) => Promise<GitRepository\[\]>/)
+})

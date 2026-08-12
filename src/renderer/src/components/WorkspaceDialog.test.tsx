@@ -19,14 +19,21 @@ test('renders source control repository selection copy', () => {
   }
 })
 
-test('discovers repositories only for an identified workspace and persists selected paths', () => {
+test('discovers repositories from the current root and persists selected paths', () => {
   assert.match(source, /workspaceId\?: string/)
   assert.match(source, /activeTab === 'sourceControl'/)
-  assert.match(source, /if \(!workspaceId \|\| !rootFolderPath\)/)
-  assert.match(source, /window\.electron\.git\.discoverRepositories\(workspaceId\)/)
+  assert.match(source, /if \(!rootFolderPath\)/)
+  assert.match(source, /window\.electron\.git\.discoverRepositoriesAtRoot\(rootFolderPath\)/)
   assert.match(source, /sourceControlRepositoryPaths/)
   assert.match(source, /sourceControlRepositoryPaths: \[\]/)
   assert.match(source, /rootChanged \? \{ sourceControlRepositoryPaths: \[\] \}/)
+})
+
+test('connects tabs to explicit tab panels', () => {
+  assert.match(source, /id=\{`workspace-dialog-tab-\$\{tab\.id\}`\}/)
+  assert.match(source, /aria-controls=\{`workspace-dialog-panel-\$\{tab\.id\}`\}/)
+  assert.match(source, /role="tabpanel"/)
+  assert.match(source, /id=\{`workspace-dialog-panel-\$\{activeTab\}`\}/)
 })
 
 test('passes workspace identity and repository paths through management and app saves', () => {

@@ -56,6 +56,11 @@ export function registerGitIPC(): void {
     return repositories.map(({ relativePath, name }) => ({ relativePath, name }))
   })
 
+  ipcMain.handle('git:discoverRepositoriesAtRoot', async (_event, rootFolderPath: string): Promise<GitRepository[]> => {
+    const repositories = await discoverGitRepositories(rootFolderPath)
+    return repositories.map(({ relativePath, name }) => ({ relativePath, name }))
+  })
+
   ipcMain.handle('git:status', async (_event, workspaceId: string, repositoryPath: string): Promise<GitStatusResult> => {
     try {
       const result = await getGitStatus(await resolveWorkspaceGitRepository(workspaceId, repositoryPath))

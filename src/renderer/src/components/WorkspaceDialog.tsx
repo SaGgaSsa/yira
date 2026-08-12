@@ -104,9 +104,8 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
   useEffect(() => {
     if (!request || !value || activeTab !== 'sourceControl') return
 
-    const workspaceId = request.workspaceId
     const rootFolderPath = value.rootFolderPath.trim()
-    if (!workspaceId || !rootFolderPath) {
+    if (!rootFolderPath) {
       setRepositories([])
       setRepositoriesLoading(false)
       return
@@ -116,7 +115,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
     setRepositories([])
     setRepositoriesLoading(true)
 
-    void window.electron.git.discoverRepositories(workspaceId).then((discovered) => {
+    void window.electron.git.discoverRepositoriesAtRoot(rootFolderPath).then((discovered) => {
       if (cancelled) return
       setRepositories(discovered)
     }).catch(() => {
@@ -129,7 +128,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
     return () => {
       cancelled = true
     }
-  }, [activeTab, request?.workspaceId, value?.rootFolderPath])
+  }, [activeTab, value?.rootFolderPath])
 
   if (!request || !value) return null
 
@@ -214,7 +213,9 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
                 key={tab.id}
                 type="button"
                 role="tab"
+                id={`workspace-dialog-tab-${tab.id}`}
                 aria-selected={activeTab === tab.id}
+                aria-controls={`workspace-dialog-panel-${tab.id}`}
                 className={`shrink-0 border-b-2 px-3 py-3 text-sm transition-colors ${
                   activeTab === tab.id ? 'border-text-display text-text-display' : 'border-transparent text-text-secondary hover:text-text-display'
                 }`}
@@ -225,6 +226,12 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
             ))}
           </div>
 
+          <div
+            id={`workspace-dialog-panel-${activeTab}`}
+            role="tabpanel"
+            aria-labelledby={`workspace-dialog-tab-${activeTab}`}
+            tabIndex={0}
+          >
           {activeTab === 'general' && (
             <div className="space-y-6">
               <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
@@ -494,6 +501,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
               )}
             </section>
           )}
+          </div>
         </div>
 
         <footer data-testid="workspace-dialog-actions" className="shrink-0 flex items-center justify-end gap-3 border-t border-border px-6 py-5">

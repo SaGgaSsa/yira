@@ -111,6 +111,7 @@ interface ElectronWorld {
   }
   git: {
     discoverRepositories: (workspaceId: string) => Promise<GitRepository[]>
+    discoverRepositoriesAtRoot: (rootFolderPath: string) => Promise<GitRepository[]>
     status: (workspaceId: string, repositoryPath: string) => Promise<GitStatusResult>
     history: (workspaceId: string, repositoryPath: string) => Promise<GitCommitHistoryResult>
     stage: (workspaceId: string, repositoryPath: string, relativePath: string, originalPath?: string) => Promise<void>
