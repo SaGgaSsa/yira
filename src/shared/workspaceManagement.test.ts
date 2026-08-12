@@ -2,7 +2,25 @@ import { applyWorkspaceManagementChanges, setWorkspaceType } from './workspaceMa
 import type { Workspace } from './types'
 import { normalizeWorkspaceConfig } from './workspaceConfig'
 
-function workspace(id: string, name: string, rootFolderPath?: string, type: Workspace['config']['type'] = 'canvas'): Workspace {
+type SourceControlConfigInput = Parameters<typeof normalizeWorkspaceConfig>[0] & {
+  sourceControlRepositoryPaths?: unknown
+}
+
+type SourceControlConfig = Workspace['config'] & {
+  sourceControlRepositoryPaths: string[]
+}
+
+function sourceControlPaths(config: Workspace['config']): string[] {
+  return (config as SourceControlConfig).sourceControlRepositoryPaths
+}
+
+function workspace(
+  id: string,
+  name: string,
+  rootFolderPath?: string,
+  type: Workspace['config']['type'] = 'canvas',
+  sourceControlRepositoryPaths: string[] = [],
+): Workspace {
   return {
     id,
     name,
@@ -13,14 +31,15 @@ function workspace(id: string, name: string, rootFolderPath?: string, type: Work
       workspacePanelOpen: true,
       sourceControlViewMode: 'list',
       terminalHistoryEnabled: true,
-    }),
+      sourceControlRepositoryPaths,
+    } as SourceControlConfigInput),
   }
 }
 
 const existing = [
-  workspace('ws-alpha', 'Alpha', '/repo/alpha'),
+  workspace('ws-alpha', 'Alpha', '/repo/alpha', 'canvas', ['apps/./web', 'apps//web']),
   workspace('ws-beta', 'Beta', '/repo/beta', 'grid'),
-  workspace('ws-gamma', 'Gamma', '/repo/gamma'),
+  workspace('ws-gamma', 'Gamma', '/repo/gamma', 'canvas', ['.']),
 ]
 
 let idCounter = 0
@@ -40,8 +59,14 @@ const managed = applyWorkspaceManagementChanges({
       workspacePanelOpen: false,
       sourceControlViewMode: 'tree',
       remoteTerminal: { host: 'notebook.tailnet.ts.net', user: 'dev' },
+      sourceControlRepositoryPaths: ['src/./app', 'src//app', '../unsafe'],
     },
-    { name: 'Delta', rootFolderPath: '/repo/delta', terminalHistoryEnabled: true },
+    {
+      name: 'Delta',
+      rootFolderPath: '/repo/delta',
+      terminalHistoryEnabled: true,
+      sourceControlRepositoryPaths: ['.', './packages//web/', 'packages/./web', '/absolute'],
+    },
     { id: 'ws-beta', name: 'Beta', rootFolderPath: '/repo/beta' },
   ],
   nextWorkspaceId,
@@ -58,12 +83,17 @@ if (managed.workspaces[0].config.terminalHistoryEnabled !== false) throw new Err
 if (managed.workspaces[0].config.workspacePanelOpen !== false) throw new Error('workspace panel toggle must be preserved')
 if (managed.workspaces[0].config.sourceControlViewMode !== 'tree') throw new Error('source control view mode must be preserved')
 if (managed.workspaces[0].config.remoteTerminal?.host !== 'notebook.tailnet.ts.net') throw new Error('remote terminal config must be preserved')
+if (sourceControlPaths(managed.workspaces[0].config).length !== 0) throw new Error('changing a workspace root must clear repository selections')
 if (managed.workspaces[2].config.type !== 'grid') throw new Error('existing workspace type must be preserved by management edits')
 if (managed.workspaces[2].config.sourceControlViewMode !== 'list') throw new Error('management edits must retain an existing source control view mode')
 if (managed.workspaces[2].config.workspacePanelOpen !== true) throw new Error('workspace panel must default open during management edits')
+if (sourceControlPaths(managed.workspaces[2].config).join('|') !== '.') throw new Error('unchanged workspace roots must preserve normalized repository selections')
 if (managed.removedWorkspaceIds.join(',') !== 'ws-alpha') throw new Error('omitted existing workspaces must be marked for removal')
 if (managed.createdWorkspaceIds.join(',') !== 'ws-new-1') throw new Error('new workspaces must be reported')
 if (managed.workspaces[1].config.type !== 'canvas') throw new Error('new management-created workspace must default to canvas')
+if (sourceControlPaths(managed.workspaces[1].config).join('|') !== '.|packages/web') {
+  throw new Error('new management workspaces must normalize repository selections')
+}
 if (managed.activeWorkspaceId !== 'ws-beta') throw new Error('active workspace must be preserved when still present')
 
 const fallback = applyWorkspaceManagementChanges({
