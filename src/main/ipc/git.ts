@@ -9,29 +9,6 @@ interface WorkspaceGitConfig {
   configuredRepositoryPaths: string[]
 }
 
-async function getWorkspaceGitConfig(workspaceId: string): Promise<WorkspaceGitConfig> {
-  if (typeof workspaceId !== 'string' || !workspaceId.trim()) throw new Error('Workspace is required')
-
-  const workspaceConfig = await getWorkspaceGitConfigById(workspaceId)
-  if (!workspaceConfig) throw new Error('Workspace is unavailable')
-  if (!workspaceConfig.rootFolderPath) throw new Error('Workspace root folder is unavailable')
-
-  return {
-    rootPath: workspaceConfig.rootFolderPath,
-    configuredRepositoryPaths: workspaceConfig.sourceControlRepositoryPaths,
-  }
-}
-
-async function getWorkspaceGitRoot(workspaceId: string): Promise<string> {
-  return (await getWorkspaceGitConfig(workspaceId)).rootPath
-}
-
-async function resolveWorkspaceGitRepository(workspaceId: string, repositoryPath: string): Promise<string> {
-  const { rootPath, configuredRepositoryPaths } = await getWorkspaceGitConfig(workspaceId)
-  const repository = await resolveConfiguredGitRepository(rootPath, configuredRepositoryPaths, repositoryPath)
-  return repository.absolutePath
-}
-
 function mutationPaths(relativePath: string, originalPath?: string): string[] {
   if (typeof relativePath !== 'string') throw new Error('Path must be a string')
   if (originalPath !== undefined && typeof originalPath !== 'string') throw new Error('Original path must be a string')
@@ -50,61 +27,101 @@ function safeGitError(error: unknown): string {
   return message
 }
 
-export function registerGitIPC(): void {
-  ipcMain.handle('git:discoverRepositories', async (_event, workspaceId: string): Promise<GitRepository[]> => {
-    const repositories = await discoverGitRepositories(await getWorkspaceGitRoot(workspaceId))
-    return repositories.map(({ relativePath, name }) => ({ relativePath, name }))
-  })
+export interface GitIPCDependencies {
+  getWorkspaceGitConfigById: typeof getWorkspaceGitConfigById
+  discoverGitRepositories: typeof discoverGitRepositories
+  resolveConfiguredGitRepository: typeof resolveConfiguredGitRepository
+  getGitStatus: typeof getGitStatus
+  getGitCommitHistory: typeof getGitCommitHistory
+  stageGitFiles: typeof stageGitFiles
+  unstageGitFiles: typeof unstageGitFiles
+  commitGitChanges: typeof commitGitChanges
+  syncGitRepository: typeof syncGitRepository
+}
 
-  ipcMain.handle('git:discoverRepositoriesAtRoot', async (_event, rootFolderPath: string): Promise<GitRepository[]> => {
-    const repositories = await discoverGitRepositories(rootFolderPath)
-    return repositories.map(({ relativePath, name }) => ({ relativePath, name }))
-  })
+type GitIPCHandler = (...args: any[]) => unknown
 
-  ipcMain.handle('git:status', async (_event, workspaceId: string, repositoryPath: string): Promise<GitStatusResult> => {
-    try {
-      const result = await getGitStatus(await resolveWorkspaceGitRepository(workspaceId, repositoryPath))
-      return result.error ? { ...result, error: safeGitError(result.error) } : result
-    } catch (error) {
-      return {
-        isRepository: false,
-        branch: null,
-        ahead: 0,
-        behind: 0,
-        staged: [],
-        unstaged: [],
-        error: safeGitError(error),
+interface GitIPCMain {
+  handle(channel: string, handler: GitIPCHandler): void
+}
+
+async function getWorkspaceGitConfigWith(dependencies: GitIPCDependencies, workspaceId: string): Promise<WorkspaceGitConfig> {
+  if (typeof workspaceId !== 'string' || !workspaceId.trim()) throw new Error('Workspace is required')
+
+  const workspaceConfig = await dependencies.getWorkspaceGitConfigById(workspaceId)
+  if (!workspaceConfig) throw new Error('Workspace is unavailable')
+  if (!workspaceConfig.rootFolderPath) throw new Error('Workspace root folder is unavailable')
+
+  return {
+    rootPath: workspaceConfig.rootFolderPath,
+    configuredRepositoryPaths: workspaceConfig.sourceControlRepositoryPaths,
+  }
+}
+
+function toSafeRepositories(repositories: Awaited<ReturnType<typeof discoverGitRepositories>>): GitRepository[] {
+  return repositories.map(({ relativePath, name }) => ({ relativePath, name }))
+}
+
+export function createGitIPCHandlers(dependencies: GitIPCDependencies): Record<string, GitIPCHandler> {
+  const getConfig = (workspaceId: string): Promise<WorkspaceGitConfig> => getWorkspaceGitConfigWith(dependencies, workspaceId)
+  const resolveRepository = async (workspaceId: string, repositoryPath: string): Promise<string> => {
+    const { rootPath, configuredRepositoryPaths } = await getConfig(workspaceId)
+    const repository = await dependencies.resolveConfiguredGitRepository(rootPath, configuredRepositoryPaths, repositoryPath)
+    return repository.absolutePath
+  }
+
+  return {
+    'git:discoverRepositories': async (_event: unknown, workspaceId: string): Promise<GitRepository[]> =>
+      toSafeRepositories(await dependencies.discoverGitRepositories((await getConfig(workspaceId)).rootPath)),
+    'git:discoverRepositoriesAtRoot': async (_event: unknown, rootFolderPath: string): Promise<GitRepository[]> =>
+      toSafeRepositories(await dependencies.discoverGitRepositories(rootFolderPath)),
+    'git:status': async (_event: unknown, workspaceId: string, repositoryPath: string): Promise<GitStatusResult> => {
+      try {
+        const result = await dependencies.getGitStatus(await resolveRepository(workspaceId, repositoryPath))
+        return result.error ? { ...result, error: safeGitError(result.error) } : result
+      } catch (error) {
+        return { isRepository: false, branch: null, ahead: 0, behind: 0, staged: [], unstaged: [], error: safeGitError(error) }
       }
-    }
-  })
-
-  ipcMain.handle('git:history', async (_event, workspaceId: string, repositoryPath: string): Promise<GitCommitHistoryResult> => {
-    try {
-      const result = await getGitCommitHistory(await resolveWorkspaceGitRepository(workspaceId, repositoryPath))
-      return result.error ? { ...result, error: safeGitError(result.error) } : result
-    } catch (error) {
-      return {
-        outgoing: [],
-        upstream: [],
-        local: [],
-        error: safeGitError(error),
+    },
+    'git:history': async (_event: unknown, workspaceId: string, repositoryPath: string): Promise<GitCommitHistoryResult> => {
+      try {
+        const result = await dependencies.getGitCommitHistory(await resolveRepository(workspaceId, repositoryPath))
+        return result.error ? { ...result, error: safeGitError(result.error) } : result
+      } catch (error) {
+        return { outgoing: [], upstream: [], local: [], error: safeGitError(error) }
       }
-    }
-  })
+    },
+    'git:stage': async (_event: unknown, workspaceId: string, repositoryPath: string, relativePath: string, originalPath?: string) => {
+      await dependencies.stageGitFiles(await resolveRepository(workspaceId, repositoryPath), mutationPaths(relativePath, originalPath))
+    },
+    'git:unstage': async (_event: unknown, workspaceId: string, repositoryPath: string, relativePath: string, originalPath?: string) => {
+      await dependencies.unstageGitFiles(await resolveRepository(workspaceId, repositoryPath), mutationPaths(relativePath, originalPath))
+    },
+    'git:commit': async (_event: unknown, workspaceId: string, repositoryPath: string, message: string) => {
+      await dependencies.commitGitChanges(await resolveRepository(workspaceId, repositoryPath), message)
+    },
+    'git:sync': async (_event: unknown, workspaceId: string, repositoryPath: string) => {
+      await dependencies.syncGitRepository(await resolveRepository(workspaceId, repositoryPath))
+    },
+  }
+}
 
-  ipcMain.handle('git:stage', async (_event, workspaceId: string, repositoryPath: string, relativePath: string, originalPath?: string) => {
-    await stageGitFiles(await resolveWorkspaceGitRepository(workspaceId, repositoryPath), mutationPaths(relativePath, originalPath))
-  })
+const defaultGitIPCDependencies: GitIPCDependencies = {
+  getWorkspaceGitConfigById,
+  discoverGitRepositories,
+  resolveConfiguredGitRepository,
+  getGitStatus,
+  getGitCommitHistory,
+  stageGitFiles,
+  unstageGitFiles,
+  commitGitChanges,
+  syncGitRepository,
+}
 
-  ipcMain.handle('git:unstage', async (_event, workspaceId: string, repositoryPath: string, relativePath: string, originalPath?: string) => {
-    await unstageGitFiles(await resolveWorkspaceGitRepository(workspaceId, repositoryPath), mutationPaths(relativePath, originalPath))
-  })
-
-  ipcMain.handle('git:commit', async (_event, workspaceId: string, repositoryPath: string, message: string) => {
-    await commitGitChanges(await resolveWorkspaceGitRepository(workspaceId, repositoryPath), message)
-  })
-
-  ipcMain.handle('git:sync', async (_event, workspaceId: string, repositoryPath: string) => {
-    await syncGitRepository(await resolveWorkspaceGitRepository(workspaceId, repositoryPath))
-  })
+export function registerGitIPC(
+  ipcMainInstance: GitIPCMain = ipcMain,
+  dependencies: GitIPCDependencies = defaultGitIPCDependencies,
+): void {
+  const handlers = createGitIPCHandlers(dependencies)
+  for (const [channel, handler] of Object.entries(handlers)) ipcMainInstance.handle(channel, handler)
 }
