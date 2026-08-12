@@ -1,9 +1,9 @@
-import i18next from 'i18next'
+import i18next, { type i18n as I18n } from 'i18next'
 import { initReactI18next } from 'react-i18next'
 import type { SupportedLanguage } from './language'
 import { resources } from './resources'
 
-export const i18n = i18next.createInstance()
+export const i18n: I18n = i18next.createInstance()
 
 export async function initializeI18n(language: SupportedLanguage = 'en'): Promise<void> {
   if (i18n.isInitialized) {
