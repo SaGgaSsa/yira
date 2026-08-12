@@ -1,10 +1,51 @@
 import { normalizeWorkspaceConfig } from './workspaceConfig'
 
+type SourceControlConfigInput = Parameters<typeof normalizeWorkspaceConfig>[0] & {
+  sourceControlRepositoryPaths?: unknown
+}
+
+type SourceControlConfig = ReturnType<typeof normalizeWorkspaceConfig> & {
+  sourceControlRepositoryPaths: string[]
+}
+
+function sourceControlPaths(config: ReturnType<typeof normalizeWorkspaceConfig>): string[] {
+  return (config as SourceControlConfig).sourceControlRepositoryPaths
+}
+
 const defaults = normalizeWorkspaceConfig({})
 if (defaults.terminalHistoryEnabled !== true) throw new Error('terminal history must default on')
 if (defaults.type !== 'canvas') throw new Error('workspace type must default to canvas')
 if (defaults.workspacePanelOpen !== true) throw new Error('workspace panel must default open')
 if (defaults.sourceControlViewMode !== 'list') throw new Error('source control view mode must default to list')
+if (sourceControlPaths(defaults).length !== 0) throw new Error('source control repository paths must default to empty')
+
+const sourceControlPathsWithNormalization = normalizeWorkspaceConfig({
+  sourceControlRepositoryPaths: [
+    '.',
+    './',
+    './packages//web/',
+    'packages/./web',
+    'services/api',
+    ' services/api ',
+    '',
+    '   ',
+    '/absolute/repository',
+    '../outside',
+    'packages/../../outside',
+    'C:/absolute/repository',
+    'C:\\absolute\\repository',
+    'services\\api',
+    'unsafe\u0000path',
+  ],
+} as SourceControlConfigInput)
+if (sourceControlPaths(sourceControlPathsWithNormalization).join('|') !== '.|packages/web|services/api') {
+  throw new Error('source control repository paths must normalize, reject unsafe paths, and deduplicate')
+}
+
+const rootRepositoryPath = normalizeWorkspaceConfig({
+  sourceControlRepositoryPaths: ['./.'],
+} as SourceControlConfigInput)
+if (sourceControlPaths(rootRepositoryPath).join('|') !== '.') throw new Error('source control root repository path must normalize to dot')
 
 const missing = normalizeWorkspaceConfig({ rootFolderPath: ' /repo ', initialCommand: ' npm test ' })
 if (missing.rootFolderPath !== '/repo') throw new Error('root folder must be trimmed')

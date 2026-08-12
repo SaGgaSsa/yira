@@ -4,7 +4,11 @@ import type {
   WorkspaceManagementEntry,
   WorkspaceType,
 } from './types'
-import { mergeAgentProvidersConfig, normalizeWorkspaceConfig } from './workspaceConfig'
+import {
+  mergeAgentProvidersConfig,
+  normalizeWorkspaceConfig,
+  normalizeWorkspaceRootFolderPath,
+} from './workspaceConfig'
 
 interface ApplyWorkspaceManagementChangesInput {
   existingWorkspaces: Workspace[]
@@ -65,9 +69,14 @@ export function applyWorkspaceManagementChanges({
       if (desiredExistingIds.has(entry.id)) throw new Error('Workspace ids must be unique')
 
       desiredExistingIds.add(entry.id)
+      const rootFolderPathChanged = normalizeWorkspaceRootFolderPath(entry.rootFolderPath)
+        !== normalizeWorkspaceRootFolderPath(existing.config.rootFolderPath)
       const config = normalizeWorkspaceConfig({
         type: existing.config.type,
         rootFolderPath: entry.rootFolderPath,
+        sourceControlRepositoryPaths: rootFolderPathChanged
+          ? []
+          : entry.sourceControlRepositoryPaths ?? existing.config.sourceControlRepositoryPaths,
         workspacePanelOpen: entry.workspacePanelOpen ?? existing.config.workspacePanelOpen,
         sourceControlViewMode: entry.sourceControlViewMode ?? existing.config.sourceControlViewMode,
         initialCommand: entry.initialCommand,
@@ -87,6 +96,7 @@ export function applyWorkspaceManagementChanges({
     const config = normalizeWorkspaceConfig({
       type: entry.type,
       rootFolderPath: entry.rootFolderPath,
+      sourceControlRepositoryPaths: entry.sourceControlRepositoryPaths,
       workspacePanelOpen: entry.workspacePanelOpen,
       sourceControlViewMode: entry.sourceControlViewMode,
       initialCommand: entry.initialCommand,

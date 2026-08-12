@@ -174,6 +174,7 @@ export type WorkspaceMetadata = Workspace
 export interface WorkspaceConfig {
   type: WorkspaceType
   rootFolderPath?: string
+  sourceControlRepositoryPaths: string[]
   workspacePanelOpen: boolean
   sourceControlViewMode: SourceControlViewMode
   initialCommand?: string
@@ -192,6 +193,7 @@ export interface WorkspaceCreateInput {
   type?: WorkspaceType
   name: string
   rootFolderPath?: string
+  sourceControlRepositoryPaths?: string[]
   workspacePanelOpen?: boolean
   sourceControlViewMode?: SourceControlViewMode
   initialCommand?: string
@@ -206,6 +208,7 @@ export interface WorkspaceManagementEntry {
   name: string
   type?: WorkspaceType
   rootFolderPath?: string
+  sourceControlRepositoryPaths?: string[]
   workspacePanelOpen?: boolean
   sourceControlViewMode?: SourceControlViewMode
   initialCommand?: string
