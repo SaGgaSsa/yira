@@ -30,6 +30,7 @@ import type {
   FloatingNavigationEvent,
   FloatingNavigationRequest,
   GitCommitHistoryResult,
+  GitRepository,
   GitStatusResult,
   AgentActiveSessionSnapshot,
   AgentProviderAvailabilitySnapshot,
@@ -109,12 +110,14 @@ interface ElectronWorld {
     readPreviewAsset: (rootPath: string, relativePath: string) => Promise<FilePreviewAssetResult>
   }
   git: {
-    status: (workspaceId: string) => Promise<GitStatusResult>
-    history: (workspaceId: string) => Promise<GitCommitHistoryResult>
-    stage: (workspaceId: string, relativePath: string, originalPath?: string) => Promise<void>
-    unstage: (workspaceId: string, relativePath: string, originalPath?: string) => Promise<void>
-    commit: (workspaceId: string, message: string) => Promise<void>
-    sync: (workspaceId: string) => Promise<void>
+    discoverRepositories: (workspaceId: string) => Promise<GitRepository[]>
+    discoverRepositoriesAtRoot: (rootFolderPath: string) => Promise<GitRepository[]>
+    status: (workspaceId: string, repositoryPath: string) => Promise<GitStatusResult>
+    history: (workspaceId: string, repositoryPath: string) => Promise<GitCommitHistoryResult>
+    stage: (workspaceId: string, repositoryPath: string, relativePath: string, originalPath?: string) => Promise<void>
+    unstage: (workspaceId: string, repositoryPath: string, relativePath: string, originalPath?: string) => Promise<void>
+    commit: (workspaceId: string, repositoryPath: string, message: string) => Promise<void>
+    sync: (workspaceId: string, repositoryPath: string) => Promise<void>
   }
   canvas: {
     load: (workspaceId: string, workspaceType?: string) => Promise<unknown | null>

@@ -3,7 +3,11 @@ import { promises as fs, readFileSync } from 'fs'
 import { isAbsolute, join, relative, resolve } from 'path'
 import type { AgentProvider, Config, Workspace, AppSettings, WorkspaceConfig, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceOpenFolderResult, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
 import { DEFAULT_SETTINGS } from '@shared/types'
-import { mergeAgentProvidersConfig, normalizeWorkspaceConfig } from '@shared/workspaceConfig'
+import {
+  mergeAgentProvidersConfig,
+  normalizeWorkspaceConfig,
+  normalizeWorkspaceRootFolderPath,
+} from '@shared/workspaceConfig'
 import { applyWorkspaceManagementChanges, setWorkspaceType } from '@shared/workspaceManagement'
 import { YIRA_HOME, CONFIG_PATH, WORKSPACES_DIR } from '../paths'
 import {
@@ -39,6 +43,7 @@ export function normalizeWorkspace(workspace: Partial<Workspace> & { id: string;
   const config = normalizeWorkspaceConfig({
     type: workspace.config?.type,
     rootFolderPath: workspace.config?.rootFolderPath ?? migratedRootFolderPath,
+    sourceControlRepositoryPaths: workspace.config?.sourceControlRepositoryPaths,
     workspacePanelOpen: workspace.config?.workspacePanelOpen,
     sourceControlViewMode: workspace.config?.sourceControlViewMode,
     initialCommand: workspace.config?.initialCommand,
@@ -102,6 +107,18 @@ export async function getWorkspaceRootFolderById(workspaceId: string): Promise<s
   return config.workspaces.find(w => w.id === workspaceId)?.config.rootFolderPath ?? null
 }
 
+/** Returns only the Git settings needed by the main-process Git IPC handlers. */
+export async function getWorkspaceGitConfigById(workspaceId: string): Promise<Pick<WorkspaceConfig, 'rootFolderPath' | 'sourceControlRepositoryPaths'> | null> {
+  const config = await readConfig()
+  const workspace = config.workspaces.find(w => w.id === workspaceId)
+  if (!workspace) return null
+
+  return {
+    rootFolderPath: workspace.config.rootFolderPath,
+    sourceControlRepositoryPaths: workspace.config.sourceControlRepositoryPaths,
+  }
+}
+
 /** Returns the selected providers once per workspace; callers own deduplication. */
 export async function getConfiguredAgentProviders(): Promise<AgentProvider[]> {
   const config = await readConfig()
@@ -142,6 +159,7 @@ export function createWorkspaceFromInput(input: WorkspaceCreateInput): Workspace
     config: normalizeWorkspaceConfig({
       type: input.type,
       rootFolderPath: input.rootFolderPath,
+      sourceControlRepositoryPaths: input.sourceControlRepositoryPaths,
       workspacePanelOpen: input.workspacePanelOpen,
       sourceControlViewMode: input.sourceControlViewMode,
       initialCommand: input.initialCommand,
@@ -162,11 +180,24 @@ export function updateWorkspace(workspace: Workspace, patch: WorkspaceUpdatePatc
   const hasAgentProviderPatch = patch.config !== undefined
     && patch.config !== null
     && Object.prototype.hasOwnProperty.call(patch.config, 'agentProvider')
+  const hasRootFolderPathPatch = patch.config !== undefined
+    && patch.config !== null
+    && Object.prototype.hasOwnProperty.call(patch.config, 'rootFolderPath')
+  const hasRepositoryPathsPatch = patch.config !== undefined
+    && patch.config !== null
+    && Object.prototype.hasOwnProperty.call(patch.config, 'sourceControlRepositoryPaths')
+  const nextRootFolderPath = normalizeWorkspaceRootFolderPath(
+    hasRootFolderPathPatch ? patch.config?.rootFolderPath : workspace.config.rootFolderPath,
+  )
+  const rootFolderPathChanged = nextRootFolderPath !== normalizeWorkspaceRootFolderPath(workspace.config.rootFolderPath)
 
   workspace.name = nextName
   workspace.config = normalizeWorkspaceConfig({
     type: workspace.config.type,
-    rootFolderPath: patch.config?.rootFolderPath ?? workspace.config.rootFolderPath,
+    rootFolderPath: hasRootFolderPathPatch ? patch.config?.rootFolderPath : workspace.config.rootFolderPath,
+    sourceControlRepositoryPaths: hasRepositoryPathsPatch
+      ? patch.config?.sourceControlRepositoryPaths
+      : rootFolderPathChanged ? [] : workspace.config.sourceControlRepositoryPaths,
     workspacePanelOpen: patch.config?.workspacePanelOpen ?? workspace.config.workspacePanelOpen,
     sourceControlViewMode: patch.config?.sourceControlViewMode ?? workspace.config.sourceControlViewMode,
     initialCommand: patch.config?.initialCommand ?? workspace.config.initialCommand,

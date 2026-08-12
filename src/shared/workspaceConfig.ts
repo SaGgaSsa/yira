@@ -37,6 +37,37 @@ function normalizeRemoteTerminal(value: Partial<RemoteTerminalConfig> | undefine
   }
 }
 
+export function normalizeWorkspaceRootFolderPath(value: unknown): string | undefined {
+  const trimmed = typeof value === 'string' ? value.trim() : undefined
+  return trimmed || undefined
+}
+
+export function normalizeSourceControlRepositoryPaths(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+
+  const seen = new Set<string>()
+  const paths: string[] = []
+
+  for (const candidate of value) {
+    if (typeof candidate !== 'string') continue
+
+    const trimmed = candidate.trim()
+    if (!trimmed || trimmed.startsWith('/') || trimmed.includes('\\') || trimmed.includes('\u0000')) continue
+    if (/^[a-zA-Z]:\//.test(trimmed)) continue
+
+    const segments = trimmed.split('/')
+    if (segments.some((segment) => segment === '..')) continue
+
+    const normalized = segments.filter((segment) => segment !== '' && segment !== '.').join('/') || '.'
+    if (seen.has(normalized)) continue
+
+    seen.add(normalized)
+    paths.push(normalized)
+  }
+
+  return paths
+}
+
 const MAX_AGENT_PROVIDER_ARGS = 32
 const MAX_AGENT_PROVIDER_ARG_LENGTH = 256
 
@@ -102,12 +133,13 @@ export function createDefaultAgentProvidersConfig(): AgentProvidersConfig {
 }
 
 export function normalizeWorkspaceConfig(config: WorkspaceConfigInput | undefined): WorkspaceConfig {
-  const rootFolderPath = config?.rootFolderPath?.trim()
+  const rootFolderPath = normalizeWorkspaceRootFolderPath(config?.rootFolderPath)
   const initialCommand = config?.initialCommand?.trim()
 
   return {
     type: normalizeWorkspaceType(config?.type),
     rootFolderPath: rootFolderPath || undefined,
+    sourceControlRepositoryPaths: normalizeSourceControlRepositoryPaths(config?.sourceControlRepositoryPaths),
     workspacePanelOpen: config?.workspacePanelOpen !== false,
     sourceControlViewMode: normalizeSourceControlViewMode(config?.sourceControlViewMode),
     initialCommand: initialCommand || undefined,

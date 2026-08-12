@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AgentActiveSessionSnapshot, AgentProviderAvailabilitySnapshot, AgentSessionHistoryQuery, AgentSessionHistoryResult, AgentUsageSnapshot, BoardTask, FileListOptions, FileSearchResult, FileWriteInput, FloatingNavigationEvent, FloatingNavigationRequest, GitCommitHistoryResult, GitStatusResult, NotificationAttentionOptions, TerminalCreateOptions, UpdateState, WindowBounds, WindowClosePreparationRequest, WindowClosePreparationResponse, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
+import type { AgentActiveSessionSnapshot, AgentProviderAvailabilitySnapshot, AgentSessionHistoryQuery, AgentSessionHistoryResult, AgentUsageSnapshot, BoardTask, FileListOptions, FileSearchResult, FileWriteInput, FloatingNavigationEvent, FloatingNavigationRequest, GitCommitHistoryResult, GitRepository, GitStatusResult, NotificationAttentionOptions, TerminalCreateOptions, UpdateState, WindowBounds, WindowClosePreparationRequest, WindowClosePreparationResponse, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
 import { createSerialTaskQueue } from '@shared/serialTaskQueue'
 
 console.log('[preload] Loading...')
@@ -105,12 +105,14 @@ contextBridge.exposeInMainWorld('electron', {
   },
 
   git: {
-    status: (workspaceId: string) => ipcRenderer.invoke('git:status', workspaceId) as Promise<GitStatusResult>,
-    history: (workspaceId: string) => ipcRenderer.invoke('git:history', workspaceId) as Promise<GitCommitHistoryResult>,
-    stage: (workspaceId: string, relativePath: string, originalPath?: string) => ipcRenderer.invoke('git:stage', workspaceId, relativePath, originalPath),
-    unstage: (workspaceId: string, relativePath: string, originalPath?: string) => ipcRenderer.invoke('git:unstage', workspaceId, relativePath, originalPath),
-    commit: (workspaceId: string, message: string) => ipcRenderer.invoke('git:commit', workspaceId, message),
-    sync: (workspaceId: string) => ipcRenderer.invoke('git:sync', workspaceId),
+    discoverRepositories: (workspaceId: string) => ipcRenderer.invoke('git:discoverRepositories', workspaceId) as Promise<GitRepository[]>,
+    discoverRepositoriesAtRoot: (rootFolderPath: string) => ipcRenderer.invoke('git:discoverRepositoriesAtRoot', rootFolderPath) as Promise<GitRepository[]>,
+    status: (workspaceId: string, repositoryPath: string) => ipcRenderer.invoke('git:status', workspaceId, repositoryPath) as Promise<GitStatusResult>,
+    history: (workspaceId: string, repositoryPath: string) => ipcRenderer.invoke('git:history', workspaceId, repositoryPath) as Promise<GitCommitHistoryResult>,
+    stage: (workspaceId: string, repositoryPath: string, relativePath: string, originalPath?: string) => ipcRenderer.invoke('git:stage', workspaceId, repositoryPath, relativePath, originalPath),
+    unstage: (workspaceId: string, repositoryPath: string, relativePath: string, originalPath?: string) => ipcRenderer.invoke('git:unstage', workspaceId, repositoryPath, relativePath, originalPath),
+    commit: (workspaceId: string, repositoryPath: string, message: string) => ipcRenderer.invoke('git:commit', workspaceId, repositoryPath, message),
+    sync: (workspaceId: string, repositoryPath: string) => ipcRenderer.invoke('git:sync', workspaceId, repositoryPath),
   },
 
   // Canvas persistence

@@ -1,6 +1,10 @@
+import assert from 'node:assert/strict'
+import { execFile } from 'node:child_process'
 import { mkdtemp, mkdir, rm, symlink, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
+import { promisify } from 'node:util'
+import test from 'node:test'
 import {
   parseGitStatus,
   resolveOriginWebUrl,
@@ -15,6 +19,13 @@ import {
   parseGitCommitLog,
   type GitCommandExecutor,
 } from './runner'
+import { discoverGitRepositories, resolveConfiguredGitRepository } from './repositories'
+
+const execFileAsync = promisify(execFile)
+
+async function initGitRepository(path: string): Promise<void> {
+  await execFileAsync('git', ['-C', path, 'init', '--quiet'])
+}
 
 const parsed = parseGitStatus([
   '## feature/source-control...origin/feature/source-control',
@@ -286,3 +297,146 @@ try {
   await rm(tempRoot, { recursive: true, force: true })
   await rm(outsideRoot, { recursive: true, force: true })
 }
+
+test('discovers Git roots at workspace depth zero, one, and two only', async () => {
+  const rootPath = await mkdtemp(join(tmpdir(), 'yira-git-repositories-'))
+  const outsidePath = await mkdtemp(join(tmpdir(), 'yira-git-repositories-outside-'))
+  try {
+    await initGitRepository(rootPath)
+
+    const alphaPath = join(rootPath, 'alpha')
+    const zetaPath = join(rootPath, 'zeta')
+    const containerPath = join(rootPath, 'container')
+    const betaPath = join(containerPath, 'beta')
+    const deepPath = join(betaPath, 'deep')
+    const firstPath = join(rootPath, 'first')
+    const secondPath = join(rootPath, 'second')
+    const firstRepositoryPath = join(firstPath, 'repository')
+    const secondRepositoryPath = join(secondPath, 'repository')
+    const parentPath = join(rootPath, 'parent')
+    const parentChildPath = join(parentPath, 'child')
+
+    await mkdir(alphaPath)
+    await mkdir(zetaPath)
+    await mkdir(betaPath, { recursive: true })
+    await mkdir(deepPath)
+    await mkdir(firstRepositoryPath, { recursive: true })
+    await mkdir(secondRepositoryPath, { recursive: true })
+    await mkdir(parentChildPath, { recursive: true })
+
+    await initGitRepository(alphaPath)
+    await initGitRepository(zetaPath)
+    await initGitRepository(betaPath)
+    await initGitRepository(deepPath)
+    await initGitRepository(firstRepositoryPath)
+    await initGitRepository(secondRepositoryPath)
+    await initGitRepository(parentPath)
+
+    for (const ignoredName of [
+      '.git',
+      'node_modules',
+      'dist',
+      'dist-electron',
+      'build',
+      'release',
+      'coverage',
+      '.next',
+      '.vite',
+    ]) {
+      const ignoredPath = join(containerPath, ignoredName)
+      await mkdir(ignoredPath, { recursive: true })
+      await initGitRepository(ignoredPath)
+    }
+
+    const outsideRepositoryPath = join(outsidePath, 'linked-repository')
+    await mkdir(outsideRepositoryPath)
+    await initGitRepository(outsideRepositoryPath)
+    await symlink(outsideRepositoryPath, join(rootPath, 'linked'))
+
+    const repositories = await discoverGitRepositories(rootPath)
+
+    assert.deepEqual(repositories.map(({ relativePath }) => relativePath), [
+      'alpha',
+      'container/beta',
+      'parent',
+      'first/repository',
+      'second/repository',
+      '.',
+      'zeta',
+    ])
+    assert.deepEqual(repositories.map(({ name }) => name), [
+      'alpha',
+      'beta',
+      'parent',
+      'repository',
+      'repository',
+      rootPath.split('/').at(-1),
+      'zeta',
+    ])
+    assert.equal(repositories.some(({ relativePath }) => relativePath === 'container/beta/deep'), false)
+    assert.equal(repositories.some(({ relativePath }) => relativePath === 'parent/child'), false)
+    assert.equal(repositories.some(({ relativePath }) => relativePath === 'linked'), false)
+    assert.equal(repositories.some(({ relativePath }) => relativePath.includes('node_modules')), false)
+  } finally {
+    await rm(rootPath, { recursive: true, force: true })
+    await rm(outsidePath, { recursive: true, force: true })
+  }
+})
+
+test('resolves only a configured live Git root inside the workspace', async () => {
+  const rootPath = await mkdtemp(join(tmpdir(), 'yira-git-repository-resolver-'))
+  const outsidePath = await mkdtemp(join(tmpdir(), 'yira-git-repository-resolver-outside-'))
+  try {
+    const selectedPath = join(rootPath, 'selected')
+    const otherPath = join(rootPath, 'other')
+    const parentPath = join(rootPath, 'parent')
+    const parentChildPath = join(parentPath, 'child')
+    const outsideRepositoryPath = join(outsidePath, 'outside')
+    await mkdir(selectedPath)
+    await mkdir(otherPath)
+    await mkdir(parentChildPath, { recursive: true })
+    await mkdir(outsideRepositoryPath)
+    await initGitRepository(selectedPath)
+    await initGitRepository(otherPath)
+    await initGitRepository(parentPath)
+    await initGitRepository(outsideRepositoryPath)
+    await symlink(outsideRepositoryPath, join(rootPath, 'linked'))
+
+    const resolved = await resolveConfiguredGitRepository(rootPath, ['selected'], 'selected')
+    assert.equal(resolved.relativePath, 'selected')
+    assert.equal(resolved.absolutePath, selectedPath)
+    assert.equal(resolved.repository.name, 'selected')
+
+    const rejectedInputs: unknown[] = [
+      'other',
+      '../outside',
+      '/tmp/outside',
+      'C:/outside',
+      'selected/../other',
+      'linked',
+      'parent/child',
+      42,
+      '',
+    ]
+    for (const requestedPath of rejectedInputs) {
+      await assert.rejects(
+        resolveConfiguredGitRepository(rootPath, ['selected'], requestedPath),
+        /repository|relative|traversal|workspace|Git/i,
+      )
+    }
+
+    await rm(selectedPath, { recursive: true, force: true })
+    await assert.rejects(
+      resolveConfiguredGitRepository(rootPath, ['selected'], 'selected'),
+      /exist|available|repository|directory/i,
+    )
+
+    await assert.rejects(
+      resolveConfiguredGitRepository(rootPath, 'selected', 'selected'),
+      /configured|array|selection/i,
+    )
+  } finally {
+    await rm(rootPath, { recursive: true, force: true })
+    await rm(outsidePath, { recursive: true, force: true })
+  }
+})

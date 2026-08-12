@@ -38,8 +38,8 @@ function workspace(
 
 const existing = [
   workspace('ws-alpha', 'Alpha', '/repo/alpha', 'canvas', ['apps/./web', 'apps//web']),
-  workspace('ws-beta', 'Beta', '/repo/beta', 'grid'),
-  workspace('ws-gamma', 'Gamma', '/repo/gamma', 'canvas', ['.']),
+  workspace('ws-beta', 'Beta', '/repo/beta', 'grid', ['.']),
+  workspace('ws-gamma', 'Gamma', '/repo/gamma'),
 ]
 
 let idCounter = 0
@@ -83,7 +83,9 @@ if (managed.workspaces[0].config.terminalHistoryEnabled !== false) throw new Err
 if (managed.workspaces[0].config.workspacePanelOpen !== false) throw new Error('workspace panel toggle must be preserved')
 if (managed.workspaces[0].config.sourceControlViewMode !== 'tree') throw new Error('source control view mode must be preserved')
 if (managed.workspaces[0].config.remoteTerminal?.host !== 'notebook.tailnet.ts.net') throw new Error('remote terminal config must be preserved')
-if (sourceControlPaths(managed.workspaces[0].config).length !== 0) throw new Error('changing a workspace root must clear repository selections')
+if (sourceControlPaths(managed.workspaces[0].config).join('|') !== 'src/app') {
+  throw new Error('changing a workspace root must retain an explicit normalized repository selection')
+}
 if (managed.workspaces[2].config.type !== 'grid') throw new Error('existing workspace type must be preserved by management edits')
 if (managed.workspaces[2].config.sourceControlViewMode !== 'list') throw new Error('management edits must retain an existing source control view mode')
 if (managed.workspaces[2].config.workspacePanelOpen !== true) throw new Error('workspace panel must default open during management edits')

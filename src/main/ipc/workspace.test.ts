@@ -12,12 +12,12 @@ function sourceControlPaths(workspace: Workspace): string[] {
   return (workspace.config as SourceControlConfig).sourceControlRepositoryPaths
 }
 
-function workspace(id: string, agentProvider?: AgentProvider): Workspace {
+function workspace(id: string, agentProvider?: AgentProvider, rootFolderPath?: string): Workspace {
   return {
     id,
     name: id,
     path: `/tmp/yira/workspaces/${id}`,
-    config: normalizeWorkspaceConfig({ agentProvider }),
+    config: normalizeWorkspaceConfig({ agentProvider, rootFolderPath }),
   }
 }
 
@@ -48,7 +48,7 @@ test('normalizes selected repositories through workspace creation and update', (
   } as Parameters<typeof createWorkspaceFromInput>[0])
   assert.deepEqual(sourceControlPaths(created), ['.', 'packages/web'])
 
-  const preserved = workspace('preserved-selection')
+  const preserved = workspace('preserved-selection', undefined, '/repo')
   ;(preserved.config as SourceControlConfig).sourceControlRepositoryPaths = ['apps/web']
   const unchanged = updateWorkspace(preserved, {
     config: { rootFolderPath: ' /repo ', sourceControlRepositoryPaths: ['src/./app', 'src//app'] },
@@ -58,5 +58,11 @@ test('normalizes selected repositories through workspace creation and update', (
   const changed = updateWorkspace(unchanged, {
     config: { rootFolderPath: '/other-repo', sourceControlRepositoryPaths: ['still/unsafe?'] },
   } as Parameters<typeof updateWorkspace>[1])
-  assert.deepEqual(sourceControlPaths(changed), [])
+  assert.deepEqual(sourceControlPaths(changed), ['still/unsafe?'])
+
+  const cleared = updateWorkspace(changed, {
+    config: { rootFolderPath: undefined },
+  } as Parameters<typeof updateWorkspace>[1])
+  assert.equal(cleared.config.rootFolderPath, undefined)
+  assert.deepEqual(sourceControlPaths(cleared), [])
 })

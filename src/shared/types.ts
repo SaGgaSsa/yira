@@ -174,6 +174,7 @@ export type WorkspaceMetadata = Workspace
 export interface WorkspaceConfig {
   type: WorkspaceType
   rootFolderPath?: string
+  sourceControlRepositoryPaths: string[]
   workspacePanelOpen: boolean
   sourceControlViewMode: SourceControlViewMode
   initialCommand?: string
@@ -192,6 +193,7 @@ export interface WorkspaceCreateInput {
   type?: WorkspaceType
   name: string
   rootFolderPath?: string
+  sourceControlRepositoryPaths?: string[]
   workspacePanelOpen?: boolean
   sourceControlViewMode?: SourceControlViewMode
   initialCommand?: string
@@ -206,6 +208,7 @@ export interface WorkspaceManagementEntry {
   name: string
   type?: WorkspaceType
   rootFolderPath?: string
+  sourceControlRepositoryPaths?: string[]
   workspacePanelOpen?: boolean
   sourceControlViewMode?: SourceControlViewMode
   initialCommand?: string
@@ -240,6 +243,14 @@ export type WorkspaceUpdatePatch = Partial<Pick<Workspace, 'name'>> & {
 }
 
 // ─── Source Control ───────────────────────────────────────────────────────
+
+/** Safe renderer-facing metadata for a discovered Git repository. */
+export interface GitRepository {
+  /** Workspace-relative POSIX path. The workspace root is represented by `.`. */
+  relativePath: string
+  /** Visible repository directory name. */
+  name: string
+}
 
 export type GitChangeStatus = 'added' | 'modified' | 'deleted' | 'renamed' | 'copied' | 'unmerged' | 'untracked' | 'unknown'
 

@@ -705,7 +705,7 @@ export default function App(): React.ReactElement {
       }
 
       skipNextAutosaveRef.current = true
-      setWorkspace('', '', { type: 'canvas', workspacePanelOpen: true, sourceControlViewMode: 'list', agentProviders: createDefaultAgentProvidersConfig() })
+      setWorkspace('', '', { type: 'canvas', workspacePanelOpen: true, sourceControlViewMode: 'list', sourceControlRepositoryPaths: [], agentProviders: createDefaultAgentProvidersConfig() })
       restoreState(createEmptyCanvasState())
       const dialogCopy = startupFirstWorkspaceDialogCopyRef.current
       setWorkspaceEditor({
@@ -725,6 +725,7 @@ export default function App(): React.ReactElement {
             remoteTerminal: { host: '', user: '' },
             agentProvider: undefined,
             agentProviders: createDefaultAgentProvidersConfig(),
+            sourceControlRepositoryPaths: [],
           },
         },
       })
@@ -948,7 +949,7 @@ export default function App(): React.ReactElement {
     setShowSettings(true)
   }, [])
 
-  const openWorkspaceEditor = useCallback((workspace: WorkspaceMetadata) => {
+  const openWorkspaceEditor = useCallback((workspace: WorkspaceMetadata, initialTab?: WorkspaceDialogRequest['initialTab']) => {
     setShowWorkspacePicker(false)
     setWorkspaceEditor({
       mode: 'edit',
@@ -958,6 +959,8 @@ export default function App(): React.ReactElement {
         eyebrow: t('workspace.workspaceSettings'),
         confirmLabel: t('workspace.saveWorkspace'),
         typeEditable: false,
+        workspaceId: workspace.id,
+        initialTab,
         value: {
           type: workspace.config.type,
           name: workspace.name,
@@ -967,15 +970,16 @@ export default function App(): React.ReactElement {
           remoteTerminal: workspace.config.remoteTerminal ?? { host: '', user: '' },
           agentProvider: workspace.config.agentProvider,
           agentProviders: workspace.config.agentProviders,
+          sourceControlRepositoryPaths: workspace.config.sourceControlRepositoryPaths,
         },
       },
     })
   }, [t])
 
-  const openActiveWorkspaceEditor = useCallback(() => {
+  const openActiveWorkspaceEditor = useCallback((initialTab?: WorkspaceDialogRequest['initialTab']) => {
     if (!activeWorkspaceId) return
     const workspace = workspaceMetadata.find((entry) => entry.id === activeWorkspaceId)
-    if (workspace) openWorkspaceEditor(workspace)
+    if (workspace) openWorkspaceEditor(workspace, initialTab)
   }, [activeWorkspaceId, openWorkspaceEditor, workspaceMetadata])
 
   const toggleWorkspacePanel = useCallback(() => {
@@ -1512,6 +1516,7 @@ export default function App(): React.ReactElement {
         remoteTerminal: value.remoteTerminal,
         agentProvider: value.agentProvider,
         agentProviders: value.agentProviders,
+        sourceControlRepositoryPaths: value.sourceControlRepositoryPaths,
       })
       await refreshWorkspaceMetadata()
       setWorkspaceEditor(null)
@@ -1528,6 +1533,7 @@ export default function App(): React.ReactElement {
         remoteTerminal: value.remoteTerminal,
         agentProvider: value.agentProvider,
         agentProviders: value.agentProviders,
+        sourceControlRepositoryPaths: value.sourceControlRepositoryPaths,
       },
     })
     if (!updated) return
@@ -1566,7 +1572,7 @@ export default function App(): React.ReactElement {
 
     if (!result.activeWorkspace) {
       skipNextAutosaveRef.current = true
-      setWorkspace('', '', { type: 'canvas', workspacePanelOpen: true, sourceControlViewMode: 'list', agentProviders: createDefaultAgentProvidersConfig() })
+      setWorkspace('', '', { type: 'canvas', workspacePanelOpen: true, sourceControlViewMode: 'list', sourceControlRepositoryPaths: [], agentProviders: createDefaultAgentProvidersConfig() })
       restoreState(createEmptyCanvasState())
       const dialogCopy = getWorkspaceDialogCopy('first', t)
       setWorkspaceEditor({
@@ -1586,6 +1592,7 @@ export default function App(): React.ReactElement {
             remoteTerminal: { host: '', user: '' },
             agentProvider: undefined,
             agentProviders: createDefaultAgentProvidersConfig(),
+            sourceControlRepositoryPaths: [],
           },
         },
       })
@@ -1619,6 +1626,7 @@ export default function App(): React.ReactElement {
           remoteTerminal: { host: '', user: '' },
           agentProvider: undefined,
           agentProviders: createDefaultAgentProvidersConfig(),
+          sourceControlRepositoryPaths: [],
         },
       },
     })
@@ -2320,6 +2328,7 @@ export default function App(): React.ReactElement {
                 <WorkspacePanel
                   rootPath={workspaceRootPath}
                   workspaceId={activeWorkspaceId}
+                  sourceControlRepositoryPaths={activeWorkspaceConfig.sourceControlRepositoryPaths}
                   sourceControlViewMode={activeWorkspaceConfig.sourceControlViewMode}
                   onWorkspaceUpdated={handleWorkspaceConfigUpdated}
                   activeFilePath={activeFilePath}

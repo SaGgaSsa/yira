@@ -167,6 +167,14 @@ type TranslationResources = {
     persistedStateWarning: string
   }
   workspace: {
+    general: string
+    terminal: string
+    agents: string
+    sourceControl: string
+    repository: string
+    selectRepositories: string
+    noRepositoriesConfigured: string
+    configureSourceControl: string
     canvas: string
     grid: string
     workspace: string
@@ -499,6 +507,14 @@ const en: TranslationResources = {
     persistedStateWarning: 'This action changes persisted workspace state.',
   },
   workspace: {
+    general: 'General',
+    terminal: 'Terminal',
+    agents: 'Agents',
+    sourceControl: 'Source Control',
+    repository: 'Repository',
+    selectRepositories: 'Select repositories',
+    noRepositoriesConfigured: 'No repositories configured',
+    configureSourceControl: 'Configure Source Control',
     canvas: 'Canvas',
     grid: 'Grid',
     workspace: 'Workspace',
@@ -831,6 +847,14 @@ const es: TranslationResources = {
     persistedStateWarning: 'Esta acción cambia el estado guardado del espacio de trabajo.',
   },
   workspace: {
+    general: 'General',
+    terminal: 'Terminal',
+    agents: 'Agentes',
+    sourceControl: 'Source Control',
+    repository: 'Repositorio',
+    selectRepositories: 'Seleccionar repositorios',
+    noRepositoriesConfigured: 'No hay repositorios configurados',
+    configureSourceControl: 'Configurar Source Control',
     canvas: 'Lienzo',
     grid: 'Cuadrícula',
     workspace: 'Espacio de trabajo',
