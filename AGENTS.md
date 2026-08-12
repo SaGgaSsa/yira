@@ -26,3 +26,5 @@ Release patch notes are generated from commit subjects between tags. Commits tha
 
 ## Security & Configuration Tips
 Keep Node access in the renderer disabled and route privileged work through preload and IPC only. Do not commit local workspace data, generated bundles, or machine-specific shell settings.
+
+Usa español técnico simplificado estilo ASD-STE100: instrucciones directas, frases cortas, una acción por frase, términos consistentes y lenguaje literal; evita ambigüedad, redundancia y variaciones innecesarias de vocabulario.
