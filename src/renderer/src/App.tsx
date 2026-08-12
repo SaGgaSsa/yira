@@ -705,7 +705,7 @@ export default function App(): React.ReactElement {
       }
 
       skipNextAutosaveRef.current = true
-      setWorkspace('', '', { type: 'canvas', workspacePanelOpen: true, sourceControlViewMode: 'list', agentProviders: createDefaultAgentProvidersConfig() })
+      setWorkspace('', '', { type: 'canvas', workspacePanelOpen: true, sourceControlViewMode: 'list', sourceControlRepositoryPaths: [], agentProviders: createDefaultAgentProvidersConfig() })
       restoreState(createEmptyCanvasState())
       const dialogCopy = startupFirstWorkspaceDialogCopyRef.current
       setWorkspaceEditor({
@@ -1566,7 +1566,7 @@ export default function App(): React.ReactElement {
 
     if (!result.activeWorkspace) {
       skipNextAutosaveRef.current = true
-      setWorkspace('', '', { type: 'canvas', workspacePanelOpen: true, sourceControlViewMode: 'list', agentProviders: createDefaultAgentProvidersConfig() })
+      setWorkspace('', '', { type: 'canvas', workspacePanelOpen: true, sourceControlViewMode: 'list', sourceControlRepositoryPaths: [], agentProviders: createDefaultAgentProvidersConfig() })
       restoreState(createEmptyCanvasState())
       const dialogCopy = getWorkspaceDialogCopy('first', t)
       setWorkspaceEditor({

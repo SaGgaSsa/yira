@@ -13,6 +13,7 @@ test('does not prepend workspace startup commands to an agent terminal', () => {
     type: 'canvas',
     workspacePanelOpen: true,
     sourceControlViewMode: 'list',
+    sourceControlRepositoryPaths: [],
     initialCommand: 'echo workspace',
     agentProviders: {
       claude: { enabled: true, args: [] },
@@ -30,6 +31,7 @@ test('keeps ordinary terminal startup command composition unchanged', () => {
     type: 'canvas',
     workspacePanelOpen: true,
     sourceControlViewMode: 'list',
+    sourceControlRepositoryPaths: [],
     initialCommand: 'echo workspace',
     agentProviders: {
       claude: { enabled: true, args: [] },
