@@ -1,5 +1,4 @@
 import React from 'react'
-import { Code2, Sparkles } from 'lucide-react'
 import type { AgentProvider, AgentUsageProviderSnapshot, AgentUsageWindow, AgentUsageWindowKind } from '@shared/types'
 
 export interface AgentUsageIndicatorProps {
@@ -38,10 +37,10 @@ const ringCircumference = 2 * Math.PI * ringRadius
 
 const providerDetails: Record<AgentProvider, {
   label: string
-  Icon: typeof Code2
+  logoPath: string
 }> = {
-  codex: { label: 'Codex', Icon: Code2 },
-  claude: { label: 'Claude', Icon: Sparkles },
+  codex: { label: 'Codex', logoPath: '/agent-provider-logos/openai.svg' },
+  claude: { label: 'Claude', logoPath: '/agent-provider-logos/anthropic.svg' },
 }
 
 function clampPercent(value: number): number | null {
@@ -56,16 +55,38 @@ function thresholdFor(percent: number | null): UsageThreshold {
   return 'neutral'
 }
 
-function formatResetAt(value: AgentUsageWindow['resetsAt']): string | null {
+export interface UsageResetFormatOptions {
+  locale?: string
+  timeZone?: string
+}
+
+export function formatUsageResetAt(
+  value: AgentUsageWindow['resetsAt'],
+  kind: AgentUsageWindowKind,
+  options: UsageResetFormatOptions = {},
+): string | null {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return null
 
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(date)
+  try {
+    const parts = new Intl.DateTimeFormat(options.locale, {
+      ...(kind === 'weekly' ? { day: '2-digit', month: 'short' } : {}),
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+      timeZone: options.timeZone,
+    }).formatToParts(date)
+    const valueFor = (type: Intl.DateTimeFormatPartTypes): string => (
+      parts.find((part) => part.type === type)?.value ?? ''
+    )
+    const time = `${valueFor('hour')}:${valueFor('minute')}`
+
+    return kind === 'weekly'
+      ? `${valueFor('day')} ${valueFor('month')} ${time}`
+      : time
+  } catch {
+    return null
+  }
 }
 
 function resetDataValue(value: AgentUsageWindow['resetsAt']): string | undefined {
@@ -93,7 +114,7 @@ function UsageWindow({
   const threshold = thresholdFor(percent)
   const style = thresholdStyles[threshold]
   const label = windowLabel(window.kind)
-  const resetText = formatResetAt(window.resetsAt)
+  const resetText = formatUsageResetAt(window.resetsAt, window.kind)
   const resetValue = resetDataValue(window.resetsAt)
   const progressOffset = percent === null
     ? ringCircumference
@@ -145,11 +166,11 @@ function UsageWindow({
       <span className="font-mono text-[11px] leading-none" data-usage-percent="true">
         {percent === null ? '—' : `${percent}%`}
       </span>
-      <span className="text-[10px] leading-none text-text-muted" data-usage-window-label="true">
+      <span className="text-[10px] leading-none text-text-primary" data-usage-window-label="true">
         {label}
       </span>
       <span
-        className="hidden min-[800px]:inline truncate text-[10px] leading-none text-text-muted"
+        className="hidden min-[800px]:inline truncate text-[10px] leading-none text-text-primary"
         data-reset-at={resetValue}
         data-usage-reset="true"
       >
@@ -164,7 +185,6 @@ export function AgentUsageIndicator({
   snapshot,
 }: AgentUsageIndicatorProps): React.ReactElement {
   const details = providerDetails[provider]
-  const Icon = details.Icon
   const resolvedStatus = snapshot?.status ?? 'unavailable'
   const available = resolvedStatus === 'available'
   const windows = available && snapshot
@@ -179,9 +199,14 @@ export function AgentUsageIndicator({
       data-status={resolvedStatus}
       aria-label={`${details.label} usage${available ? '' : ' unavailable'}`}
     >
-      <span className="inline-flex min-w-0 shrink-0 items-center gap-1 text-text-primary" data-provider-identity="true">
-        <Icon size={13} strokeWidth={1.8} aria-hidden="true" />
-        <span className="truncate">{details.label}</span>
+      <span className="inline-flex min-w-0 shrink-0 items-center text-text-primary" data-provider-identity="true">
+        <img
+          className="size-3.5 shrink-0 object-contain"
+          src={details.logoPath}
+          alt=""
+          aria-hidden="true"
+          data-provider-logo="true"
+        />
       </span>
 
       {windows.length > 0 ? (

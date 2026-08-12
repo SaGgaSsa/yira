@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { AgentUsageProviderSnapshot } from '@shared/types'
-import { AgentUsageIndicator } from './AgentUsageIndicator'
+import { AgentUsageIndicator, formatUsageResetAt } from './AgentUsageIndicator'
 
 const resetAt = '2026-08-12T15:30:00.000Z'
 
@@ -12,6 +12,17 @@ function renderIndicator(snapshot: Omit<AgentUsageProviderSnapshot, 'provider'> 
   )
 }
 
+test('formats five-hour and weekly reset dates in the requested order', () => {
+  assert.equal(
+    formatUsageResetAt(resetAt, 'fiveHour', { locale: 'en-GB', timeZone: 'UTC' }),
+    '15:30',
+  )
+  assert.equal(
+    formatUsageResetAt(resetAt, 'weekly', { locale: 'en-GB', timeZone: 'UTC' }),
+    '12 Aug 15:30',
+  )
+})
+
 test('renders one available Codex window with an accessible progress ring and reset date', () => {
   const markup = renderIndicator({
     status: 'available',
@@ -19,15 +30,22 @@ test('renders one available Codex window with an accessible progress ring and re
   })
 
   assert.match(markup, /data-provider="codex"/)
-  assert.match(markup, />Codex</)
+  assert.match(markup, /src="\/agent-provider-logos\/openai\.svg"/)
+  assert.match(markup, /data-provider-logo="true"/)
+  assert.match(markup, /alt=""/)
+  assert.match(markup, /aria-hidden="true"/)
+  assert.doesNotMatch(markup, />Codex</)
+  assert.match(markup, /aria-label="Codex usage"/)
   assert.match(markup, /data-window-kind="fiveHour"/)
   assert.match(markup, /data-used-percent="42"/)
   assert.match(markup, />42%<\/span>/)
   assert.match(markup, />5 h<\/span>/)
+  assert.match(markup, /class="[^\"]*text-text-primary[^\"]*" data-usage-window-label="true"/)
+  assert.match(markup, /class="[^\"]*text-text-primary[^\"]*" data-reset-at="[^\"]*" data-usage-reset="true"/)
   assert.match(markup, /role="img"/)
   assert.match(markup, /aria-label="Codex 5 h usage: 42%/)
   assert.match(markup, /data-reset-at="2026-08-12T15:30:00.000Z"/)
-  assert.match(markup, /2026/)
+  assert.match(markup, />↻ [^<]+<\/span>/)
 })
 
 test('renders both compact windows and preserves the Claude provider identity', () => {
@@ -40,7 +58,9 @@ test('renders both compact windows and preserves the Claude provider identity', 
   }, 'claude')
 
   assert.match(markup, /data-provider="claude"/)
-  assert.match(markup, />Claude</)
+  assert.match(markup, /src="\/agent-provider-logos\/anthropic\.svg"/)
+  assert.match(markup, /aria-label="Claude usage"/)
+  assert.doesNotMatch(markup, />Claude</)
   assert.equal((markup.match(/data-window-kind=/g) ?? []).length, 2)
   assert.match(markup, /data-window-kind="fiveHour"/)
   assert.match(markup, /data-window-kind="weekly"/)

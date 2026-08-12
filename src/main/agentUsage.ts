@@ -171,6 +171,13 @@ function hasRawFields(state: RawWindowState): boolean {
   return state.durationMinutes !== undefined || state.usedPercent !== undefined || state.resetsAt !== undefined
 }
 
+function hasRawStateFields(state: RawRateLimitsState): boolean {
+  return Boolean(
+    (state.primary && hasRawFields(state.primary))
+    || (state.secondary && hasRawFields(state.secondary)),
+  )
+}
+
 function extractRawState(value: unknown): RawRateLimitsState {
   const state: RawRateLimitsState = {}
   for (const record of rateLimitRecords(value)) {
@@ -228,6 +235,13 @@ function cloneProviderSnapshot(snapshot: AgentUsageProviderSnapshot): AgentUsage
     ...(snapshot.updatedAt ? { updatedAt: snapshot.updatedAt } : {}),
     status: snapshot.status,
   }
+}
+
+function copyAvailableSnapshot(
+  provider: AgentProvider,
+  snapshot: AgentUsageProviderSnapshot,
+): AgentUsageProviderSnapshot {
+  return snapshot.status === 'available' ? cloneProviderSnapshot(snapshot) : unavailableSnapshot(provider)
 }
 
 function cloneSnapshot(snapshot: AgentUsageSnapshot): AgentUsageSnapshot {
@@ -540,12 +554,19 @@ export class AgentUsageService {
 
     for (const provider of ['claude'] as const) {
       if (!configured.has(provider)) continue
+      next[provider] = copyAvailableSnapshot(provider, this.snapshot[provider])
       const reader = this.providerReaders[provider]
       if (!reader) continue
       try {
-        next[provider] = sanitizeProviderSnapshot(provider, await reader())
+        const sanitized = sanitizeProviderSnapshot(provider, await reader())
+        if (sanitized.status !== 'available') continue
+        const updatedAt = snapshotTimestamp(this.now)
+        next[provider] = {
+          ...sanitized,
+          ...(updatedAt ? { updatedAt } : {}),
+        }
       } catch {
-        next[provider] = unavailableSnapshot(provider)
+        // Keep the last valid snapshot until a later read succeeds.
       }
     }
 
@@ -555,16 +576,16 @@ export class AgentUsageService {
 
   private async readCodex(): Promise<AgentUsageProviderSnapshot> {
     const client = await this.ensureCodexClient()
-    if (!client) return unavailableSnapshot('codex')
+    if (!client) return copyAvailableSnapshot('codex', this.snapshot.codex)
     try {
       const response = await client.request(CODEX_RATE_LIMITS_READ)
-      this.codexRawState = extractRawState(response)
-      return stateToSnapshot(this.codexRawState, this.now)
+      const rawState = extractRawState(response)
+      const codex = stateToSnapshot(rawState, this.now)
+      if (codex.status !== 'available') return copyAvailableSnapshot('codex', this.snapshot.codex)
+      this.codexRawState = rawState
+      return codex
     } catch {
-      return {
-        ...cloneProviderSnapshot(this.snapshot.codex),
-        status: 'unavailable',
-      }
+      return copyAvailableSnapshot('codex', this.snapshot.codex)
     }
   }
 
@@ -583,10 +604,15 @@ export class AgentUsageService {
   private handleCodexNotification(notification: CodexAppServerNotification): void {
     if (notification.method !== CODEX_RATE_LIMITS_UPDATED) return
     const update = extractRawState(notification.params)
-    this.codexRawState = mergeRawState(this.codexRawState, update)
-    const codex = stateToSnapshot(this.codexRawState, this.now)
-    this.snapshot = { ...this.snapshot, codex }
-    this.emit()
+    if (hasRawStateFields(update)) {
+      const rawState = mergeRawState(this.codexRawState, update)
+      const codex = stateToSnapshot(rawState, this.now)
+      if (codex.status === 'available') {
+        this.codexRawState = rawState
+        this.snapshot = { ...this.snapshot, codex }
+        this.emit()
+      }
+    }
     void this.refresh()
   }
 

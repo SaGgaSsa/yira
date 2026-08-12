@@ -55,7 +55,9 @@ class FakeCodexClient implements CodexAppServerClient {
   async request<T = unknown>(method: string, params?: unknown): Promise<T> {
     this.methods.push(method)
     this.requestParams.push(params)
-    return this.responses.shift() as T
+    const response = this.responses.shift()
+    if (response instanceof Error) throw response
+    return response as T
   }
 
   onNotification(listener: (notification: { method: string; params?: unknown }) => void): () => void {
@@ -220,6 +222,7 @@ test('deduplicates configured providers and never starts Codex when it is not co
 test('passes the safe Claude snapshot from the passive reader through unchanged', async () => {
   const service = new AgentUsageService({
     getConfiguredProviders: () => ['claude'],
+    now: () => 1_700_000_000_000,
     providerReaders: {
       claude: () => ({
         status: 'available',
@@ -236,10 +239,99 @@ test('passes the safe Claude snapshot from the passive reader through unchanged'
   assert.deepEqual(service.getSnapshot().claude, {
     provider: 'claude',
     status: 'available',
+    updatedAt: '2023-11-14T22:13:20.000Z',
     windows: [
       { kind: 'fiveHour', usedPercent: 42.5, resetsAt: '2026-08-11T18:00:00.000Z' },
       { kind: 'weekly', usedPercent: 17, resetsAt: '2026-08-16T00:00:00.000Z' },
     ],
+  })
+
+  await service.stop()
+})
+
+test('retains the last available Claude snapshot when the reader returns null', async () => {
+  let readerValue: unknown = {
+    status: 'available',
+    windows: [
+      { kind: 'fiveHour', usedPercent: 42.5, resetsAt: '2026-08-11T18:00:00.000Z' },
+      { kind: 'weekly', usedPercent: 17, resetsAt: '2026-08-16T00:00:00.000Z' },
+    ],
+  }
+  let currentNow = 1_700_000_000_000
+  const service = new AgentUsageService({
+    getConfiguredProviders: () => ['claude'],
+    now: () => currentNow,
+    providerReaders: { claude: () => readerValue },
+  })
+
+  await service.start()
+  currentNow += 60_000
+  readerValue = null
+  await service.refresh()
+
+  assert.deepEqual(service.getSnapshot().claude, {
+    provider: 'claude',
+    status: 'available',
+    updatedAt: '2023-11-14T22:13:20.000Z',
+    windows: [
+      { kind: 'fiveHour', usedPercent: 42.5, resetsAt: '2026-08-11T18:00:00.000Z' },
+      { kind: 'weekly', usedPercent: 17, resetsAt: '2026-08-16T00:00:00.000Z' },
+    ],
+  })
+
+  await service.stop()
+})
+
+test('retains the last available Codex snapshot after a temporary account/rateLimits/read rejection', async () => {
+  const client = new FakeCodexClient(fullRateLimits(), new Error('temporary app-server failure'))
+  let currentNow = 1_700_000_000_000
+  const service = new AgentUsageService({
+    getConfiguredProviders: () => ['codex'],
+    codexClientFactory: async () => client,
+    now: () => currentNow,
+  })
+
+  await service.start()
+  currentNow += 60_000
+  await service.refresh()
+
+  assert.deepEqual(service.getSnapshot().codex, {
+    provider: 'codex',
+    status: 'available',
+    updatedAt: '2023-11-14T22:13:20.000Z',
+    windows: [
+      { kind: 'fiveHour', usedPercent: 25, resetsAt: '2027-01-15T08:00:00.000Z' },
+      { kind: 'weekly', usedPercent: 60, resetsAt: '2027-01-15T10:46:40.000Z' },
+    ],
+  })
+
+  await service.stop()
+})
+
+test('clears the retained Claude snapshot when Claude is no longer configured', async () => {
+  let configured: Array<'claude' | 'codex'> = ['claude']
+  const service = new AgentUsageService({
+    getConfiguredProviders: () => configured,
+    providerReaders: {
+      claude: () => ({
+        status: 'available',
+        windows: [
+          { kind: 'fiveHour', usedPercent: 42.5, resetsAt: '2026-08-11T18:00:00.000Z' },
+        ],
+      }),
+    },
+  })
+
+  await service.start()
+  assert.equal(service.getSnapshot().claude.status, 'available')
+
+  configured = []
+  await service.refresh()
+
+  assert.deepEqual(service.getSnapshot().claude, {
+    provider: 'claude',
+    status: 'unavailable',
+    windows: [],
   })
 
   await service.stop()
