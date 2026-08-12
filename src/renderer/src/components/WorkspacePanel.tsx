@@ -21,6 +21,7 @@ type WorkspacePanelTab = 'explorer' | 'agents' | 'source-control'
 interface WorkspacePanelProps {
   rootPath: string
   workspaceId: string
+  sourceControlRepositoryPaths: string[]
   sourceControlViewMode: SourceControlViewMode
   onWorkspaceUpdated: (workspace: Workspace) => void
   activeFilePath: string | null
@@ -38,6 +39,7 @@ interface WorkspacePanelProps {
 export function WorkspacePanel({
   rootPath,
   workspaceId,
+  sourceControlRepositoryPaths,
   sourceControlViewMode,
   onWorkspaceUpdated,
   activeFilePath,
@@ -126,6 +128,7 @@ export function WorkspacePanel({
         {tab === 'source-control' && (
           <WorkspaceSourceControl
             workspaceId={workspaceId}
+            sourceControlRepositoryPaths={sourceControlRepositoryPaths}
             sourceControlViewMode={sourceControlViewMode}
             onWorkspaceUpdated={onWorkspaceUpdated}
             onOpenWorkspaceSettings={onOpenWorkspaceSettings}

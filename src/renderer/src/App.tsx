@@ -2327,6 +2327,7 @@ export default function App(): React.ReactElement {
                 <WorkspacePanel
                   rootPath={workspaceRootPath}
                   workspaceId={activeWorkspaceId}
+                  sourceControlRepositoryPaths={activeWorkspaceConfig.sourceControlRepositoryPaths}
                   sourceControlViewMode={activeWorkspaceConfig.sourceControlViewMode}
                   onWorkspaceUpdated={handleWorkspaceConfigUpdated}
                   activeFilePath={activeFilePath}

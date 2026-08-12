@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs'
 
 const source = readFileSync(new URL('./WorkspaceSourceControl.tsx', import.meta.url), 'utf8')
+const workspacePanelSource = readFileSync(new URL('./WorkspacePanel.tsx', import.meta.url), 'utf8')
+const appSource = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8')
 
 for (const requiredLabel of ['Staged Changes', 'Changes']) {
   if (!source.includes(requiredLabel)) throw new Error(`source control must render the ${requiredLabel} section`)
@@ -131,6 +133,21 @@ for (const requiredRepositoryCall of [
 }
 if (!source.includes('setActiveRepositoryPath')) {
   throw new Error('source control must retain the selected repository during refresh and actions')
+}
+if (!source.includes('sourceControlRepositoryPaths: string[]')) {
+  throw new Error('source control must receive configured repository paths from the active workspace')
+}
+if (!source.includes("const sourceControlRepositoryPathsKey = sourceControlRepositoryPaths.join('\\u0000')")) {
+  throw new Error('source control must derive a stable repository configuration key')
+}
+if (!source.includes('sourceControlRepositoryPathsKey')) {
+  throw new Error('repository configuration changes must reload the repository list')
+}
+if (!workspacePanelSource.includes('sourceControlRepositoryPaths={sourceControlRepositoryPaths}')) {
+  throw new Error('WorkspacePanel must pass repository configuration to Source Control')
+}
+if (!appSource.includes('sourceControlRepositoryPaths={activeWorkspaceConfig.sourceControlRepositoryPaths}')) {
+  throw new Error('App must pass active repository configuration to WorkspacePanel')
 }
 const repositoryLoadEffectDependencies = source.match(/void loadRepositories\(\)\n  \}, \[([^\]]+)\]\)/)?.[1] ?? ''
 if (repositoryLoadEffectDependencies.includes('onOpenWorkspaceSettings')) {

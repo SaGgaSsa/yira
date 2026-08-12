@@ -5,6 +5,7 @@ import { buildSourceControlTree, type SourceControlTreeNode } from '@/utils/sour
 
 interface WorkspaceSourceControlProps {
   workspaceId: string
+  sourceControlRepositoryPaths: string[]
   sourceControlViewMode: SourceControlViewMode
   onWorkspaceUpdated: (workspace: Workspace) => void
   onOpenWorkspaceSettings: () => void
@@ -244,7 +245,7 @@ function CommitHistoryAccordion({ history, upstream, expanded, onToggle }: {
   )
 }
 
-export function WorkspaceSourceControl({ workspaceId, sourceControlViewMode, onWorkspaceUpdated, onOpenWorkspaceSettings }: WorkspaceSourceControlProps): React.ReactElement {
+export function WorkspaceSourceControl({ workspaceId, sourceControlRepositoryPaths, sourceControlViewMode, onWorkspaceUpdated, onOpenWorkspaceSettings }: WorkspaceSourceControlProps): React.ReactElement {
   const [repositories, setRepositories] = useState<GitRepository[]>([])
   const [repositoriesLoading, setRepositoriesLoading] = useState(true)
   const [activeRepositoryPath, setActiveRepositoryPathState] = useState<string | null>(null)
@@ -265,6 +266,7 @@ export function WorkspaceSourceControl({ workspaceId, sourceControlViewMode, onW
   const manualCommitsToggleRef = useRef(new Map<string, boolean>())
   const refreshVersionRef = useRef(0)
   const repositoryLoadVersionRef = useRef(0)
+  const sourceControlRepositoryPathsKey = sourceControlRepositoryPaths.join('\u0000')
   activeWorkspaceRef.current = workspaceId
 
   const setActiveRepositoryPath = useCallback((repositoryPath: string | null) => {
@@ -371,8 +373,11 @@ export function WorkspaceSourceControl({ workspaceId, sourceControlViewMode, onW
     setActionPending(false)
     setCommitMessage('')
     setRetryAction(null)
+  }, [setActiveRepositoryPath, workspaceId])
+
+  useEffect(() => {
     void loadRepositories()
-  }, [loadRepositories, setActiveRepositoryPath, workspaceId])
+  }, [loadRepositories, sourceControlRepositoryPathsKey])
 
   useEffect(() => {
     if (!activeRepositoryPath) return
