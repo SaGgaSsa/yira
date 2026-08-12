@@ -36,6 +36,7 @@ function workspaceToDraft(workspace: WorkspaceMetadata): WorkspaceDraft {
     remoteTerminal: workspace.config.remoteTerminal,
     agentProvider: workspace.config.agentProvider,
     agentProviders: workspace.config.agentProviders,
+    sourceControlRepositoryPaths: workspace.config.sourceControlRepositoryPaths,
     markedForRemoval: false,
     removalText: '',
   }
@@ -51,6 +52,7 @@ function draftToDialogValue(draft?: WorkspaceDraft): WorkspaceDialogValue {
     remoteTerminal: draft?.remoteTerminal ?? { host: '', user: '' },
     agentProvider: normalizeWorkspaceAgentProvider(draft?.agentProvider),
     agentProviders: normalizeAgentProvidersConfig(draft?.agentProviders ?? createDefaultAgentProvidersConfig()),
+    sourceControlRepositoryPaths: draft?.sourceControlRepositoryPaths ?? [],
   }
 }
 
@@ -64,6 +66,7 @@ function dialogValueToDraftValue(value: WorkspaceDialogValue): WorkspaceManageme
     remoteTerminal: value.remoteTerminal,
     agentProvider: value.agentProvider,
     agentProviders: value.agentProviders,
+    sourceControlRepositoryPaths: value.sourceControlRepositoryPaths,
   }
 }
 
@@ -117,6 +120,7 @@ export function WorkspaceManagementDialog({
         eyebrow: t('workspace.workspaceDraft'),
         confirmLabel: t('workspace.applyDraft'),
         typeEditable: false,
+        workspaceId: draft?.id,
         value: draftToDialogValue(draft ?? undefined),
       },
     })
@@ -150,6 +154,7 @@ export function WorkspaceManagementDialog({
         remoteTerminal: draft.remoteTerminal,
         agentProvider: draft.agentProvider,
         agentProviders: draft.agentProviders,
+        sourceControlRepositoryPaths: draft.sourceControlRepositoryPaths,
       })))
     } catch (err) {
       setError(err instanceof Error ? err.message : t('workspace.saveChangesFailed'))

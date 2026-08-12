@@ -725,6 +725,7 @@ export default function App(): React.ReactElement {
             remoteTerminal: { host: '', user: '' },
             agentProvider: undefined,
             agentProviders: createDefaultAgentProvidersConfig(),
+            sourceControlRepositoryPaths: [],
           },
         },
       })
@@ -958,6 +959,7 @@ export default function App(): React.ReactElement {
         eyebrow: t('workspace.workspaceSettings'),
         confirmLabel: t('workspace.saveWorkspace'),
         typeEditable: false,
+        workspaceId: workspace.id,
         value: {
           type: workspace.config.type,
           name: workspace.name,
@@ -967,6 +969,7 @@ export default function App(): React.ReactElement {
           remoteTerminal: workspace.config.remoteTerminal ?? { host: '', user: '' },
           agentProvider: workspace.config.agentProvider,
           agentProviders: workspace.config.agentProviders,
+          sourceControlRepositoryPaths: workspace.config.sourceControlRepositoryPaths,
         },
       },
     })
@@ -1512,6 +1515,7 @@ export default function App(): React.ReactElement {
         remoteTerminal: value.remoteTerminal,
         agentProvider: value.agentProvider,
         agentProviders: value.agentProviders,
+        sourceControlRepositoryPaths: value.sourceControlRepositoryPaths,
       })
       await refreshWorkspaceMetadata()
       setWorkspaceEditor(null)
@@ -1528,6 +1532,7 @@ export default function App(): React.ReactElement {
         remoteTerminal: value.remoteTerminal,
         agentProvider: value.agentProvider,
         agentProviders: value.agentProviders,
+        sourceControlRepositoryPaths: value.sourceControlRepositoryPaths,
       },
     })
     if (!updated) return
@@ -1586,6 +1591,7 @@ export default function App(): React.ReactElement {
             remoteTerminal: { host: '', user: '' },
             agentProvider: undefined,
             agentProviders: createDefaultAgentProvidersConfig(),
+            sourceControlRepositoryPaths: [],
           },
         },
       })
@@ -1619,6 +1625,7 @@ export default function App(): React.ReactElement {
           remoteTerminal: { host: '', user: '' },
           agentProvider: undefined,
           agentProviders: createDefaultAgentProvidersConfig(),
+          sourceControlRepositoryPaths: [],
         },
       },
     })
