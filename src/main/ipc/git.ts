@@ -61,7 +61,6 @@ async function getWorkspaceGitConfigWith(dependencies: GitIPCDependencies, works
 function toSafeRepositories(repositories: Awaited<ReturnType<typeof discoverGitRepositories>>): GitRepository[] {
   return repositories.map(({ relativePath, name }) => ({ relativePath, name }))
 }
-
 export function createGitIPCHandlers(dependencies: GitIPCDependencies): Record<string, GitIPCHandler> {
   const getConfig = (workspaceId: string): Promise<WorkspaceGitConfig> => getWorkspaceGitConfigWith(dependencies, workspaceId)
   const resolveRepository = async (workspaceId: string, repositoryPath: string): Promise<string> => {

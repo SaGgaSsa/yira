@@ -52,9 +52,9 @@ function historyResult(): GitCommitHistoryResult {
 
 test('registers and invokes discovery through the Git IPC boundary', async () => {
   const ipcMain = new FakeIpcMain()
-  const { createGitIPCHandlers } = loadGitIPC(ipcMain)
+  const { registerGitIPC } = loadGitIPC(ipcMain)
   const roots: unknown[] = []
-  const handlers = createGitIPCHandlers({
+  registerGitIPC(ipcMain, {
     getWorkspaceGitConfigById: async (workspaceId) => {
       assert.equal(workspaceId, 'workspace-a')
       return { rootFolderPath: '/workspace', sourceControlRepositoryPaths: ['.', 'packages/web'] }
@@ -71,7 +71,6 @@ test('registers and invokes discovery through the Git IPC boundary', async () =>
     commitGitChanges: async () => undefined,
     syncGitRepository: async () => undefined,
   })
-  for (const [channel, handler] of Object.entries(handlers)) ipcMain.handle(channel, handler)
 
   assert.deepEqual(await ipcMain.invoke('git:discoverRepositories', 'workspace-a'), [
     { relativePath: '.', name: 'workspace' },
