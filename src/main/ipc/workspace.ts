@@ -107,6 +107,18 @@ export async function getWorkspaceRootFolderById(workspaceId: string): Promise<s
   return config.workspaces.find(w => w.id === workspaceId)?.config.rootFolderPath ?? null
 }
 
+/** Returns only the Git settings needed by the main-process Git IPC handlers. */
+export async function getWorkspaceGitConfigById(workspaceId: string): Promise<Pick<WorkspaceConfig, 'rootFolderPath' | 'sourceControlRepositoryPaths'> | null> {
+  const config = await readConfig()
+  const workspace = config.workspaces.find(w => w.id === workspaceId)
+  if (!workspace) return null
+
+  return {
+    rootFolderPath: workspace.config.rootFolderPath,
+    sourceControlRepositoryPaths: workspace.config.sourceControlRepositoryPaths,
+  }
+}
+
 /** Returns the selected providers once per workspace; callers own deduplication. */
 export async function getConfiguredAgentProviders(): Promise<AgentProvider[]> {
   const config = await readConfig()

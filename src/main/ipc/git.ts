@@ -1,13 +1,35 @@
 import { ipcMain } from 'electron'
-import type { GitCommitHistoryResult, GitStatusResult } from '@shared/types'
+import type { GitCommitHistoryResult, GitRepository, GitStatusResult } from '@shared/types'
+import { discoverGitRepositories, resolveConfiguredGitRepository } from '../git/repositories'
 import { commitGitChanges, getGitCommitHistory, getGitStatus, stageGitFiles, syncGitRepository, unstageGitFiles } from '../git/runner'
-import { getWorkspaceRootFolderById } from './workspace'
+import { getWorkspaceGitConfigById } from './workspace'
+
+interface WorkspaceGitConfig {
+  rootPath: string
+  configuredRepositoryPaths: string[]
+}
+
+async function getWorkspaceGitConfig(workspaceId: string): Promise<WorkspaceGitConfig> {
+  if (typeof workspaceId !== 'string' || !workspaceId.trim()) throw new Error('Workspace is required')
+
+  const workspaceConfig = await getWorkspaceGitConfigById(workspaceId)
+  if (!workspaceConfig) throw new Error('Workspace is unavailable')
+  if (!workspaceConfig.rootFolderPath) throw new Error('Workspace root folder is unavailable')
+
+  return {
+    rootPath: workspaceConfig.rootFolderPath,
+    configuredRepositoryPaths: workspaceConfig.sourceControlRepositoryPaths,
+  }
+}
 
 async function getWorkspaceGitRoot(workspaceId: string): Promise<string> {
-  if (typeof workspaceId !== 'string' || !workspaceId) throw new Error('Workspace is required')
-  const rootPath = await getWorkspaceRootFolderById(workspaceId)
-  if (!rootPath) throw new Error('Workspace root folder is unavailable')
-  return rootPath
+  return (await getWorkspaceGitConfig(workspaceId)).rootPath
+}
+
+async function resolveWorkspaceGitRepository(workspaceId: string, repositoryPath: string): Promise<string> {
+  const { rootPath, configuredRepositoryPaths } = await getWorkspaceGitConfig(workspaceId)
+  const repository = await resolveConfiguredGitRepository(rootPath, configuredRepositoryPaths, repositoryPath)
+  return repository.absolutePath
 }
 
 function mutationPaths(relativePath: string, originalPath?: string): string[] {
@@ -16,10 +38,28 @@ function mutationPaths(relativePath: string, originalPath?: string): string[] {
   return originalPath && originalPath !== relativePath ? [relativePath, originalPath] : [relativePath]
 }
 
+function safeGitError(error: unknown): string {
+  const message = typeof error === 'string'
+    ? error.trim()
+    : error instanceof Error
+      ? error.message.trim()
+      : ''
+  if (!message || message.includes('/') || message.includes('\\') || /^[a-zA-Z]:/.test(message)) {
+    return 'Workspace root folder is unavailable'
+  }
+  return message
+}
+
 export function registerGitIPC(): void {
-  ipcMain.handle('git:status', async (_event, workspaceId: string): Promise<GitStatusResult> => {
+  ipcMain.handle('git:discoverRepositories', async (_event, workspaceId: string): Promise<GitRepository[]> => {
+    const repositories = await discoverGitRepositories(await getWorkspaceGitRoot(workspaceId))
+    return repositories.map(({ relativePath, name }) => ({ relativePath, name }))
+  })
+
+  ipcMain.handle('git:status', async (_event, workspaceId: string, repositoryPath: string): Promise<GitStatusResult> => {
     try {
-      return await getGitStatus(await getWorkspaceGitRoot(workspaceId))
+      const result = await getGitStatus(await resolveWorkspaceGitRepository(workspaceId, repositoryPath))
+      return result.error ? { ...result, error: safeGitError(result.error) } : result
     } catch (error) {
       return {
         isRepository: false,
@@ -28,37 +68,38 @@ export function registerGitIPC(): void {
         behind: 0,
         staged: [],
         unstaged: [],
-        error: error instanceof Error ? error.message : 'Workspace root folder is unavailable',
+        error: safeGitError(error),
       }
     }
   })
 
-  ipcMain.handle('git:history', async (_event, workspaceId: string): Promise<GitCommitHistoryResult> => {
+  ipcMain.handle('git:history', async (_event, workspaceId: string, repositoryPath: string): Promise<GitCommitHistoryResult> => {
     try {
-      return await getGitCommitHistory(await getWorkspaceGitRoot(workspaceId))
+      const result = await getGitCommitHistory(await resolveWorkspaceGitRepository(workspaceId, repositoryPath))
+      return result.error ? { ...result, error: safeGitError(result.error) } : result
     } catch (error) {
       return {
         outgoing: [],
         upstream: [],
         local: [],
-        error: error instanceof Error ? error.message : 'Workspace root folder is unavailable',
+        error: safeGitError(error),
       }
     }
   })
 
-  ipcMain.handle('git:stage', async (_event, workspaceId: string, relativePath: string, originalPath?: string) => {
-    await stageGitFiles(await getWorkspaceGitRoot(workspaceId), mutationPaths(relativePath, originalPath))
+  ipcMain.handle('git:stage', async (_event, workspaceId: string, repositoryPath: string, relativePath: string, originalPath?: string) => {
+    await stageGitFiles(await resolveWorkspaceGitRepository(workspaceId, repositoryPath), mutationPaths(relativePath, originalPath))
   })
 
-  ipcMain.handle('git:unstage', async (_event, workspaceId: string, relativePath: string, originalPath?: string) => {
-    await unstageGitFiles(await getWorkspaceGitRoot(workspaceId), mutationPaths(relativePath, originalPath))
+  ipcMain.handle('git:unstage', async (_event, workspaceId: string, repositoryPath: string, relativePath: string, originalPath?: string) => {
+    await unstageGitFiles(await resolveWorkspaceGitRepository(workspaceId, repositoryPath), mutationPaths(relativePath, originalPath))
   })
 
-  ipcMain.handle('git:commit', async (_event, workspaceId: string, message: string) => {
-    await commitGitChanges(await getWorkspaceGitRoot(workspaceId), message)
+  ipcMain.handle('git:commit', async (_event, workspaceId: string, repositoryPath: string, message: string) => {
+    await commitGitChanges(await resolveWorkspaceGitRepository(workspaceId, repositoryPath), message)
   })
 
-  ipcMain.handle('git:sync', async (_event, workspaceId: string) => {
-    await syncGitRepository(await getWorkspaceGitRoot(workspaceId))
+  ipcMain.handle('git:sync', async (_event, workspaceId: string, repositoryPath: string) => {
+    await syncGitRepository(await resolveWorkspaceGitRepository(workspaceId, repositoryPath))
   })
 }
