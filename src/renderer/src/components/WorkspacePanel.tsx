@@ -128,6 +128,7 @@ export function WorkspacePanel({
             workspaceId={workspaceId}
             sourceControlViewMode={sourceControlViewMode}
             onWorkspaceUpdated={onWorkspaceUpdated}
+            onOpenWorkspaceSettings={onOpenWorkspaceSettings}
           />
         )}
       </div>

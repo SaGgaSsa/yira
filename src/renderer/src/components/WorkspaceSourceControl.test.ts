@@ -9,11 +9,11 @@ for (const requiredLabel of ['Staged Changes', 'Changes']) {
 if (!source.includes('window.electron.git.status')) {
   throw new Error('source control must load status through the restricted Git bridge')
 }
-if (!source.includes('window.electron.git.history(workspaceId)')) {
+if (!source.includes('window.electron.git.history')) {
   throw new Error('source control must load commit history through the restricted Git bridge')
 }
 const refreshBody = source.match(/const refresh = useCallback\(async [\s\S]*?=> \{([\s\S]*?)\n  \}, \[workspaceId\]\)/)?.[1]
-if (!refreshBody?.includes('window.electron.git.status(workspaceId)') || !refreshBody.includes('window.electron.git.history(workspaceId)')) {
+if (!refreshBody?.includes('window.electron.git.status') || !refreshBody.includes('window.electron.git.history')) {
   throw new Error('every Source Control refresh must request both status and history')
 }
 if (!source.includes('Promise.allSettled')) {
@@ -82,18 +82,53 @@ if (!source.includes('manualCommitsToggleRef') || !source.includes('manualCommit
 if (!source.includes('preserveActionError') || !source.includes('await refresh({ preserveActionError:')) {
   throw new Error('mutation failures must refresh status/history without replacing the original error')
 }
-if (!source.includes('setRetryAction({ workspaceId: actionWorkspaceId, action })')) {
+if (!source.includes('setRetryAction({ workspaceId: actionWorkspaceId, repositoryPath: actionRepositoryPath, action })')) {
   throw new Error('retry actions must retain their originating workspace')
 }
-if (!source.includes('const currentRetryAction = retryAction?.workspaceId === workspaceId')) {
+if (!source.includes('const currentRetryAction = retryAction?.workspaceId === workspaceId && retryAction.repositoryPath === activeRepositoryPath')) {
   throw new Error('retry actions must be derived only for the active workspace')
 }
 if (!source.includes('retryAction.workspaceId !== workspaceId')) {
   throw new Error('retry handler must reject actions from another workspace')
 }
-if (!source.includes('const currentActionError = actionError?.workspaceId === workspaceId')) {
+if (!source.includes('const currentActionError = actionError?.workspaceId === workspaceId && actionError.repositoryPath === activeRepositoryPath')) {
   throw new Error('action errors must be scoped to the active workspace')
 }
 if (!source.includes('{currentActionError &&') || !source.includes('{currentRetryAction &&')) {
   throw new Error('stale workspace errors and retry controls must not render')
+}
+
+if (!source.includes('window.electron.workspace.getActive()')) {
+  throw new Error('source control must load the active workspace repository configuration')
+}
+if (!source.includes('window.electron.git.discoverRepositories(workspaceId)')) {
+  throw new Error('source control must discover repository names when it mounts')
+}
+if (!source.includes('sourceControlRepositoryPaths')) {
+  throw new Error('source control must use the configured repository paths')
+}
+if (!source.includes('sortRepositories(configuredRepositories)')) {
+  throw new Error('source control repositories must be ordered by name')
+}
+if (!source.includes('source-control-repository')) {
+  throw new Error('source control must render a repository selector')
+}
+if (!source.includes('No hay repositorios configurados')) {
+  throw new Error('source control must render the exact unconfigured state')
+}
+if (!source.includes('onOpenWorkspaceSettings')) {
+  throw new Error('unconfigured source control must offer workspace configuration')
+}
+for (const requiredRepositoryCall of [
+  'window.electron.git.status(workspaceId, repositoryPath)',
+  'window.electron.git.history(workspaceId, repositoryPath)',
+  'window.electron.git.stage(workspaceId, actionRepositoryPath',
+  'window.electron.git.unstage(workspaceId, actionRepositoryPath',
+  'window.electron.git.commit(workspaceId, actionRepositoryPath',
+  'window.electron.git.sync(workspaceId, actionRepositoryPath)',
+]) {
+  if (!source.includes(requiredRepositoryCall)) throw new Error(`source control must send the active repository path to ${requiredRepositoryCall}`)
+}
+if (!source.includes('setActiveRepositoryPath')) {
+  throw new Error('source control must retain the selected repository during refresh and actions')
 }
