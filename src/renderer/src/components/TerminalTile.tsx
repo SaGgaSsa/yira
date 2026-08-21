@@ -9,6 +9,7 @@ import { useSettingsStore } from '@/store/settingsStore'
 import { isTerminalInputAttended } from '@/utils/terminalAttention'
 import { buildTerminalStartupCommand } from '@/utils/terminalLaunch'
 import { createTerminalFitScheduler } from '@/utils/terminalFitScheduler'
+import { registerSynchronizedOutputRefresh } from '@/utils/terminalSynchronizedOutputRefresh'
 import { sanitizeTerminalReplayBuffer } from '@/utils/terminalReplaySanitizer'
 import { getTerminalContainerBackground, getXtermTheme } from '@/utils/terminalTheme'
 import { buildTerminalContextMenuItems } from '@/utils/terminalContextMenu'
@@ -104,6 +105,31 @@ export function registerTerminalInputFocusListener({
   return () => terminalInput?.removeEventListener('focus', handleFocus)
 }
 
+type RequestAnimationFrame = (callback: () => void) => number
+type CancelAnimationFrame = (handle: number) => void
+
+export function scheduleWorkspaceActivationFit(
+  fit: () => void,
+  requestFrame: RequestAnimationFrame = (callback) => window.requestAnimationFrame(callback),
+  cancelFrame: CancelAnimationFrame = (handle) => window.cancelAnimationFrame(handle),
+): () => void {
+  let preparationFrame: number | null = null
+  let stabilizationFrame: number | null = null
+
+  preparationFrame = requestFrame(() => {
+    preparationFrame = null
+    stabilizationFrame = requestFrame(() => {
+      stabilizationFrame = null
+      fit()
+    })
+  })
+
+  return () => {
+    if (preparationFrame !== null) cancelFrame(preparationFrame)
+    if (stabilizationFrame !== null) cancelFrame(stabilizationFrame)
+  }
+}
+
 function applyTerminalPadding(container: HTMLElement | null, edgeToEdge: boolean): void {
   const xtermEl = container?.querySelector('.xterm') as HTMLElement | null
   if (!xtermEl) return
@@ -121,6 +147,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
   const fitRef = useRef<FitAddon | null>(null)
   const fitSchedulerRef = useRef(createTerminalFitScheduler())
   const isVisibleRef = useRef(isVisible)
+  const activeWorkspaceId = useCanvasStore((s) => s.activeWorkspaceId)
   const attentionEnabled = useSettingsStore((s) => s.terminal.attentionEnabled)
   const attentionEnabledRef = useRef(attentionEnabled)
   const notificationsMutedRef = useRef(tile.notificationsMuted === true)
@@ -226,6 +253,13 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
 
     termRef.current = term
     fitRef.current = fitAddon
+
+    const disposeSynchronizedOutputRefresh = registerSynchronizedOutputRefresh({
+      parser: term.parser,
+      refresh: (start, end) => term.refresh(start, end),
+      getRows: () => term.rows,
+      isVisible: () => isVisibleRef.current,
+    })
 
     term.attachCustomKeyEventHandler((event) => {
       if (!isTerminalCopyShortcut(event)) return true
@@ -344,6 +378,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
       fitSchedulerRef.current.cancelPending()
       ro.disconnect()
       removeTerminalInputFocusListener()
+      disposeSynchronizedOutputRefresh()
       window.removeEventListener('focus', clearAttentionIfAttended)
       ptyUnsub?.()
       agentAlertUnsub?.()
@@ -373,6 +408,8 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
     applyTerminalPadding(containerRef.current, edgeToEdge)
     doFit()
   }, [edgeToEdge, doFit, isVisible])
+
+  useEffect(() => scheduleWorkspaceActivationFit(doFit), [activeWorkspaceId, doFit])
 
   // Re-fit on width/height changes
   useEffect(() => {
