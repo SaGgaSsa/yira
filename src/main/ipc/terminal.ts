@@ -22,6 +22,7 @@ import {
   type ManagedTerminalSession,
   type TerminalShutdownResult,
 } from '../terminalSessions'
+import { DeferredTerminalStartupCommand } from '../terminalStartupCommand'
 
 // node-pty must be required (not imported) due to native module ESM issues
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -221,6 +222,7 @@ export function registerTerminalIPC(): void {
         }
         : undefined,
     }
+    let startupCommand: DeferredTerminalStartupCommand | undefined
 
     const agentLifecycle = agentLaunch
       ? createAgentTerminalLifecycle({
@@ -239,6 +241,7 @@ export function registerTerminalIPC(): void {
         if (cleanedUp) return
         cleanedUp = true
         session.agentLifecycle?.onExit()
+        startupCommand?.dispose()
         agentAlertBridge.unregisterTerminal(runtimeTileId)
         agentAlerts.clearOnDestroy(runtimeTileId)
         session.listeners.clear()
@@ -274,6 +277,12 @@ export function registerTerminalIPC(): void {
       throw error
     }
     agentExitGate?.markRegistered()
+    if (!isRemoteSsh && !isAgent && options.initialCommand?.trim()) {
+      startupCommand = new DeferredTerminalStartupCommand({
+        command: options.initialCommand,
+        write: (data) => term.write(data),
+      })
+    }
 
     // Clean up listeners when renderer is destroyed
     event.sender.once('destroyed', () => {
@@ -281,6 +290,7 @@ export function registerTerminalIPC(): void {
     })
 
     term.onData((data: string) => {
+      startupCommand?.onOutput(data)
       session.buffer = (session.buffer + data).slice(-500000)
       for (const listener of [...session.listeners]) {
         try {
@@ -303,10 +313,6 @@ export function registerTerminalIPC(): void {
 
     if (historySetup?.prependCommand) {
       term.write(`${historySetup.prependCommand}\r`)
-    }
-
-    if (!isRemoteSsh && !isAgent && options.initialCommand?.trim()) {
-      term.write(`${options.initialCommand.trim()}\r`)
     }
 
     return { cols: 80, rows: 24, buffer: '' }

@@ -3,6 +3,9 @@ import { readFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
+import { setTimeout as delay } from 'node:timers/promises'
+
+import { DeferredTerminalStartupCommand } from '../terminalStartupCommand'
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
 
@@ -48,4 +51,41 @@ test('reattaches existing sessions before rejecting new sessions during shutdown
   assert.ok(existingIndex >= 0, 'terminal:create must look up an existing session')
   assert.ok(rejectionIndex > existingIndex, 'existing-session lookup must precede shutdown rejection')
   assert.ok(gateIndex >= 0 && gateIndex < spawnIndex, 'shutdown gate must remain before pty.spawn')
+})
+
+test('writes a startup command once after shell output becomes quiet', async () => {
+  const writes: string[] = []
+  const command = new DeferredTerminalStartupCommand({
+    command: 'npm run dev',
+    write: (data) => writes.push(data),
+    quietPeriodMs: 10,
+    fallbackMs: 100,
+  })
+
+  command.onOutput('loading profile')
+  await delay(5)
+  command.onOutput('prompt')
+  await delay(5)
+  assert.deepEqual(writes, [])
+
+  await delay(10)
+  assert.deepEqual(writes, ['npm run dev\r'])
+
+  command.onOutput('later output')
+  await delay(15)
+  assert.deepEqual(writes, ['npm run dev\r'])
+})
+
+test('writes a startup command after the fallback when the shell stays silent', async () => {
+  const writes: string[] = []
+  const command = new DeferredTerminalStartupCommand({
+    command: 'pwd',
+    write: (data) => writes.push(data),
+    quietPeriodMs: 5,
+    fallbackMs: 10,
+  })
+
+  await delay(15)
+
+  assert.deepEqual(writes, ['pwd\r'])
 })
