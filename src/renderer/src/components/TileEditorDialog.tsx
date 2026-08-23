@@ -96,11 +96,16 @@ export function TileEditorDialog({ request, onCancel, onConfirm }: TileEditorDia
 
   return createPortal(
     <div className="fixed inset-0 z-[10035] flex items-center justify-center bg-black/80">
-      <div className="w-[620px] max-h-[86vh] max-w-[calc(100vw-32px)] overflow-hidden rounded-[24px] border border-border-visible bg-bg-secondary shadow-2xl">
+      <div
+        className="w-[620px] max-h-[86vh] max-w-[calc(100vw-32px)] overflow-hidden rounded-[24px] border border-border-visible bg-bg-secondary shadow-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="tile-editor-title"
+      >
         <div className="flex items-center justify-between gap-4 border-b border-border px-6 py-5">
           <div className="min-w-0">
             <div className="nd-label text-text-secondary">Tile Settings</div>
-            <h2 className="mt-2 text-xl text-text-display">{request.title}</h2>
+            <h2 id="tile-editor-title" className="mt-2 text-xl text-text-display">{request.title}</h2>
           </div>
           <button
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border-visible text-text-secondary transition-colors hover:text-text-display"

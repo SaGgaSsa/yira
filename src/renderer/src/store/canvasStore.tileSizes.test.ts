@@ -43,6 +43,35 @@ const state: CanvasState = {
 
 useCanvasStore.getState().restoreState(state)
 
+useCanvasStore.getState().updateTile('terminal', {
+  label: 'Development',
+  startupCommand: 'npm run dev',
+  notificationsMuted: true,
+})
+const configuredTerminal = useCanvasStore.getState().tiles.find((tile) => tile.id === 'terminal')
+if (
+  configuredTerminal?.label !== 'Development' ||
+  configuredTerminal.startupCommand !== 'npm run dev' ||
+  configuredTerminal.notificationsMuted !== true
+) {
+  throw new Error('tile settings must update every configurable terminal field')
+}
+
+useCanvasStore.getState().updateTile('terminal', {
+  label: undefined,
+  startupCommand: undefined,
+  notificationsMuted: undefined,
+})
+const clearedTerminal = useCanvasStore.getState().tiles.find((tile) => tile.id === 'terminal')
+if (
+  !clearedTerminal ||
+  clearedTerminal.label !== undefined ||
+  clearedTerminal.startupCommand !== undefined ||
+  clearedTerminal.notificationsMuted !== undefined
+) {
+  throw new Error('tile settings must clear optional terminal fields')
+}
+
 const expected = new Map([
   ['terminal', { width: 900, height: 400 }],
   ['note', { width: 900, height: 800 }],

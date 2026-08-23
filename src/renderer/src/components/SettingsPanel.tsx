@@ -3,10 +3,11 @@ import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { X, Monitor, Moon, Sun, Type, Grid3X3, Globe, Code2, Info, RefreshCw, Download, LayoutGrid, Keyboard, Terminal } from 'lucide-react'
-import { useSettingsStore } from '@/store/settingsStore'
+import { createUserSettingsDraft, useSettingsStore } from '@/store/settingsStore'
 import { useUpdateStore } from '@/store/updateStore'
 import { SHORTCUT_CATALOG } from '@/utils/shortcutCatalog'
-import type { UpdateState } from '@shared/types'
+import type { UpdateState, UserSettings } from '@shared/types'
+import { DEFAULT_USER_SETTINGS } from '@shared/types'
 import type { TerminalThemeId } from '@shared/terminalThemes'
 import { TERMINAL_THEMES } from '@shared/terminalThemes'
 import { MAX_FONT_SIZE_PX, MIN_FONT_SIZE_PX } from '@shared/userSettings'
@@ -102,36 +103,64 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
   const { t } = useTranslation()
   const [activeSection, setActiveSection] = useState<SettingsSectionId>('appearance')
   const [agentHookMessage, setAgentHookMessage] = useState('')
-  const language = useSettingsStore((s) => s.language)
-  const appearance = useSettingsStore((s) => s.appearance)
-  const interfaceFontSizePx = useSettingsStore((s) => s.interfaceFontSizePx)
-  const tileFontSizePx = useSettingsStore((s) => s.tileFontSizePx)
-  const showGrid = useSettingsStore((s) => s.showGrid)
-  const snapToGrid = useSettingsStore((s) => s.snapToGrid)
-  const gridSize = useSettingsStore((s) => s.gridSize)
-  const updateDiagnosticsEnabled = useSettingsStore((s) => s.updateDiagnosticsEnabled)
-  const browserHomeUrl = useSettingsStore((s) => s.browser.homeUrl)
-  const terminalAttentionEnabled = useSettingsStore((s) => s.terminal.attentionEnabled)
-  const agentAlertsEnabled = useSettingsStore((s) => s.terminal.agentAlertsEnabled)
-  const terminalThemeId = useSettingsStore((s) => s.terminal.themeId)
-  const attentionDelayEnabled = useSettingsStore((s) => s.notifications.attentionDelayEnabled)
-  const tileCreationAvailability = useSettingsStore((s) => s.tiles.creationAvailability)
-  const groupsEnabled = useSettingsStore((s) => s.groups.enabled)
-  const setAppearance = useSettingsStore((s) => s.setAppearance)
-  const setLanguage = useSettingsStore((s) => s.setLanguage)
-  const setInterfaceFontSizePx = useSettingsStore((s) => s.setInterfaceFontSizePx)
-  const setTileFontSizePx = useSettingsStore((s) => s.setTileFontSizePx)
-  const setShowGrid = useSettingsStore((s) => s.setShowGrid)
-  const setSnapToGrid = useSettingsStore((s) => s.setSnapToGrid)
-  const setGridSize = useSettingsStore((s) => s.setGridSize)
-  const setUpdateDiagnosticsEnabled = useSettingsStore((s) => s.setUpdateDiagnosticsEnabled)
-  const setBrowserHomeUrl = useSettingsStore((s) => s.setBrowserHomeUrl)
-  const setTerminalAttentionEnabled = useSettingsStore((s) => s.setTerminalAttentionEnabled)
-  const setAgentAlertsEnabled = useSettingsStore((s) => s.setAgentAlertsEnabled)
-  const setTerminalThemeId = useSettingsStore((s) => s.setTerminalThemeId)
-  const setNotificationAttentionDelayEnabled = useSettingsStore((s) => s.setNotificationAttentionDelayEnabled)
-  const setTileCreationAvailable = useSettingsStore((s) => s.setTileCreationAvailable)
-  const setGroupsEnabled = useSettingsStore((s) => s.setGroupsEnabled)
+  const [draft, setDraft] = useState<UserSettings>(() => createUserSettingsDraft(useSettingsStore.getState()))
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
+  const applySettings = useSettingsStore((s) => s.applySettings)
+  const language = draft.language
+  const appearance = draft.appearance
+  const interfaceFontSizePx = draft.interfaceFontSizePx
+  const tileFontSizePx = draft.tileFontSizePx
+  const showGrid = draft.showGrid
+  const snapToGrid = draft.snapToGrid
+  const gridSize = draft.gridSize
+  const updateDiagnosticsEnabled = draft.updateDiagnosticsEnabled
+  const browserHomeUrl = draft.browser.homeUrl
+  const terminalAttentionEnabled = draft.terminal.attentionEnabled
+  const agentAlertsEnabled = draft.terminal.agentAlertsEnabled
+  const terminalThemeId = draft.terminal.themeId
+  const attentionDelayEnabled = draft.notifications.attentionDelayEnabled
+  const tileCreationAvailability = draft.tiles.creationAvailability
+  const groupsEnabled = draft.groups.enabled
+  const setAppearance = (appearance: UserSettings['appearance']) => setDraft((current) => ({ ...current, appearance }))
+  const setLanguage = (language: UserSettings['language']) => setDraft((current) => ({ ...current, language }))
+  const setInterfaceFontSizePx = (interfaceFontSizePx: number) => setDraft((current) => ({ ...current, interfaceFontSizePx }))
+  const setTileFontSizePx = (tileFontSizePx: number) => setDraft((current) => ({ ...current, tileFontSizePx }))
+  const setShowGrid = (showGrid: boolean) => setDraft((current) => ({ ...current, showGrid }))
+  const setSnapToGrid = (snapToGrid: boolean) => setDraft((current) => ({ ...current, snapToGrid }))
+  const setGridSize = (gridSize: number) => setDraft((current) => ({
+    ...current,
+    gridSize: Math.max(8, Math.min(80, Math.round(gridSize))),
+  }))
+  const setUpdateDiagnosticsEnabled = (updateDiagnosticsEnabled: boolean) => setDraft((current) => ({ ...current, updateDiagnosticsEnabled }))
+  const setBrowserHomeUrl = (homeUrl: string) => setDraft((current) => ({ ...current, browser: { homeUrl } }))
+  const setTerminalAttentionEnabled = (attentionEnabled: boolean) => setDraft((current) => ({
+    ...current,
+    terminal: { ...current.terminal, attentionEnabled },
+  }))
+  const setAgentAlertsEnabled = (agentAlertsEnabled: boolean) => setDraft((current) => ({
+    ...current,
+    terminal: { ...current.terminal, agentAlertsEnabled },
+  }))
+  const setTerminalThemeId = (themeId: TerminalThemeId) => setDraft((current) => ({
+    ...current,
+    terminal: { ...current.terminal, themeId },
+  }))
+  const setNotificationAttentionDelayEnabled = (attentionDelayEnabled: boolean) => setDraft((current) => ({
+    ...current,
+    notifications: { attentionDelayEnabled },
+  }))
+  const setTileCreationAvailable = (type: keyof UserSettings['tiles']['creationAvailability'], available: boolean) => setDraft((current) => ({
+    ...current,
+    tiles: {
+      creationAvailability: {
+        ...DEFAULT_USER_SETTINGS.tiles.creationAvailability,
+        ...current.tiles.creationAvailability,
+        [type]: available,
+      },
+    },
+  }))
+  const setGroupsEnabled = (enabled: boolean) => setDraft((current) => ({ ...current, groups: { enabled } }))
   const currentVersion = useUpdateStore((s) => s.currentVersion)
   const availableVersion = useUpdateStore((s) => s.availableVersion)
   const updateStatus = useUpdateStore((s) => s.status)
@@ -156,23 +185,36 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
   useEffect(() => {
     if (!open) return
     setActiveSection(initialSection)
+    setDraft(createUserSettingsDraft(useSettingsStore.getState()))
+    setSaveError('')
   }, [initialSection, open])
+
+  const handleCancel = useCallback(() => {
+    if (saving) return
+    onClose()
+  }, [onClose, saving])
+
+  const handleSave = useCallback(async () => {
+    if (saving) return
+    setSaving(true)
+    setSaveError('')
+    try {
+      await applySettings(draft)
+      onClose()
+    } catch (error) {
+      console.error('[SettingsPanel] Failed to save settings:', error)
+      setSaveError(t('common.error'))
+    } finally {
+      setSaving(false)
+    }
+  }, [applySettings, draft, onClose, saving, t])
 
   const handleBackdropClick = useCallback(
     (e: React.MouseEvent) => {
-      if (e.target === e.currentTarget) onClose()
+      if (e.target === e.currentTarget) handleCancel()
     },
-    [onClose],
+    [handleCancel],
   )
-
-  useEffect(() => {
-    if (!open) return
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [open, onClose])
 
   if (!open) return null as unknown as React.ReactElement
 
@@ -610,15 +652,29 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
 
   return createPortal(
     <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80" onClick={handleBackdropClick}>
-      <div className="flex h-[86vh] w-[1040px] max-w-[calc(100vw-32px)] flex-col overflow-hidden rounded-[24px] border border-border-visible bg-bg-secondary">
+      <div
+        className="flex h-[86vh] w-[1040px] max-w-[calc(100vw-32px)] flex-col overflow-hidden rounded-[24px] border border-border-visible bg-bg-secondary"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="general-settings-title"
+        tabIndex={-1}
+        autoFocus
+        onKeyDown={(event) => {
+          if (event.key !== 'Escape') return
+          event.preventDefault()
+          event.stopPropagation()
+          handleCancel()
+        }}
+      >
         <div className="flex items-center justify-between border-b border-border px-6 py-5">
           <div>
             <div className="nd-label text-text-secondary">{t('settings.settingsMatrix')}</div>
-            <h2 className="mt-2 text-xl text-text-display">{t('settings.systemControls')}</h2>
+            <h2 id="general-settings-title" className="mt-2 text-xl text-text-display">{t('settings.systemControls')}</h2>
           </div>
           <button
             className="flex h-10 w-10 items-center justify-center rounded-full border border-border-visible text-text-secondary transition-colors hover:text-text-display"
-            onClick={onClose}
+            onClick={handleCancel}
+            disabled={saving}
           >
             <X size={16} />
           </button>
@@ -660,6 +716,24 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
               {renderActiveSection()}
             </div>
           </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-3 border-t border-border px-6 py-4">
+          {saveError && <span className="mr-auto text-sm text-red-400">{saveError}</span>}
+          <button
+            className="rounded-full border border-border-visible px-4 py-2 text-sm text-text-secondary transition-colors hover:border-text-secondary hover:text-text-display disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={handleCancel}
+            disabled={saving}
+          >
+            {t('common.cancel')}
+          </button>
+          <button
+            className="rounded-full border border-text-display px-4 py-2 text-sm text-text-display transition-colors hover:bg-bg-tertiary disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={() => void handleSave()}
+            disabled={saving}
+          >
+            {t('common.save')}
+          </button>
         </div>
       </div>
     </div>,

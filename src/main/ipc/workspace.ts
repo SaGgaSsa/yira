@@ -186,6 +186,9 @@ export function updateWorkspace(workspace: Workspace, patch: WorkspaceUpdatePatc
   const hasRepositoryPathsPatch = patch.config !== undefined
     && patch.config !== null
     && Object.prototype.hasOwnProperty.call(patch.config, 'sourceControlRepositoryPaths')
+  const hasInitialCommandPatch = patch.config !== undefined
+    && patch.config !== null
+    && Object.prototype.hasOwnProperty.call(patch.config, 'initialCommand')
   const nextRootFolderPath = normalizeWorkspaceRootFolderPath(
     hasRootFolderPathPatch ? patch.config?.rootFolderPath : workspace.config.rootFolderPath,
   )
@@ -200,7 +203,7 @@ export function updateWorkspace(workspace: Workspace, patch: WorkspaceUpdatePatc
       : rootFolderPathChanged ? [] : workspace.config.sourceControlRepositoryPaths,
     workspacePanelOpen: patch.config?.workspacePanelOpen ?? workspace.config.workspacePanelOpen,
     sourceControlViewMode: patch.config?.sourceControlViewMode ?? workspace.config.sourceControlViewMode,
-    initialCommand: patch.config?.initialCommand ?? workspace.config.initialCommand,
+    initialCommand: hasInitialCommandPatch ? patch.config?.initialCommand : workspace.config.initialCommand,
     terminalHistoryEnabled: patch.config?.terminalHistoryEnabled ?? workspace.config.terminalHistoryEnabled,
     remoteTerminal: patch.config?.remoteTerminal ?? workspace.config.remoteTerminal,
     agentProvider: hasAgentProviderPatch ? patch.config?.agentProvider : workspace.config.agentProvider,

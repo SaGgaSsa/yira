@@ -67,6 +67,63 @@ test('returns before handling Escape when the event starts inside a terminal', (
   assert.deepEqual(calls, [])
 })
 
+test('does not close an underlying picker when a dialog handled Escape', () => {
+  const calls: string[] = []
+
+  handleKeyboardShortcut(
+    keyboardEvent({ defaultPrevented: true }),
+    createDeps({
+      onClosePicker: () => calls.push('closePicker'),
+      focusTile: () => calls.push('focusTile'),
+      selectTiles: () => calls.push('selectTiles'),
+    }),
+  )
+
+  assert.deepEqual(calls, [])
+})
+
+test('does not handle Escape globally when focus is inside a dialog', () => {
+  const previousHTMLElement = globalThis.HTMLElement
+
+  class FakeHTMLElement {
+    tagName = 'INPUT'
+    isContentEditable = false
+
+    closest(selector: string): object | null {
+      return selector === '[role="dialog"]' ? {} : null
+    }
+
+    getAttribute(): string | null {
+      return null
+    }
+  }
+
+  Object.defineProperty(globalThis, 'HTMLElement', {
+    configurable: true,
+    value: FakeHTMLElement,
+  })
+
+  try {
+    const calls: string[] = []
+
+    handleKeyboardShortcut(
+      keyboardEvent({ target: new FakeHTMLElement() as unknown as EventTarget }),
+      createDeps({
+        onClosePicker: () => calls.push('closePicker'),
+        focusTile: () => calls.push('focusTile'),
+        selectTiles: () => calls.push('selectTiles'),
+      }),
+    )
+
+    assert.deepEqual(calls, [])
+  } finally {
+    Object.defineProperty(globalThis, 'HTMLElement', {
+      configurable: true,
+      value: previousHTMLElement,
+    })
+  }
+})
+
 test('uses the resolver to focus the left split panel', () => {
   const calls: string[] = []
   let nextState: ShortcutDeps['splitViewState'] = splitViewState
@@ -94,6 +151,10 @@ test('keeps editable controls out of tab navigation', () => {
   class FakeHTMLElement {
     tagName = 'INPUT'
     isContentEditable = false
+
+    closest(): null {
+      return null
+    }
 
     getAttribute(): string | null {
       return null

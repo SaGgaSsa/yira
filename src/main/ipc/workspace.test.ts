@@ -40,6 +40,23 @@ test('persists workspace agent provider through load, create, and update normali
   assert.equal(cleared.config.agentProvider, undefined)
 })
 
+test('clears an initial command when the update explicitly omits its value', () => {
+  const existing = workspace('clear-initial-command')
+  existing.config = normalizeWorkspaceConfig({
+    initialCommand: 'npm run dev',
+    terminalHistoryEnabled: false,
+    remoteTerminal: { host: 'dev.example.test', user: 'dev' },
+  })
+
+  const updated = updateWorkspace(existing, {
+    config: { initialCommand: undefined },
+  })
+
+  assert.equal(updated.config.initialCommand, undefined)
+  assert.equal(updated.config.terminalHistoryEnabled, false)
+  assert.deepEqual(updated.config.remoteTerminal, { host: 'dev.example.test', user: 'dev' })
+})
+
 test('normalizes selected repositories through workspace creation and update', () => {
   const created = createWorkspaceFromInput({
     name: 'Created',

@@ -25,11 +25,33 @@ export interface SettingsState extends UserSettings {
   setNotificationAttentionDelayEnabled: (enabled: boolean) => void
   setTileCreationAvailable: (type: ConfigurableTileCreationType, available: boolean) => void
   setGroupsEnabled: (enabled: boolean) => void
+  applySettings: (settings: UserSettings) => Promise<void>
   loadSettings: () => Promise<void>
   saveSettings: () => void
 }
 
 const autosaveTimer = { current: null as ReturnType<typeof setTimeout> | null }
+
+export function createUserSettingsDraft(settings: UserSettings): UserSettings {
+  return {
+    language: settings.language,
+    appearance: settings.appearance,
+    interfaceFontSizePx: settings.interfaceFontSizePx,
+    tileFontSizePx: settings.tileFontSizePx,
+    showGrid: settings.showGrid,
+    snapToGrid: settings.snapToGrid,
+    gridSize: settings.gridSize,
+    updateDiagnosticsEnabled: settings.updateDiagnosticsEnabled,
+    updateDiagnosticsMigrationComplete: settings.updateDiagnosticsMigrationComplete,
+    browser: { ...settings.browser },
+    terminal: { ...settings.terminal },
+    notifications: { ...settings.notifications },
+    tiles: {
+      creationAvailability: { ...settings.tiles.creationAvailability },
+    },
+    groups: { ...settings.groups },
+  }
+}
 
 function scheduleSave() {
   if (autosaveTimer.current) clearTimeout(autosaveTimer.current)
@@ -152,6 +174,29 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setGroupsEnabled: (enabled) => {
     set((state) => ({ groups: { ...state.groups, enabled } }))
     scheduleSave()
+  },
+
+  applySettings: async (settings) => {
+    const normalized = normalizeUserSettings({
+      ...settings,
+      browser: {
+        homeUrl: settings.browser.homeUrl.trim() || DEFAULT_USER_SETTINGS.browser.homeUrl,
+      },
+    })
+
+    await window.electron.settings.save(normalized)
+    set({
+      ...normalized,
+      browser: { ...normalized.browser },
+      terminal: { ...normalized.terminal },
+      notifications: { ...normalized.notifications },
+      tiles: {
+        creationAvailability: { ...normalized.tiles.creationAvailability },
+      },
+      groups: { ...normalized.groups },
+    })
+    await i18n.changeLanguage(normalized.language)
+    void window.electron.terminal.setAgentAlertsEnabled(normalized.terminal.agentAlertsEnabled)
   },
 
   loadSettings: async () => {

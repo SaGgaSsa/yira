@@ -36,7 +36,15 @@ function isEditableShortcutTarget(target: EventTarget | null): boolean {
   )
 }
 
+function isDialogShortcutTarget(target: EventTarget | null): boolean {
+  if (typeof HTMLElement === 'undefined' || !(target instanceof HTMLElement)) return false
+
+  return target.closest('[role="dialog"]') !== null
+}
+
 export function handleKeyboardShortcut(e: KeyboardEvent, deps: UseKeyboardShortcutsDeps): void {
+  if (e.defaultPrevented) return
+
   const {
     tiles,
     focusedTileId,
@@ -52,6 +60,7 @@ export function handleKeyboardShortcut(e: KeyboardEvent, deps: UseKeyboardShortc
   } = deps
 
   if (isTerminalShortcutTarget(e.target)) return
+  if (isDialogShortcutTarget(e.target)) return
 
   const isEditableTarget = isEditableShortcutTarget(e.target)
   const shortcut = resolveKeyboardShortcut(e)
