@@ -46,6 +46,7 @@ interface ResizeDragState {
 
 interface MoveDragState {
   pointerId: number
+  pointerCaptureTarget: Element
   sourceTileId: string
   pointerX: number
   pointerY: number
@@ -57,6 +58,17 @@ interface LastMoveUpdate {
   timestamp: number
   pendingAction: PendingGridDragAction
   targetRect: GridDropRect | null
+}
+
+function releaseMovePointerCapture(drag: MoveDragState | null): void {
+  if (!drag) return
+
+  try {
+    if (!drag.pointerCaptureTarget.hasPointerCapture(drag.pointerId)) return
+    drag.pointerCaptureTarget.releasePointerCapture(drag.pointerId)
+  } catch {
+    // The element can lose capture or be detached before cleanup runs.
+  }
 }
 
 function getTileTitle(tile: TileState, terminalTitles: Record<string, string>): string {
@@ -98,6 +110,7 @@ export function GridView({
   const moveDragRef = useRef<MoveDragState | null>(null)
   const lastMoveUpdateRef = useRef<LastMoveUpdate | null>(null)
   const [moveDrag, setMoveDrag] = useState<MoveDragState | null>(null)
+  const hasMoveDrag = moveDrag !== null
   const tilesById = useMemo(() => new Map(tiles.map((tile) => [tile.id, tile])), [tiles])
   const draggedTileId = moveDrag?.sourceTileId ?? null
   const previewRect = moveDrag
@@ -112,6 +125,7 @@ export function GridView({
     rootNodeRef.current = rootNode
     if (!rootChanged || !moveDragRef.current) return
 
+    releaseMovePointerCapture(moveDragRef.current)
     moveDragRef.current = null
     lastMoveUpdateRef.current = null
     setMoveDrag(null)
@@ -206,6 +220,7 @@ export function GridView({
   }, [])
 
   const clearMoveDrag = useCallback(() => {
+    releaseMovePointerCapture(moveDragRef.current)
     moveDragRef.current = null
     lastMoveUpdateRef.current = null
     setMoveDrag(null)
@@ -217,12 +232,14 @@ export function GridView({
     event.stopPropagation()
     const nextDrag: MoveDragState = {
       pointerId: event.pointerId,
+      pointerCaptureTarget: event.currentTarget,
       sourceTileId: tileId,
       pointerX: event.clientX,
       pointerY: event.clientY,
       pendingAction: { type: 'none' },
       targetRect: null,
     }
+    event.currentTarget.setPointerCapture(event.pointerId)
     moveDragRef.current = nextDrag
     lastMoveUpdateRef.current = {
       timestamp: performance.now(),
@@ -234,7 +251,7 @@ export function GridView({
   }, [onFocusTile])
 
   useEffect(() => {
-    if (!moveDrag) return
+    if (!hasMoveDrag) return
 
     const handlePointerMove = (event: PointerEvent) => {
       updateMoveDrag(event)
@@ -271,8 +288,9 @@ export function GridView({
       window.removeEventListener('pointermove', handlePointerMove)
       window.removeEventListener('pointerup', handlePointerUp)
       window.removeEventListener('pointercancel', handlePointerCancel)
+      releaseMovePointerCapture(moveDragRef.current)
     }
-  }, [clearMoveDrag, moveDrag, onSetRootNode, updateMoveDrag])
+  }, [clearMoveDrag, hasMoveDrag, onSetRootNode, updateMoveDrag])
 
   const renderNode = (node: GridLayoutNode): React.ReactElement | null => {
     if (node.type === 'leaf') {
