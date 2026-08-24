@@ -27,7 +27,7 @@ import { useTheme } from './hooks/useTheme'
 import { useFontSize } from './hooks/useFontSize'
 import { useUpdateStore } from './store/updateStore'
 import { findMergeTargetGroup, getGroupingBlockedReason } from './utils/grouping'
-import { GRID_MAX_TILES, GROUP_COLOR_ORDER, getDefaultTileSize, type AgentUsageSnapshot, type BoardState, type BoardTask, type TileState, type CanvasState, type GridWorkspaceState, type Workspace, type WorkspaceMetadata, type TileGroup, type ViewMode, type SplitPanelId, type SplitViewState, type WorkspaceManagementEntry, type WorkspaceType } from '@shared/types'
+import { GRID_MAX_TILES, GROUP_COLOR_ORDER, getDefaultTileSize, type AgentUsageSnapshot, type BoardState, type BoardTask, type FileTileOpenOptions, type TileState, type CanvasState, type GridWorkspaceState, type Workspace, type WorkspaceMetadata, type TileGroup, type ViewMode, type SplitPanelId, type SplitViewState, type WorkspaceManagementEntry, type WorkspaceType } from '@shared/types'
 import { createDefaultAgentProvidersConfig } from '@shared/workspaceConfig'
 import { createEmptyGridWorkspaceState, normalizeGridWorkspaceState } from '@shared/gridWorkspaceState'
 import {
@@ -1063,7 +1063,7 @@ export default function App(): React.ReactElement {
     })
   }, [])
 
-  const openFileTile = useCallback(async (relativePath: string) => {
+  const openFileTile = useCallback(async (relativePath: string, options: FileTileOpenOptions = {}) => {
     const path = relativePath.trim()
     if (!workspaceRootPath || !path) throw new Error('A workspace file path is required')
 
@@ -1091,6 +1091,7 @@ export default function App(): React.ReactElement {
       label: deriveFileTileTitle(path),
       filePath: path,
       filePreview: true,
+      ...(options.markdownView ? { fileMarkdownView: options.markdownView } : {}),
     }
 
     const initialPlan = planFileTileOpen(initialState.tiles, proposed)
@@ -1145,10 +1146,12 @@ export default function App(): React.ReactElement {
     makeOpenedFileVisible(plan.tile.id)
   }, [makeOpenedFileVisible, workspaceRootPath])
 
-  useEffect(() => window.electron.floating.onNavigationRequested(({ workspaceId, kind, target }) => {
+  useEffect(() => window.electron.floating.onNavigationRequested(({ workspaceId, kind, target, fileMarkdownView }) => {
     if (workspaceId !== useCanvasStore.getState().activeWorkspaceId) return
     if (kind === 'file') {
-      void openFileTile(target)
+      void openFileTile(target, { markdownView: fileMarkdownView }).catch((error: unknown) => {
+        console.error('[App] Failed to open file tile from floating navigation:', error)
+      })
       return
     }
     addBrowser(target)

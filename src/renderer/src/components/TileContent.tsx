@@ -1,6 +1,6 @@
 import React from 'react'
 import { Terminal, StickyNote, Globe, Clock, FileText } from 'lucide-react'
-import type { TileState } from '@shared/types'
+import type { FileTileOpenOptions, TileState } from '@shared/types'
 import { TerminalTileWrapper } from './TerminalTile'
 import { NoteTile } from './NoteTile'
 import { BrowserTile } from './BrowserTile'
@@ -24,7 +24,7 @@ interface TileContentProps {
   onFocus: () => void
   onUpdate: (patch: Partial<TileState>) => void | Promise<void>
   onOpenBrowserTile?: (url: string) => void
-  onOpenFileTile?: (relativePath: string) => void | Promise<void>
+  onOpenFileTile?: (relativePath: string, options?: FileTileOpenOptions) => void | Promise<void>
   workspaceRootPath?: string
 }
 
@@ -41,6 +41,7 @@ export function TileContent({ tile, isFocused, edgeToEdge = false, isVisible = t
         onUpdate={onUpdate}
         onDelete={() => {}}
         onOpenBrowserTile={onOpenBrowserTile}
+        onOpenFileTile={onOpenFileTile}
       />
     )
   }

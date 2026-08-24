@@ -26,7 +26,22 @@ const {
   handleTerminalOutput,
   registerTerminalInputFocusListener,
   scheduleWorkspaceActivationFit,
+  shouldRegisterTerminalMarkdownLinks,
 } = loadWithJiti<typeof import('./TerminalTile')>('./TerminalTile.tsx')
+
+const registrationPolicyCases = [
+  ['local terminal with workspace root and callback', undefined, '/workspace', true, true],
+  ['remote SSH terminal', 'remote-ssh', '/workspace', true, false],
+  ['local terminal without workspace root', undefined, '', true, false],
+  ['local terminal with whitespace workspace root', undefined, '  ', true, false],
+  ['local terminal without file callback', undefined, '/workspace', false, false],
+] as const
+
+for (const [label, connection, workspaceRootPath, hasOpenFileTile, expected] of registrationPolicyCases) {
+  if (shouldRegisterTerminalMarkdownLinks(connection, workspaceRootPath, hasOpenFileTile) !== expected) {
+    throw new Error(`Markdown link registration policy mismatch: ${label}`)
+  }
+}
 
 if (typeof registerSynchronizedOutputRefresh !== 'function') {
   throw new Error('terminal must register a synchronized-output refresh handler')

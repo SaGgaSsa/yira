@@ -604,6 +604,10 @@ export function normalizeFileMarkdownViewMode(value: unknown): MarkdownViewMode 
   return value === 'edit' || value === 'preview' || value === 'live' ? value : 'edit'
 }
 
+export interface FileTileOpenOptions {
+  markdownView?: MarkdownViewMode
+}
+
 export const NOTE_COLORS: Record<NoteColor, { bg: string; text: string }> = {
   yellow: { bg: '#fef3c7', text: '#78350f' },
   green:  { bg: '#dcfce7', text: '#166534' },
@@ -734,6 +738,7 @@ export interface TileFloatingState {
 export interface FloatingNavigationRequest {
   kind: 'file' | 'browser'
   target: string
+  fileMarkdownView?: MarkdownViewMode
 }
 
 export interface FloatingNavigationEvent extends FloatingNavigationRequest {

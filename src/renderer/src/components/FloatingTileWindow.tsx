@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { PanelBottomClose } from 'lucide-react'
 import type { ShellProfileId, TileState, WorkspaceConfig } from '@shared/types'
+import { createFloatingFileNavigationRequest } from '@shared/floatingNavigation'
 import { normalizeWorkspaceConfig } from '@shared/workspaceConfig'
 import { useCanvasStore } from '@/store/canvasStore'
 import { TileContent, TILE_META } from './TileContent'
@@ -140,8 +141,19 @@ export function FloatingTileWindow(): React.ReactElement {
           edgeToEdge
           onFocus={() => undefined}
           onUpdate={updateTile}
-          onOpenFileTile={(relativePath) => window.electron.floating.requestNavigation(tile.id, { kind: 'file', target: relativePath })}
-          onOpenBrowserTile={(url) => { void window.electron.floating.requestNavigation(tile.id, { kind: 'browser', target: url }) }}
+          onOpenFileTile={(relativePath, options) => {
+            void window.electron.floating.requestNavigation(
+              tile.id,
+              createFloatingFileNavigationRequest(relativePath, options),
+            ).catch((error: unknown) => {
+              console.error('[FloatingTileWindow] Failed to request file navigation:', error)
+            })
+          }}
+          onOpenBrowserTile={(url) => {
+            void window.electron.floating.requestNavigation(tile.id, { kind: 'browser', target: url }).catch((error: unknown) => {
+              console.error('[FloatingTileWindow] Failed to request browser navigation:', error)
+            })
+          }}
           workspaceRootPath={workspaceConfig?.rootFolderPath ?? ''}
           isVisible
         />

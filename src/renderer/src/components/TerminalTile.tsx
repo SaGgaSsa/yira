@@ -3,7 +3,7 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
-import type { TileState } from '@shared/types'
+import type { FileTileOpenOptions, TileState } from '@shared/types'
 import { useCanvasStore } from '@/store/canvasStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { isTerminalInputAttended } from '@/utils/terminalAttention'
@@ -13,6 +13,8 @@ import { registerSynchronizedOutputRefresh } from '@/utils/terminalSynchronizedO
 import { sanitizeTerminalReplayBuffer } from '@/utils/terminalReplaySanitizer'
 import { getTerminalContainerBackground, getXtermTheme } from '@/utils/terminalTheme'
 import { buildTerminalContextMenuItems } from '@/utils/terminalContextMenu'
+import { createTerminalMarkdownLinkProvider } from '@/utils/terminalMarkdownLinks'
+import type { TerminalLinkTarget } from '@/utils/terminalContextMenu'
 import { shouldOpenTerminalLink } from '@/utils/terminalLinkActivation'
 import {
   decodeOsc52ClipboardPayload,
@@ -31,6 +33,7 @@ interface Props {
   onUpdate: (patch: Partial<TileState>) => void
   onDelete: () => void
   onOpenBrowserTile?: (url: string) => void
+  onOpenFileTile?: (relativePath: string, options?: FileTileOpenOptions) => void | Promise<void>
 }
 
 export interface TerminalOutputHandlerOptions {
@@ -141,7 +144,15 @@ function applyTerminalPadding(container: HTMLElement | null, edgeToEdge: boolean
   xtermEl.style.paddingBottom = verticalPadding
 }
 
-export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVisible = true, autoFocus = false, onFocus, onUpdate, onDelete, onOpenBrowserTile }: Props): React.ReactElement {
+export function shouldRegisterTerminalMarkdownLinks(
+  connection: TileState['terminalConnection'],
+  workspaceRootPath: string | undefined,
+  hasOpenFileTile: boolean,
+): boolean {
+  return connection !== 'remote-ssh' && Boolean(workspaceRootPath?.trim()) && hasOpenFileTile
+}
+
+export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVisible = true, autoFocus = false, onFocus, onUpdate, onDelete, onOpenBrowserTile, onOpenFileTile }: Props): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
@@ -153,9 +164,24 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
   const notificationsMutedRef = useRef(tile.notificationsMuted === true)
   const tileFontSizePx = useSettingsStore((s) => s.tileFontSizePx)
   const terminalThemeId = useSettingsStore((s) => s.terminal.themeId)
-  const [menuPosition, setMenuPosition] = useState<{ x: number; y: number; selectionText: string; linkUrl?: string } | null>(null)
-  const hoveredLinkUrlRef = useRef<string | null>(null)
+  const [menuPosition, setMenuPosition] = useState<{ x: number; y: number; selectionText: string; linkTarget?: TerminalLinkTarget } | null>(null)
+  const hoveredLinkTargetRef = useRef<TerminalLinkTarget | null>(null)
+  const onOpenFileTileRef = useRef<Props['onOpenFileTile']>(onOpenFileTile)
+  onOpenFileTileRef.current = onOpenFileTile
   isVisibleRef.current = isVisible
+
+  const openMarkdownFileTile = useCallback((relativePath: string, options: FileTileOpenOptions = { markdownView: 'preview' }): void | Promise<void> => {
+    const openFileTile = onOpenFileTileRef.current
+    if (!openFileTile) return
+
+    try {
+      return Promise.resolve(openFileTile(relativePath, options)).catch((error: unknown) => {
+        console.error('[TerminalTile] Failed to open Markdown file tile:', error)
+      })
+    } catch (error) {
+      console.error('[TerminalTile] Failed to open Markdown file tile:', error)
+    }
+  }, [])
 
   const focusTerminal = useCallback(() => {
     onFocus()
@@ -175,7 +201,11 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
     const selection = selectionSnapshot ?? (term?.hasSelection() ? term.getSelection() : '')
     if (!selection) return
     term?.focus()
-    await window.electron.clipboard.writeText(selection)
+    try {
+      await window.electron.clipboard.writeText(selection)
+    } catch (error) {
+      console.error('[TerminalTile] Failed to copy terminal selection:', error)
+    }
   }, [])
 
   const pasteClipboard = useCallback(async () => {
@@ -217,6 +247,9 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
   useEffect(() => {
     if (!containerRef.current) return
 
+    const { activeWorkspaceId, activeWorkspaceConfig: workspaceConfig } = useCanvasStore.getState()
+    const isRemoteSsh = tile.terminalConnection === 'remote-ssh'
+
     // Create xterm instance
     const term = new Terminal({
       theme: getXtermTheme(useSettingsStore.getState().terminal.themeId),
@@ -237,10 +270,12 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
       })
     }, {
       hover: (_event, url) => {
-        hoveredLinkUrlRef.current = url
+        hoveredLinkTargetRef.current = { kind: 'web', value: url }
       },
       leave: () => {
-        hoveredLinkUrlRef.current = null
+        if (hoveredLinkTargetRef.current?.kind === 'web') {
+          hoveredLinkTargetRef.current = null
+        }
       },
     })
     term.loadAddon(webLinksAddon)
@@ -253,6 +288,26 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
 
     termRef.current = term
     fitRef.current = fitAddon
+
+    const markdownLinkDisposer = shouldRegisterTerminalMarkdownLinks(
+      tile.terminalConnection,
+      workspaceConfig.rootFolderPath,
+      Boolean(onOpenFileTileRef.current),
+    )
+      ? term.registerLinkProvider(createTerminalMarkdownLinkProvider(term, {
+          baseDirectory: tile.agent?.cwd ?? '',
+          onActivate: (relativePath) => openMarkdownFileTile(relativePath, { markdownView: 'preview' }),
+          onHover: (relativePath) => {
+            hoveredLinkTargetRef.current = { kind: 'markdown', value: relativePath }
+          },
+          onLeave: (relativePath) => {
+            const current = hoveredLinkTargetRef.current
+            if (current?.kind === 'markdown' && current.value === relativePath) {
+              hoveredLinkTargetRef.current = null
+            }
+          },
+        }))
+      : null
 
     const disposeSynchronizedOutputRefresh = registerSynchronizedOutputRefresh({
       parser: term.parser,
@@ -267,7 +322,9 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
       const selection = getTerminalContextSelectionSnapshot(term)
       if (!selection) return true
 
-      void window.electron.clipboard.writeText(selection)
+      void window.electron.clipboard.writeText(selection).catch((error: unknown) => {
+        console.error('[TerminalTile] Failed to copy terminal selection:', error)
+      })
       return false
     })
 
@@ -310,8 +367,6 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
       }
       return true
     })
-    const { activeWorkspaceId, activeWorkspaceConfig: workspaceConfig } = useCanvasStore.getState()
-    const isRemoteSsh = tile.terminalConnection === 'remote-ssh'
     const initialCommand = isRemoteSsh ? undefined : buildTerminalStartupCommand(tile, workspaceConfig)
 
     window.electron.terminal
@@ -383,6 +438,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
       ptyUnsub?.()
       agentAlertUnsub?.()
       inputDisposer?.dispose()
+      markdownLinkDisposer?.dispose()
       osc52Disposer.dispose()
       titleDisposer.dispose()
       window.electron?.terminal?.detach?.(tile.id)
@@ -398,6 +454,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
     tile.agent?.sessionId,
     tile.id,
     tile.shellProfileId,
+    tile.terminalConnection,
   ])
 
   useEffect(() => {
@@ -444,7 +501,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
   const menuItems: MenuItem[] = buildTerminalContextMenuItems({
     selectedText: menuPosition?.selectionText ?? '',
     notificationsMuted: tile.notificationsMuted === true,
-    linkUrl: menuPosition?.linkUrl,
+    linkTarget: menuPosition?.linkTarget,
     onCopySelection: () => {
       void copySelection(menuPosition?.selectionText)
     },
@@ -459,6 +516,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
       onUpdate({ notificationsMuted: tile.notificationsMuted ? undefined : true })
     },
     onOpenBrowserTile,
+    onOpenFileTile: openMarkdownFileTile,
     onOpenExternal: (url) => {
       void window.electron.shell.openExternal(url).catch((error: unknown) => {
         console.error('[TerminalTile] Failed to open terminal link externally:', error)
@@ -486,7 +544,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
             x: event.clientX,
             y: event.clientY,
             selectionText,
-            linkUrl: hoveredLinkUrlRef.current ?? undefined,
+            linkTarget: hoveredLinkTargetRef.current ?? undefined,
           })
         }}
       />

@@ -4,7 +4,7 @@ const calls: string[] = []
 const items = buildTerminalContextMenuItems({
   selectedText: '',
   notificationsMuted: false,
-  linkUrl: 'https://example.com/docs',
+  linkTarget: { kind: 'web', value: 'https://example.com/docs' },
   onCopySelection: () => calls.push('copy-selection'),
   onPaste: () => calls.push('paste'),
   onSelectAll: () => calls.push('select-all'),
@@ -25,6 +25,35 @@ items[2].action?.()
 
 if (calls.join('|') !== 'browser:https://example.com/docs|external:https://example.com/docs|copy-link:https://example.com/docs') {
   throw new Error(`unexpected URL callbacks: ${calls.join('|')}`)
+}
+
+const markdownCalls: string[] = []
+const markdownItems = buildTerminalContextMenuItems({
+  selectedText: '',
+  notificationsMuted: false,
+  linkTarget: { kind: 'markdown', value: 'docs/guide.md' },
+  onCopySelection: () => markdownCalls.push('copy-selection'),
+  onPaste: () => markdownCalls.push('paste'),
+  onSelectAll: () => markdownCalls.push('select-all'),
+  onToggleNotifications: () => markdownCalls.push('toggle-notifications'),
+  onOpenFileTile: (path, options) => {
+    markdownCalls.push(`markdown:${path}`)
+    if (options?.markdownView !== 'preview') throw new Error('Markdown tile must open in preview mode')
+  },
+  onOpenExternal: () => markdownCalls.push('external'),
+  onCopyLink: (path) => markdownCalls.push(`copy-path:${path}`),
+})
+
+const markdownLabels = markdownItems.filter((item) => !item.divider).map((item) => item.label)
+if (markdownLabels.join('|') !== 'Open in Markdown tile|Copy path') {
+  throw new Error(`unexpected Markdown link menu: ${markdownLabels.join('|')}`)
+}
+
+markdownItems[0].action?.()
+markdownItems[1].action?.()
+
+if (markdownCalls.join('|') !== 'markdown:docs/guide.md|copy-path:docs/guide.md') {
+  throw new Error(`unexpected Markdown callbacks: ${markdownCalls.join('|')}`)
 }
 
 const activityItems = buildTerminalContextMenuItems({

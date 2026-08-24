@@ -37,11 +37,24 @@ const proposed = fileTile('new-file', {
 const existing = fileTile('existing', {
   filePath: 'src/new.ts',
   filePreview: false,
+  fileMarkdownView: 'live',
   fileDraft: 'unsaved source',
 })
 const deduplicated = planFileTileOpen([existing], proposed)
 if (deduplicated.kind !== 'focus-existing' || deduplicated.tileId !== 'existing') {
   throw new Error('opening a path already present must focus that tile instead of creating a duplicate')
+}
+if (existing.fileMarkdownView !== 'live') {
+  throw new Error('focusing an existing file tile must preserve its selected Markdown view')
+}
+
+const requestedPreview = fileTile('requested-preview', {
+  filePath: 'docs/guide.md',
+  fileMarkdownView: 'preview',
+})
+const createdWithPreview = planFileTileOpen([], requestedPreview)
+if (createdWithPreview.kind !== 'create' || createdWithPreview.tile.fileMarkdownView !== 'preview') {
+  throw new Error('a new Markdown file tile must retain its requested preview view')
 }
 
 const reusable = fileTile('preview', { x: 10, y: 20, zIndex: 1, fileMarkdownView: 'preview' })
