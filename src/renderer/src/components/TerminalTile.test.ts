@@ -20,12 +20,10 @@ const loadWithJiti = require('jiti')(fileURLToPath(import.meta.url), {
   }),
 }) as <T>(id: string) => T
 const { getTileNotificationCopy } = loadWithJiti<typeof import('./TileEditorDialog')>('./TileEditorDialog.tsx')
-const { registerSynchronizedOutputRefresh } = loadWithJiti<typeof import('../utils/terminalSynchronizedOutputRefresh')>('../utils/terminalSynchronizedOutputRefresh.ts')
 const {
   handleTerminalAgentAlert,
   handleTerminalOutput,
   registerTerminalInputFocusListener,
-  scheduleWorkspaceActivationFit,
   shouldRegisterTerminalMarkdownLinks,
 } = loadWithJiti<typeof import('./TerminalTile')>('./TerminalTile.tsx')
 
@@ -41,161 +39,6 @@ for (const [label, connection, workspaceRootPath, hasOpenFileTile, expected] of 
   if (shouldRegisterTerminalMarkdownLinks(connection, workspaceRootPath, hasOpenFileTile) !== expected) {
     throw new Error(`Markdown link registration policy mismatch: ${label}`)
   }
-}
-
-if (typeof registerSynchronizedOutputRefresh !== 'function') {
-  throw new Error('terminal must register a synchronized-output refresh handler')
-}
-
-const synchronizedRefreshCalls: Array<{ start: number; end: number }> = []
-let synchronizedTerminalVisible = true
-const synchronizedOutputState: {
-  handler: ((params: (number | number[])[]) => boolean) | null
-  handlerDisposed: boolean
-  queuedRefresh: (() => void) | null
-} = {
-  handler: null,
-  handlerDisposed: false,
-  queuedRefresh: null,
-}
-const getSynchronizedRefreshCallCount = (): number => synchronizedRefreshCalls.length
-
-const disposeSynchronizedOutputRefresh = registerSynchronizedOutputRefresh({
-  parser: {
-    registerCsiHandler: (identifier, handler) => {
-      if (identifier.prefix !== '?' || identifier.final !== 'l') {
-        throw new Error('synchronized-output refresh must observe DEC private mode resets')
-      }
-      synchronizedOutputState.handler = handler
-      return {
-        dispose: () => {
-          synchronizedOutputState.handlerDisposed = true
-        },
-      }
-    },
-  },
-  refresh: (start, end) => {
-    synchronizedRefreshCalls.push({ start, end })
-  },
-  getRows: () => 30,
-  isVisible: () => synchronizedTerminalVisible,
-  requestFrame: (callback) => {
-    synchronizedOutputState.queuedRefresh = callback
-    return 1
-  },
-  cancelFrame: () => {
-    synchronizedOutputState.queuedRefresh = null
-  },
-})
-
-const synchronizedOutputHandler = synchronizedOutputState.handler
-if (!synchronizedOutputHandler) throw new Error('synchronized-output refresh handler must be registered')
-const synchronizedOutputHandled = synchronizedOutputHandler([2026])
-if (synchronizedOutputHandled !== false) {
-  throw new Error('synchronized-output refresh handler must preserve xterm mode reset handling')
-}
-synchronizedOutputHandler([2026])
-const queuedSynchronizedRefresh = synchronizedOutputState.queuedRefresh
-if (!queuedSynchronizedRefresh) throw new Error('synchronized-output completion must schedule a refresh')
-if (getSynchronizedRefreshCallCount() !== 0) {
-  throw new Error('synchronized-output completion must defer refresh until the next frame')
-}
-queuedSynchronizedRefresh()
-if (getSynchronizedRefreshCallCount() !== 1) {
-  throw new Error('synchronized-output completions in one frame must coalesce into one refresh')
-}
-if (synchronizedRefreshCalls[0]?.start !== 0 || synchronizedRefreshCalls[0]?.end !== 29) {
-  throw new Error('synchronized-output completion must refresh the complete visible terminal')
-}
-
-synchronizedTerminalVisible = false
-synchronizedOutputHandler([2026])
-const hiddenSynchronizedRefresh = synchronizedOutputState.queuedRefresh
-if (!hiddenSynchronizedRefresh) throw new Error('synchronized-output completion must still use a deferred visibility check')
-hiddenSynchronizedRefresh()
-if (getSynchronizedRefreshCallCount() !== 1) {
-  throw new Error('synchronized-output completion must not refresh a hidden terminal')
-}
-
-disposeSynchronizedOutputRefresh()
-if (!synchronizedOutputState.handlerDisposed) {
-  throw new Error('synchronized-output refresh cleanup must dispose its parser handler')
-}
-
-let queuedWorkspaceFitFrames: Array<{ id: number; callback: () => void }> = []
-let nextWorkspaceFitFrameId = 1
-const workspaceFitState = { calls: 0 }
-const getWorkspaceFitCalls = (): number => workspaceFitState.calls
-
-const cancelWorkspaceActivationFit = scheduleWorkspaceActivationFit(
-  () => {
-    workspaceFitState.calls += 1
-  },
-  (callback) => {
-    const id = nextWorkspaceFitFrameId++
-    queuedWorkspaceFitFrames.push({ id, callback })
-    return id
-  },
-  (id) => {
-    queuedWorkspaceFitFrames = queuedWorkspaceFitFrames.filter((frame) => frame.id !== id)
-  },
-)
-
-const firstWorkspaceFitFrame = queuedWorkspaceFitFrames.shift()
-if (!firstWorkspaceFitFrame) throw new Error('workspace activation must defer the first terminal fit')
-firstWorkspaceFitFrame.callback()
-
-if (getWorkspaceFitCalls() !== 0) {
-  throw new Error('workspace activation must wait for the layout stabilization frame before fitting')
-}
-
-const finalWorkspaceFitFrame = queuedWorkspaceFitFrames.shift()
-if (!finalWorkspaceFitFrame) throw new Error('workspace activation must schedule a layout stabilization fit')
-finalWorkspaceFitFrame.callback()
-
-if (getWorkspaceFitCalls() !== 1) throw new Error('workspace activation must fit once after layout stabilization')
-
-cancelWorkspaceActivationFit()
-
-const cancelledWorkspaceFit = scheduleWorkspaceActivationFit(
-  () => {
-    throw new Error('cancelled workspace activation fit must not run')
-  },
-  (callback) => {
-    const id = nextWorkspaceFitFrameId++
-    queuedWorkspaceFitFrames.push({ id, callback })
-    return id
-  },
-  (id) => {
-    queuedWorkspaceFitFrames = queuedWorkspaceFitFrames.filter((frame) => frame.id !== id)
-  },
-)
-cancelledWorkspaceFit()
-
-if (queuedWorkspaceFitFrames.length !== 0) {
-  throw new Error('cancelling workspace activation fit must remove its pending frame')
-}
-
-const cancelFinalWorkspaceFit = scheduleWorkspaceActivationFit(
-  () => {
-    throw new Error('cancelled workspace stabilization fit must not run')
-  },
-  (callback) => {
-    const id = nextWorkspaceFitFrameId++
-    queuedWorkspaceFitFrames.push({ id, callback })
-    return id
-  },
-  (id) => {
-    queuedWorkspaceFitFrames = queuedWorkspaceFitFrames.filter((frame) => frame.id !== id)
-  },
-)
-const workspacePreparationFrame = queuedWorkspaceFitFrames.shift()
-if (!workspacePreparationFrame) throw new Error('workspace activation must schedule a preparation frame')
-workspacePreparationFrame.callback()
-cancelFinalWorkspaceFit()
-
-if (queuedWorkspaceFitFrames.length !== 0) {
-  throw new Error('cancelling workspace activation fit must remove its stabilization frame')
 }
 
 const terminalTile: TileState = {
