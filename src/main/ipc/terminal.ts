@@ -1,6 +1,6 @@
 import { BrowserWindow, ipcMain, WebContents } from 'electron'
 import { promises as fs } from 'fs'
-import type { ShellProfile, TerminalCreateOptions } from '@shared/types'
+import type { ShellProfile, TerminalCreateOptions, TerminalExitEvent } from '@shared/types'
 import { detectShellProfiles, detectSshClient } from '../shell-profiles'
 import { buildTerminalHistorySetup } from '../terminal-history'
 import { resolveTerminalWorkspaceRoot } from '../workspace-root'
@@ -23,6 +23,7 @@ import {
   type TerminalShutdownResult,
 } from '../terminalSessions'
 import { DeferredTerminalStartupCommand } from '../terminalStartupCommand'
+import { TerminalExitState } from '../terminalEvents'
 
 // node-pty must be required (not imported) due to native module ESM issues
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -36,10 +37,15 @@ interface PtyInstance {
   onExit?: (cb: () => void) => void
 }
 
+interface SpawnedPtyInstance extends Omit<PtyInstance, 'onExit'> {
+  onExit?: (cb: (event: TerminalExitEvent) => void) => void
+}
+
 interface TerminalSession extends ManagedTerminalSession {
   pty: PtyInstance
   listeners: Set<WebContents>
   buffer: string
+  exitEvent?: TerminalExitEvent
   agentLifecycle?: AgentTerminalLifecycle
 }
 
@@ -114,7 +120,7 @@ export function registerTerminalIPC(): void {
     const existing = getTerminalSession(runtimeTileId)
     if (existing) {
       existing.listeners.add(event.sender)
-      return { cols: 80, rows: 24, buffer: existing.buffer }
+      return { cols: 80, rows: 24, buffer: existing.buffer, exitEvent: existing.exitEvent }
     }
 
     const isRemoteSsh = options.connection === 'remote-ssh'
@@ -192,7 +198,7 @@ export function registerTerminalIPC(): void {
       throw new Error('Terminal sessions are shutting down')
     }
 
-    let spawnedTerm: PtyInstance
+    let spawnedTerm: SpawnedPtyInstance
     try {
       spawnedTerm = pty.spawn(executable, spawnArgs, {
         name: 'xterm-256color',
@@ -207,8 +213,10 @@ export function registerTerminalIPC(): void {
     }
 
     let ptyExited = false
-    spawnedTerm.onExit?.(() => {
+    const exitState = new TerminalExitState<WebContents>(runtimeTileId)
+    spawnedTerm.onExit?.((exitEvent) => {
       ptyExited = true
+      exitState.record(exitEvent)
     })
     const term: PtyInstance = {
       write: (data) => spawnedTerm.write(data),
@@ -236,6 +244,9 @@ export function registerTerminalIPC(): void {
       pty: term,
       listeners: new Set([event.sender]),
       buffer: '',
+      get exitEvent() {
+        return exitState.event
+      },
       agentLifecycle,
       onCleanup: () => {
         if (cleanedUp) return
@@ -247,6 +258,7 @@ export function registerTerminalIPC(): void {
         session.listeners.clear()
       },
     }
+    exitState.attach(session.listeners)
     const agentExitGate = agentLifecycle
       ? createAgentTerminalExitGate(() => session.onCleanup())
       : null

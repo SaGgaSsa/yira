@@ -434,6 +434,18 @@ export type ShellProfileId = 'powershell' | 'cmd' | 'wsl' | 'bash' | 'zsh' | 'fi
 
 export type TerminalConnectionKind = 'remote-ssh'
 
+export interface TerminalExitEvent {
+  exitCode: number
+  signal?: number
+}
+
+export interface TerminalCreateResult {
+  cols: number
+  rows: number
+  buffer: string
+  exitEvent?: TerminalExitEvent
+}
+
 export interface ShellProfile {
   id: ShellProfileId
   label: string

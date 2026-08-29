@@ -1,7 +1,9 @@
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
+import { createElement } from 'react'
 import type { CanvasState, TileState } from '@shared/types'
 import { useCanvasStore } from '@/store/canvasStore'
+import { renderToStaticMarkup } from 'react-dom/server'
 
 const require = createRequire(import.meta.url)
 const cssExtensions = require.extensions as Record<string, (module: NodeModule, filename: string) => void>
@@ -23,9 +25,81 @@ const { getTileNotificationCopy } = loadWithJiti<typeof import('./TileEditorDial
 const {
   handleTerminalAgentAlert,
   handleTerminalOutput,
+  getRemoteTerminalExitEvent,
+  RemoteTerminalReconnectNotice,
+  restartTerminalAfterExit,
   registerTerminalInputFocusListener,
   shouldRegisterTerminalMarkdownLinks,
 } = loadWithJiti<typeof import('./TerminalTile')>('./TerminalTile.tsx')
+
+const hiddenReconnectNotice = renderToStaticMarkup(
+  createElement(RemoteTerminalReconnectNotice, {
+    visible: false,
+    reconnecting: false,
+    onReconnect: () => undefined,
+  }),
+)
+if (hiddenReconnectNotice !== '') {
+  throw new Error('connected terminals must not show the SSH reconnect notice')
+}
+
+const reconnectNotice = renderToStaticMarkup(
+  createElement(RemoteTerminalReconnectNotice, {
+    visible: true,
+    reconnecting: false,
+    onReconnect: () => undefined,
+  }),
+)
+if (!reconnectNotice.includes('SSH connection closed') || !reconnectNotice.includes('Reconnect')) {
+  throw new Error('disconnected SSH terminals must show a reconnect action')
+}
+if (!reconnectNotice.includes('role="status"') || !reconnectNotice.includes('aria-live="polite"')) {
+  throw new Error('the SSH reconnect notice must announce its dynamic status accessibly')
+}
+
+const reconnectSteps: string[] = []
+await restartTerminalAfterExit(
+  async () => {
+    reconnectSteps.push('destroy')
+  },
+  () => {
+    reconnectSteps.push('restart')
+  },
+)
+if (reconnectSteps.join(',') !== 'destroy,restart') {
+  throw new Error('SSH reconnect must destroy the exited session before starting a replacement')
+}
+
+let reconnectAttempt = 0
+let replacements = 0
+await restartTerminalAfterExit(
+  async () => {
+    reconnectAttempt += 1
+    if (reconnectAttempt === 1) throw new Error('destroy failed')
+  },
+  () => {
+    replacements += 1
+  },
+).catch(() => undefined)
+await restartTerminalAfterExit(
+  async () => {
+    reconnectAttempt += 1
+  },
+  () => {
+    replacements += 1
+  },
+)
+if (reconnectAttempt !== 2 || replacements !== 1) {
+  throw new Error('a failed SSH reconnect must allow a later retry without starting two replacements')
+}
+
+const retainedExit = { exitCode: 255, signal: 0 }
+if (getRemoteTerminalExitEvent('remote-ssh', retainedExit) !== retainedExit) {
+  throw new Error('reattached SSH terminals must retain an exit that happened while hidden')
+}
+if (getRemoteTerminalExitEvent(undefined, retainedExit) !== null) {
+  throw new Error('local terminals must not show the SSH reconnect notice')
+}
 
 const registrationPolicyCases = [
   ['local terminal with workspace root and callback', undefined, '/workspace', true, true],

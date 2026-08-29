@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AgentActiveSessionSnapshot, AgentProviderAvailabilitySnapshot, AgentSessionHistoryQuery, AgentSessionHistoryResult, AgentUsageSnapshot, BoardTask, FileListOptions, FileSearchResult, FileWriteInput, FloatingNavigationEvent, FloatingNavigationRequest, GitCommitHistoryResult, GitRepository, GitStatusResult, NotificationAttentionOptions, TerminalCreateOptions, UpdateState, WindowBounds, WindowClosePreparationRequest, WindowClosePreparationResponse, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
+import type { AgentActiveSessionSnapshot, AgentProviderAvailabilitySnapshot, AgentSessionHistoryQuery, AgentSessionHistoryResult, AgentUsageSnapshot, BoardTask, FileListOptions, FileSearchResult, FileWriteInput, FloatingNavigationEvent, FloatingNavigationRequest, GitCommitHistoryResult, GitRepository, GitStatusResult, NotificationAttentionOptions, TerminalCreateOptions, TerminalCreateResult, TerminalExitEvent, UpdateState, WindowBounds, WindowClosePreparationRequest, WindowClosePreparationResponse, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
 import { createSerialTaskQueue } from '@shared/serialTaskQueue'
 
 console.log('[preload] Loading...')
@@ -124,7 +124,7 @@ contextBridge.exposeInMainWorld('electron', {
   // Terminal
   terminal: {
     create: (tileId: string, options: TerminalCreateOptions) =>
-      ipcRenderer.invoke('terminal:create', tileId, options),
+      ipcRenderer.invoke('terminal:create', tileId, options) as Promise<TerminalCreateResult>,
     write: (tileId: string, data: string) => ipcRenderer.invoke('terminal:write', tileId, data),
     resize: (tileId: string, cols: number, rows: number) =>
       ipcRenderer.invoke('terminal:resize', tileId, cols, rows),
@@ -136,6 +136,12 @@ contextBridge.exposeInMainWorld('electron', {
     onData: (tileId: string, callback: (data: string) => void) => {
       const channel = `terminal:data:${tileId}`
       const handler = (_evt: unknown, data: string) => callback(data)
+      ipcRenderer.on(channel, handler)
+      return () => { ipcRenderer.removeListener(channel, handler) }
+    },
+    onExit: (tileId: string, callback: (event: TerminalExitEvent) => void) => {
+      const channel = `terminal:exit:${tileId}`
+      const handler = (_evt: unknown, event: TerminalExitEvent) => callback(event)
       ipcRenderer.on(channel, handler)
       return () => { ipcRenderer.removeListener(channel, handler) }
     },

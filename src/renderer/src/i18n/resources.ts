@@ -303,6 +303,9 @@ type TranslationResources = {
     optionalStartupCommand: string
     refreshTerminal: string
     restart: string
+    sshConnectionClosed: string
+    reconnect: string
+    reconnecting: string
   }
   canvas: {
     clearSelection: string
@@ -643,6 +646,9 @@ const en: TranslationResources = {
     optionalStartupCommand: 'Optional startup command',
     refreshTerminal: 'Refresh terminal',
     restart: 'Restart',
+    sshConnectionClosed: 'SSH connection closed',
+    reconnect: 'Reconnect',
+    reconnecting: 'Reconnecting…',
   },
   canvas: {
     clearSelection: 'Clear Selection',
@@ -983,6 +989,9 @@ const es: TranslationResources = {
     optionalStartupCommand: 'Comando de inicio opcional',
     refreshTerminal: 'Actualizar terminal',
     restart: 'Reiniciar',
+    sshConnectionClosed: 'Conexión SSH cerrada',
+    reconnect: 'Reconectar',
+    reconnecting: 'Reconectando…',
   },
   canvas: {
     clearSelection: 'Limpiar selección',

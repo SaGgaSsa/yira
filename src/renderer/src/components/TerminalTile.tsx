@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react'
+import { RefreshCw } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
-import type { FileTileOpenOptions, TileState } from '@shared/types'
+import type { FileTileOpenOptions, TerminalExitEvent, TileState } from '@shared/types'
 import { useCanvasStore } from '@/store/canvasStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { isTerminalInputAttended } from '@/utils/terminalAttention'
@@ -33,6 +35,60 @@ interface Props {
   onDelete: () => void
   onOpenBrowserTile?: (url: string) => void
   onOpenFileTile?: (relativePath: string, options?: FileTileOpenOptions) => void | Promise<void>
+}
+
+interface RemoteTerminalReconnectNoticeProps {
+  visible: boolean
+  reconnecting: boolean
+  onReconnect: () => void
+  message?: string
+  reconnectLabel?: string
+  reconnectingLabel?: string
+}
+
+export function RemoteTerminalReconnectNotice({
+  visible,
+  reconnecting,
+  onReconnect,
+  message = 'SSH connection closed',
+  reconnectLabel = 'Reconnect',
+  reconnectingLabel = 'Reconnecting…',
+}: RemoteTerminalReconnectNoticeProps): React.ReactElement | null {
+  if (!visible) return null
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-md border border-border-visible bg-bg-tertiary/95 px-3 py-2 text-xs text-text-secondary shadow-lg"
+    >
+      <span>{message}</span>
+      <button
+        type="button"
+        className="inline-flex items-center gap-1.5 rounded border border-border-visible px-2 py-1 text-text-display transition-colors hover:bg-hover-bg disabled:cursor-wait disabled:opacity-60"
+        disabled={reconnecting}
+        onClick={onReconnect}
+      >
+        <RefreshCw size={12} className={reconnecting ? 'animate-spin' : undefined} />
+        <span>{reconnecting ? reconnectingLabel : reconnectLabel}</span>
+      </button>
+    </div>
+  )
+}
+
+export async function restartTerminalAfterExit(
+  destroy: () => Promise<void>,
+  restart: () => void,
+): Promise<void> {
+  await destroy()
+  restart()
+}
+
+export function getRemoteTerminalExitEvent(
+  connection: TileState['terminalConnection'],
+  exitEvent: TerminalExitEvent | undefined,
+): TerminalExitEvent | null {
+  return connection === 'remote-ssh' && exitEvent ? exitEvent : null
 }
 
 export interface TerminalOutputHandlerOptions {
@@ -127,6 +183,7 @@ export function shouldRegisterTerminalMarkdownLinks(
 }
 
 export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVisible = true, autoFocus = false, onFocus, onUpdate, onDelete, onOpenBrowserTile, onOpenFileTile }: Props): React.ReactElement {
+  const { t } = useTranslation()
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
@@ -138,6 +195,9 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
   const tileFontSizePx = useSettingsStore((s) => s.tileFontSizePx)
   const terminalThemeId = useSettingsStore((s) => s.terminal.themeId)
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number; selectionText: string; linkTarget?: TerminalLinkTarget } | null>(null)
+  const [terminalExit, setTerminalExit] = useState<TerminalExitEvent | null>(null)
+  const [reconnecting, setReconnecting] = useState(false)
+  const [sessionGeneration, setSessionGeneration] = useState(0)
   const hoveredLinkTargetRef = useRef<TerminalLinkTarget | null>(null)
   const onOpenFileTileRef = useRef<Props['onOpenFileTile']>(onOpenFileTile)
   onOpenFileTileRef.current = onOpenFileTile
@@ -189,6 +249,24 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
     term.focus()
     term.paste(text)
   }, [])
+
+  const reconnectRemoteTerminal = useCallback(async () => {
+    if (reconnecting || tile.terminalConnection !== 'remote-ssh') return
+    setReconnecting(true)
+
+    try {
+      await restartTerminalAfterExit(
+        () => window.electron.terminal.destroy(tile.id),
+        () => {
+          setTerminalExit(null)
+          setSessionGeneration((generation) => generation + 1)
+        },
+      )
+    } catch (error) {
+      console.error('[TerminalTile] Failed to restart remote SSH terminal:', error)
+      setReconnecting(false)
+    }
+  }, [reconnecting, tile.id, tile.terminalConnection])
 
   // Fit terminal to container
   const doFit = useCallback(() => {
@@ -317,6 +395,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
     // Create PTY session
     let cancelled = false
     let ptyUnsub: (() => void) | null = null
+    let exitUnsub: (() => void) | null = null
     let agentAlertUnsub: (() => void) | null = null
     let inputDisposer: { dispose: () => void } | null = null
     const titleDisposer = term.onTitleChange((title) => {
@@ -335,6 +414,12 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
     })
     const initialCommand = isRemoteSsh ? undefined : buildTerminalStartupCommand(tile, workspaceConfig)
 
+    exitUnsub = window.electron.terminal.onExit(tile.id, (exitEvent) => {
+      if (cancelled || !isRemoteSsh) return
+      setTerminalExit(exitEvent)
+      setReconnecting(false)
+    })
+
     window.electron.terminal
       .create(tile.id, {
         shellProfileId: tile.shellProfileId ?? 'bash',
@@ -351,8 +436,10 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
           ? workspaceConfig.agentProviders[tile.agent.provider]
           : undefined,
       })
-      .then(({ buffer }) => {
+      .then(({ buffer, exitEvent }) => {
         if (cancelled) return
+        setReconnecting(false)
+        setTerminalExit(getRemoteTerminalExitEvent(tile.terminalConnection, exitEvent))
         useCanvasStore.getState().registerTerminalCreated(tile.id)
         if (buffer) term.write(sanitizeTerminalReplayBuffer(buffer))
 
@@ -391,6 +478,10 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
       .catch((err: Error) => {
         if (cancelled) return
         term.write(`\r\n\x1b[31mFailed to start terminal: ${err?.message ?? String(err)}\x1b[0m\r\n`)
+        if (isRemoteSsh) {
+          setTerminalExit({ exitCode: -1 })
+          setReconnecting(false)
+        }
       })
 
     // Cleanup on unmount / before re-run
@@ -401,6 +492,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
       removeTerminalInputFocusListener()
       window.removeEventListener('focus', clearAttentionIfAttended)
       ptyUnsub?.()
+      exitUnsub?.()
       agentAlertUnsub?.()
       inputDisposer?.dispose()
       markdownLinkDisposer?.dispose()
@@ -420,6 +512,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
     tile.id,
     tile.shellProfileId,
     tile.terminalConnection,
+    sessionGeneration,
   ])
 
   useEffect(() => {
@@ -493,7 +586,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
   })
 
   return (
-    <>
+    <div className="relative h-full w-full">
       <div
         ref={containerRef}
         className="h-full w-full"
@@ -511,6 +604,16 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
           })
         }}
       />
+      <RemoteTerminalReconnectNotice
+        visible={tile.terminalConnection === 'remote-ssh' && (terminalExit !== null || reconnecting)}
+        reconnecting={reconnecting}
+        message={t('terminal.sshConnectionClosed', 'SSH connection closed')}
+        reconnectLabel={t('terminal.reconnect', 'Reconnect')}
+        reconnectingLabel={t('terminal.reconnecting', 'Reconnecting…')}
+        onReconnect={() => {
+          void reconnectRemoteTerminal()
+        }}
+      />
       {menuPosition && (
         <ContextMenu
           x={menuPosition.x}
@@ -519,6 +622,6 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
           onClose={() => setMenuPosition(null)}
         />
       )}
-    </>
+    </div>
   )
 }

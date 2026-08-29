@@ -15,6 +15,8 @@ import type {
   BoardState,
   BoardTask,
   TerminalCreateOptions,
+  TerminalCreateResult,
+  TerminalExitEvent,
   UpdateState,
   NotificationAttentionOptions,
   NotificationAttentionResult,
@@ -124,7 +126,7 @@ interface ElectronWorld {
     save: (workspaceId: string, state: unknown, workspaceType?: string) => Promise<void>
   }
   terminal: {
-    create: (tileId: string, options: TerminalCreateOptions) => Promise<{ cols: number; rows: number; buffer: string }>
+    create: (tileId: string, options: TerminalCreateOptions) => Promise<TerminalCreateResult>
     write: (tileId: string, data: string) => Promise<void>
     resize: (tileId: string, cols: number, rows: number) => Promise<void>
     destroy: (tileId: string) => Promise<void>
@@ -133,6 +135,7 @@ interface ElectronWorld {
     setAgentAlertsEnabled: (enabled: boolean) => Promise<void>
     sshAvailable: () => Promise<boolean>
     onData: (tileId: string, callback: (data: string) => void) => () => void
+    onExit: (tileId: string, callback: (event: TerminalExitEvent) => void) => () => void
     onAgentAlert: (tileId: string, callback: (state: unknown) => void) => () => void
   }
   shellProfiles: {
