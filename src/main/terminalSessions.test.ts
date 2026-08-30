@@ -27,8 +27,12 @@ class FakePty {
   }
 }
 
-function sessionFor(pty: FakePty, onCleanup: () => void = () => undefined): ManagedTerminalSession {
-  return { pty, onCleanup }
+function sessionFor(
+  pty: FakePty,
+  onProcessExit: () => void = () => undefined,
+  onDispose: () => void = () => undefined,
+): ManagedTerminalSession {
+  return { pty, onCleanup: onDispose, onProcessExit, onDispose }
 }
 
 test('shuts down every session and counts immediate exit notifications', async () => {
@@ -136,42 +140,42 @@ test('rejects new sessions after shutdown begins', () => {
   assert.equal(manager.isAcceptingSessions(), false)
 })
 
-test('invokes cleanup once when a session is removed before shutdown', async () => {
+test('invokes disposal once when a session is removed before shutdown', async () => {
   const pty = new FakePty()
-  let cleanupCalls = 0
+  let disposeCalls = 0
   const manager = new TerminalSessionManager({ timeoutMs: 5 })
 
-  manager.add('one', sessionFor(pty, () => { cleanupCalls += 1 }))
+  manager.add('one', sessionFor(pty, undefined, () => { disposeCalls += 1 }))
   pty.exit()
 
   assert.equal(manager.delete('one')?.session.pty, pty)
   await manager.shutdownAll()
 
-  assert.equal(cleanupCalls, 1)
+  assert.equal(disposeCalls, 1)
   assert.equal(pty.killCalls, 0)
 })
 
-test('invokes cleanup once for every session during shutdown', async () => {
+test('invokes disposal once for every session during shutdown', async () => {
   const first = new FakePty(true)
   const second = new FakePty(true)
-  let cleanupCalls = 0
+  let disposeCalls = 0
   const manager = new TerminalSessionManager({ timeoutMs: 50 })
-  const onCleanup = () => { cleanupCalls += 1 }
+  const onDispose = () => { disposeCalls += 1 }
 
-  manager.add('one', sessionFor(first, onCleanup))
-  manager.add('two', sessionFor(second, onCleanup))
+  manager.add('one', sessionFor(first, undefined, onDispose))
+  manager.add('two', sessionFor(second, undefined, onDispose))
 
   await manager.shutdownAll()
 
-  assert.equal(cleanupCalls, 2)
+  assert.equal(disposeCalls, 2)
 })
 
 test('does not kill a PTY twice when delete runs during shutdown', async () => {
   const pty = new FakePty()
-  let cleanupCalls = 0
+  let disposeCalls = 0
   const manager = new TerminalSessionManager({ timeoutMs: 5 })
 
-  manager.add('one', sessionFor(pty, () => { cleanupCalls += 1 }))
+  manager.add('one', sessionFor(pty, undefined, () => { disposeCalls += 1 }))
   const stopping = manager.shutdownAll()
   const deletion = manager.delete('one')
 
@@ -180,16 +184,16 @@ test('does not kill a PTY twice when delete runs during shutdown', async () => {
   if (deletion && !deletion.killRequested) deletion.session.pty.kill()
 
   assert.equal(pty.killCalls, 1)
-  assert.equal(cleanupCalls, 1)
+  assert.equal(disposeCalls, 1)
   assert.deepEqual(await stopping, { requested: 1, exited: 0, timedOut: 1 })
 })
 
 test('delete leaves one kill for an ordinary terminal destroy', () => {
   const pty = new FakePty()
-  let cleanupCalls = 0
+  let disposeCalls = 0
   const manager = new TerminalSessionManager({ timeoutMs: 5 })
 
-  manager.add('one', sessionFor(pty, () => { cleanupCalls += 1 }))
+  manager.add('one', sessionFor(pty, undefined, () => { disposeCalls += 1 }))
   const deletion = manager.delete('one')
 
   assert.ok(deletion)
@@ -197,5 +201,61 @@ test('delete leaves one kill for an ordinary terminal destroy', () => {
   if (!deletion.killRequested) deletion.session.pty.kill()
 
   assert.equal(pty.killCalls, 1)
+  assert.equal(disposeCalls, 1)
+})
+
+test('calls process-exit once and keeps disposal separate and idempotent', async () => {
+  const pty = new FakePty(true)
+  let processExitCalls = 0
+  let disposeCalls = 0
+  const manager = new TerminalSessionManager({ timeoutMs: 50 })
+
+  manager.add('one', sessionFor(
+    pty,
+    () => { processExitCalls += 1 },
+    () => { disposeCalls += 1 },
+  ))
+
+  pty.exit()
+  pty.exit()
+  const stopping = manager.shutdownAll()
+  manager.delete('one')
+
+  assert.deepEqual(await stopping, { requested: 1, exited: 1, timedOut: 0 })
+  assert.equal(processExitCalls, 1)
+  assert.equal(disposeCalls, 1)
+})
+
+test('does not dispose an active session when its process exits', () => {
+  const pty = new FakePty()
+  let processExitCalls = 0
+  let disposeCalls = 0
+  const manager = new TerminalSessionManager({ timeoutMs: 5 })
+
+  manager.add('one', sessionFor(
+    pty,
+    () => { processExitCalls += 1 },
+    () => { disposeCalls += 1 },
+  ))
+  pty.exit()
+
+  assert.equal(processExitCalls, 1)
+  assert.equal(disposeCalls, 0)
+  assert.equal(manager.get('one')?.pty, pty)
+})
+
+test('keeps the legacy cleanup callback idempotent', async () => {
+  const pty = new FakePty()
+  let cleanupCalls = 0
+  const manager = new TerminalSessionManager({ timeoutMs: 5 })
+
+  manager.add('one', {
+    pty,
+    onCleanup: () => { cleanupCalls += 1 },
+  })
+  pty.exit()
+  manager.delete('one')
+  await manager.shutdownAll()
+
   assert.equal(cleanupCalls, 1)
 })

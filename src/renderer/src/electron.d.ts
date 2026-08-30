@@ -43,6 +43,7 @@ import type {
   MarkdownViewMode,
   NoteKind,
 } from '@shared/types'
+import type { TerminalSessionIdentity, TerminalSessionTarget } from '@shared/terminalSessionIdentity'
 
 type NoteData = {
   title?: string
@@ -126,16 +127,18 @@ interface ElectronWorld {
     save: (workspaceId: string, state: unknown, workspaceType?: string) => Promise<void>
   }
   terminal: {
-    create: (tileId: string, options: TerminalCreateOptions) => Promise<TerminalCreateResult>
-    write: (tileId: string, data: string) => Promise<void>
-    resize: (tileId: string, cols: number, rows: number) => Promise<void>
-    destroy: (tileId: string) => Promise<void>
-    detach: (tileId: string) => Promise<void>
-    acknowledgeAgentAlert: (tileId: string) => Promise<void>
+    create: (target: TerminalSessionTarget, options: TerminalCreateOptions) => Promise<TerminalCreateResult>
+    attach: (identity: TerminalSessionIdentity) => Promise<TerminalCreateResult>
+    write: (identity: TerminalSessionIdentity, data: string) => Promise<void>
+    resize: (identity: TerminalSessionIdentity, cols: number, rows: number) => Promise<void>
+    destroy: (identity: TerminalSessionIdentity) => Promise<void>
+    destroyCurrent: (target: TerminalSessionTarget) => Promise<void>
+    detach: (identity: TerminalSessionIdentity) => Promise<void>
+    acknowledgeAgentAlert: (identity: TerminalSessionIdentity) => Promise<void>
     setAgentAlertsEnabled: (enabled: boolean) => Promise<void>
     sshAvailable: () => Promise<boolean>
-    onData: (tileId: string, callback: (data: string) => void) => () => void
-    onExit: (tileId: string, callback: (event: TerminalExitEvent) => void) => () => void
+    onData: (identity: TerminalSessionIdentity, callback: (data: string) => void) => () => void
+    onExit: (identity: TerminalSessionIdentity, callback: (event: TerminalExitEvent) => void) => () => void
     onAgentAlert: (tileId: string, callback: (state: unknown) => void) => () => void
   }
   shellProfiles: {

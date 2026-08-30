@@ -1,6 +1,12 @@
 import { BrowserWindow, ipcMain, WebContents } from 'electron'
 import { promises as fs } from 'fs'
-import type { ShellProfile, TerminalCreateOptions, TerminalExitEvent } from '@shared/types'
+import type { ShellProfile, TerminalCreateOptions, TerminalCreateResult, TerminalExitEvent } from '@shared/types'
+import {
+  sameTerminalSessionIdentity,
+  terminalSessionLookupKey,
+  type TerminalSessionIdentity,
+  type TerminalSessionTarget,
+} from '@shared/terminalSessionIdentity'
 import { detectShellProfiles, detectSshClient } from '../shell-profiles'
 import { buildTerminalHistorySetup } from '../terminal-history'
 import { resolveTerminalWorkspaceRoot } from '../workspace-root'
@@ -22,8 +28,8 @@ import {
   type ManagedTerminalSession,
   type TerminalShutdownResult,
 } from '../terminalSessions'
+import { TerminalDelivery } from '../terminalDelivery'
 import { DeferredTerminalStartupCommand } from '../terminalStartupCommand'
-import { TerminalExitState } from '../terminalEvents'
 
 // node-pty must be required (not imported) due to native module ESM issues
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -43,31 +49,170 @@ interface SpawnedPtyInstance extends Omit<PtyInstance, 'onExit'> {
 
 interface TerminalSession extends ManagedTerminalSession {
   pty: PtyInstance
-  listeners: Set<WebContents>
-  buffer: string
-  exitEvent?: TerminalExitEvent
+  delivery: TerminalDelivery<WebContents>
+  alertListeners: Set<WebContents>
+  agentProvider?: AgentTerminalLaunch['provider']
   agentLifecycle?: AgentTerminalLifecycle
 }
 
 const terminalSessionManager = new TerminalSessionManager()
+const terminalSessionGenerations = new Map<string, number>()
+const terminalSessionTargetsByTile = new Map<string, Map<string, TerminalSessionTarget>>()
+const localAgentAlertTargetsByTile = new Map<string, Set<string>>()
+const terminalSessionCreations = new Map<string, Promise<TerminalCreateResult>>()
 let profiles: ShellProfile[] = []
 let sshClient: string | null = null
+const TERMINAL_BUFFER_LENGTH = 500_000
 const agentAlerts = new SemanticAgentAlertState({ onChange: broadcastAgentAlert })
 const agentAlertBridge = new AgentAlertBridge({
   onAlert: (alert) => {
-    const session = getTerminalSession(alert.tileId)
+    const session = findAgentAlertSession(alert.tileId, alert.provider)
     if (!session) return
     if (session.agentLifecycle && !session.agentLifecycle.onAlert(alert)) return
     agentAlerts.report(alert)
   },
 })
 
+function normalizeTerminalId(value: unknown): string | undefined {
+  if (typeof value !== 'string' || /[\u0000-\u001f\u007f]/.test(value)) return undefined
+  const normalized = value.trim()
+  return normalized || undefined
+}
+
+function normalizeTerminalSessionTarget(
+  input: TerminalSessionTarget,
+  isAgent: boolean,
+): TerminalSessionTarget {
+  const tileId = isAgent ? normalizeAgentOpaqueId(input?.tileId) : normalizeTerminalId(input?.tileId)
+  const workspaceId = isAgent ? normalizeAgentOpaqueId(input?.workspaceId) : normalizeTerminalId(input?.workspaceId)
+  if (!tileId) throw new Error(isAgent ? 'Invalid agent tile id' : 'Invalid terminal tile id')
+  if (!workspaceId) throw new Error(isAgent ? 'Invalid agent workspace id' : 'Invalid terminal workspace id')
+  return { tileId, workspaceId }
+}
+
+function normalizeTerminalSessionIdentity(input: TerminalSessionIdentity): TerminalSessionIdentity {
+  const target = normalizeTerminalSessionTarget(input, false)
+  if (!Number.isInteger(input?.generation) || input.generation < 1) {
+    throw new Error('Invalid terminal session generation')
+  }
+  return { ...target, generation: input.generation }
+}
+
+function getTerminalSession(target: TerminalSessionTarget): TerminalSession | undefined
+function getTerminalSession(identity: TerminalSessionIdentity): TerminalSession | undefined
+function getTerminalSession(
+  targetOrIdentity: TerminalSessionTarget | TerminalSessionIdentity,
+): TerminalSession | undefined {
+  const session = terminalSessionManager.get(terminalSessionLookupKey(targetOrIdentity)) as TerminalSession | undefined
+  if (!session) return undefined
+  if ('generation' in targetOrIdentity
+    && !sameTerminalSessionIdentity(session.delivery.identity, targetOrIdentity)) {
+    return undefined
+  }
+  return session
+}
+
+function attachTerminalListener(
+  session: TerminalSession,
+  identity: TerminalSessionIdentity,
+  sender: WebContents,
+): boolean {
+  if (!session.delivery.attach(identity, sender)) return false
+  session.alertListeners.add(sender)
+  const alert = agentAlerts.get(identity.tileId)
+  if (alert) {
+    try {
+      if (sender.isDestroyed()) {
+        session.alertListeners.delete(sender)
+        session.delivery.detach(identity, sender)
+      }
+      else sender.send(`terminal:agentAlert:${identity.tileId}`, alert)
+    } catch {
+      session.alertListeners.delete(sender)
+    }
+  }
+  sender.once('destroyed', () => {
+    session.delivery.detach(identity, sender)
+    session.alertListeners.delete(sender)
+  })
+  return true
+}
+
+function rememberTerminalTarget(target: TerminalSessionTarget): void {
+  const key = terminalSessionLookupKey(target)
+  const targets = terminalSessionTargetsByTile.get(target.tileId) ?? new Map<string, TerminalSessionTarget>()
+  targets.set(key, { ...target })
+  terminalSessionTargetsByTile.set(target.tileId, targets)
+}
+
+function forgetTerminalTarget(target: TerminalSessionTarget): void {
+  const targets = terminalSessionTargetsByTile.get(target.tileId)
+  if (!targets) return
+  targets.delete(terminalSessionLookupKey(target))
+  if (targets.size === 0) terminalSessionTargetsByTile.delete(target.tileId)
+}
+
+function terminalSessionsForTile(tileId: string): TerminalSession[] {
+  const targets = terminalSessionTargetsByTile.get(tileId)
+  if (!targets) return []
+  const sessions: TerminalSession[] = []
+  for (const target of targets.values()) {
+    const session = getTerminalSession(target)
+    if (session) sessions.push(session)
+  }
+  return sessions
+}
+
+function findAgentAlertSession(
+  tileId: string,
+  provider?: AgentAlertState['provider'],
+): TerminalSession | undefined {
+  const sessions = terminalSessionsForTile(tileId)
+  if (provider) {
+    const providerSessions = sessions.filter(session => session.agentProvider === provider)
+    if (providerSessions.length === 1) return providerSessions[0]
+  }
+  return sessions.length === 1 ? sessions[0] : undefined
+}
+
+function registerLocalAgentAlertTarget(target: TerminalSessionTarget): Record<string, string> {
+  const key = terminalSessionLookupKey(target)
+  const targets = localAgentAlertTargetsByTile.get(target.tileId) ?? new Set<string>()
+  const wasEmpty = targets.size === 0
+  const environment = wasEmpty
+    ? agentAlertBridge.registerLocalTerminal(target.tileId)
+    : agentAlertBridge.getLaunchEnvironment(target.tileId)
+  if (!environment) throw new Error('Agent alert bridge must start before registering terminals')
+  targets.add(key)
+  localAgentAlertTargetsByTile.set(target.tileId, targets)
+  return environment
+}
+
+function unregisterLocalAgentAlertTarget(target: TerminalSessionTarget): void {
+  const targets = localAgentAlertTargetsByTile.get(target.tileId)
+  if (!targets) return
+  targets.delete(terminalSessionLookupKey(target))
+  if (targets.size > 0) return
+  localAgentAlertTargetsByTile.delete(target.tileId)
+  agentAlertBridge.unregisterTerminal(target.tileId)
+}
+
+function nextTerminalGeneration(key: string): number {
+  const generation = (terminalSessionGenerations.get(key) ?? 0) + 1
+  terminalSessionGenerations.set(key, generation)
+  return generation
+}
+
 function broadcastAgentAlert(tileId: string, state: AgentAlertState | null): void {
-  const session = getTerminalSession(tileId)
+  const session = findAgentAlertSession(tileId, state?.provider)
   if (session) {
-    for (const listener of [...session.listeners]) {
-      if (listener.isDestroyed()) session.listeners.delete(listener)
-      else listener.send(`terminal:agentAlert:${tileId}`, state)
+    for (const listener of [...session.alertListeners]) {
+      try {
+        if (listener.isDestroyed()) session.alertListeners.delete(listener)
+        else listener.send(`terminal:agentAlert:${tileId}`, state)
+      } catch {
+        session.alertListeners.delete(listener)
+      }
     }
   }
 
@@ -84,17 +229,14 @@ export function shutdownTerminalSessions(): Promise<TerminalShutdownResult> {
   return terminalSessionManager.shutdownAll()
 }
 
-function getTerminalSession(tileId: string): TerminalSession | undefined {
-  return terminalSessionManager.get(tileId) as TerminalSession | undefined
+function destroyTerminalSession(target: TerminalSessionTarget): void {
+  const deletion = terminalSessionManager.delete(terminalSessionLookupKey(target))
+  if (!deletion || deletion.killRequested) return
+  try { deletion.session.pty.kill() } catch { /* ignore */ }
 }
 
 function resolveProfile(shellProfileId: string): ShellProfile | undefined {
   return profiles.find(p => p.id === shellProfileId)
-}
-
-function resolveTerminalId(tileId: string): string {
-  if (terminalSessionManager.get(tileId)) return tileId
-  return normalizeAgentOpaqueId(tileId) ?? tileId
 }
 
 export function initShellProfiles(): void {
@@ -110,271 +252,322 @@ export function registerTerminalIPC(): void {
 
   ipcMain.handle('terminal:sshAvailable', async () => sshClient !== null)
 
-  ipcMain.handle('terminal:create', async (event, tileId: string, options: TerminalCreateOptions) => {
+  ipcMain.handle('terminal:create', async (_event, target: TerminalSessionTarget, options: TerminalCreateOptions) => {
     const isAgent = options.agent !== undefined
-    const runtimeTileId = isAgent ? normalizeAgentOpaqueId(tileId) ?? '' : tileId
-    const runtimeWorkspaceId = isAgent ? normalizeAgentOpaqueId(options.workspaceId) : options.workspaceId
-    if (isAgent && !runtimeTileId) throw new Error('Invalid agent tile id')
-    if (isAgent && !runtimeWorkspaceId) throw new Error('Invalid agent workspace id')
-    // Check for existing session (reattach)
-    const existing = getTerminalSession(runtimeTileId)
+    const runtimeTarget = normalizeTerminalSessionTarget(target, isAgent)
+    const sessionKey = terminalSessionLookupKey(runtimeTarget)
+
+    // Check for existing session (reattach) before rejecting new sessions during shutdown.
+    const existing = getTerminalSession(runtimeTarget)
     if (existing) {
-      existing.listeners.add(event.sender)
-      return { cols: 80, rows: 24, buffer: existing.buffer, exitEvent: existing.exitEvent }
+      return { cols: 80, rows: 24, ...existing.delivery.snapshot() }
     }
 
-    const isRemoteSsh = options.connection === 'remote-ssh'
-    if (isRemoteSsh && isAgent) {
-      throw new Error('Agent terminals cannot use remote SSH')
-    }
-    const profile = isRemoteSsh ? undefined : resolveProfile(options.shellProfileId)
-    if (!isRemoteSsh && !isAgent && !profile) {
-      throw new Error(`Shell profile "${options.shellProfileId}" not found or not available`)
-    }
-    if (isRemoteSsh && !options.remoteTerminal) {
-      throw new Error('Remote SSH is not configured for this workspace')
-    }
-    if (isRemoteSsh && !sshClient) {
-      throw new Error('OpenSSH client is not available on this computer')
-    }
-
-    const spawnEnv: Record<string, string> = { ...process.env as Record<string, string> }
-    await agentAlertBridge.start()
-    if (isRemoteSsh) agentAlertBridge.registerRemoteTerminal(runtimeTileId)
-    else Object.assign(spawnEnv, agentAlertBridge.registerLocalTerminal(runtimeTileId))
-    const workspacePath = !isRemoteSsh && !isAgent && runtimeWorkspaceId
-      ? await getWorkspacePathById(runtimeWorkspaceId)
-      : null
-    const workspaceRootFolderPath = !isRemoteSsh && runtimeWorkspaceId
-      ? await getWorkspaceRootFolderById(runtimeWorkspaceId)
-      : options.workspaceDir
-    const terminalRoot = profile
-      ? resolveTerminalWorkspaceRoot({
-        shellProfileId: profile.id,
-        workspaceRootFolderPath: workspaceRootFolderPath ?? undefined,
-        wslStartInHome: options.wslStartInHome,
-      })
-      : null
-    const historySetup = profile && !isAgent ? buildTerminalHistorySetup({
-      shellProfileId: profile.id,
-      workspaceId: runtimeWorkspaceId,
-      workspacePath: workspacePath ?? undefined,
-      enabled: options.terminalHistoryEnabled,
-    }) : null
-
-    if (historySetup) {
-      await fs.mkdir(historySetup.historyDir, { recursive: true })
-      Object.assign(spawnEnv, historySetup.env)
-    }
-
-    let agentLaunch: AgentTerminalLaunch | null
-    try {
-      agentLaunch = isAgent
-        ? buildAgentTerminalLaunch({
-          tileId: runtimeTileId,
-          workspaceId: runtimeWorkspaceId ?? '',
-          agent: options.agent!,
-          providerConfig: options.agentProviderConfig,
-          workspaceRoot: workspaceRootFolderPath ?? options.workspaceDir,
-          fallbackCwd: terminalRoot?.cwd ?? process.cwd(),
-        })
-        : null
-    } catch (error) {
-      agentAlertBridge.unregisterTerminal(runtimeTileId)
-      throw error
-    }
-    const spawnArgs = isRemoteSsh
-      ? buildRemoteSshLaunch(options.remoteTerminal!, options.remoteStartupCommand).args
-      : agentLaunch
-        ? [...agentLaunch.args]
-        : [...profile!.args]
-
-    if (terminalRoot && !agentLaunch) spawnArgs.push(...terminalRoot.spawnArgs)
-
-    const executable = isRemoteSsh ? sshClient! : agentLaunch?.command ?? profile!.shell
-    const label = isRemoteSsh ? 'Remote SSH' : agentLaunch ? `${agentLaunch.provider} agent` : profile!.label
     if (!terminalSessionManager.isAcceptingSessions()) {
-      agentAlertBridge.unregisterTerminal(runtimeTileId)
       throw new Error('Terminal sessions are shutting down')
     }
 
-    let spawnedTerm: SpawnedPtyInstance
-    try {
-      spawnedTerm = pty.spawn(executable, spawnArgs, {
-        name: 'xterm-256color',
-        cols: 80,
-        rows: 24,
-        cwd: agentLaunch?.cwd ?? terminalRoot?.cwd ?? process.cwd(),
-        env: spawnEnv,
-      })
-    } catch (err) {
-      agentAlertBridge.unregisterTerminal(runtimeTileId)
-      throw new Error(`Failed to spawn ${label}: ${err instanceof Error ? err.message : String(err)}`)
+    const creating = terminalSessionCreations.get(sessionKey)
+    if (creating) {
+      await creating
+      const session = getTerminalSession(runtimeTarget)
+      if (!session) throw new Error('Terminal session was not registered')
+      return { cols: 80, rows: 24, ...session.delivery.snapshot() }
     }
 
-    let ptyExited = false
-    const exitState = new TerminalExitState<WebContents>(runtimeTileId)
-    spawnedTerm.onExit?.((exitEvent) => {
-      ptyExited = true
-      exitState.record(exitEvent)
-    })
-    const term: PtyInstance = {
-      write: (data) => spawnedTerm.write(data),
-      resize: (cols, rows) => spawnedTerm.resize(cols, rows),
-      kill: () => spawnedTerm.kill(),
-      onData: (callback) => spawnedTerm.onData(callback),
-      onExit: spawnedTerm.onExit
-        ? (callback) => {
-          spawnedTerm.onExit?.(callback)
-          if (ptyExited) callback()
+    const creation = (async (): Promise<TerminalCreateResult> => {
+      const runtimeTileId = runtimeTarget.tileId
+      const runtimeWorkspaceId = runtimeTarget.workspaceId
+      const identity: TerminalSessionIdentity = {
+        ...runtimeTarget,
+        generation: nextTerminalGeneration(sessionKey),
+      }
+      const delivery = new TerminalDelivery<WebContents>(identity, TERMINAL_BUFFER_LENGTH)
+
+      const isRemoteSsh = options.connection === 'remote-ssh'
+      if (isRemoteSsh && isAgent) {
+        delivery.dispose()
+        throw new Error('Agent terminals cannot use remote SSH')
+      }
+      const profile = isRemoteSsh ? undefined : resolveProfile(options.shellProfileId)
+      if (!isRemoteSsh && !isAgent && !profile) {
+        delivery.dispose()
+        throw new Error(`Shell profile "${options.shellProfileId}" not found or not available`)
+      }
+      if (isRemoteSsh && !options.remoteTerminal) {
+        delivery.dispose()
+        throw new Error('Remote SSH is not configured for this workspace')
+      }
+      if (isRemoteSsh && !sshClient) {
+        delivery.dispose()
+        throw new Error('OpenSSH client is not available on this computer')
+      }
+
+      const spawnEnv: Record<string, string> = { ...process.env as Record<string, string> }
+      let workspacePath: string | null = null
+      let workspaceRootFolderPath: string | null | undefined
+      let terminalRoot: ReturnType<typeof resolveTerminalWorkspaceRoot> | null = null
+      let historySetup: ReturnType<typeof buildTerminalHistorySetup> = null
+      try {
+        await agentAlertBridge.start()
+        if (!isRemoteSsh) Object.assign(spawnEnv, registerLocalAgentAlertTarget(runtimeTarget))
+        workspacePath = !isRemoteSsh && !isAgent
+          ? await getWorkspacePathById(runtimeWorkspaceId)
+          : null
+        workspaceRootFolderPath = !isRemoteSsh
+          ? await getWorkspaceRootFolderById(runtimeWorkspaceId)
+          : options.workspaceDir
+        terminalRoot = profile
+          ? resolveTerminalWorkspaceRoot({
+            shellProfileId: profile.id,
+            workspaceRootFolderPath: workspaceRootFolderPath ?? undefined,
+            wslStartInHome: options.wslStartInHome,
+          })
+          : null
+        historySetup = profile && !isAgent ? buildTerminalHistorySetup({
+          shellProfileId: profile.id,
+          workspaceId: runtimeWorkspaceId,
+          workspacePath: workspacePath ?? undefined,
+          enabled: options.terminalHistoryEnabled,
+        }) : null
+
+        if (historySetup) {
+          await fs.mkdir(historySetup.historyDir, { recursive: true })
+          Object.assign(spawnEnv, historySetup.env)
         }
-        : undefined,
-    }
-    let startupCommand: DeferredTerminalStartupCommand | undefined
+      } catch (error) {
+        unregisterLocalAgentAlertTarget(runtimeTarget)
+        delivery.dispose()
+        throw error
+      }
 
-    const agentLifecycle = agentLaunch
-      ? createAgentTerminalLifecycle({
-        registry: agentSessionRegistry,
-        tileId: runtimeTileId,
-        workspaceId: runtimeWorkspaceId!,
+      let agentLaunch: AgentTerminalLaunch | null
+      try {
+        agentLaunch = isAgent
+          ? buildAgentTerminalLaunch({
+            tileId: runtimeTileId,
+            workspaceId: runtimeWorkspaceId,
+            agent: options.agent!,
+            providerConfig: options.agentProviderConfig,
+            workspaceRoot: workspaceRootFolderPath ?? options.workspaceDir,
+            fallbackCwd: terminalRoot?.cwd ?? process.cwd(),
+          })
+          : null
+      } catch (error) {
+        unregisterLocalAgentAlertTarget(runtimeTarget)
+        delivery.dispose()
+        throw error
+      }
+      let spawnArgs: string[]
+      try {
+        spawnArgs = isRemoteSsh
+          ? buildRemoteSshLaunch(options.remoteTerminal!, options.remoteStartupCommand).args
+          : agentLaunch
+            ? [...agentLaunch.args]
+            : [...profile!.args]
+
+        if (terminalRoot && !agentLaunch) spawnArgs.push(...terminalRoot.spawnArgs)
+      } catch (error) {
+        unregisterLocalAgentAlertTarget(runtimeTarget)
+        delivery.dispose()
+        throw error
+      }
+
+      const executable = isRemoteSsh ? sshClient! : agentLaunch?.command ?? profile!.shell
+      const label = isRemoteSsh ? 'Remote SSH' : agentLaunch ? `${agentLaunch.provider} agent` : profile!.label
+      if (!terminalSessionManager.isAcceptingSessions()) {
+        unregisterLocalAgentAlertTarget(runtimeTarget)
+        delivery.dispose()
+        throw new Error('Terminal sessions are shutting down')
+      }
+
+      let spawnedTerm: SpawnedPtyInstance
+      try {
+        spawnedTerm = pty.spawn(executable, spawnArgs, {
+          name: 'xterm-256color',
+          cols: 80,
+          rows: 24,
+          cwd: agentLaunch?.cwd ?? terminalRoot?.cwd ?? process.cwd(),
+          env: spawnEnv,
+        })
+      } catch (err) {
+        unregisterLocalAgentAlertTarget(runtimeTarget)
+        delivery.dispose()
+        throw new Error(`Failed to spawn ${label}: ${err instanceof Error ? err.message : String(err)}`)
+      }
+
+      let ptyExited = false
+      spawnedTerm.onExit?.((exitEvent) => {
+        ptyExited = true
+        delivery.recordExit(exitEvent)
       })
-      : undefined
-    let cleanedUp = false
-    const session: TerminalSession = {
-      pty: term,
-      listeners: new Set([event.sender]),
-      buffer: '',
-      get exitEvent() {
-        return exitState.event
-      },
-      agentLifecycle,
-      onCleanup: () => {
-        if (cleanedUp) return
-        cleanedUp = true
+      const term: PtyInstance = {
+        write: (data) => spawnedTerm.write(data),
+        resize: (cols, rows) => spawnedTerm.resize(cols, rows),
+        kill: () => spawnedTerm.kill(),
+        onData: (callback) => spawnedTerm.onData(callback),
+        onExit: spawnedTerm.onExit
+          ? (callback) => {
+            spawnedTerm.onExit?.(callback)
+            if (ptyExited) callback()
+          }
+          : undefined,
+      }
+      let startupCommand: DeferredTerminalStartupCommand | undefined
+
+      const agentLifecycle = agentLaunch
+        ? createAgentTerminalLifecycle({
+          registry: agentSessionRegistry,
+          tileId: runtimeTileId,
+          workspaceId: runtimeWorkspaceId,
+        })
+        : undefined
+      let processExitHandled = false
+      let disposed = false
+      const onProcessExit = () => {
+        if (processExitHandled) return
+        processExitHandled = true
         session.agentLifecycle?.onExit()
         startupCommand?.dispose()
-        agentAlertBridge.unregisterTerminal(runtimeTileId)
+        unregisterLocalAgentAlertTarget(runtimeTarget)
         agentAlerts.clearOnDestroy(runtimeTileId)
-        session.listeners.clear()
-      },
-    }
-    exitState.attach(session.listeners)
-    const agentExitGate = agentLifecycle
-      ? createAgentTerminalExitGate(() => session.onCleanup())
-      : null
-    if (agentExitGate) term.onExit?.(agentExitGate.handle)
-    else term.onExit?.(() => session.onCleanup())
+      }
+      const onDispose = () => {
+        if (disposed) return
+        disposed = true
+        onProcessExit()
+        session.alertListeners.clear()
+        session.delivery.dispose()
+        forgetTerminalTarget(runtimeTarget)
+      }
+      const session: TerminalSession = {
+        pty: term,
+        delivery,
+        alertListeners: new Set(),
+        agentProvider: agentLaunch?.provider,
+        agentLifecycle,
+        onCleanup: onDispose,
+        onProcessExit,
+        onDispose,
+      }
+      const agentExitGate = agentLifecycle
+        ? createAgentTerminalExitGate(() => session.onProcessExit?.())
+        : null
+      if (agentExitGate) term.onExit?.(agentExitGate.handle)
 
-    if (agentLaunch) {
+      if (agentLaunch) {
+        try {
+          agentSessionRegistry.register({
+            sessionId: agentLaunch.sessionId,
+            tileId: runtimeTileId,
+            workspaceId: runtimeWorkspaceId,
+            provider: agentLaunch.provider,
+          })
+        } catch (error) {
+          unregisterLocalAgentAlertTarget(runtimeTarget)
+          delivery.dispose()
+          try { term.kill() } catch { /* ignore */ }
+          throw error
+        }
+      }
+
       try {
-        agentSessionRegistry.register({
-          sessionId: agentLaunch.sessionId,
-          tileId: runtimeTileId,
-          workspaceId: runtimeWorkspaceId!,
-          provider: agentLaunch.provider,
-        })
+        terminalSessionManager.add(sessionKey, session)
       } catch (error) {
-        agentAlertBridge.unregisterTerminal(runtimeTileId)
+        if (agentLaunch) agentSessionRegistry.remove(runtimeWorkspaceId, runtimeTileId)
+        unregisterLocalAgentAlertTarget(runtimeTarget)
+        delivery.dispose()
         try { term.kill() } catch { /* ignore */ }
         throw error
       }
-    }
-
-    try {
-      terminalSessionManager.add(runtimeTileId, session)
-    } catch (error) {
-      if (agentLaunch) agentSessionRegistry.remove(runtimeWorkspaceId!, runtimeTileId)
-      agentAlertBridge.unregisterTerminal(runtimeTileId)
-      try { term.kill() } catch { /* ignore */ }
-      throw error
-    }
-    agentExitGate?.markRegistered()
-    if (!isRemoteSsh && !isAgent && options.initialCommand?.trim()) {
-      startupCommand = new DeferredTerminalStartupCommand({
-        command: options.initialCommand,
-        write: (data) => term.write(data),
-      })
-    }
-
-    // Clean up listeners when renderer is destroyed
-    event.sender.once('destroyed', () => {
-      session.listeners.delete(event.sender)
-    })
-
-    term.onData((data: string) => {
-      startupCommand?.onOutput(data)
-      session.buffer = (session.buffer + data).slice(-500000)
-      for (const listener of [...session.listeners]) {
-        try {
-          if (!listener.isDestroyed()) {
-            listener.send(`terminal:data:${runtimeTileId}`, data)
-          } else {
-            session.listeners.delete(listener)
-          }
-        } catch {
-          session.listeners.delete(listener)
-        }
+      rememberTerminalTarget(runtimeTarget)
+      agentExitGate?.markRegistered()
+      if (!isRemoteSsh && !isAgent && options.initialCommand?.trim() && !processExitHandled) {
+        startupCommand = new DeferredTerminalStartupCommand({
+          command: options.initialCommand,
+          write: (data) => term.write(data),
+        })
       }
-    })
 
-    if (!agentExitGate) {
-      term.onExit?.(() => {
-        session.agentLifecycle?.onExit()
+      term.onData((data: string) => {
+        startupCommand?.onOutput(data)
+        session.delivery.append(data)
       })
-    }
 
-    if (historySetup?.prependCommand) {
-      term.write(`${historySetup.prependCommand}\r`)
-    }
+      if (historySetup?.prependCommand) {
+        term.write(`${historySetup.prependCommand}\r`)
+      }
 
-    return { cols: 80, rows: 24, buffer: '' }
+      return { cols: 80, rows: 24, ...delivery.snapshot() }
+    })()
+    terminalSessionCreations.set(sessionKey, creation)
+    try {
+      return await creation
+    } finally {
+      if (terminalSessionCreations.get(sessionKey) === creation) terminalSessionCreations.delete(sessionKey)
+    }
   })
 
-  ipcMain.handle('terminal:write', (_, tileId: string, data: string) => {
-    const runtimeTileId = resolveTerminalId(tileId)
-    const session = getTerminalSession(runtimeTileId)
-    if (data) {
-      agentAlerts.clearOnInput(runtimeTileId)
+  ipcMain.handle('terminal:attach', (event, identity: TerminalSessionIdentity) => {
+    const runtimeIdentity = normalizeTerminalSessionIdentity(identity)
+    const session = getTerminalSession(runtimeIdentity)
+    if (!session) throw new Error('Terminal session is no longer active')
+    if (!attachTerminalListener(session, runtimeIdentity, event.sender)) {
+      throw new Error('Terminal session identity is stale')
+    }
+    return { cols: 80, rows: 24, ...session.delivery.snapshot() }
+  })
+
+  ipcMain.handle('terminal:write', (_, identity: TerminalSessionIdentity, data: string) => {
+    const runtimeIdentity = normalizeTerminalSessionIdentity(identity)
+    const session = getTerminalSession(runtimeIdentity)
+    if (session && data) {
+      agentAlerts.clearOnInput(runtimeIdentity.tileId)
       session?.agentLifecycle?.onInput(data)
     }
     session?.pty.write(data)
   })
 
-  ipcMain.handle('terminal:acknowledgeAgentAlert', (_, tileId: string) => {
-    const runtimeTileId = resolveTerminalId(tileId)
-    agentAlerts.clearOnFocus(runtimeTileId)
-    getTerminalSession(runtimeTileId)?.agentLifecycle?.onFocus()
+  ipcMain.handle('terminal:acknowledgeAgentAlert', (_, identity: TerminalSessionIdentity) => {
+    const runtimeIdentity = normalizeTerminalSessionIdentity(identity)
+    const session = getTerminalSession(runtimeIdentity)
+    if (!session) return
+    agentAlerts.clearOnFocus(runtimeIdentity.tileId)
+    session.agentLifecycle?.onFocus()
   })
 
   ipcMain.handle('terminal:setAgentAlertsEnabled', (_, enabled: boolean) => {
     setAgentAlertsEnabled(enabled === true)
   })
 
-  ipcMain.handle('terminal:resize', (_, tileId: string, cols: number, rows: number) => {
+  ipcMain.handle('terminal:resize', (_, identity: TerminalSessionIdentity, cols: number, rows: number) => {
+    const runtimeIdentity = normalizeTerminalSessionIdentity(identity)
     if (cols > 0 && rows > 0) {
-      getTerminalSession(resolveTerminalId(tileId))?.pty.resize(Math.floor(cols), Math.floor(rows))
+      getTerminalSession(runtimeIdentity)?.pty.resize(Math.floor(cols), Math.floor(rows))
     }
   })
 
-  ipcMain.handle('terminal:destroy', (_, tileId: string) => {
-    const runtimeTileId = resolveTerminalId(tileId)
-    const deletion = terminalSessionManager.delete(runtimeTileId)
-    if (deletion) {
-      if (!deletion.killRequested) {
-        try { deletion.session.pty.kill() } catch { /* ignore */ }
-      }
-    } else {
-      agentAlertBridge.unregisterTerminal(runtimeTileId)
-      agentAlerts.clearOnDestroy(runtimeTileId)
-    }
+  ipcMain.handle('terminal:destroy', (_, identity: TerminalSessionIdentity) => {
+    const runtimeIdentity = normalizeTerminalSessionIdentity(identity)
+    const session = getTerminalSession(runtimeIdentity)
+    if (!session) return
+    destroyTerminalSession(runtimeIdentity)
+  })
+
+  ipcMain.handle('terminal:destroyCurrent', (_, target: TerminalSessionTarget) => {
+    const runtimeTarget = normalizeTerminalSessionTarget(target, false)
+    if (!getTerminalSession(runtimeTarget)) return
+    destroyTerminalSession(runtimeTarget)
   })
 
   // terminal:detach — disconnects PTY but doesn't kill the process
   // (not used yet, but kept for future session persistence)
-  ipcMain.handle('terminal:detach', (event, tileId: string) => {
-    const session = getTerminalSession(resolveTerminalId(tileId))
+  ipcMain.handle('terminal:detach', (event, identity: TerminalSessionIdentity) => {
+    const runtimeIdentity = normalizeTerminalSessionIdentity(identity)
+    const session = getTerminalSession(runtimeIdentity)
     if (session) {
-      session.listeners.delete(event.sender)
+      session.delivery.detach(runtimeIdentity, event.sender)
+      session.alertListeners.delete(event.sender)
     }
   })
 }

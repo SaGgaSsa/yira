@@ -40,7 +40,10 @@ import { refreshGridTileContent } from './utils/gridTileRefresh'
 import { DEFAULT_SPLIT_ORIENTATION, toggleSplitOrientation } from './utils/splitViewState'
 import { getTerminalDisplayTitle, normalizeTerminalWindowTitle } from './utils/terminalDisplayTitle'
 import { resolveViewModeTransition } from './utils/viewModeTransition'
-import { shouldKeepSidebarOpenForWorkspace } from './utils/emptyWorkspaceView'
+import {
+  resolveSidebarCollapsedAfterWorkspaceViewChange,
+  shouldKeepSidebarOpenForWorkspace,
+} from './utils/emptyWorkspaceView'
 import { normalizeCanvasStateForJson } from './utils/canvasStateNormalization'
 import {
   clearActivatedWorkspaceAttentionCount,
@@ -397,8 +400,10 @@ export default function App(): React.ReactElement {
   const [tileRefreshKeys, setTileRefreshKeys] = useState<Record<string, number>>({})
   const [tileMenu, setTileMenu] = useState<{ tileId: string; x: number; y: number } | null>(null)
   const [groupMenu, setGroupMenu] = useState<{ groupId: string; x: number; y: number } | null>(null)
+  const [terminalActivationGeneration, setTerminalActivationGeneration] = useState(0)
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const workspaceTransitionRef = useRef(0)
+  const previousSidebarWorkspaceIdRef = useRef(activeWorkspaceId)
   const floatingRestoreRef = useRef<{ workspaceId: string | null; detachedTileIds: Set<string> }>({
     workspaceId: null,
     detachedTileIds: new Set(),
@@ -448,10 +453,16 @@ export default function App(): React.ReactElement {
   }, [clearAllTerminalAttention, terminalAttentionEnabled])
 
   useEffect(() => {
-    if (viewMode === 'fullview') {
-      setSidebarCollapsed(!shouldKeepSidebarOpen)
-    }
-  }, [shouldKeepSidebarOpen, viewMode])
+    const previousWorkspaceId = previousSidebarWorkspaceIdRef.current
+    previousSidebarWorkspaceIdRef.current = activeWorkspaceId
+    setSidebarCollapsed((currentCollapsed) => resolveSidebarCollapsedAfterWorkspaceViewChange(
+      currentCollapsed,
+      previousWorkspaceId,
+      activeWorkspaceId,
+      viewMode,
+      shouldKeepSidebarOpen,
+    ))
+  }, [activeWorkspaceId, shouldKeepSidebarOpen, viewMode])
 
   useEffect(() => {
     void initializeUpdates()
@@ -604,6 +615,7 @@ export default function App(): React.ReactElement {
     } else {
       restoreWorkspaceState(workspace.id, workspace.name, workspace.config, restoredState as CanvasState)
     }
+    setTerminalActivationGeneration((generation) => generation + 1)
 
     if (options?.activationMode === 'focus-last') {
       const focusTarget = resolveWorkspaceFocusTarget(restoredState.tiles, rememberedTileId)
@@ -1486,16 +1498,17 @@ export default function App(): React.ReactElement {
   const handleRefreshTile = useCallback(async (tile: TileState) => {
     setTileMenu(null)
 
+    const workspaceId = activeWorkspaceId
     const confirmed = await requestRefreshTileConfirmation(tile)
     if (!confirmed) return
 
-    if (tile.type === 'terminal') {
+    if (tile.type === 'terminal' && workspaceId) {
       clearTerminalTitle(tile.id)
-      await window.electron.terminal.destroy(tile.id)
+      await window.electron.terminal.destroyCurrent({ workspaceId, tileId: tile.id })
     }
 
     bumpTileRefreshKey(tile.id)
-  }, [bumpTileRefreshKey, clearTerminalTitle, requestRefreshTileConfirmation])
+  }, [activeWorkspaceId, bumpTileRefreshKey, clearTerminalTitle, requestRefreshTileConfirmation])
 
   const handleConfirmWorkspaceEditor = useCallback(async (value: WorkspaceDialogValue) => {
     if (!workspaceEditor) return
@@ -2268,9 +2281,11 @@ export default function App(): React.ReactElement {
                   />
                 ) : activeWorkspaceType === 'grid' && viewMode === 'gridview' ? (
                   <GridView
+                    key={activeWorkspaceId}
                     rootNode={gridViewState.rootNode}
                     tiles={attachedTiles}
                     tileRefreshKeys={tileRefreshKeys}
+                    terminalActivationGeneration={terminalActivationGeneration}
                     focusedTileId={focusedTileId}
                     terminalTitles={terminalTitles}
                     onFocusTile={(tileId) => {
@@ -2292,6 +2307,7 @@ export default function App(): React.ReactElement {
                   />
                 ) : (
                   <Canvas
+                    key={activeWorkspaceId}
                     tileCreationSelectorProps={tileCreationSelectorProps}
                     profiles={availableProfiles}
                     onCreateTerminal={(profileId) => addTerminal(profileId)}
@@ -2317,6 +2333,7 @@ export default function App(): React.ReactElement {
                     onDetachTile={detachTile}
                     onConfirmRemoveFromGroup={confirmRemoveTileFromGroup}
                     tileRefreshKeys={tileRefreshKeys}
+                    terminalActivationGeneration={terminalActivationGeneration}
                     viewMode={viewMode}
                     fullviewActiveTileId={fullviewActiveTileId}
                     splitViewState={splitViewState}

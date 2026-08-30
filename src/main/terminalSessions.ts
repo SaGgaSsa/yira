@@ -8,6 +8,8 @@ export interface ManagedPty {
 export interface ManagedTerminalSession {
   pty: ManagedPty
   onCleanup: () => void
+  onProcessExit?: () => void
+  onDispose?: () => void
 }
 
 export interface DeletedTerminalSession {
@@ -28,6 +30,7 @@ export interface TerminalShutdownResult {
 interface ManagedSessionRecord {
   session: ManagedTerminalSession
   exited: boolean
+  processExitNotified: boolean
   killRequested: boolean
   exitPromise: Promise<void>
   resolveExit: () => void
@@ -62,6 +65,7 @@ export class TerminalSessionManager {
     const record: ManagedSessionRecord = {
       session,
       exited: false,
+      processExitNotified: false,
       killRequested: false,
       exitPromise,
       resolveExit,
@@ -72,6 +76,14 @@ export class TerminalSessionManager {
     session.pty.onExit?.(() => {
       if (record.exited) return
       record.exited = true
+      if (!record.processExitNotified) {
+        record.processExitNotified = true
+        try {
+          record.session.onProcessExit?.()
+        } catch {
+          // A process-exit callback must not prevent shutdown bookkeeping.
+        }
+      }
       record.resolveExit()
     })
   }
@@ -146,7 +158,8 @@ export class TerminalSessionManager {
     if (record.cleanedUp) return
     record.cleanedUp = true
     try {
-      record.session.onCleanup()
+      const onDispose = record.session.onDispose ?? record.session.onCleanup
+      onDispose?.()
     } catch {
       // Cleanup for one session must not prevent cleanup or shutdown of others.
     }

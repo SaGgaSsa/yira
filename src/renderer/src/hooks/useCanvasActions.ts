@@ -310,6 +310,7 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
       if (!tile) return false
 
       const label = tile.label?.trim() || TILE_TYPE_LABELS[tile.type]
+      const workspaceId = useCanvasStore.getState().activeWorkspaceId
       const confirmed = await requestConfirm({
         title: 'Close tile',
         message: `Close "${label}"? Any running session or unsaved surface state may be lost.`,
@@ -319,7 +320,9 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
       })
       if (!confirmed) return false
 
-      if (tile?.type === 'terminal') window.electron.terminal.destroy(tileId)
+      if (tile.type === 'terminal' && workspaceId) {
+        void window.electron.terminal.destroyCurrent({ workspaceId, tileId })
+      }
       if (tile?.type === 'note') window.electron.note.delete(tileId)
       removeTile(tileId)
       return true

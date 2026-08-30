@@ -1,4 +1,5 @@
 import type { TerminalThemeId } from './terminalThemes'
+import type { TerminalSessionIdentity } from './terminalSessionIdentity'
 
 // ─── Agents ────────────────────────────────────────────────────────────────
 
@@ -443,6 +444,7 @@ export interface TerminalCreateResult {
   cols: number
   rows: number
   buffer: string
+  identity: TerminalSessionIdentity
   exitEvent?: TerminalExitEvent
 }
 

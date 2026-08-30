@@ -99,6 +99,7 @@ interface CanvasProps extends CanvasCreationMenuInput {
   splitOrientation?: SplitOrientation
   onFocusSplitPanel?: (panel: SplitPanelId) => void
   workspaceRootPath: string
+  terminalActivationGeneration?: number
 }
 
 export function Canvas({
@@ -128,6 +129,7 @@ export function Canvas({
   splitOrientation = 'vertical',
   onFocusSplitPanel,
   workspaceRootPath,
+  terminalActivationGeneration = 0,
 }: CanvasProps): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<DragState | null>(null)
@@ -740,6 +742,7 @@ export function Canvas({
                   onOpenBrowserTile={onOpenBrowserTile}
                   onOpenFileTile={onOpenFileTile}
                   workspaceRootPath={workspaceRootPath}
+                  terminalActivationGeneration={terminalActivationGeneration}
                 />
               </TileChrome>
             )

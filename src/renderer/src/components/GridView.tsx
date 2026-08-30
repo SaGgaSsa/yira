@@ -21,6 +21,7 @@ interface GridViewProps {
   rootNode: GridLayoutNode | null
   tiles: TileState[]
   tileRefreshKeys: Record<string, number>
+  terminalActivationGeneration?: number
   focusedTileId: string | null
   terminalTitles: Record<string, string>
   onFocusTile: (tileId: string) => void
@@ -90,6 +91,7 @@ export function GridView({
   rootNode,
   tiles,
   tileRefreshKeys,
+  terminalActivationGeneration = 0,
   focusedTileId,
   terminalTitles,
   onFocusTile,
@@ -338,6 +340,7 @@ export function GridView({
               onOpenBrowserTile={onOpenBrowserTile}
               onOpenFileTile={onOpenFileTile}
               workspaceRootPath={workspaceRootPath}
+              terminalActivationGeneration={terminalActivationGeneration}
             />
           </div>
         </section>

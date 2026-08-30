@@ -1,6 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { AgentActiveSessionSnapshot, AgentProviderAvailabilitySnapshot, AgentSessionHistoryQuery, AgentSessionHistoryResult, AgentUsageSnapshot, BoardTask, FileListOptions, FileSearchResult, FileWriteInput, FloatingNavigationEvent, FloatingNavigationRequest, GitCommitHistoryResult, GitRepository, GitStatusResult, NotificationAttentionOptions, TerminalCreateOptions, TerminalCreateResult, TerminalExitEvent, UpdateState, WindowBounds, WindowClosePreparationRequest, WindowClosePreparationResponse, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
 import { createSerialTaskQueue } from '@shared/serialTaskQueue'
+import {
+  terminalSessionDataChannel,
+  terminalSessionExitChannel,
+  type TerminalSessionIdentity,
+  type TerminalSessionTarget,
+} from '@shared/terminalSessionIdentity'
 
 console.log('[preload] Loading...')
 
@@ -123,24 +129,27 @@ contextBridge.exposeInMainWorld('electron', {
 
   // Terminal
   terminal: {
-    create: (tileId: string, options: TerminalCreateOptions) =>
-      ipcRenderer.invoke('terminal:create', tileId, options) as Promise<TerminalCreateResult>,
-    write: (tileId: string, data: string) => ipcRenderer.invoke('terminal:write', tileId, data),
-    resize: (tileId: string, cols: number, rows: number) =>
-      ipcRenderer.invoke('terminal:resize', tileId, cols, rows),
-    destroy: (tileId: string) => ipcRenderer.invoke('terminal:destroy', tileId),
-    detach: (tileId: string) => ipcRenderer.invoke('terminal:detach', tileId),
-    acknowledgeAgentAlert: (tileId: string) => ipcRenderer.invoke('terminal:acknowledgeAgentAlert', tileId),
+    create: (target: TerminalSessionTarget, options: TerminalCreateOptions) =>
+      ipcRenderer.invoke('terminal:create', target, options) as Promise<TerminalCreateResult>,
+    attach: (identity: TerminalSessionIdentity) =>
+      ipcRenderer.invoke('terminal:attach', identity) as Promise<TerminalCreateResult>,
+    write: (identity: TerminalSessionIdentity, data: string) => ipcRenderer.invoke('terminal:write', identity, data),
+    resize: (identity: TerminalSessionIdentity, cols: number, rows: number) =>
+      ipcRenderer.invoke('terminal:resize', identity, cols, rows),
+    destroy: (identity: TerminalSessionIdentity) => ipcRenderer.invoke('terminal:destroy', identity),
+    destroyCurrent: (target: TerminalSessionTarget) => ipcRenderer.invoke('terminal:destroyCurrent', target),
+    detach: (identity: TerminalSessionIdentity) => ipcRenderer.invoke('terminal:detach', identity),
+    acknowledgeAgentAlert: (identity: TerminalSessionIdentity) => ipcRenderer.invoke('terminal:acknowledgeAgentAlert', identity),
     setAgentAlertsEnabled: (enabled: boolean) => ipcRenderer.invoke('terminal:setAgentAlertsEnabled', enabled),
     sshAvailable: () => ipcRenderer.invoke('terminal:sshAvailable'),
-    onData: (tileId: string, callback: (data: string) => void) => {
-      const channel = `terminal:data:${tileId}`
+    onData: (identity: TerminalSessionIdentity, callback: (data: string) => void) => {
+      const channel = terminalSessionDataChannel(identity)
       const handler = (_evt: unknown, data: string) => callback(data)
       ipcRenderer.on(channel, handler)
       return () => { ipcRenderer.removeListener(channel, handler) }
     },
-    onExit: (tileId: string, callback: (event: TerminalExitEvent) => void) => {
-      const channel = `terminal:exit:${tileId}`
+    onExit: (identity: TerminalSessionIdentity, callback: (event: TerminalExitEvent) => void) => {
+      const channel = terminalSessionExitChannel(identity)
       const handler = (_evt: unknown, event: TerminalExitEvent) => callback(event)
       ipcRenderer.on(channel, handler)
       return () => { ipcRenderer.removeListener(channel, handler) }

@@ -6,12 +6,15 @@ import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
 import type { FileTileOpenOptions, TerminalExitEvent, TileState } from '@shared/types'
+import type { TerminalSessionIdentity } from '@shared/terminalSessionIdentity'
 import { useCanvasStore } from '@/store/canvasStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { isTerminalInputAttended } from '@/utils/terminalAttention'
 import { buildTerminalStartupCommand } from '@/utils/terminalLaunch'
 import { createTerminalFitScheduler } from '@/utils/terminalFitScheduler'
 import { sanitizeTerminalReplayBuffer } from '@/utils/terminalReplaySanitizer'
+import { createTerminalReplayController } from '@/utils/terminalReplay'
+import { canFitTerminalAfterActivation } from '@/utils/terminalActivationFit'
 import { getTerminalContainerBackground, getXtermTheme } from '@/utils/terminalTheme'
 import { buildTerminalContextMenuItems } from '@/utils/terminalContextMenu'
 import { createTerminalMarkdownLinkProvider } from '@/utils/terminalMarkdownLinks'
@@ -35,6 +38,7 @@ interface Props {
   onDelete: () => void
   onOpenBrowserTile?: (url: string) => void
   onOpenFileTile?: (relativePath: string, options?: FileTileOpenOptions) => void | Promise<void>
+  terminalActivationGeneration?: number
 }
 
 interface RemoteTerminalReconnectNoticeProps {
@@ -182,13 +186,19 @@ export function shouldRegisterTerminalMarkdownLinks(
   return connection !== 'remote-ssh' && Boolean(workspaceRootPath?.trim()) && hasOpenFileTile
 }
 
-export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVisible = true, autoFocus = false, onFocus, onUpdate, onDelete, onOpenBrowserTile, onOpenFileTile }: Props): React.ReactElement {
+export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVisible = true, autoFocus = false, onFocus, onUpdate, onDelete, onOpenBrowserTile, onOpenFileTile, terminalActivationGeneration = 0 }: Props): React.ReactElement {
   const { t } = useTranslation()
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
+  const sessionIdentityRef = useRef<TerminalSessionIdentity | null>(null)
   const fitSchedulerRef = useRef(createTerminalFitScheduler())
   const isVisibleRef = useRef(isVisible)
+  const currentActivationGenerationRef = useRef(terminalActivationGeneration)
+  const replaySequenceRef = useRef(0)
+  const currentReplayGenerationRef = useRef<number | null>(null)
+  const completedReplayGenerationRef = useRef<number | null>(null)
+  const isStaleRef = useRef(false)
   const attentionEnabled = useSettingsStore((s) => s.terminal.attentionEnabled)
   const attentionEnabledRef = useRef(attentionEnabled)
   const notificationsMutedRef = useRef(tile.notificationsMuted === true)
@@ -202,6 +212,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
   const onOpenFileTileRef = useRef<Props['onOpenFileTile']>(onOpenFileTile)
   onOpenFileTileRef.current = onOpenFileTile
   isVisibleRef.current = isVisible
+  currentActivationGenerationRef.current = terminalActivationGeneration
 
   const openMarkdownFileTile = useCallback((relativePath: string, options: FileTileOpenOptions = { markdownView: 'preview' }): void | Promise<void> => {
     const openFileTile = onOpenFileTileRef.current
@@ -252,11 +263,13 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
 
   const reconnectRemoteTerminal = useCallback(async () => {
     if (reconnecting || tile.terminalConnection !== 'remote-ssh') return
+    const identity = sessionIdentityRef.current
+    if (!identity) return
     setReconnecting(true)
 
     try {
       await restartTerminalAfterExit(
-        () => window.electron.terminal.destroy(tile.id),
+        () => window.electron.terminal.destroy(identity),
         () => {
           setTerminalExit(null)
           setSessionGeneration((generation) => generation + 1)
@@ -269,15 +282,38 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
   }, [reconnecting, tile.id, tile.terminalConnection])
 
   // Fit terminal to container
-  const doFit = useCallback(() => {
+  const doFit = useCallback((requestedReplayGeneration = completedReplayGenerationRef.current) => {
     if (!isVisibleRef.current) {
       fitSchedulerRef.current.cancelPending()
       return
     }
     if (!fitRef.current || !termRef.current || !containerRef.current) return
+    const identity = sessionIdentityRef.current
+    if (!identity) return
+    const activationGeneration = currentActivationGenerationRef.current
+    if (!canFitTerminalAfterActivation({
+      isVisible: isVisibleRef.current,
+      activationGeneration,
+      currentActivationGeneration: currentActivationGenerationRef.current,
+      replayGeneration: requestedReplayGeneration,
+      currentReplayGeneration: currentReplayGenerationRef.current,
+      isStale: isStaleRef.current,
+    })) {
+      fitSchedulerRef.current.cancelPending()
+      return
+    }
     try {
       fitSchedulerRef.current.requestFit(fitRef.current, (cols, rows) => {
-        window.electron.terminal.resize(tile.id, cols, rows)
+        if (sessionIdentityRef.current !== identity) return
+        if (!canFitTerminalAfterActivation({
+          isVisible: isVisibleRef.current,
+          activationGeneration,
+          currentActivationGeneration: currentActivationGenerationRef.current,
+          replayGeneration: requestedReplayGeneration,
+          currentReplayGeneration: currentReplayGenerationRef.current,
+          isStale: isStaleRef.current,
+        })) return
+        window.electron.terminal.resize(identity, cols, rows)
       })
     } catch { /* ignore */ }
   }, [tile.id])
@@ -297,6 +333,12 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
   // Create terminal + PTY on mount
   useEffect(() => {
     if (!containerRef.current) return
+
+    const replayGeneration = replaySequenceRef.current + 1
+    replaySequenceRef.current = replayGeneration
+    currentReplayGenerationRef.current = replayGeneration
+    completedReplayGenerationRef.current = null
+    isStaleRef.current = false
 
     const { activeWorkspaceId, activeWorkspaceConfig: workspaceConfig } = useCanvasStore.getState()
     const isRemoteSsh = tile.terminalConnection === 'remote-ssh'
@@ -381,7 +423,8 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
       attentionEnabled: () => attentionEnabledRef.current,
       clearActivity: () => {
         useCanvasStore.getState().clearTerminalAttention(tile.id)
-        void window.electron.terminal.acknowledgeAgentAlert(tile.id)
+        const identity = sessionIdentityRef.current
+        if (identity) void window.electron.terminal.acknowledgeAgentAlert(identity)
       },
     })
     window.addEventListener('focus', clearAttentionIfAttended)
@@ -398,6 +441,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
     let exitUnsub: (() => void) | null = null
     let agentAlertUnsub: (() => void) | null = null
     let inputDisposer: { dispose: () => void } | null = null
+    let replayController: ReturnType<typeof createTerminalReplayController> | null = null
     const titleDisposer = term.onTitleChange((title) => {
       useCanvasStore.getState().setTerminalTitle(tile.id, title)
     })
@@ -414,14 +458,8 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
     })
     const initialCommand = isRemoteSsh ? undefined : buildTerminalStartupCommand(tile, workspaceConfig)
 
-    exitUnsub = window.electron.terminal.onExit(tile.id, (exitEvent) => {
-      if (cancelled || !isRemoteSsh) return
-      setTerminalExit(exitEvent)
-      setReconnecting(false)
-    })
-
     window.electron.terminal
-      .create(tile.id, {
+      .create({ tileId: tile.id, workspaceId: activeWorkspaceId }, {
         shellProfileId: tile.shellProfileId ?? 'bash',
         connection: isRemoteSsh ? 'remote-ssh' : undefined,
         remoteTerminal: isRemoteSsh ? workspaceConfig.remoteTerminal : undefined,
@@ -436,44 +474,63 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
           ? workspaceConfig.agentProviders[tile.agent.provider]
           : undefined,
       })
-      .then(({ buffer, exitEvent }) => {
+      .then(async ({ identity: createdIdentity }) => {
         if (cancelled) return
-        setReconnecting(false)
-        setTerminalExit(getRemoteTerminalExitEvent(tile.terminalConnection, exitEvent))
-        useCanvasStore.getState().registerTerminalCreated(tile.id)
-        if (buffer) term.write(sanitizeTerminalReplayBuffer(buffer))
-
-        // Listen for PTY data
-        ptyUnsub = window.electron.terminal.onData(tile.id, (data: string) => {
-          if (cancelled) return
-
-          handleTerminalOutput({
-            data,
-            term,
-            attentionEnabled: attentionEnabledRef.current,
-            notificationsMuted: notificationsMutedRef.current,
-            isWindowFocused: document.hasFocus(),
-            activeElement: document.activeElement,
-            markActivity: () => {
-              useCanvasStore.getState().markTerminalOutput(tile.id)
-            },
-            clearActivity: () => {
-              useCanvasStore.getState().clearTerminalAttention(tile.id)
-            },
-          })
+        sessionIdentityRef.current = createdIdentity
+        const isCurrent = () => !cancelled && sessionIdentityRef.current === createdIdentity
+        replayController = createTerminalReplayController({
+          isCurrent,
+          write: (data, callback) => term.write(data, callback),
+          onData: (data) => {
+            handleTerminalOutput({
+              data,
+              term,
+              attentionEnabled: attentionEnabledRef.current,
+              notificationsMuted: notificationsMutedRef.current,
+              isWindowFocused: document.hasFocus(),
+              activeElement: document.activeElement,
+              markActivity: () => {
+                useCanvasStore.getState().markTerminalOutput(tile.id)
+              },
+              clearActivity: () => {
+                useCanvasStore.getState().clearTerminalAttention(tile.id)
+              },
+            })
+          },
+          onExit: (exitEvent) => {
+            if (!isCurrent() || !isRemoteSsh) return
+            setTerminalExit(exitEvent)
+            setReconnecting(false)
+          },
+          onReplayComplete: () => {
+            if (!isCurrent()) return
+            completedReplayGenerationRef.current = replayGeneration
+            doFit(replayGeneration)
+          },
         })
 
+        // Register identity-specific listeners before attaching the renderer.
+        ptyUnsub = window.electron.terminal.onData(createdIdentity, replayController.onData)
+        exitUnsub = window.electron.terminal.onExit(createdIdentity, replayController.onExit)
         agentAlertUnsub = window.electron.terminal.onAgentAlert(tile.id, (state: unknown) => {
           handleTerminalAgentAlert(state, term)
         })
 
         // Send user input to PTY
         inputDisposer = term.onData((data: string) => {
-          window.electron.terminal.write(tile.id, data)
+          if (!isCurrent()) return
+          void window.electron.terminal.write(createdIdentity, data)
         })
 
-        // Initial fit
-        doFit()
+        const attached = await window.electron.terminal.attach(createdIdentity)
+        if (!isCurrent()) return
+        setReconnecting(false)
+        useCanvasStore.getState().registerTerminalCreated(tile.id)
+        // Replay now owns the ordered equivalent of: if (buffer) term.write(sanitizeTerminalReplayBuffer(buffer))
+        replayController.replay({
+          buffer: sanitizeTerminalReplayBuffer(attached.buffer),
+          exitEvent: attached.exitEvent,
+        })
       })
       .catch((err: Error) => {
         if (cancelled) return
@@ -487,6 +544,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
     // Cleanup on unmount / before re-run
     return () => {
       cancelled = true
+      isStaleRef.current = true
       fitSchedulerRef.current.cancelPending()
       ro.disconnect()
       removeTerminalInputFocusListener()
@@ -495,10 +553,15 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
       exitUnsub?.()
       agentAlertUnsub?.()
       inputDisposer?.dispose()
+      replayController?.dispose()
       markdownLinkDisposer?.dispose()
       osc52Disposer.dispose()
       titleDisposer.dispose()
-      window.electron?.terminal?.detach?.(tile.id)
+      const identity = sessionIdentityRef.current
+      if (identity) window.electron?.terminal?.detach?.(identity)
+      sessionIdentityRef.current = null
+      currentReplayGenerationRef.current = null
+      completedReplayGenerationRef.current = null
       term.dispose()
       termRef.current = null
       fitRef.current = null
@@ -522,7 +585,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
     }
     applyTerminalPadding(containerRef.current, edgeToEdge)
     doFit()
-  }, [edgeToEdge, doFit, isVisible])
+  }, [edgeToEdge, doFit, isVisible, terminalActivationGeneration])
 
   // Re-fit on width/height changes
   useEffect(() => {

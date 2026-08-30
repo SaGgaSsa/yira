@@ -1,4 +1,6 @@
 import { createRequire } from 'node:module'
+import { readFile } from 'node:fs/promises'
+import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createElement } from 'react'
 import type { CanvasState, TileState } from '@shared/types'
@@ -6,6 +8,7 @@ import { useCanvasStore } from '@/store/canvasStore'
 import { renderToStaticMarkup } from 'react-dom/server'
 
 const require = createRequire(import.meta.url)
+const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..')
 const cssExtensions = require.extensions as Record<string, (module: NodeModule, filename: string) => void>
 cssExtensions['.css'] = () => {}
 const { transformSync } = require('esbuild') as typeof import('esbuild')
@@ -31,6 +34,40 @@ const {
   registerTerminalInputFocusListener,
   shouldRegisterTerminalMarkdownLinks,
 } = loadWithJiti<typeof import('./TerminalTile')>('./TerminalTile.tsx')
+
+const preloadSource = await readFile(resolve(repositoryRoot, 'src/preload/index.ts'), 'utf8')
+const electronTypesSource = await readFile(resolve(repositoryRoot, 'src/renderer/src/electron.d.ts'), 'utf8')
+const terminalTileSource = await readFile(resolve(repositoryRoot, 'src/renderer/src/components/TerminalTile.tsx'), 'utf8')
+
+if (!preloadSource.includes('terminalSessionDataChannel') || !preloadSource.includes('terminalSessionExitChannel')) {
+  throw new Error('terminal preload listeners must use canonical identity channel helpers')
+}
+if (preloadSource.includes('`terminal:data:${tileId}`') || preloadSource.includes('`terminal:exit:${tileId}`')) {
+  throw new Error('terminal preload listeners must not build channels from tile ids')
+}
+if (!preloadSource.includes("ipcRenderer.invoke('terminal:attach', identity)")) {
+  throw new Error('terminal preload must attach a session after registering listeners')
+}
+if (!electronTypesSource.includes('create: (target: TerminalSessionTarget')) {
+  throw new Error('terminal create must accept a workspace-scoped target')
+}
+if (!electronTypesSource.includes('write: (identity: TerminalSessionIdentity')) {
+  throw new Error('terminal write must require a complete session identity')
+}
+for (const operation of ['resize', 'destroy', 'detach', 'acknowledgeAgentAlert', 'onData', 'onExit']) {
+  if (!electronTypesSource.includes(`${operation}: (identity: TerminalSessionIdentity`)) {
+    throw new Error(`terminal ${operation} must require a complete session identity`)
+  }
+}
+if (!terminalTileSource.includes('sessionIdentityRef')) {
+  throw new Error('TerminalTile must retain its session identity in a ref')
+}
+if (!terminalTileSource.includes('workspaceId: activeWorkspaceId')) {
+  throw new Error('TerminalTile must create sessions with the active workspace id')
+}
+if (terminalTileSource.includes('term.reset()') || terminalTileSource.includes('term.clear()')) {
+  throw new Error('terminal exit finalization must not reset or clear xterm')
+}
 
 const hiddenReconnectNotice = renderToStaticMarkup(
   createElement(RemoteTerminalReconnectNotice, {

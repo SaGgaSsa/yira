@@ -26,9 +26,10 @@ interface TileContentProps {
   onOpenBrowserTile?: (url: string) => void
   onOpenFileTile?: (relativePath: string, options?: FileTileOpenOptions) => void | Promise<void>
   workspaceRootPath?: string
+  terminalActivationGeneration?: number
 }
 
-export function TileContent({ tile, isFocused, edgeToEdge = false, isVisible = true, autoFocus = false, onFocus, onUpdate, onOpenBrowserTile, onOpenFileTile, workspaceRootPath = '' }: TileContentProps): React.ReactElement {
+export function TileContent({ tile, isFocused, edgeToEdge = false, isVisible = true, autoFocus = false, onFocus, onUpdate, onOpenBrowserTile, onOpenFileTile, workspaceRootPath = '', terminalActivationGeneration = 0 }: TileContentProps): React.ReactElement {
   if (tile.type === 'terminal') {
     return (
       <TerminalTileWrapper
@@ -42,6 +43,7 @@ export function TileContent({ tile, isFocused, edgeToEdge = false, isVisible = t
         onDelete={() => {}}
         onOpenBrowserTile={onOpenBrowserTile}
         onOpenFileTile={onOpenFileTile}
+        terminalActivationGeneration={terminalActivationGeneration}
       />
     )
   }
