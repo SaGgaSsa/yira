@@ -1,7 +1,7 @@
 import * as electron from 'electron'
 import { promises as fs, readFileSync } from 'fs'
 import { isAbsolute, join, relative, resolve } from 'path'
-import type { AgentProvider, Config, Workspace, AppSettings, WorkspaceConfig, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceOpenFolderResult, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
+import type { AgentProvider, Config, Workspace, AppSettings, RemoteTerminalConfig, WorkspaceConfig, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceOpenFolderResult, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
 import { DEFAULT_SETTINGS } from '@shared/types'
 import {
   mergeAgentProvidersConfig,
@@ -105,6 +105,11 @@ export async function getWorkspacePathById(workspaceId: string): Promise<string 
 export async function getWorkspaceRootFolderById(workspaceId: string): Promise<string | null> {
   const config = await readConfig()
   return config.workspaces.find(w => w.id === workspaceId)?.config.rootFolderPath ?? null
+}
+
+export async function getWorkspaceRemoteTerminalById(workspaceId: string): Promise<RemoteTerminalConfig | null> {
+  const config = await readConfig()
+  return config.workspaces.find(w => w.id === workspaceId)?.config.remoteTerminal ?? null
 }
 
 /** Returns only the Git settings needed by the main-process Git IPC handlers. */

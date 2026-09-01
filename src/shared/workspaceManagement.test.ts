@@ -58,7 +58,14 @@ const managed = applyWorkspaceManagementChanges({
       terminalHistoryEnabled: false,
       workspacePanelOpen: false,
       sourceControlViewMode: 'tree',
-      remoteTerminal: { host: 'notebook.tailnet.ts.net', user: 'dev' },
+      remoteTerminal: {
+        host: 'notebook.tailnet.ts.net',
+        user: 'dev',
+        wakeOnLan: {
+          enabled: true,
+          macAddress: 'aa-bb-cc-dd-ee-ff',
+        },
+      },
       sourceControlRepositoryPaths: ['src/./app', 'src//app', '../unsafe'],
     },
     {
@@ -83,6 +90,15 @@ if (managed.workspaces[0].config.terminalHistoryEnabled !== false) throw new Err
 if (managed.workspaces[0].config.workspacePanelOpen !== false) throw new Error('workspace panel toggle must be preserved')
 if (managed.workspaces[0].config.sourceControlViewMode !== 'tree') throw new Error('source control view mode must be preserved')
 if (managed.workspaces[0].config.remoteTerminal?.host !== 'notebook.tailnet.ts.net') throw new Error('remote terminal config must be preserved')
+if (managed.workspaces[0].config.remoteTerminal?.wakeOnLan?.enabled !== true) {
+  throw new Error('Wake-on-LAN must remain enabled through management changes')
+}
+if (managed.workspaces[0].config.remoteTerminal?.wakeOnLan?.macAddress !== 'AA:BB:CC:DD:EE:FF') {
+  throw new Error('Wake-on-LAN MAC must be canonical after management changes')
+}
+if (managed.workspaces[0].config.remoteTerminal?.wakeOnLan?.port !== 9) {
+  throw new Error('Wake-on-LAN defaults must persist through management changes')
+}
 if (sourceControlPaths(managed.workspaces[0].config).join('|') !== 'src/app') {
   throw new Error('changing a workspace root must retain an explicit normalized repository selection')
 }

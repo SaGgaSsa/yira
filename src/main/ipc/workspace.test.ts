@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { AgentProvider, Workspace } from '@shared/types'
 import { normalizeWorkspaceConfig } from '@shared/workspaceConfig'
-import { createWorkspaceFromInput, normalizeWorkspace, updateWorkspace } from './workspace'
+import { createWorkspaceFromInput, getWorkspaceRemoteTerminalById, normalizeWorkspace, updateWorkspace } from './workspace'
 
 type SourceControlConfig = Workspace['config'] & {
   sourceControlRepositoryPaths: string[]
@@ -38,6 +38,46 @@ test('persists workspace agent provider through load, create, and update normali
 
   const cleared = updateWorkspace(workspace('cleared', 'claude'), { config: { agentProvider: undefined } })
   assert.equal(cleared.config.agentProvider, undefined)
+})
+
+test('persists Wake-on-LAN through workspace creation and update normalization', () => {
+  const created = createWorkspaceFromInput({
+    name: 'Wake-on-LAN created',
+    remoteTerminal: {
+      host: '192.168.1.40',
+      user: 'dev',
+      wakeOnLan: {
+        enabled: true,
+        macAddress: 'aa-bb-cc-dd-ee-ff',
+      },
+    },
+  })
+
+  assert.equal(created.config.remoteTerminal?.wakeOnLan?.enabled, true)
+  assert.equal(created.config.remoteTerminal?.wakeOnLan?.macAddress, 'AA:BB:CC:DD:EE:FF')
+  assert.equal(created.config.remoteTerminal?.wakeOnLan?.broadcastAddress, '255.255.255.255')
+  assert.equal(created.config.remoteTerminal?.wakeOnLan?.port, 9)
+
+  const existing = workspace('wake-on-lan')
+  const updated = updateWorkspace(existing, {
+    config: {
+      remoteTerminal: {
+        host: '192.168.1.40',
+        user: 'dev',
+        wakeOnLan: {
+          enabled: true,
+          macAddress: 'AA:BB:CC:DD:EE:FF',
+        },
+      },
+    },
+  })
+
+  assert.equal(updated.config.remoteTerminal?.wakeOnLan?.enabled, true)
+  assert.equal(updated.config.remoteTerminal?.wakeOnLan?.port, 9)
+})
+
+test('returns no remote terminal for a missing workspace', async () => {
+  assert.equal(await getWorkspaceRemoteTerminalById('__missing-wake-on-lan-workspace__'), null)
 })
 
 test('clears an initial command when the update explicitly omits its value', () => {

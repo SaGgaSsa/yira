@@ -155,10 +155,23 @@ export interface AgentUsageSnapshot {
 export type WorkspaceType = 'canvas' | 'grid'
 export type SourceControlViewMode = 'list' | 'tree'
 
+export interface WakeOnLanConfig {
+  enabled: boolean
+  macAddress: string
+  broadcastAddress?: string
+  port?: number
+}
+
 export interface RemoteTerminalConfig {
   host: string
   user: string
   port?: number
+  wakeOnLan?: WakeOnLanConfig
+}
+
+export interface RemotePreparationResult {
+  status: 'disabled' | 'available' | 'host-online' | 'woken'
+  wakeSent: boolean
 }
 
 export interface Workspace {

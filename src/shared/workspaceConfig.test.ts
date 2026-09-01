@@ -84,6 +84,115 @@ if (remote.remoteTerminal?.host !== 'notebook.tailnet.ts.net') throw new Error('
 if (remote.remoteTerminal?.user !== 'dev') throw new Error('remote user must be trimmed')
 if (remote.remoteTerminal?.port !== 2202) throw new Error('remote port must be preserved')
 
+const wakeOnLan = normalizeWorkspaceConfig({
+  remoteTerminal: {
+    host: '192.168.1.40',
+    user: 'dev',
+    wakeOnLan: {
+      enabled: true,
+      macAddress: 'aa-bb-cc-dd-ee-ff',
+      broadcastAddress: ' 192.168.1.255 ',
+      port: 9,
+    },
+  },
+})
+if (wakeOnLan.remoteTerminal?.wakeOnLan?.enabled !== true) throw new Error('Wake-on-LAN must remain enabled for a valid config')
+if (wakeOnLan.remoteTerminal?.wakeOnLan?.macAddress !== 'AA:BB:CC:DD:EE:FF') {
+  throw new Error('Wake-on-LAN MAC must use canonical form')
+}
+if (wakeOnLan.remoteTerminal?.wakeOnLan?.broadcastAddress !== '192.168.1.255') {
+  throw new Error('Wake-on-LAN broadcast address must be trimmed')
+}
+if (wakeOnLan.remoteTerminal?.wakeOnLan?.port !== 9) throw new Error('Wake-on-LAN UDP port must be preserved')
+
+const wakeOnLanDefaults = normalizeWorkspaceConfig({
+  remoteTerminal: {
+    host: '192.168.1.40',
+    user: 'dev',
+    wakeOnLan: {
+      enabled: true,
+      macAddress: 'AA:BB:CC:DD:EE:FF',
+    },
+  },
+})
+if (wakeOnLanDefaults.remoteTerminal?.wakeOnLan?.broadcastAddress !== '255.255.255.255') {
+  throw new Error('active Wake-on-LAN must default to the global broadcast address')
+}
+if (wakeOnLanDefaults.remoteTerminal?.wakeOnLan?.port !== 9) {
+  throw new Error('active Wake-on-LAN must default to UDP port 9')
+}
+
+const disabledWakeOnLan = normalizeWorkspaceConfig({
+  remoteTerminal: {
+    host: '192.168.1.40',
+    user: 'dev',
+    wakeOnLan: {
+      enabled: false,
+      macAddress: 'aa:bb:cc:dd:ee:ff',
+    },
+  },
+})
+if (disabledWakeOnLan.remoteTerminal?.wakeOnLan?.enabled !== false) {
+  throw new Error('disabled Wake-on-LAN must remain disabled')
+}
+if (disabledWakeOnLan.remoteTerminal?.wakeOnLan?.broadcastAddress !== undefined) {
+  throw new Error('disabled Wake-on-LAN must not receive active defaults')
+}
+
+const invalidWakeOnLan = normalizeWorkspaceConfig({
+  remoteTerminal: {
+    host: '192.168.1.40',
+    user: 'dev',
+    wakeOnLan: {
+      enabled: true,
+      macAddress: 'invalid',
+    },
+  },
+})
+if (invalidWakeOnLan.remoteTerminal?.wakeOnLan?.enabled !== false) {
+  throw new Error('invalid Wake-on-LAN config must be disabled')
+}
+
+const invalidBroadcastWakeOnLan = normalizeWorkspaceConfig({
+  remoteTerminal: {
+    host: '192.168.1.40',
+    user: 'dev',
+    wakeOnLan: {
+      enabled: true,
+      macAddress: 'AA:BB:CC:DD:EE:FF',
+      broadcastAddress: 'broadcast.local',
+    },
+  },
+})
+if (invalidBroadcastWakeOnLan.remoteTerminal?.wakeOnLan?.enabled !== false) {
+  throw new Error('invalid Wake-on-LAN broadcast must disable the config')
+}
+
+const invalidPortWakeOnLan = normalizeWorkspaceConfig({
+  remoteTerminal: {
+    host: '192.168.1.40',
+    user: 'dev',
+    wakeOnLan: {
+      enabled: true,
+      macAddress: 'AA:BB:CC:DD:EE:FF',
+      port: 65536,
+    },
+  },
+})
+if (invalidPortWakeOnLan.remoteTerminal?.wakeOnLan?.enabled !== false) {
+  throw new Error('out-of-range Wake-on-LAN port must disable the config')
+}
+
+const missingWakeOnLan = normalizeWorkspaceConfig({
+  remoteTerminal: {
+    host: '192.168.1.40',
+    user: 'dev',
+  },
+})
+if (missingWakeOnLan.remoteTerminal?.wakeOnLan !== undefined) {
+  throw new Error('missing Wake-on-LAN config must remain absent')
+}
+
 const invalidRemote = normalizeWorkspaceConfig({
   remoteTerminal: {
     host: '   ',
