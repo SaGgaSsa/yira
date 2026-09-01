@@ -37,6 +37,12 @@ test('binds before broadcast and sends three packets with normalized defaults', 
       events.push('bind')
       callback()
     },
+    once(event: 'error', _listener: (error: Error) => void) {
+      events.push(`once:${event}`)
+    },
+    removeListener(event: 'error', _listener: (error: Error) => void) {
+      events.push(`remove:${event}`)
+    },
     setBroadcast(enabled: boolean) {
       events.push(`broadcast:${enabled}`)
     },
@@ -73,7 +79,9 @@ test('binds before broadcast and sends three packets with normalized defaults', 
   const mac = Buffer.from('AABBCCDDEEFF', 'hex')
   const expectedPacket = Buffer.concat([Buffer.alloc(6, 0xff), ...Array.from({ length: 16 }, () => mac)])
   assert.deepEqual(events, [
+    'once:error',
     'bind',
+    'remove:error',
     'broadcast:true',
     'send:0',
     'complete:0',
@@ -102,6 +110,12 @@ test('closes the socket once when sending fails', async () => {
     bind(callback: () => void) {
       callback()
     },
+    once(_event: 'error', _listener: (error: Error) => void) {
+      // The fake models the dgram boundary only.
+    },
+    removeListener(_event: 'error', _listener: (error: Error) => void) {
+      // The fake models the dgram boundary only.
+    },
     setBroadcast(_enabled: boolean) {
       // The fake models the dgram boundary only.
     },
@@ -127,5 +141,55 @@ test('closes the socket once when sending fails', async () => {
     { message: 'UDP send failed' },
   )
   assert.equal(sends, 1)
+  assert.equal(closeCalls, 1)
+})
+
+test('rejects and closes when the socket emits a bind error', async () => {
+  const bindError = new Error('UDP bind failed')
+  let bindErrorListener: ((error: Error) => void) | undefined
+  let removeListenerCalls = 0
+  let closeCalls = 0
+  const socket = {
+    bind(_callback: () => void) {
+      queueMicrotask(() => bindErrorListener?.(bindError))
+    },
+    once(event: 'error', listener: (error: Error) => void) {
+      assert.equal(event, 'error')
+      bindErrorListener = listener
+    },
+    removeListener(event: 'error', listener: (error: Error) => void) {
+      assert.equal(event, 'error')
+      removeListenerCalls += 1
+      if (bindErrorListener === listener) bindErrorListener = undefined
+    },
+    setBroadcast(_enabled: boolean) {
+      throw new Error('setBroadcast must not run after bind failure')
+    },
+    send(
+      _message: Uint8Array,
+      _port: number,
+      _address: string,
+      _callback: (error: Error | null) => void,
+    ) {
+      throw new Error('send must not run after bind failure')
+    },
+    close() {
+      closeCalls += 1
+      throw Object.assign(new Error('Socket is not running'), {
+        code: 'ERR_SOCKET_DGRAM_NOT_RUNNING',
+      })
+    },
+  }
+
+  const operation = sendWakeOnLan(
+    { enabled: true, macAddress: 'AA:BB:CC:DD:EE:FF' },
+    { createSocket: () => socket, delay: async () => undefined },
+  )
+  const timeout = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error('bind test timed out')), 50)
+  })
+
+  await assert.rejects(Promise.race([operation, timeout]), { message: bindError.message })
+  assert.equal(removeListenerCalls, 1)
   assert.equal(closeCalls, 1)
 })

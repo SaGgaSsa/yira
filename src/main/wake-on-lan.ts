@@ -14,6 +14,8 @@ const SEND_INTERVAL_MS = 250
 
 export interface WakeOnLanSocket {
   bind: (callback: () => void) => void
+  once: (event: 'error', listener: (error: Error) => void) => void
+  removeListener: (event: 'error', listener: (error: Error) => void) => void
   setBroadcast: (enabled: boolean) => void
   send: (
     message: Uint8Array,
@@ -61,6 +63,12 @@ function createDefaultSocket(): WakeOnLanSocket {
     bind: (callback) => {
       socket.bind(callback)
     },
+    once: (event, listener) => {
+      socket.once(event, listener)
+    },
+    removeListener: (event, listener) => {
+      socket.removeListener(event, listener)
+    },
     setBroadcast: (enabled) => {
       socket.setBroadcast(enabled)
     },
@@ -74,8 +82,34 @@ function createDefaultSocket(): WakeOnLanSocket {
 }
 
 function waitForBind(socket: WakeOnLanSocket): Promise<void> {
-  return new Promise((resolve) => {
-    socket.bind(resolve)
+  return new Promise((resolve, reject) => {
+    let settled = false
+    const onError = (error: Error): void => {
+      if (settled) return
+      settled = true
+      cleanup()
+      reject(error)
+    }
+    const onBound = (): void => {
+      if (settled) return
+      settled = true
+      cleanup()
+      resolve()
+    }
+    function cleanup(): void {
+      try {
+        socket.removeListener('error', onError)
+      } catch {
+        // Cleanup must not replace the bind result.
+      }
+    }
+
+    socket.once('error', onError)
+    try {
+      socket.bind(onBound)
+    } catch (error) {
+      onError(error instanceof Error ? error : new Error(String(error)))
+    }
   })
 }
 
@@ -115,6 +149,7 @@ export async function sendWakeOnLan(
     socket.close()
   }
 
+  let operationFailed = false
   try {
     await waitForBind(socket)
     socket.setBroadcast(true)
@@ -123,7 +158,14 @@ export async function sendWakeOnLan(
       await sendPacket(socket, packet, port, broadcastAddress)
       if (attempt < SEND_COUNT - 1) await delay(SEND_INTERVAL_MS)
     }
+  } catch (error) {
+    operationFailed = true
+    throw error
   } finally {
-    close()
+    try {
+      close()
+    } catch (error) {
+      if (!operationFailed) throw error
+    }
   }
 }
