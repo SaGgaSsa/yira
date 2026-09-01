@@ -81,7 +81,6 @@ test('binds before broadcast and sends three packets with normalized defaults', 
   assert.deepEqual(events, [
     'once:error',
     'bind',
-    'remove:error',
     'broadcast:true',
     'send:0',
     'complete:0',
@@ -92,6 +91,7 @@ test('binds before broadcast and sends three packets with normalized defaults', 
     'send:2',
     'complete:2',
     'close',
+    'remove:error',
   ])
   assert.deepEqual(delays, [250, 250])
   assert.equal(sent.length, 3)
@@ -190,6 +190,59 @@ test('rejects and closes when the socket emits a bind error', async () => {
   })
 
   await assert.rejects(Promise.race([operation, timeout]), { message: bindError.message })
+  assert.equal(removeListenerCalls, 1)
+  assert.equal(closeCalls, 1)
+})
+
+test('rejects and stops sending when the socket emits an error during delay', async () => {
+  const socketError = new Error('UDP socket failed during delay')
+  let socketErrorListener: ((error: Error) => void) | undefined
+  let removeListenerCalls = 0
+  let sends = 0
+  let closeCalls = 0
+  const socket = {
+    bind(callback: () => void) {
+      callback()
+    },
+    once(event: 'error', listener: (error: Error) => void) {
+      assert.equal(event, 'error')
+      socketErrorListener = listener
+    },
+    removeListener(event: 'error', listener: (error: Error) => void) {
+      assert.equal(event, 'error')
+      removeListenerCalls += 1
+      if (socketErrorListener === listener) socketErrorListener = undefined
+    },
+    setBroadcast(_enabled: boolean) {
+      // The fake models the dgram boundary only.
+    },
+    send(
+      _message: Uint8Array,
+      _port: number,
+      _address: string,
+      callback: (error: Error | null) => void,
+    ) {
+      sends += 1
+      callback(null)
+    },
+    close() {
+      closeCalls += 1
+    },
+  }
+
+  await assert.rejects(
+    sendWakeOnLan(
+      { enabled: true, macAddress: 'AA:BB:CC:DD:EE:FF' },
+      {
+        createSocket: () => socket,
+        delay: async () => {
+          socketErrorListener?.(socketError)
+        },
+      },
+    ),
+    { message: socketError.message },
+  )
+  assert.equal(sends, 1)
   assert.equal(removeListenerCalls, 1)
   assert.equal(closeCalls, 1)
 })

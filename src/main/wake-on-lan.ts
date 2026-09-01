@@ -81,36 +81,65 @@ function createDefaultSocket(): WakeOnLanSocket {
   }
 }
 
-function waitForBind(socket: WakeOnLanSocket): Promise<void> {
-  return new Promise((resolve, reject) => {
-    let settled = false
-    const onError = (error: Error): void => {
-      if (settled) return
-      settled = true
-      cleanup()
-      reject(error)
-    }
-    const onBound = (): void => {
-      if (settled) return
-      settled = true
-      cleanup()
-      resolve()
-    }
-    function cleanup(): void {
-      try {
-        socket.removeListener('error', onError)
-      } catch {
-        // Cleanup must not replace the bind result.
-      }
-    }
+interface BindWait {
+  promise: Promise<void>
+  socketError: Promise<never>
+  getSocketError: () => Error | undefined
+  cleanup: () => void
+}
 
-    socket.once('error', onError)
-    try {
-      socket.bind(onBound)
-    } catch (error) {
-      onError(error instanceof Error ? error : new Error(String(error)))
-    }
+function waitForBind(socket: WakeOnLanSocket): BindWait {
+  let bindSettled = false
+  let socketFailure: Error | undefined
+  let resolveBind!: () => void
+  let rejectBind!: (error: Error) => void
+  let rejectSocketError!: (error: Error) => void
+  const promise = new Promise<void>((resolve, reject) => {
+    resolveBind = resolve
+    rejectBind = reject
   })
+  const socketError = new Promise<never>((_resolve, reject) => {
+    rejectSocketError = reject
+  })
+  void socketError.catch(() => undefined)
+  const onError = (error: Error): void => {
+    socketFailure ??= error
+    rejectSocketError(error)
+    if (bindSettled) return
+    bindSettled = true
+    rejectBind(error)
+  }
+  const onBound = (): void => {
+    if (bindSettled) return
+    bindSettled = true
+    resolveBind()
+  }
+  function cleanup(): void {
+    try {
+      socket.removeListener('error', onError)
+    } catch {
+      // Cleanup must not replace the bind result.
+    }
+  }
+
+  try {
+    socket.once('error', onError)
+    socket.bind(onBound)
+  } catch (error) {
+    onError(error instanceof Error ? error : new Error(String(error)))
+  }
+
+  return {
+    promise,
+    socketError,
+    getSocketError: () => socketFailure,
+    cleanup,
+  }
+}
+
+function throwIfSocketError(bindWait: BindWait): void {
+  const error = bindWait.getSocketError()
+  if (error) throw error
 }
 
 function sendPacket(
@@ -150,13 +179,26 @@ export async function sendWakeOnLan(
   }
 
   let operationFailed = false
+  let bindWait: BindWait | undefined
   try {
-    await waitForBind(socket)
+    const currentBindWait = waitForBind(socket)
+    bindWait = currentBindWait
+    await Promise.race([currentBindWait.promise, currentBindWait.socketError])
+    throwIfSocketError(currentBindWait)
     socket.setBroadcast(true)
+    throwIfSocketError(currentBindWait)
 
     for (let attempt = 0; attempt < SEND_COUNT; attempt += 1) {
-      await sendPacket(socket, packet, port, broadcastAddress)
-      if (attempt < SEND_COUNT - 1) await delay(SEND_INTERVAL_MS)
+      throwIfSocketError(currentBindWait)
+      await Promise.race([
+        sendPacket(socket, packet, port, broadcastAddress),
+        currentBindWait.socketError,
+      ])
+      throwIfSocketError(currentBindWait)
+      if (attempt < SEND_COUNT - 1) {
+        await Promise.race([delay(SEND_INTERVAL_MS), currentBindWait.socketError])
+        throwIfSocketError(currentBindWait)
+      }
     }
   } catch (error) {
     operationFailed = true
@@ -166,6 +208,8 @@ export async function sendWakeOnLan(
       close()
     } catch (error) {
       if (!operationFailed) throw error
+    } finally {
+      bindWait?.cleanup()
     }
   }
 }
