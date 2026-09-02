@@ -14,6 +14,7 @@ import type {
   WindowClosePreparationRequest,
   BoardState,
   BoardTask,
+  RemotePreparationResult,
   TerminalCreateOptions,
   TerminalCreateResult,
   TerminalExitEvent,
@@ -127,6 +128,7 @@ interface ElectronWorld {
     save: (workspaceId: string, state: unknown, workspaceType?: string) => Promise<void>
   }
   terminal: {
+    prepareRemote: (workspaceId: string) => Promise<RemotePreparationResult>
     create: (target: TerminalSessionTarget, options: TerminalCreateOptions) => Promise<TerminalCreateResult>
     attach: (identity: TerminalSessionIdentity) => Promise<TerminalCreateResult>
     write: (identity: TerminalSessionIdentity, data: string) => Promise<void>

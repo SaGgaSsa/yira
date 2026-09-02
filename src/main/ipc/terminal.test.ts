@@ -220,3 +220,44 @@ test('keeps user-requested current destruction separate from generation-checked 
   assert.match(identityDestroyBlock, /identity:\s*TerminalSessionIdentity/)
   assert.match(identityDestroyBlock, /getTerminalSession\(runtimeIdentity\)/)
 })
+
+test('prepares remote hosts from persisted workspace configuration and deduplicates active work', async () => {
+  const text = await source('src/main/ipc/terminal.ts')
+  const start = text.indexOf("ipcMain.handle('terminal:prepareRemote'")
+  assert.ok(start >= 0, 'terminal:prepareRemote handler must be registered')
+  const block = text.slice(start, start + 1_800)
+
+  assert.match(block, /workspaceId:\s*string/)
+  assert.match(block, /normalizeTerminalId\(workspaceId\)/)
+  assert.match(block, /getWorkspaceRemoteTerminalById\(runtimeWorkspaceId\)/)
+  assert.match(block, /ensureRemoteSshReady\(remoteTerminal\)/)
+  assert.match(block, /remotePreparations\.get\(/)
+  assert.match(block, /remotePreparations\.set\(/)
+  assert.match(block, /\.finally\(/)
+  assert.match(block, /remotePreparations\.get\(key\) === preparation/)
+  assert.match(text, /const remotePreparations = new Map<string, Promise<RemotePreparationResult>>\(\)/)
+  assert.match(block, /Remote SSH is not configured for this workspace/)
+})
+
+test('exposes remote preparation through the preload bridge with only workspaceId', async () => {
+  const text = await source('src/preload/index.ts')
+  const terminalStart = text.indexOf('  terminal: {')
+  const shellProfilesStart = text.indexOf('  // Shell profiles', terminalStart)
+  assert.ok(terminalStart >= 0, 'terminal bridge must be exposed')
+  assert.ok(shellProfilesStart > terminalStart, 'terminal bridge must end before shell profiles')
+  const block = text.slice(terminalStart, shellProfilesStart)
+  const prepareStart = block.indexOf('prepareRemote:')
+  assert.ok(prepareStart >= 0, 'prepareRemote bridge method must be exposed')
+  const prepareBlock = block.slice(prepareStart, prepareStart + 240)
+
+  assert.match(prepareBlock, /prepareRemote:\s*\(workspaceId:\s*string\)/)
+  assert.match(prepareBlock, /ipcRenderer\.invoke\('terminal:prepareRemote', workspaceId\)/)
+  assert.doesNotMatch(prepareBlock, /host|mac|broadcast|port/i)
+})
+
+test('declares the typed remote preparation result in the renderer bridge', async () => {
+  const text = await source('src/renderer/src/electron.d.ts')
+
+  assert.match(text, /RemotePreparationResult/)
+  assert.match(text, /prepareRemote:\s*\(workspaceId:\s*string\)\s*=>\s*Promise<RemotePreparationResult>/)
+})

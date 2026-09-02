@@ -1,6 +1,13 @@
 import { BrowserWindow, ipcMain, WebContents } from 'electron'
 import { promises as fs } from 'fs'
-import type { ShellProfile, TerminalCreateOptions, TerminalCreateResult, TerminalExitEvent } from '@shared/types'
+import type {
+  RemotePreparationResult,
+  RemoteTerminalConfig,
+  ShellProfile,
+  TerminalCreateOptions,
+  TerminalCreateResult,
+  TerminalExitEvent,
+} from '@shared/types'
 import {
   sameTerminalSessionIdentity,
   terminalSessionLookupKey,
@@ -10,8 +17,13 @@ import {
 import { detectShellProfiles, detectSshClient } from '../shell-profiles'
 import { buildTerminalHistorySetup } from '../terminal-history'
 import { resolveTerminalWorkspaceRoot } from '../workspace-root'
-import { getWorkspacePathById, getWorkspaceRootFolderById } from './workspace'
+import {
+  getWorkspacePathById,
+  getWorkspaceRemoteTerminalById,
+  getWorkspaceRootFolderById,
+} from './workspace'
 import { buildRemoteSshLaunch } from '../remote-ssh'
+import { ensureRemoteSshReady } from '../remote-host-readiness'
 import { AgentAlertBridge } from '../agentAlertBridge'
 import { SemanticAgentAlertState, type AgentAlertState } from '../agentAlerts'
 import { agentSessionRegistry } from '../agents/registry'
@@ -60,6 +72,7 @@ const terminalSessionGenerations = new Map<string, number>()
 const terminalSessionTargetsByTile = new Map<string, Map<string, TerminalSessionTarget>>()
 const localAgentAlertTargetsByTile = new Map<string, Set<string>>()
 const terminalSessionCreations = new Map<string, Promise<TerminalCreateResult>>()
+const remotePreparations = new Map<string, Promise<RemotePreparationResult>>()
 let profiles: ShellProfile[] = []
 let sshClient: string | null = null
 const TERMINAL_BUFFER_LENGTH = 500_000
@@ -239,6 +252,15 @@ function resolveProfile(shellProfileId: string): ShellProfile | undefined {
   return profiles.find(p => p.id === shellProfileId)
 }
 
+function remotePreparationKey(workspaceId: string, remoteTerminal: RemoteTerminalConfig): string {
+  return JSON.stringify([
+    workspaceId,
+    remoteTerminal.host,
+    remoteTerminal.port ?? 22,
+    remoteTerminal.wakeOnLan?.macAddress ?? '',
+  ])
+}
+
 export function initShellProfiles(): void {
   profiles = detectShellProfiles()
   sshClient = detectSshClient()
@@ -251,6 +273,24 @@ export function registerTerminalIPC(): void {
   })
 
   ipcMain.handle('terminal:sshAvailable', async () => sshClient !== null)
+
+  ipcMain.handle('terminal:prepareRemote', async (_event, workspaceId: string) => {
+    const runtimeWorkspaceId = normalizeTerminalId(workspaceId)
+    if (!runtimeWorkspaceId) throw new Error('Invalid terminal workspace id')
+
+    const remoteTerminal = await getWorkspaceRemoteTerminalById(runtimeWorkspaceId)
+    if (!remoteTerminal) throw new Error('Remote SSH is not configured for this workspace')
+
+    const key = remotePreparationKey(runtimeWorkspaceId, remoteTerminal)
+    const activePreparation = remotePreparations.get(key)
+    if (activePreparation) return activePreparation
+
+    const preparation = ensureRemoteSshReady(remoteTerminal).finally(() => {
+      if (remotePreparations.get(key) === preparation) remotePreparations.delete(key)
+    })
+    remotePreparations.set(key, preparation)
+    return preparation
+  })
 
   ipcMain.handle('terminal:create', async (_event, target: TerminalSessionTarget, options: TerminalCreateOptions) => {
     const isAgent = options.agent !== undefined

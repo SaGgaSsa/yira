@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AgentActiveSessionSnapshot, AgentProviderAvailabilitySnapshot, AgentSessionHistoryQuery, AgentSessionHistoryResult, AgentUsageSnapshot, BoardTask, FileListOptions, FileSearchResult, FileWriteInput, FloatingNavigationEvent, FloatingNavigationRequest, GitCommitHistoryResult, GitRepository, GitStatusResult, NotificationAttentionOptions, TerminalCreateOptions, TerminalCreateResult, TerminalExitEvent, UpdateState, WindowBounds, WindowClosePreparationRequest, WindowClosePreparationResponse, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
+import type { AgentActiveSessionSnapshot, AgentProviderAvailabilitySnapshot, AgentSessionHistoryQuery, AgentSessionHistoryResult, AgentUsageSnapshot, BoardTask, FileListOptions, FileSearchResult, FileWriteInput, FloatingNavigationEvent, FloatingNavigationRequest, GitCommitHistoryResult, GitRepository, GitStatusResult, NotificationAttentionOptions, RemotePreparationResult, TerminalCreateOptions, TerminalCreateResult, TerminalExitEvent, UpdateState, WindowBounds, WindowClosePreparationRequest, WindowClosePreparationResponse, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
 import { createSerialTaskQueue } from '@shared/serialTaskQueue'
 import {
   terminalSessionDataChannel,
@@ -129,6 +129,8 @@ contextBridge.exposeInMainWorld('electron', {
 
   // Terminal
   terminal: {
+    prepareRemote: (workspaceId: string) =>
+      ipcRenderer.invoke('terminal:prepareRemote', workspaceId) as Promise<RemotePreparationResult>,
     create: (target: TerminalSessionTarget, options: TerminalCreateOptions) =>
       ipcRenderer.invoke('terminal:create', target, options) as Promise<TerminalCreateResult>,
     attach: (identity: TerminalSessionIdentity) =>
