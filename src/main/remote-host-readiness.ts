@@ -217,6 +217,9 @@ export async function ensureRemoteSshReady(
     }
 
     const result = await probe(target)
+    if (now() >= deadline) {
+      throw createStableError('La computadora remota no habilitó SSH en 60 segundos')
+    }
     if (result === 'available') return { status: 'woken', wakeSent: true }
     if (result === 'invalid-host') {
       throw createStableError('No se pudo resolver el host remoto')

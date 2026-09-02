@@ -281,6 +281,28 @@ test('wakes an unreachable host and waits until SSH is available', async () => {
   assert.deepEqual(delays, [2000, 2000])
 })
 
+test('rejects when a post-Wake-on-LAN probe completes after the startup deadline', async () => {
+  let clock = 0
+  let probeCalls = 0
+
+  await assert.rejects(
+    ensureRemoteSshReady(remoteConfig(), {
+      probe: async () => {
+        probeCalls += 1
+        if (probeCalls === 1) return 'unreachable'
+        clock = 60_001
+        return 'available'
+      },
+      wake: async () => undefined,
+      delay: async () => {
+        clock = 59_999
+      },
+      now: () => clock,
+    }),
+    { message: 'La computadora remota no habilitó SSH en 60 segundos' },
+  )
+})
+
 test('wraps Wake-on-LAN errors with a stable message and cause', async () => {
   const failure = new Error('UDP send failed')
 
