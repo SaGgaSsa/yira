@@ -21,7 +21,7 @@ export type RemoteSshSocketListener = (() => void) | ((error: Error) => void)
 export interface RemoteSshSocket {
   once: (event: RemoteSshSocketEvent, listener: RemoteSshSocketListener) => void
   removeListener: (event: RemoteSshSocketEvent, listener: RemoteSshSocketListener) => void
-  setTimeout: (milliseconds: number, callback: () => void) => void
+  setTimeout: (milliseconds: number, callback?: () => void) => void
   destroy: () => void
 }
 
@@ -96,7 +96,7 @@ function removeSocketListener(
 
 function disableSocketTimeout(socket: RemoteSshSocket): void {
   try {
-    socket.setTimeout(0, () => undefined)
+    socket.setTimeout(0)
   } catch {
     // Cleanup must not replace the probe result.
   }

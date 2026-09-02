@@ -21,7 +21,6 @@ interface FakeSocket extends RemoteSshSocket {
 
 function createFakeSocket(): FakeSocket {
   const listeners = new Map<SocketEvent, Set<SocketListener>>()
-  let timeoutListener: (() => void) | undefined
   const socket: FakeSocket = {
     destroyed: false,
     destroyCalls: 0,
@@ -36,18 +35,17 @@ function createFakeSocket(): FakeSocket {
     },
     setTimeout(milliseconds, callback) {
       socket.timeoutCalls.push(milliseconds)
-      timeoutListener = milliseconds > 0 ? callback : undefined
+      if (callback) {
+        const timeoutListeners = listeners.get('timeout') ?? new Set<SocketListener>()
+        timeoutListeners.add(callback)
+        listeners.set('timeout', timeoutListeners)
+      }
     },
     destroy() {
       socket.destroyCalls += 1
       socket.destroyed = true
     },
     emit(event, error) {
-      if (event === 'timeout') {
-        timeoutListener?.()
-        return
-      }
-
       const eventListeners = [...(listeners.get(event) ?? [])]
       for (const listener of eventListeners) {
         if (event === 'error') {
