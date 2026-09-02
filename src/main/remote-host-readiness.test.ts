@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import * as net from 'node:net'
 import test from 'node:test'
 
 import {
@@ -101,6 +102,22 @@ test('classifies a successful TCP connection as available and cleans up once', a
   socket.emit('connect')
   socket.emit('error', Object.assign(new Error('late failure'), { code: 'ECONNREFUSED' }))
   assert.equal(socket.destroyCalls, 1)
+})
+
+test('removes the timeout callback listener after a successful probe', async () => {
+  const socket = new net.Socket()
+  const result = probeRemoteSsh(
+    { host: '192.168.1.40' },
+    {
+      createConnection: () => {
+        queueMicrotask(() => socket.emit('connect'))
+        return socket
+      },
+    },
+  )
+
+  assert.equal(await result, 'available')
+  assert.equal(socket.listenerCount('timeout'), 0)
 })
 
 test('classifies ECONNREFUSED as refused and destroys the socket', async () => {

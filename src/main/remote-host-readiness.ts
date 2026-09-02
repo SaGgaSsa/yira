@@ -162,8 +162,6 @@ export async function probeRemoteSsh(
       if (settled) return
       socket.once('error', onError)
       if (settled) return
-      socket.once('timeout', onTimeout)
-      if (settled) return
       socket.setTimeout(DEFAULT_SSH_TIMEOUT_MS, onTimeout)
     } catch (error) {
       fail(error)
