@@ -200,6 +200,12 @@ type TranslationResources = {
     hostTailscaleOrLocal: string
     linuxUser: string
     sshPort: string
+    wakeOnLan: string
+    wakeOnLanMacAddress: string
+    wakeOnLanBroadcastAddress: string
+    wakeOnLanUdpPort: string
+    wakeOnLanInvalidMac: string
+    wakeOnLanInvalidBroadcast: string
     terminalHistory: string
     agentProvider: string
     agentProviders: string
@@ -306,6 +312,7 @@ type TranslationResources = {
     sshConnectionClosed: string
     reconnect: string
     reconnecting: string
+    wakeOnLanPreparing: string
   }
   canvas: {
     clearSelection: string
@@ -543,6 +550,12 @@ const en: TranslationResources = {
     hostTailscaleOrLocal: 'Host (Tailscale or local)',
     linuxUser: 'Linux user',
     sshPort: 'SSH port',
+    wakeOnLan: 'Wake-on-LAN',
+    wakeOnLanMacAddress: 'MAC address',
+    wakeOnLanBroadcastAddress: 'Broadcast address',
+    wakeOnLanUdpPort: 'UDP port',
+    wakeOnLanInvalidMac: 'Enter a valid MAC address.',
+    wakeOnLanInvalidBroadcast: 'Enter a valid IPv4 broadcast address.',
     terminalHistory: 'Workspace terminal history',
     agentProvider: 'Agent provider',
     agentProviders: 'Agent providers',
@@ -649,6 +662,7 @@ const en: TranslationResources = {
     sshConnectionClosed: 'SSH connection closed',
     reconnect: 'Reconnect',
     reconnecting: 'Reconnecting…',
+    wakeOnLanPreparing: 'Preparing remote computer…',
   },
   canvas: {
     clearSelection: 'Clear Selection',
@@ -886,6 +900,12 @@ const es: TranslationResources = {
     hostTailscaleOrLocal: 'Host (Tailscale o local)',
     linuxUser: 'Usuario de Linux',
     sshPort: 'Puerto SSH',
+    wakeOnLan: 'Wake-on-LAN',
+    wakeOnLanMacAddress: 'Dirección MAC',
+    wakeOnLanBroadcastAddress: 'Dirección broadcast',
+    wakeOnLanUdpPort: 'Puerto UDP',
+    wakeOnLanInvalidMac: 'Escribe una dirección MAC válida.',
+    wakeOnLanInvalidBroadcast: 'Escribe una dirección broadcast IPv4 válida.',
     terminalHistory: 'Historial de terminal del espacio de trabajo',
     agentProvider: 'Proveedor de agente',
     agentProviders: 'Proveedores de agentes',
@@ -992,6 +1012,7 @@ const es: TranslationResources = {
     sshConnectionClosed: 'Conexión SSH cerrada',
     reconnect: 'Reconectar',
     reconnecting: 'Reconectando…',
+    wakeOnLanPreparing: 'Preparando computadora remota…',
   },
   canvas: {
     clearSelection: 'Limpiar selección',

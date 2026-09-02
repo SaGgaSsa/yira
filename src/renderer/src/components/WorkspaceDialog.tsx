@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { FolderOpen, GitBranch, Grid3X3, History, Info, LayoutGrid, TerminalSquare, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import type { AgentProvider, AgentProvidersConfig, GitRepository, RemoteTerminalConfig, WorkspaceType } from '@shared/types'
+import type { AgentProvider, AgentProvidersConfig, GitRepository, RemoteTerminalConfig, WakeOnLanConfig, WorkspaceType } from '@shared/types'
 import { normalizeAgentProvidersConfig, normalizeWorkspaceAgentProvider } from '@shared/workspaceConfig'
 
 export interface WorkspaceDialogValue {
@@ -35,7 +35,54 @@ interface WorkspaceDialogProps {
   onConfirm: (value: WorkspaceDialogValue) => void
 }
 
-function normalizeValue(value: WorkspaceDialogValue): WorkspaceDialogValue {
+const WAKE_ON_LAN_MAC_PATTERN = /^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$/i
+const WAKE_ON_LAN_MAC_HYPHEN_PATTERN = /^(?:[0-9a-f]{2}-){5}[0-9a-f]{2}$/i
+
+function isLiteralIpv4(value: string): boolean {
+  const octets = value.split('.')
+  return octets.length === 4 && octets.every((octet) => {
+    if (!/^(0|[1-9]\d{0,2})$/.test(octet)) return false
+    const number = Number(octet)
+    return number >= 0 && number <= 255
+  })
+}
+
+function isWakeOnLanMacValid(macAddress: string): boolean {
+  const value = typeof macAddress === 'string' ? macAddress.trim() : ''
+  return WAKE_ON_LAN_MAC_PATTERN.test(value) || WAKE_ON_LAN_MAC_HYPHEN_PATTERN.test(value)
+}
+
+function isWakeOnLanBroadcastValid(broadcastAddress: string | undefined): boolean {
+  const value = typeof broadcastAddress === 'string' ? broadcastAddress.trim() : ''
+  return !value || isLiteralIpv4(value)
+}
+
+function isWakeOnLanPortValid(port: number | undefined): boolean {
+  return port === undefined || Number.isInteger(port) && port >= 1 && port <= 65535
+}
+
+export function isWakeOnLanConfigValid(value: WakeOnLanConfig | undefined): boolean {
+  if (!value || !value.enabled) return true
+  return isWakeOnLanMacValid(value.macAddress)
+    && isWakeOnLanBroadcastValid(value.broadcastAddress)
+    && isWakeOnLanPortValid(value.port)
+}
+
+function normalizeWakeOnLanValue(value: WakeOnLanConfig | undefined): WakeOnLanConfig | undefined {
+  if (!value) return undefined
+  return {
+    ...value,
+    macAddress: typeof value.macAddress === 'string' ? value.macAddress.trim() : '',
+    ...(value.broadcastAddress === undefined
+      ? {}
+      : { broadcastAddress: typeof value.broadcastAddress === 'string' ? value.broadcastAddress.trim() : '' }),
+    ...(value.port === undefined ? {} : { port: value.port }),
+  }
+}
+
+export function normalizeValue(value: WorkspaceDialogValue): WorkspaceDialogValue {
+  const wakeOnLan = normalizeWakeOnLanValue(value.remoteTerminal.wakeOnLan)
+
   return {
     type: value.type === 'grid' ? 'grid' : 'canvas',
     name: value.name.trim(),
@@ -46,6 +93,7 @@ function normalizeValue(value: WorkspaceDialogValue): WorkspaceDialogValue {
       host: value.remoteTerminal.host.trim(),
       user: value.remoteTerminal.user.trim(),
       ...(value.remoteTerminal.port === undefined ? {} : { port: value.remoteTerminal.port }),
+      ...(wakeOnLan ? { wakeOnLan } : {}),
     },
     agentProvider: normalizeWorkspaceAgentProvider(value.agentProvider),
     agentProviders: normalizeAgentProvidersConfig(value.agentProviders),
@@ -92,7 +140,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
         const target = event.target as HTMLElement | null
         if (target?.tagName === 'TEXTAREA') return
         if (target?.getAttribute('role') === 'tab') return
-        if (!value.name.trim()) return
+        if (!value.name.trim() || !isWakeOnLanConfigValid(value.remoteTerminal.wakeOnLan)) return
         event.preventDefault()
         onConfirm(normalizeValue(value))
       }
@@ -134,7 +182,12 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
   if (!request || !value) return null
 
   const canCancel = request.canCancel !== false
-  const canSubmit = Boolean(value.name.trim())
+  const wakeOnLan = value.remoteTerminal.wakeOnLan
+  const wakeOnLanEnabled = wakeOnLan?.enabled === true
+  const wakeOnLanMacValid = !wakeOnLanEnabled || isWakeOnLanMacValid(wakeOnLan?.macAddress ?? '')
+  const wakeOnLanBroadcastValid = !wakeOnLanEnabled || isWakeOnLanBroadcastValid(wakeOnLan?.broadcastAddress)
+  const wakeOnLanPortValid = !wakeOnLanEnabled || isWakeOnLanPortValid(wakeOnLan?.port)
+  const canSubmit = Boolean(value.name.trim()) && isWakeOnLanConfigValid(wakeOnLan)
   const typeEditable = request.typeEditable === true
   const providerOptions: Array<{ provider: AgentProvider | undefined; label: string }> = [
     { provider: undefined, label: t('workspace.noAgentProvider') },
@@ -184,6 +237,20 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
       return {
         ...current,
         sourceControlRepositoryPaths: [...selected],
+      }
+    })
+  }
+
+  const updateWakeOnLan = (patch: Partial<WakeOnLanConfig>) => {
+    setValue((current) => {
+      if (!current) return current
+      const currentWakeOnLan = current.remoteTerminal.wakeOnLan ?? { enabled: true, macAddress: '' }
+      return {
+        ...current,
+        remoteTerminal: {
+          ...current.remoteTerminal,
+          wakeOnLan: { ...currentWakeOnLan, ...patch },
+        },
       }
     })
   }
@@ -395,6 +462,88 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
                       placeholder="22"
                     />
                   </label>
+                </div>
+                <div className="mt-5 border-t border-border pt-4">
+                  <label className="flex items-center justify-between gap-4">
+                    <span className="nd-label text-text-secondary">{t('workspace.wakeOnLan')}</span>
+                    <input
+                      type="checkbox"
+                      className="h-5 w-5 shrink-0 accent-[var(--text-primary)]"
+                      checked={wakeOnLanEnabled}
+                      onChange={(event) => {
+                        const enabled = event.target.checked
+                        setValue((current) => {
+                          if (!current) return current
+                          const currentWakeOnLan = current.remoteTerminal.wakeOnLan
+                          if (!currentWakeOnLan && !enabled) return current
+                          return {
+                            ...current,
+                            remoteTerminal: {
+                              ...current.remoteTerminal,
+                              wakeOnLan: currentWakeOnLan
+                                ? { ...currentWakeOnLan, enabled }
+                                : { enabled, macAddress: '' },
+                            },
+                          }
+                        })
+                      }}
+                      aria-label={t('workspace.wakeOnLan')}
+                    />
+                  </label>
+                  {wakeOnLanEnabled && (
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <label className="block">
+                        <span className="nd-label mb-2 block text-text-secondary">{t('workspace.wakeOnLanMacAddress')}</span>
+                        <input
+                          className="w-full rounded-full border border-border-visible bg-bg-primary px-4 py-3 font-mono text-sm text-text-display outline-none"
+                          value={wakeOnLan?.macAddress ?? ''}
+                          onChange={(event) => updateWakeOnLan({ macAddress: event.target.value })}
+                          placeholder="AA:BB:CC:DD:EE:FF"
+                          spellCheck={false}
+                          aria-invalid={!wakeOnLanMacValid}
+                          aria-describedby={!wakeOnLanMacValid ? 'workspace-wake-on-lan-mac-error' : undefined}
+                        />
+                        {!wakeOnLanMacValid && (
+                          <p id="workspace-wake-on-lan-mac-error" role="alert" className="mt-2 text-xs text-red-300">
+                            {t('workspace.wakeOnLanInvalidMac')}
+                          </p>
+                        )}
+                      </label>
+                      <label className="block">
+                        <span className="nd-label mb-2 block text-text-secondary">{t('workspace.wakeOnLanBroadcastAddress')}</span>
+                        <input
+                          className="w-full rounded-full border border-border-visible bg-bg-primary px-4 py-3 font-mono text-sm text-text-display outline-none"
+                          value={wakeOnLan?.broadcastAddress ?? ''}
+                          onChange={(event) => updateWakeOnLan({ broadcastAddress: event.target.value })}
+                          placeholder="255.255.255.255"
+                          spellCheck={false}
+                          aria-invalid={!wakeOnLanBroadcastValid}
+                          aria-describedby={!wakeOnLanBroadcastValid ? 'workspace-wake-on-lan-broadcast-error' : undefined}
+                        />
+                        {!wakeOnLanBroadcastValid && (
+                          <p id="workspace-wake-on-lan-broadcast-error" role="alert" className="mt-2 text-xs text-red-300">
+                            {t('workspace.wakeOnLanInvalidBroadcast')}
+                          </p>
+                        )}
+                      </label>
+                      <label className="block sm:col-span-2 sm:max-w-[200px]">
+                        <span className="nd-label mb-2 block text-text-secondary">{t('workspace.wakeOnLanUdpPort')}</span>
+                        <input
+                          className="w-full rounded-full border border-border-visible bg-bg-primary px-4 py-3 font-mono text-sm text-text-display outline-none"
+                          type="number"
+                          min="1"
+                          max="65535"
+                          value={wakeOnLan?.port ?? ''}
+                          onChange={(event) => {
+                            const nextPort = event.target.value ? Number(event.target.value) : undefined
+                            updateWakeOnLan({ port: nextPort })
+                          }}
+                          placeholder="9"
+                          aria-invalid={!wakeOnLanPortValid}
+                        />
+                      </label>
+                    </div>
+                  )}
                 </div>
               </section>
 

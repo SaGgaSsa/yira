@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createElement } from 'react'
-import type { CanvasState, TileState } from '@shared/types'
+import type { CanvasState, RemotePreparationResult, TileState } from '@shared/types'
 import { useCanvasStore } from '@/store/canvasStore'
 import { renderToStaticMarkup } from 'react-dom/server'
 
@@ -26,13 +26,19 @@ const loadWithJiti = require('jiti')(fileURLToPath(import.meta.url), {
 }) as <T>(id: string) => T
 const { getTileNotificationCopy } = loadWithJiti<typeof import('./TileEditorDialog')>('./TileEditorDialog.tsx')
 const {
+  isWakeOnLanConfigValid,
+  normalizeValue,
+} = loadWithJiti<typeof import('./WorkspaceDialog')>('./WorkspaceDialog.tsx')
+const {
   handleTerminalAgentAlert,
   handleTerminalOutput,
   getRemoteTerminalExitEvent,
+  RemoteTerminalPreparingNotice,
   RemoteTerminalReconnectNotice,
   restartTerminalAfterExit,
   registerTerminalInputFocusListener,
   shouldRegisterTerminalMarkdownLinks,
+  prepareRemoteTerminal,
 } = loadWithJiti<typeof import('./TerminalTile')>('./TerminalTile.tsx')
 
 const preloadSource = await readFile(resolve(repositoryRoot, 'src/preload/index.ts'), 'utf8')
@@ -94,6 +100,32 @@ if (!reconnectNotice.includes('role="status"') || !reconnectNotice.includes('ari
   throw new Error('the SSH reconnect notice must announce its dynamic status accessibly')
 }
 
+const hiddenPreparingNotice = renderToStaticMarkup(
+  createElement(RemoteTerminalPreparingNotice, {
+    visible: false,
+    message: 'Preparando computadora remota…',
+  }),
+)
+if (hiddenPreparingNotice !== '') {
+  throw new Error('the remote preparation overlay must stay hidden when preparation is inactive')
+}
+
+const preparingNotice = renderToStaticMarkup(
+  createElement(RemoteTerminalPreparingNotice, {
+    visible: true,
+    message: 'Preparando computadora remota…',
+  }),
+)
+if (!preparingNotice.includes('Preparando computadora remota…')) {
+  throw new Error('the remote preparation overlay must show its accessible status message')
+}
+if (!preparingNotice.includes('role="status"') || !preparingNotice.includes('aria-live="polite"')) {
+  throw new Error('the remote preparation overlay must announce its dynamic status accessibly')
+}
+if (!preparingNotice.includes('animate-spin') || preparingNotice.includes('<button')) {
+  throw new Error('the remote preparation overlay must show a spinner without a button')
+}
+
 const reconnectSteps: string[] = []
 await restartTerminalAfterExit(
   async () => {
@@ -136,6 +168,109 @@ if (getRemoteTerminalExitEvent('remote-ssh', retainedExit) !== retainedExit) {
 }
 if (getRemoteTerminalExitEvent(undefined, retainedExit) !== null) {
   throw new Error('local terminals must not show the SSH reconnect notice')
+}
+
+let cancelled = false
+let createCalls = 0
+let resolvePreparation!: (result: RemotePreparationResult) => void
+const preparation = new Promise<RemotePreparationResult>((resolve) => {
+  resolvePreparation = resolve
+})
+const cancelledPreparation = prepareRemoteTerminal({
+  isCancelled: () => cancelled,
+  prepare: () => preparation,
+  create: async () => {
+    createCalls += 1
+  },
+})
+cancelled = true
+resolvePreparation({ status: 'woken', wakeSent: true })
+await cancelledPreparation
+if (createCalls !== 0) {
+  throw new Error('cancelled remote preparation must not create a PTY')
+}
+
+let successfulCreateCalls = 0
+await prepareRemoteTerminal({
+  isCancelled: () => false,
+  prepare: async () => ({ status: 'available', wakeSent: false }),
+  create: async () => {
+    successfulCreateCalls += 1
+  },
+})
+if (successfulCreateCalls !== 1) {
+  throw new Error('successful remote preparation must create exactly one PTY')
+}
+
+const preparationError = new Error('preparation failed')
+let failedCreateCalls = 0
+await prepareRemoteTerminal({
+  isCancelled: () => false,
+  prepare: async () => {
+    throw preparationError
+  },
+  create: async () => {
+    failedCreateCalls += 1
+  },
+}).then(
+  () => {
+    throw new Error('failed remote preparation must reject')
+  },
+  (error: unknown) => {
+    if (error !== preparationError) throw error
+  },
+)
+if (failedCreateCalls !== 0) {
+  throw new Error('failed remote preparation must not create a PTY')
+}
+
+if (!isWakeOnLanConfigValid(undefined)) {
+  throw new Error('an absent Wake-on-LAN configuration must be valid')
+}
+if (!isWakeOnLanConfigValid({ enabled: false, macAddress: 'invalid' })) {
+  throw new Error('a disabled Wake-on-LAN configuration must not block saving')
+}
+if (!isWakeOnLanConfigValid({ enabled: true, macAddress: 'aa-bb-cc-dd-ee-ff', broadcastAddress: '', port: 9 })) {
+  throw new Error('an enabled Wake-on-LAN configuration must accept hyphenated MAC addresses')
+}
+if (isWakeOnLanConfigValid({ enabled: true, macAddress: 'aa:bb:cc:dd:ee' })) {
+  throw new Error('an incomplete Wake-on-LAN MAC address must be invalid')
+}
+if (isWakeOnLanConfigValid({ enabled: true, macAddress: 'aa:bb:cc:dd:ee:ff', broadcastAddress: 'not-an-ip' })) {
+  throw new Error('an invalid Wake-on-LAN broadcast address must be invalid')
+}
+if (isWakeOnLanConfigValid({ enabled: true, macAddress: 'aa:bb:cc:dd:ee:ff', port: 65536 })) {
+  throw new Error('an out-of-range Wake-on-LAN UDP port must be invalid')
+}
+
+const normalizedDialogValue = normalizeValue({
+  type: 'canvas',
+  name: ' Workspace ',
+  rootFolderPath: '',
+  initialCommand: '',
+  terminalHistoryEnabled: true,
+  remoteTerminal: {
+    host: 'host',
+    user: 'user',
+    port: 22,
+    wakeOnLan: {
+      enabled: true,
+      macAddress: ' aa-bb-cc-dd-ee-ff ',
+      broadcastAddress: ' 192.168.1.255 ',
+      port: 9,
+    },
+  },
+  agentProviders: {
+    claude: { enabled: true, args: [] },
+    codex: { enabled: true, args: [] },
+  },
+  sourceControlRepositoryPaths: [],
+})
+if (normalizedDialogValue.remoteTerminal.wakeOnLan?.macAddress !== 'aa-bb-cc-dd-ee-ff') {
+  throw new Error('normalizeValue must preserve the Wake-on-LAN MAC value')
+}
+if (normalizedDialogValue.remoteTerminal.wakeOnLan?.broadcastAddress !== '192.168.1.255') {
+  throw new Error('normalizeValue must preserve the Wake-on-LAN broadcast value')
 }
 
 const registrationPolicyCases = [

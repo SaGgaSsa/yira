@@ -5,7 +5,7 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
-import type { FileTileOpenOptions, TerminalExitEvent, TileState } from '@shared/types'
+import type { FileTileOpenOptions, RemotePreparationResult, TerminalExitEvent, TileState } from '@shared/types'
 import type { TerminalSessionIdentity } from '@shared/terminalSessionIdentity'
 import { useCanvasStore } from '@/store/canvasStore'
 import { useSettingsStore } from '@/store/settingsStore'
@@ -93,6 +93,47 @@ export function getRemoteTerminalExitEvent(
   exitEvent: TerminalExitEvent | undefined,
 ): TerminalExitEvent | null {
   return connection === 'remote-ssh' && exitEvent ? exitEvent : null
+}
+
+export interface RemoteTerminalPreparationOptions {
+  isCancelled: () => boolean
+  prepare: () => Promise<RemotePreparationResult>
+  create: () => Promise<void>
+}
+
+export async function prepareRemoteTerminal({
+  isCancelled,
+  prepare,
+  create,
+}: RemoteTerminalPreparationOptions): Promise<void> {
+  await prepare()
+  if (isCancelled()) return
+  await create()
+}
+
+interface RemoteTerminalPreparingNoticeProps {
+  visible: boolean
+  message?: string
+}
+
+export function RemoteTerminalPreparingNotice({
+  visible,
+  message = 'Preparing remote computer…',
+}: RemoteTerminalPreparingNoticeProps): React.ReactElement | null {
+  if (!visible) return null
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="absolute inset-0 z-10 flex items-center justify-center bg-bg-tertiary/90 text-sm text-text-secondary"
+    >
+      <div className="flex items-center gap-2 rounded-md border border-border-visible bg-bg-tertiary/95 px-4 py-3 shadow-lg">
+        <RefreshCw size={14} className="animate-spin" aria-hidden="true" />
+        <span>{message}</span>
+      </div>
+    </div>
+  )
 }
 
 export interface TerminalOutputHandlerOptions {
@@ -207,6 +248,7 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number; selectionText: string; linkTarget?: TerminalLinkTarget } | null>(null)
   const [terminalExit, setTerminalExit] = useState<TerminalExitEvent | null>(null)
   const [reconnecting, setReconnecting] = useState(false)
+  const [preparing, setPreparing] = useState(false)
   const [sessionGeneration, setSessionGeneration] = useState(0)
   const hoveredLinkTargetRef = useRef<TerminalLinkTarget | null>(null)
   const onOpenFileTileRef = useRef<Props['onOpenFileTile']>(onOpenFileTile)
@@ -264,17 +306,21 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
   const reconnectRemoteTerminal = useCallback(async () => {
     if (reconnecting || tile.terminalConnection !== 'remote-ssh') return
     const identity = sessionIdentityRef.current
-    if (!identity) return
     setReconnecting(true)
 
     try {
-      await restartTerminalAfterExit(
-        () => window.electron.terminal.destroy(identity),
-        () => {
-          setTerminalExit(null)
-          setSessionGeneration((generation) => generation + 1)
-        },
-      )
+      if (identity) {
+        await restartTerminalAfterExit(
+          () => window.electron.terminal.destroy(identity),
+          () => {
+            setTerminalExit(null)
+            setSessionGeneration((generation) => generation + 1)
+          },
+        )
+      } else {
+        setTerminalExit(null)
+        setSessionGeneration((generation) => generation + 1)
+      }
     } catch (error) {
       console.error('[TerminalTile] Failed to restart remote SSH terminal:', error)
       setReconnecting(false)
@@ -342,6 +388,8 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
 
     const { activeWorkspaceId, activeWorkspaceConfig: workspaceConfig } = useCanvasStore.getState()
     const isRemoteSsh = tile.terminalConnection === 'remote-ssh'
+    const shouldPrepareRemote = isRemoteSsh && workspaceConfig.remoteTerminal?.wakeOnLan?.enabled === true
+    setPreparing(shouldPrepareRemote)
 
     // Create xterm instance
     const term = new Terminal({
@@ -458,88 +506,103 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
     })
     const initialCommand = isRemoteSsh ? undefined : buildTerminalStartupCommand(tile, workspaceConfig)
 
-    window.electron.terminal
-      .create({ tileId: tile.id, workspaceId: activeWorkspaceId }, {
-        shellProfileId: tile.shellProfileId ?? 'bash',
-        connection: isRemoteSsh ? 'remote-ssh' : undefined,
-        remoteTerminal: isRemoteSsh ? workspaceConfig.remoteTerminal : undefined,
-        remoteStartupCommand: isRemoteSsh ? tile.startupCommand : undefined,
-        workspaceId: activeWorkspaceId || undefined,
-        workspaceDir: isRemoteSsh ? undefined : workspaceConfig.rootFolderPath,
-        wslStartInHome: !isRemoteSsh && tile.shellProfileId === 'wsl' && !workspaceConfig.rootFolderPath,
-        initialCommand,
-        terminalHistoryEnabled: workspaceConfig.terminalHistoryEnabled !== false,
-        agent: isRemoteSsh ? undefined : tile.agent,
-        agentProviderConfig: !isRemoteSsh && tile.agent
-          ? workspaceConfig.agentProviders[tile.agent.provider]
-          : undefined,
-      })
-      .then(async ({ identity: createdIdentity }) => {
-        if (cancelled) return
-        sessionIdentityRef.current = createdIdentity
-        const isCurrent = () => !cancelled && sessionIdentityRef.current === createdIdentity
-        replayController = createTerminalReplayController({
-          isCurrent,
-          write: (data, callback) => term.write(data, callback),
-          onData: (data) => {
-            handleTerminalOutput({
-              data,
-              term,
-              attentionEnabled: attentionEnabledRef.current,
-              notificationsMuted: notificationsMutedRef.current,
-              isWindowFocused: document.hasFocus(),
-              activeElement: document.activeElement,
-              markActivity: () => {
-                useCanvasStore.getState().markTerminalOutput(tile.id)
-              },
-              clearActivity: () => {
-                useCanvasStore.getState().clearTerminalAttention(tile.id)
-              },
-            })
-          },
-          onExit: (exitEvent) => {
-            if (!isCurrent() || !isRemoteSsh) return
-            setTerminalExit(exitEvent)
-            setReconnecting(false)
-          },
-          onReplayComplete: () => {
+    const createPty = async (): Promise<void> => {
+      setPreparing(false)
+      await window.electron.terminal
+        .create({ tileId: tile.id, workspaceId: activeWorkspaceId }, {
+          shellProfileId: tile.shellProfileId ?? 'bash',
+          connection: isRemoteSsh ? 'remote-ssh' : undefined,
+          remoteTerminal: isRemoteSsh ? workspaceConfig.remoteTerminal : undefined,
+          remoteStartupCommand: isRemoteSsh ? tile.startupCommand : undefined,
+          workspaceId: activeWorkspaceId || undefined,
+          workspaceDir: isRemoteSsh ? undefined : workspaceConfig.rootFolderPath,
+          wslStartInHome: !isRemoteSsh && tile.shellProfileId === 'wsl' && !workspaceConfig.rootFolderPath,
+          initialCommand,
+          terminalHistoryEnabled: workspaceConfig.terminalHistoryEnabled !== false,
+          agent: isRemoteSsh ? undefined : tile.agent,
+          agentProviderConfig: !isRemoteSsh && tile.agent
+            ? workspaceConfig.agentProviders[tile.agent.provider]
+            : undefined,
+        })
+        .then(async ({ identity: createdIdentity }) => {
+          if (cancelled) return
+          sessionIdentityRef.current = createdIdentity
+          const isCurrent = () => !cancelled && sessionIdentityRef.current === createdIdentity
+          replayController = createTerminalReplayController({
+            isCurrent,
+            write: (data, callback) => term.write(data, callback),
+            onData: (data) => {
+              handleTerminalOutput({
+                data,
+                term,
+                attentionEnabled: attentionEnabledRef.current,
+                notificationsMuted: notificationsMutedRef.current,
+                isWindowFocused: document.hasFocus(),
+                activeElement: document.activeElement,
+                markActivity: () => {
+                  useCanvasStore.getState().markTerminalOutput(tile.id)
+                },
+                clearActivity: () => {
+                  useCanvasStore.getState().clearTerminalAttention(tile.id)
+                },
+              })
+            },
+            onExit: (exitEvent) => {
+              if (!isCurrent() || !isRemoteSsh) return
+              setTerminalExit(exitEvent)
+              setReconnecting(false)
+            },
+            onReplayComplete: () => {
+              if (!isCurrent()) return
+              completedReplayGenerationRef.current = replayGeneration
+              doFit(replayGeneration)
+            },
+          })
+
+          // Register identity-specific listeners before attaching the renderer.
+          ptyUnsub = window.electron.terminal.onData(createdIdentity, replayController.onData)
+          exitUnsub = window.electron.terminal.onExit(createdIdentity, replayController.onExit)
+          agentAlertUnsub = window.electron.terminal.onAgentAlert(tile.id, (state: unknown) => {
+            handleTerminalAgentAlert(state, term)
+          })
+
+          // Send user input to PTY
+          inputDisposer = term.onData((data: string) => {
             if (!isCurrent()) return
-            completedReplayGenerationRef.current = replayGeneration
-            doFit(replayGeneration)
-          },
-        })
+            void window.electron.terminal.write(createdIdentity, data)
+          })
 
-        // Register identity-specific listeners before attaching the renderer.
-        ptyUnsub = window.electron.terminal.onData(createdIdentity, replayController.onData)
-        exitUnsub = window.electron.terminal.onExit(createdIdentity, replayController.onExit)
-        agentAlertUnsub = window.electron.terminal.onAgentAlert(tile.id, (state: unknown) => {
-          handleTerminalAgentAlert(state, term)
-        })
-
-        // Send user input to PTY
-        inputDisposer = term.onData((data: string) => {
+          const attached = await window.electron.terminal.attach(createdIdentity)
           if (!isCurrent()) return
-          void window.electron.terminal.write(createdIdentity, data)
-        })
-
-        const attached = await window.electron.terminal.attach(createdIdentity)
-        if (!isCurrent()) return
-        setReconnecting(false)
-        useCanvasStore.getState().registerTerminalCreated(tile.id)
-        // Replay now owns the ordered equivalent of: if (buffer) term.write(sanitizeTerminalReplayBuffer(buffer))
-        replayController.replay({
-          buffer: sanitizeTerminalReplayBuffer(attached.buffer),
-          exitEvent: attached.exitEvent,
-        })
-      })
-      .catch((err: Error) => {
-        if (cancelled) return
-        term.write(`\r\n\x1b[31mFailed to start terminal: ${err?.message ?? String(err)}\x1b[0m\r\n`)
-        if (isRemoteSsh) {
-          setTerminalExit({ exitCode: -1 })
           setReconnecting(false)
-        }
-      })
+          useCanvasStore.getState().registerTerminalCreated(tile.id)
+          // Replay now owns the ordered equivalent of: if (buffer) term.write(sanitizeTerminalReplayBuffer(buffer))
+          replayController.replay({
+            buffer: sanitizeTerminalReplayBuffer(attached.buffer),
+            exitEvent: attached.exitEvent,
+          })
+        })
+    }
+
+    const handleStartError = (err: unknown): void => {
+      if (cancelled) return
+      setPreparing(false)
+      const error = err instanceof Error ? err : new Error(String(err))
+      term.write(`\r\n\x1b[31mFailed to start terminal: ${error.message}\x1b[0m\r\n`)
+      if (isRemoteSsh) {
+        setTerminalExit({ exitCode: -1 })
+        setReconnecting(false)
+      }
+    }
+
+    const start = shouldPrepareRemote
+      ? prepareRemoteTerminal({
+          isCancelled: () => cancelled,
+          prepare: () => window.electron.terminal.prepareRemote(activeWorkspaceId),
+          create: createPty,
+        })
+      : createPty()
+    void start.catch(handleStartError)
 
     // Cleanup on unmount / before re-run
     return () => {
@@ -667,8 +730,12 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
           })
         }}
       />
+      <RemoteTerminalPreparingNotice
+        visible={preparing}
+        message={t('terminal.wakeOnLanPreparing')}
+      />
       <RemoteTerminalReconnectNotice
-        visible={tile.terminalConnection === 'remote-ssh' && (terminalExit !== null || reconnecting)}
+        visible={!preparing && tile.terminalConnection === 'remote-ssh' && (terminalExit !== null || reconnecting)}
         reconnecting={reconnecting}
         message={t('terminal.sshConnectionClosed', 'SSH connection closed')}
         reconnectLabel={t('terminal.reconnect', 'Reconnect')}
