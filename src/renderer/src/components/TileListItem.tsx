@@ -9,6 +9,7 @@ export interface ListRowProps {
   icon: LucideIcon
   label: string
   variant?: 'default' | 'workspace'
+  workspaceDiff?: React.ReactNode
   active?: boolean
   sessionActive?: boolean
   attentionCount?: number
@@ -71,6 +72,7 @@ export function ListRow({
   icon: Icon,
   label,
   variant = 'default',
+  workspaceDiff,
   active = false,
   sessionActive = false,
   attentionCount = 0,
@@ -102,6 +104,7 @@ export function ListRow({
   const attentionLabel = formatTerminalAttentionCount(attentionCount)
   const actionCount = [onConfigure, onFocus, onPin, onDetach, onClose].filter(Boolean).length
   const isWorkspace = variant === 'workspace'
+  const hasWorkspaceDiff = isWorkspace && Boolean(workspaceDiff)
   const workspaceIsActive = isWorkspace && (active || sessionActive)
   const actionPaddingClass = actionCount >= 4
     ? 'pr-[7.75rem]'
@@ -120,7 +123,7 @@ export function ListRow({
 
   return (
     <div
-      className={`relative rounded-2xl border ${rowStateClassName} ${className}`.trim()}
+      className={`relative rounded-2xl border ${isWorkspace ? 'flex items-center' : ''} ${rowStateClassName} ${className}`.trim()}
       draggable={draggable}
       onDragStart={onDragStart}
       onDragOver={onDragOver}
@@ -136,7 +139,7 @@ export function ListRow({
           }}
     >
       <button
-        className={`flex h-full w-full items-center gap-2 px-3 py-2.5 ${actionPaddingClass} ${isWorkspace ? 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent' : ''}`}
+        className={`flex h-full items-center gap-2 px-3 py-2.5 ${isWorkspace ? 'min-w-0 flex-1' : `w-full ${actionPaddingClass}`} ${isWorkspace ? 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent' : ''}`}
         onClick={onClick}
         onDoubleClick={onDoubleClick}
         title={label}
@@ -145,7 +148,7 @@ export function ListRow({
         <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${iconClassName}`}>
           <Icon size={11} className="shrink-0" />
         </div>
-        <div className="flex min-w-0 flex-1 items-center justify-center gap-2 text-center">
+        <div className={`flex min-w-0 flex-1 items-center gap-2 ${isWorkspace ? 'justify-start text-left' : 'justify-center text-center'}`}>
           <div className={`min-w-0 truncate text-sm ${labelClassName}`}>
             {label}
           </div>
@@ -165,8 +168,11 @@ export function ListRow({
         </div>
       </button>
 
-      {actionCount > 0 && (
-        <div className="absolute right-2 top-1/2 flex shrink-0 -translate-y-1/2 items-center gap-1">
+      {(actionCount > 0 || hasWorkspaceDiff) && (
+        <div className={isWorkspace
+          ? 'flex shrink-0 items-center gap-1 pr-2'
+          : 'absolute right-2 top-1/2 flex shrink-0 -translate-y-1/2 items-center gap-1'}>
+          {isWorkspace && workspaceDiff}
           {onConfigure && (
             <ListRowActionButton title={configureTitle} onClick={onConfigure} workspaceVariant={isWorkspace}>
               <Settings size={13} />

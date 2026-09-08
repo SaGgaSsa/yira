@@ -66,6 +66,7 @@ test('registers and invokes discovery through the Git IPC boundary', async () =>
     resolveConfiguredGitRepository: async () => ({ absolutePath: '/workspace', relativePath: '.', repository: { relativePath: '.', name: 'workspace' } }),
     getGitStatus: async () => statusResult(),
     getGitCommitHistory: async () => historyResult(),
+    getGitDiffSummary: async () => ({ additions: 0, deletions: 0, available: true }),
     stageGitFiles: async () => undefined,
     unstageGitFiles: async () => undefined,
     commitGitChanges: async () => undefined,
@@ -76,7 +77,106 @@ test('registers and invokes discovery through the Git IPC boundary', async () =>
     { relativePath: '.', name: 'workspace' },
     { relativePath: 'packages/web', name: 'web' },
   ])
+  assert.equal(ipcMain.handlers.has('git:workspaceDiff'), true)
   assert.deepEqual(roots, ['/workspace'])
+})
+
+test('sums configured repository diffs and discards the total when one repository fails', async () => {
+  const ipcMain = new FakeIpcMain()
+  const { createGitIPCHandlers } = loadGitIPC(ipcMain)
+  const resolvedPaths: string[] = []
+  const handlers = createGitIPCHandlers({
+    getWorkspaceGitConfigById: async () => ({ rootFolderPath: '/workspace', sourceControlRepositoryPaths: ['apps/web', 'apps/api'] }),
+    discoverGitRepositories: async () => [],
+    resolveConfiguredGitRepository: async (_rootPath, _configuredPaths, requestedPath) => {
+      if (typeof requestedPath !== 'string') throw new Error('path must be text')
+      resolvedPaths.push(requestedPath)
+      return {
+        absolutePath: `/workspace/${requestedPath}`,
+        relativePath: requestedPath,
+        repository: { relativePath: requestedPath, name: requestedPath.split('/').at(-1) ?? requestedPath },
+      }
+    },
+    getGitStatus: async () => statusResult(),
+    getGitCommitHistory: async () => historyResult(),
+    getGitDiffSummary: async (rootPath) => rootPath.endsWith('/api')
+      ? { additions: 4, deletions: 1, available: true }
+      : { additions: 2, deletions: 3, available: true },
+    stageGitFiles: async () => undefined,
+    unstageGitFiles: async () => undefined,
+    commitGitChanges: async () => undefined,
+    syncGitRepository: async () => undefined,
+  })
+
+  assert.deepEqual(await handlers['git:workspaceDiff']({}, 'workspace-a'), {
+    additions: 6,
+    deletions: 4,
+    available: true,
+  })
+  assert.deepEqual(resolvedPaths, ['apps/web', 'apps/api'])
+
+  const unavailableHandlers = createGitIPCHandlers({
+    getWorkspaceGitConfigById: async () => ({ rootFolderPath: '/workspace', sourceControlRepositoryPaths: ['apps/web', 'apps/api'] }),
+    discoverGitRepositories: async () => [],
+    resolveConfiguredGitRepository: async (_rootPath, _configuredPaths, requestedPath) => ({
+      absolutePath: `/workspace/${requestedPath as string}`,
+      relativePath: requestedPath as string,
+      repository: { relativePath: requestedPath as string, name: 'repo' },
+    }),
+    getGitStatus: async () => statusResult(),
+    getGitCommitHistory: async () => historyResult(),
+    getGitDiffSummary: async (rootPath) => {
+      if (rootPath.endsWith('/api')) throw new Error('repository failed')
+      return { additions: 99, deletions: 99, available: true }
+    },
+    stageGitFiles: async () => undefined,
+    unstageGitFiles: async () => undefined,
+    commitGitChanges: async () => undefined,
+    syncGitRepository: async () => undefined,
+  })
+  assert.deepEqual(await unavailableHandlers['git:workspaceDiff']({}, 'workspace-a'), {
+    additions: 0,
+    deletions: 0,
+    available: false,
+  })
+})
+
+test('returns an unavailable workspace diff for invalid or empty workspace configuration', async () => {
+  const ipcMain = new FakeIpcMain()
+  const { createGitIPCHandlers } = loadGitIPC(ipcMain)
+  let resolverCalled = false
+  const createHandlers = (config: { rootFolderPath?: string; sourceControlRepositoryPaths: string[] } | null) => createGitIPCHandlers({
+    getWorkspaceGitConfigById: async () => config,
+    discoverGitRepositories: async () => [],
+    resolveConfiguredGitRepository: async () => {
+      resolverCalled = true
+      throw new Error('not expected')
+    },
+    getGitStatus: async () => statusResult(),
+    getGitCommitHistory: async () => historyResult(),
+    getGitDiffSummary: async () => ({ additions: 0, deletions: 0, available: true }),
+    stageGitFiles: async () => undefined,
+    unstageGitFiles: async () => undefined,
+    commitGitChanges: async () => undefined,
+    syncGitRepository: async () => undefined,
+  })
+
+  assert.deepEqual(await createHandlers({ rootFolderPath: '/workspace', sourceControlRepositoryPaths: [] })['git:workspaceDiff']({}, 'workspace-a'), {
+    additions: 0,
+    deletions: 0,
+    available: false,
+  })
+  assert.equal(resolverCalled, false)
+  assert.deepEqual(await createHandlers({ sourceControlRepositoryPaths: ['.'] })['git:workspaceDiff']({}, 'workspace-a'), {
+    additions: 0,
+    deletions: 0,
+    available: false,
+  })
+  assert.deepEqual(await createHandlers(null)['git:workspaceDiff']({}, ''), {
+    additions: 0,
+    deletions: 0,
+    available: false,
+  })
 })
 
 test('resolves the configured repository before status, history, and mutations', async () => {
@@ -96,6 +196,7 @@ test('resolves the configured repository before status, history, and mutations',
     },
     getGitStatus: async (rootPath) => { runnerCalls.push(`status:${rootPath}`); return statusResult() },
     getGitCommitHistory: async (rootPath) => { runnerCalls.push(`history:${rootPath}`); return historyResult() },
+    getGitDiffSummary: async () => ({ additions: 0, deletions: 0, available: true }),
     stageGitFiles: async (rootPath, paths) => { runnerCalls.push(`stage:${rootPath}:${paths.join(',')}`) },
     unstageGitFiles: async (rootPath, paths) => { runnerCalls.push(`unstage:${rootPath}:${paths.join(',')}`) },
     commitGitChanges: async (rootPath, message) => { runnerCalls.push(`commit:${rootPath}:${message}`) },
@@ -141,6 +242,7 @@ test('rejects an unconfigured or escaping repository before mutation runner exec
     },
     getGitStatus: async () => statusResult(),
     getGitCommitHistory: async () => historyResult(),
+    getGitDiffSummary: async () => ({ additions: 0, deletions: 0, available: true }),
     stageGitFiles: async () => { runnerCalled = true },
     unstageGitFiles: async () => { runnerCalled = true },
     commitGitChanges: async () => { runnerCalled = true },
@@ -168,6 +270,7 @@ test('keeps safe fallback results when repository resolution fails', async () =>
     resolveConfiguredGitRepository: async () => { throw new Error('Repository is not configured') },
     getGitStatus: async () => statusResult(),
     getGitCommitHistory: async () => historyResult(),
+    getGitDiffSummary: async () => ({ additions: 0, deletions: 0, available: true }),
     stageGitFiles: async () => undefined,
     unstageGitFiles: async () => undefined,
     commitGitChanges: async () => undefined,
@@ -206,6 +309,7 @@ test('registers discovery by root path for unsaved workspace roots', async () =>
     resolveConfiguredGitRepository: async () => { throw new Error('not used') },
     getGitStatus: async () => statusResult(),
     getGitCommitHistory: async () => historyResult(),
+    getGitDiffSummary: async () => ({ additions: 0, deletions: 0, available: true }),
     stageGitFiles: async () => undefined,
     unstageGitFiles: async () => undefined,
     commitGitChanges: async () => undefined,

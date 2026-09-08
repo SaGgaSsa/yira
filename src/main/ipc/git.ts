@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
-import type { GitCommitHistoryResult, GitRepository, GitStatusResult } from '@shared/types'
+import type { GitCommitHistoryResult, GitRepository, GitStatusResult, WorkspaceGitDiffResult } from '@shared/types'
+import { getGitDiffSummary } from '../git/diff'
 import { discoverGitRepositories, resolveConfiguredGitRepository } from '../git/repositories'
 import { commitGitChanges, getGitCommitHistory, getGitStatus, stageGitFiles, syncGitRepository, unstageGitFiles } from '../git/runner'
 import { getWorkspaceGitConfigById } from './workspace'
@@ -33,6 +34,7 @@ export interface GitIPCDependencies {
   resolveConfiguredGitRepository: typeof resolveConfiguredGitRepository
   getGitStatus: typeof getGitStatus
   getGitCommitHistory: typeof getGitCommitHistory
+  getGitDiffSummary: typeof getGitDiffSummary
   stageGitFiles: typeof stageGitFiles
   unstageGitFiles: typeof unstageGitFiles
   commitGitChanges: typeof commitGitChanges
@@ -90,6 +92,37 @@ export function createGitIPCHandlers(dependencies: GitIPCDependencies): Record<s
         return { outgoing: [], upstream: [], local: [], error: safeGitError(error) }
       }
     },
+    'git:workspaceDiff': async (_event: unknown, workspaceId: string): Promise<WorkspaceGitDiffResult> => {
+      const unavailable: WorkspaceGitDiffResult = { additions: 0, deletions: 0, available: false }
+      try {
+        const { rootPath, configuredRepositoryPaths } = await getConfig(workspaceId)
+        if (configuredRepositoryPaths.length === 0) return unavailable
+
+        const seenRepositoryPaths = new Set<string>()
+        let additions = 0
+        let deletions = 0
+        for (const repositoryPath of configuredRepositoryPaths) {
+          if (seenRepositoryPaths.has(repositoryPath)) continue
+          seenRepositoryPaths.add(repositoryPath)
+
+          const repository = await dependencies.resolveConfiguredGitRepository(rootPath, configuredRepositoryPaths, repositoryPath)
+          const result = await dependencies.getGitDiffSummary(repository.absolutePath)
+          if (!result.available
+            || !Number.isSafeInteger(result.additions)
+            || !Number.isSafeInteger(result.deletions)
+            || result.additions < 0
+            || result.deletions < 0) {
+            return unavailable
+          }
+          additions += result.additions
+          deletions += result.deletions
+        }
+
+        return { additions, deletions, available: true }
+      } catch {
+        return unavailable
+      }
+    },
     'git:stage': async (_event: unknown, workspaceId: string, repositoryPath: string, relativePath: string, originalPath?: string) => {
       await dependencies.stageGitFiles(await resolveRepository(workspaceId, repositoryPath), mutationPaths(relativePath, originalPath))
     },
@@ -111,6 +144,7 @@ const defaultGitIPCDependencies: GitIPCDependencies = {
   resolveConfiguredGitRepository,
   getGitStatus,
   getGitCommitHistory,
+  getGitDiffSummary,
   stageGitFiles,
   unstageGitFiles,
   commitGitChanges,

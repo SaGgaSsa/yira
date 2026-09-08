@@ -2,6 +2,8 @@ import React from 'react'
 import { Grid3X3, LayoutGrid } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { WorkspaceMetadata } from '@shared/types'
+import { hasConfiguredWorkspaceGitDiff } from '@/hooks/useWorkspaceGitDiff'
+import { WorkspaceGitDiff } from './WorkspaceGitDiff'
 import { ListRow } from './TileListItem'
 
 export interface WorkspaceListItemProps {
@@ -31,12 +33,23 @@ export function WorkspaceListItem({
 }: WorkspaceListItemProps): React.ReactElement {
   const { t } = useTranslation()
   const Icon = workspace.config.type === 'grid' ? Grid3X3 : LayoutGrid
+  const hasWorkspaceGitDiff = hasConfiguredWorkspaceGitDiff(
+    workspace.config.rootFolderPath,
+    workspace.config.sourceControlRepositoryPaths,
+  )
 
   return (
     <ListRow
       icon={Icon}
       label={workspace.name}
       variant="workspace"
+      workspaceDiff={hasWorkspaceGitDiff ? (
+        <WorkspaceGitDiff
+          workspaceId={workspace.id}
+          rootFolderPath={workspace.config.rootFolderPath}
+          sourceControlRepositoryPaths={workspace.config.sourceControlRepositoryPaths}
+        />
+      ) : undefined}
       active={active}
       sessionActive={sessionActive}
       attentionCount={attentionCount}

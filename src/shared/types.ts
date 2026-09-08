@@ -303,6 +303,12 @@ export interface GitCommitHistoryResult {
   error?: string
 }
 
+export interface WorkspaceGitDiffResult {
+  additions: number
+  deletions: number
+  available: boolean
+}
+
 export interface Config {
   workspaces: WorkspaceMetadata[]
   activeWorkspaceId: string

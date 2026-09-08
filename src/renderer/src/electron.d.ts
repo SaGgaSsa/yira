@@ -35,6 +35,7 @@ import type {
   GitCommitHistoryResult,
   GitRepository,
   GitStatusResult,
+  WorkspaceGitDiffResult,
   AgentActiveSessionSnapshot,
   AgentProviderAvailabilitySnapshot,
   AgentSessionHistoryQuery,
@@ -121,6 +122,7 @@ interface ElectronWorld {
     discoverRepositoriesAtRoot: (rootFolderPath: string) => Promise<GitRepository[]>
     status: (workspaceId: string, repositoryPath: string) => Promise<GitStatusResult>
     history: (workspaceId: string, repositoryPath: string) => Promise<GitCommitHistoryResult>
+    workspaceDiff: (workspaceId: string) => Promise<WorkspaceGitDiffResult>
     stage: (workspaceId: string, repositoryPath: string, relativePath: string, originalPath?: string) => Promise<void>
     unstage: (workspaceId: string, repositoryPath: string, relativePath: string, originalPath?: string) => Promise<void>
     commit: (workspaceId: string, repositoryPath: string, message: string) => Promise<void>

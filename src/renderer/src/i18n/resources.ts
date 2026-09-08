@@ -233,6 +233,8 @@ type TranslationResources = {
     unpin: string
     attention_one: string
     attention_other: string
+    gitDiffTooltip: string
+    gitDiffUnavailable: string
   }
   tile: {
     terminal: string
@@ -583,6 +585,8 @@ const en: TranslationResources = {
     unpin: 'Unpin workspace',
     attention_one: '{{count}} terminal output event in this workspace',
     attention_other: '{{count}} terminal output events in this workspace',
+    gitDiffTooltip: 'Net diff of pending commits and uncommitted changes since the common ancestor with the known remote reference (+{{additions}} −{{deletions}}). It may not represent the latest push.',
+    gitDiffUnavailable: 'Git diff unavailable for this workspace.',
   },
   tile: {
     terminal: 'Terminal',
@@ -933,6 +937,8 @@ const es: TranslationResources = {
     unpin: 'Desfijar espacio de trabajo',
     attention_one: '{{count}} evento de salida de terminal en este espacio de trabajo',
     attention_other: '{{count}} eventos de salida de terminal en este espacio de trabajo',
+    gitDiffTooltip: 'Diff neto de commits pendientes y cambios sin commit desde el ancestro común con la referencia remota conocida (+{{additions}} −{{deletions}}). Puede no representar el último push.',
+    gitDiffUnavailable: 'El diff de Git no está disponible para este espacio de trabajo.',
   },
   tile: {
     terminal: 'Terminal',
