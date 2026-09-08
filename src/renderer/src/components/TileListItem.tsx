@@ -10,6 +10,7 @@ export interface ListRowProps {
   label: string
   variant?: 'default' | 'workspace'
   active?: boolean
+  sessionActive?: boolean
   attentionCount?: number
   attentionTitle?: string
   onClick: () => void
@@ -71,6 +72,7 @@ export function ListRow({
   label,
   variant = 'default',
   active = false,
+  sessionActive = false,
   attentionCount = 0,
   attentionTitle,
   onClick,
@@ -100,20 +102,19 @@ export function ListRow({
   const attentionLabel = formatTerminalAttentionCount(attentionCount)
   const actionCount = [onConfigure, onFocus, onPin, onDetach, onClose].filter(Boolean).length
   const isWorkspace = variant === 'workspace'
+  const workspaceIsActive = isWorkspace && (active || sessionActive)
   const actionPaddingClass = actionCount >= 4
     ? 'pr-[7.75rem]'
     : actionCount > 0
       ? 'pr-[5.75rem]'
       : ''
   const rowStateClassName = isWorkspace
-    ? active
-      ? 'bg-accent-subtle'
+    ? workspaceIsActive
+      ? ''
       : 'bg-bg-secondary hover:bg-hover-bg'
     : ''
-  const iconClassName = isWorkspace && active
-    ? 'border-accent text-accent'
-    : 'border-border-visible text-text-secondary'
-  const labelClassName = isWorkspace && !active
+  const iconClassName = 'border-border-visible text-text-secondary'
+  const labelClassName = isWorkspace && !workspaceIsActive
     ? 'text-text-secondary'
     : 'text-text-display'
 
@@ -126,8 +127,8 @@ export function ListRow({
       onDrop={onDrop}
       style={isWorkspace
         ? {
-            borderColor: active ? 'var(--accent)' : 'var(--border)',
-            boxShadow: active ? 'inset 3px 0 0 var(--accent)' : undefined,
+            background: workspaceIsActive ? 'var(--surface-raised)' : undefined,
+            borderColor: workspaceIsActive ? 'var(--text-display)' : 'var(--border)',
           }
         : {
             background: active ? 'var(--surface-raised)' : 'var(--surface)',
@@ -184,7 +185,7 @@ export function ListRow({
               disabled={pinDisabled}
               workspaceVariant={isWorkspace}
             >
-              <Pin size={13} className={pinned ? `fill-current ${isWorkspace && !active ? 'text-text-secondary' : 'text-text-display'}` : undefined} aria-hidden="true" />
+              <Pin size={13} className={pinned ? `fill-current ${isWorkspace && !workspaceIsActive ? 'text-text-secondary' : 'text-text-display'}` : undefined} aria-hidden="true" />
             </ListRowActionButton>
           )}
           {onDetach && (

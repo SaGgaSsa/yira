@@ -406,6 +406,7 @@ function AppContent(): React.ReactElement {
   const [remoteSshAvailable, setRemoteSshAvailable] = useState(false)
   const [showWorkspaceManager, setShowWorkspaceManager] = useState(false)
   const [workspaceMetadata, setWorkspaceMetadata] = useState<WorkspaceMetadata[]>([])
+  const [sessionActiveWorkspaceIds, setSessionActiveWorkspaceIds] = useState<Set<string>>(new Set())
   const pendingWorkspacePinsRef = useRef(new Set<string>())
   const [pendingWorkspacePinIds, setPendingWorkspacePinIds] = useState<Set<string>>(new Set())
   const [boardState, setBoardState] = useState<BoardState>(EMPTY_BOARD_STATE)
@@ -557,6 +558,34 @@ function AppContent(): React.ReactElement {
     [],
   )
 
+  const markWorkspaceSessionActive = useCallback((workspaceId: string) => {
+    setSessionActiveWorkspaceIds((current) => {
+      if (current.has(workspaceId)) return current
+
+      const next = new Set(current)
+      next.add(workspaceId)
+      return next
+    })
+  }, [])
+
+  const pruneSessionActiveWorkspaceIds = useCallback((workspaceIds: readonly string[]) => {
+    const remainingWorkspaceIds = new Set(workspaceIds)
+    setSessionActiveWorkspaceIds((current) => {
+      let changed = false
+      const next = new Set<string>()
+
+      for (const workspaceId of current) {
+        if (remainingWorkspaceIds.has(workspaceId)) {
+          next.add(workspaceId)
+        } else {
+          changed = true
+        }
+      }
+
+      return changed ? next : current
+    })
+  }, [])
+
   useEffect(() => window.electron.window.onClosePreparationRequest(async ({ phase }) => {
     if (phase === 'flush') {
       await windowBufferRegistry.flush()
@@ -631,6 +660,7 @@ function AppContent(): React.ReactElement {
       restoreWorkspaceState(workspace.id, workspace.name, workspace.config, restoredState as CanvasState)
     }
 
+    markWorkspaceSessionActive(workspace.id)
     await pruneWorkspaceTerminalRuntimes(registry, workspace.id, restoredState.tiles)
     if (transitionId !== workspaceTransitionRef.current) return
 
@@ -645,7 +675,7 @@ function AppContent(): React.ReactElement {
     }
 
     clearWorkspaceAttentionCount(workspace.id)
-  }, [clearWorkspaceAttentionCount, focusTile, registry, restoreGridWorkspaceState, restoreWorkspaceState, saveToDisk, selectTiles, setFullviewActiveTileId, setViewMode, updateWorkspaceAttentionCount])
+  }, [clearWorkspaceAttentionCount, focusTile, markWorkspaceSessionActive, registry, restoreGridWorkspaceState, restoreWorkspaceState, saveToDisk, selectTiles, setFullviewActiveTileId, setViewMode, updateWorkspaceAttentionCount])
 
   const recordWorkspaceSelection = useCallback((workspaceId: string) => {
     void window.electron.workspace.recordSelection(workspaceId)
@@ -1610,6 +1640,7 @@ function AppContent(): React.ReactElement {
     const result = await window.electron.workspace.commitManagementChanges({ workspaces: entries })
 
     await destroyRemovedWorkspaceRuntimes(registry, result.removedWorkspaceIds)
+    pruneSessionActiveWorkspaceIds(result.workspaces.map((workspace) => workspace.id))
     setWorkspaceMetadata(result.workspaces)
     if (result.removedWorkspaceIds.length > 0) {
       pruneWorkspaceAttentionCounts(result.workspaces.map((workspace) => workspace.id))
@@ -1651,7 +1682,7 @@ function AppContent(): React.ReactElement {
     }
 
     await activateWorkspace(result.activeWorkspace, { persistCurrent: false, updateMain: false })
-  }, [activeWorkspaceId, activateWorkspace, pruneWorkspaceAttentionCounts, registry, restoreState, saveToDisk, setWorkspace, t])
+  }, [activeWorkspaceId, activateWorkspace, pruneSessionActiveWorkspaceIds, pruneWorkspaceAttentionCounts, registry, restoreState, saveToDisk, setWorkspace, t])
 
   const openCreateWorkspaceDialog = useCallback(() => {
     const dialogCopy = getWorkspaceDialogCopy('new', t)
@@ -2169,6 +2200,7 @@ function AppContent(): React.ReactElement {
                     key={workspace.id}
                     workspace={workspace}
                     active={workspace.id === activeWorkspaceId}
+                    sessionActive={sessionActiveWorkspaceIds.has(workspace.id)}
                     attentionCount={workspaceAttentionCounts[workspace.id] ?? 0}
                     className="w-full transition-colors"
                     onClick={() => switchWorkspace(workspace)}

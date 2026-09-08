@@ -7,6 +7,7 @@ import { ListRow } from './TileListItem'
 export interface WorkspaceListItemProps {
   workspace: WorkspaceMetadata
   active?: boolean
+  sessionActive?: boolean
   attentionCount?: number
   onClick: () => void
   onConfigure: () => void
@@ -19,6 +20,7 @@ export interface WorkspaceListItemProps {
 export function WorkspaceListItem({
   workspace,
   active = false,
+  sessionActive = false,
   attentionCount = 0,
   onClick,
   onConfigure,
@@ -36,6 +38,7 @@ export function WorkspaceListItem({
       label={workspace.name}
       variant="workspace"
       active={active}
+      sessionActive={sessionActive}
       attentionCount={attentionCount}
       attentionTitle={t(attentionCount === 1 ? 'workspace.attention_one' : 'workspace.attention_other', { count: attentionCount })}
       onClick={onClick}
