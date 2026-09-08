@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 
 import { sanitizeTerminalReplayBuffer } from '../src/renderer/src/utils/terminalReplaySanitizer'
@@ -50,11 +49,4 @@ test('preserves incomplete and malformed VT requests', () => {
   const replay = 'a\x1b[6b\x1b]10;?c\x1bP$qmd\x1b[?6me\x1b]4;0;not-a-query\x07f'
 
   assert.equal(sanitizeTerminalReplayBuffer(replay), replay)
-})
-
-test('TerminalTile sanitizes only the terminal.create replay buffer before writing it', async () => {
-  const source = await readFile(new URL('../src/renderer/src/components/TerminalTile.tsx', import.meta.url), 'utf8')
-
-  assert.match(source, /if \(buffer\) term\.write\(sanitizeTerminalReplayBuffer\(buffer\)\)/)
-  assert.match(source, /term\.write\(data\)/)
 })

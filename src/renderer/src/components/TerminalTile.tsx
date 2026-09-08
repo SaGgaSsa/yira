@@ -1,34 +1,27 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { Terminal } from '@xterm/xterm'
-import { FitAddon } from '@xterm/addon-fit'
-import { WebLinksAddon } from '@xterm/addon-web-links'
-import '@xterm/xterm/css/xterm.css'
-import type { FileTileOpenOptions, RemotePreparationResult, TerminalExitEvent, TileState } from '@shared/types'
-import type { TerminalSessionIdentity } from '@shared/terminalSessionIdentity'
+import type { FileTileOpenOptions, RemotePreparationResult, TerminalCreateOptions, TerminalExitEvent, TileState, WorkspaceConfig } from '@shared/types'
+import type { TerminalSessionTarget } from '@shared/terminalSessionIdentity'
 import { useCanvasStore } from '@/store/canvasStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { isTerminalInputAttended } from '@/utils/terminalAttention'
 import { buildTerminalStartupCommand } from '@/utils/terminalLaunch'
-import { createTerminalFitScheduler } from '@/utils/terminalFitScheduler'
-import { sanitizeTerminalReplayBuffer } from '@/utils/terminalReplaySanitizer'
-import { createTerminalReplayController } from '@/utils/terminalReplay'
-import { canFitTerminalAfterActivation } from '@/utils/terminalActivationFit'
-import { getTerminalContainerBackground, getXtermTheme } from '@/utils/terminalTheme'
+import { getTerminalContainerBackground } from '@/utils/terminalTheme'
 import { buildTerminalContextMenuItems } from '@/utils/terminalContextMenu'
-import { createTerminalMarkdownLinkProvider } from '@/utils/terminalMarkdownLinks'
 import type { TerminalLinkTarget } from '@/utils/terminalContextMenu'
-import { shouldOpenTerminalLink } from '@/utils/terminalLinkActivation'
-import {
-  decodeOsc52ClipboardPayload,
-  getTerminalContextSelectionSnapshot,
-  isTerminalCopyShortcut,
-} from '@/utils/terminalClipboard'
 import { ContextMenu, type MenuItem } from './ContextMenu'
+import {
+  useTerminalRuntimeContext,
+  type TerminalRuntimeCreateRequest,
+} from './TerminalRuntimeProvider'
+import type { TerminalRuntime, TerminalRuntimeSnapshot, TerminalRuntimeViewOptions } from '@/utils/terminalRuntime'
+import type { TerminalRuntimeRegistry } from '@/utils/terminalRuntimeRegistry'
 
 interface Props {
   tile: TileState
+  workspaceId: string
+  workspaceConfig: WorkspaceConfig
   isFocused: boolean
   edgeToEdge?: boolean
   isVisible?: boolean
@@ -38,7 +31,6 @@ interface Props {
   onDelete: () => void
   onOpenBrowserTile?: (url: string) => void
   onOpenFileTile?: (relativePath: string, options?: FileTileOpenOptions) => void | Promise<void>
-  terminalActivationGeneration?: number
 }
 
 interface RemoteTerminalReconnectNoticeProps {
@@ -208,17 +200,6 @@ export function registerTerminalInputFocusListener({
   return () => terminalInput?.removeEventListener('focus', handleFocus)
 }
 
-function applyTerminalPadding(container: HTMLElement | null, edgeToEdge: boolean): void {
-  const xtermEl = container?.querySelector('.xterm') as HTMLElement | null
-  if (!xtermEl) return
-  const horizontalPadding = edgeToEdge ? '0px' : '14px'
-  const verticalPadding = edgeToEdge ? '0px' : '12px'
-  xtermEl.style.paddingLeft = horizontalPadding
-  xtermEl.style.paddingRight = horizontalPadding
-  xtermEl.style.paddingTop = verticalPadding
-  xtermEl.style.paddingBottom = verticalPadding
-}
-
 export function shouldRegisterTerminalMarkdownLinks(
   connection: TileState['terminalConnection'],
   workspaceRootPath: string | undefined,
@@ -227,36 +208,193 @@ export function shouldRegisterTerminalMarkdownLinks(
   return connection !== 'remote-ssh' && Boolean(workspaceRootPath?.trim()) && hasOpenFileTile
 }
 
-export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVisible = true, autoFocus = false, onFocus, onUpdate, onDelete, onOpenBrowserTile, onOpenFileTile, terminalActivationGeneration = 0 }: Props): React.ReactElement {
+const EMPTY_RUNTIME_SNAPSHOT: TerminalRuntimeSnapshot = {
+  preparing: false,
+  reconnecting: false,
+  exitEvent: null,
+  error: null,
+  title: null,
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+export function attachTerminalRuntimeHost(
+  runtime: Pick<TerminalRuntime, 'attachHost'>,
+  host: HTMLElement,
+  viewOptions: TerminalRuntimeViewOptions,
+  registry: Pick<TerminalRuntimeRegistry<TerminalRuntime>, 'park'>,
+  target: TerminalSessionTarget,
+): () => void {
+  runtime.attachHost(host, viewOptions)
+  return () => registry.park(target)
+}
+
+export function TerminalTileWrapper({
+  tile,
+  workspaceId,
+  workspaceConfig,
+  isFocused,
+  edgeToEdge = false,
+  isVisible = true,
+  autoFocus = false,
+  onFocus,
+  onUpdate,
+  onDelete: _onDelete,
+  onOpenBrowserTile,
+  onOpenFileTile,
+}: Props): React.ReactElement {
   const { t } = useTranslation()
+  const {
+    registry,
+    createRuntime,
+    getHoveredLinkTarget,
+  } = useTerminalRuntimeContext()
   const containerRef = useRef<HTMLDivElement>(null)
-  const termRef = useRef<Terminal | null>(null)
-  const fitRef = useRef<FitAddon | null>(null)
-  const sessionIdentityRef = useRef<TerminalSessionIdentity | null>(null)
-  const fitSchedulerRef = useRef(createTerminalFitScheduler())
-  const isVisibleRef = useRef(isVisible)
-  const currentActivationGenerationRef = useRef(terminalActivationGeneration)
-  const replaySequenceRef = useRef(0)
-  const currentReplayGenerationRef = useRef<number | null>(null)
-  const completedReplayGenerationRef = useRef<number | null>(null)
-  const isStaleRef = useRef(false)
+  const target = useMemo<TerminalSessionTarget>(() => ({ workspaceId, tileId: tile.id }), [tile.id, workspaceId])
+  const terminalConnection = tile.terminalConnection === 'remote-ssh' ? 'remote-ssh' : undefined
+  const isRemoteSsh = terminalConnection === 'remote-ssh'
+  const shouldPrepareRemote = isRemoteSsh && workspaceConfig.remoteTerminal?.wakeOnLan?.enabled === true
+  const workspaceRootPath = workspaceConfig.rootFolderPath?.trim() ?? ''
   const attentionEnabled = useSettingsStore((s) => s.terminal.attentionEnabled)
   const attentionEnabledRef = useRef(attentionEnabled)
-  const notificationsMutedRef = useRef(tile.notificationsMuted === true)
   const tileFontSizePx = useSettingsStore((s) => s.tileFontSizePx)
   const terminalThemeId = useSettingsStore((s) => s.terminal.themeId)
+  const [runtime, setRuntime] = useState<TerminalRuntime | null>(null)
+  const [acquirePending, setAcquirePending] = useState(true)
+  const [acquireError, setAcquireError] = useState<string | null>(null)
+  const [acquireExitEvent, setAcquireExitEvent] = useState<TerminalExitEvent | null>(null)
+  const [reconnectPending, setReconnectPending] = useState(false)
+  const [acquireGeneration, setAcquireGeneration] = useState(0)
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number; selectionText: string; linkTarget?: TerminalLinkTarget } | null>(null)
-  const [terminalExit, setTerminalExit] = useState<TerminalExitEvent | null>(null)
-  const [reconnecting, setReconnecting] = useState(false)
-  const [preparing, setPreparing] = useState(false)
-  const [sessionGeneration, setSessionGeneration] = useState(0)
-  const hoveredLinkTargetRef = useRef<TerminalLinkTarget | null>(null)
-  const onOpenFileTileRef = useRef<Props['onOpenFileTile']>(onOpenFileTile)
+
+  const onFocusRef = useRef(onFocus)
+  const onOpenBrowserTileRef = useRef(onOpenBrowserTile)
+  const onOpenFileTileRef = useRef(onOpenFileTile)
+  onFocusRef.current = onFocus
+  onOpenBrowserTileRef.current = onOpenBrowserTile
   onOpenFileTileRef.current = onOpenFileTile
-  isVisibleRef.current = isVisible
-  currentActivationGenerationRef.current = terminalActivationGeneration
+
+  const runtimeOnFocus = useCallback(() => {
+    onFocusRef.current()
+  }, [])
+  const runtimeOpenBrowserTile = useCallback((url: string) => {
+    onOpenBrowserTileRef.current?.(url)
+  }, [])
+  const runtimeOpenFileTile = useCallback((relativePath: string, options?: FileTileOpenOptions) => {
+    return onOpenFileTileRef.current?.(relativePath, options)
+  }, [])
+  const hasOpenFileTile = Boolean(onOpenFileTile)
+
+  const createOptions = useMemo<TerminalCreateOptions>(() => ({
+    shellProfileId: tile.shellProfileId ?? 'bash',
+    connection: terminalConnection,
+    remoteTerminal: isRemoteSsh ? workspaceConfig.remoteTerminal : undefined,
+    remoteStartupCommand: isRemoteSsh ? tile.startupCommand : undefined,
+    workspaceId: workspaceId || undefined,
+    workspaceDir: isRemoteSsh ? undefined : workspaceConfig.rootFolderPath,
+    wslStartInHome: !isRemoteSsh && tile.shellProfileId === 'wsl' && !workspaceConfig.rootFolderPath,
+    initialCommand: isRemoteSsh ? undefined : buildTerminalStartupCommand(tile, workspaceConfig),
+    terminalHistoryEnabled: workspaceConfig.terminalHistoryEnabled !== false,
+    agent: isRemoteSsh ? undefined : tile.agent,
+    agentProviderConfig: !isRemoteSsh && tile.agent
+      ? workspaceConfig.agentProviders[tile.agent.provider]
+      : undefined,
+  }), [
+    isRemoteSsh,
+    terminalConnection,
+    tile.agent,
+    tile.shellProfileId,
+    tile.startupCommand,
+    workspaceConfig,
+    workspaceId,
+  ])
+
+  const viewOptions = useMemo<TerminalRuntimeViewOptions>(() => ({
+    visible: isVisible,
+    edgeToEdge,
+    autoFocus,
+    fontSize: tileFontSizePx,
+    themeId: terminalThemeId,
+    notificationsMuted: tile.notificationsMuted === true,
+    workspaceRootPath,
+    onFocus: runtimeOnFocus,
+    onOpenBrowserTile: runtimeOpenBrowserTile,
+    onOpenFileTile: hasOpenFileTile ? runtimeOpenFileTile : undefined,
+  }), [
+    autoFocus,
+    edgeToEdge,
+    isVisible,
+    runtimeOnFocus,
+    runtimeOpenBrowserTile,
+    runtimeOpenFileTile,
+    hasOpenFileTile,
+    terminalThemeId,
+    tile.notificationsMuted,
+    tileFontSizePx,
+    workspaceRootPath,
+  ])
+
+  const activeRuntime = runtime && runtime.target.workspaceId === target.workspaceId && runtime.target.tileId === target.tileId
+    ? runtime
+    : null
+  const activeRuntimeRef = useRef<TerminalRuntime | null>(null)
+  activeRuntimeRef.current = activeRuntime
+
+  const pendingSnapshot = useMemo<TerminalRuntimeSnapshot>(() => ({
+    ...EMPTY_RUNTIME_SNAPSHOT,
+    preparing: acquirePending || reconnectPending,
+    reconnecting: reconnectPending,
+    exitEvent: reconnectPending ? null : acquireExitEvent,
+    error: acquireError,
+  }), [acquireError, acquireExitEvent, acquirePending, reconnectPending])
+  const subscribeToRuntime = useCallback((listener: () => void): (() => void) => (
+    activeRuntime?.subscribe(listener) ?? (() => {})
+  ), [activeRuntime])
+  const getRuntimeSnapshot = useCallback((): TerminalRuntimeSnapshot => (
+    activeRuntime?.getSnapshot() ?? pendingSnapshot
+  ), [activeRuntime, pendingSnapshot])
+  const runtimeSnapshot = useSyncExternalStore(
+    subscribeToRuntime,
+    getRuntimeSnapshot,
+    getRuntimeSnapshot,
+  )
+  const snapshot = useMemo<TerminalRuntimeSnapshot>(() => {
+    if (!activeRuntime) return pendingSnapshot
+    if (!reconnectPending) return runtimeSnapshot
+
+    return {
+      ...runtimeSnapshot,
+      preparing: true,
+      reconnecting: true,
+      exitEvent: null,
+      error: acquireError ?? runtimeSnapshot.error,
+    }
+  }, [acquireError, activeRuntime, pendingSnapshot, reconnectPending, runtimeSnapshot])
+
+  const clearAttentionIfAttended = useCallback(() => {
+    const terminalInput = activeRuntimeRef.current?.terminal?.textarea
+    const isWindowFocused = typeof document.hasFocus === 'function' ? document.hasFocus() : true
+    if (!isTerminalInputAttended(isWindowFocused, terminalInput, document.activeElement)) return
+    if (!attentionEnabledRef.current) return
+
+    useCanvasStore.getState().clearTerminalAttention(tile.id)
+    void activeRuntimeRef.current?.acknowledgeAgentAlert()
+  }, [tile.id])
+
+  const focusTerminal = useCallback(() => {
+    const currentRuntime = activeRuntimeRef.current
+    if (currentRuntime) {
+      currentRuntime.focus()
+      return
+    }
+    onFocusRef.current()
+  }, [])
 
   const openMarkdownFileTile = useCallback((relativePath: string, options: FileTileOpenOptions = { markdownView: 'preview' }): void | Promise<void> => {
+    const currentRuntime = activeRuntimeRef.current
+    if (currentRuntime) return currentRuntime.openFileTile(relativePath, options)
     const openFileTile = onOpenFileTileRef.current
     if (!openFileTile) return
 
@@ -269,24 +407,11 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
     }
   }, [])
 
-  const focusTerminal = useCallback(() => {
-    onFocus()
-    termRef.current?.focus()
-  }, [onFocus])
-
-  const clearAttentionIfAttended = useCallback(() => {
-    if (!isTerminalInputAttended(document.hasFocus(), termRef.current?.textarea, document.activeElement)) return
-
-    if (!attentionEnabledRef.current) return
-
-    useCanvasStore.getState().clearTerminalAttention(tile.id)
-  }, [tile.id])
-
   const copySelection = useCallback(async (selectionSnapshot?: string) => {
-    const term = termRef.current
-    const selection = selectionSnapshot ?? (term?.hasSelection() ? term.getSelection() : '')
+    const currentRuntime = activeRuntimeRef.current
+    const selection = selectionSnapshot ?? (currentRuntime?.hasSelection() ? currentRuntime.getSelection() : '')
     if (!selection) return
-    term?.focus()
+    currentRuntime?.focus()
     try {
       await window.electron.clipboard.writeText(selection)
     } catch (error) {
@@ -295,390 +420,151 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
   }, [])
 
   const pasteClipboard = useCallback(async () => {
-    const term = termRef.current
-    if (!term) return
+    const currentRuntime = activeRuntimeRef.current
+    if (!currentRuntime) return
     const text = await window.electron.clipboard.readText()
     if (!text) return
-    term.focus()
-    term.paste(text)
+    currentRuntime.focus()
+    currentRuntime.paste(text)
   }, [])
 
   const reconnectRemoteTerminal = useCallback(async () => {
-    if (reconnecting || tile.terminalConnection !== 'remote-ssh') return
-    const identity = sessionIdentityRef.current
-    setReconnecting(true)
+    const currentRuntime = activeRuntimeRef.current
+    if (!isRemoteSsh || reconnectPending || snapshot.reconnecting) return
+
+    setReconnectPending(true)
+    setAcquirePending(true)
+    setAcquireError(null)
+    setAcquireExitEvent(null)
+    currentRuntime?.setReconnecting(true)
+    setRuntime(null)
 
     try {
-      if (identity) {
-        await restartTerminalAfterExit(
-          () => window.electron.terminal.destroy(identity),
-          () => {
-            setTerminalExit(null)
-            setSessionGeneration((generation) => generation + 1)
-          },
-        )
-      } else {
-        setTerminalExit(null)
-        setSessionGeneration((generation) => generation + 1)
-      }
+      await registry.destroy(target)
+      setAcquireGeneration((generation) => generation + 1)
     } catch (error) {
+      const message = getErrorMessage(error)
       console.error('[TerminalTile] Failed to restart remote SSH terminal:', error)
-      setReconnecting(false)
+      setReconnectPending(false)
+      setAcquirePending(false)
+      setAcquireError(message)
+      setAcquireExitEvent({ exitCode: -1 })
     }
-  }, [reconnecting, tile.id, tile.terminalConnection])
-
-  // Fit terminal to container
-  const doFit = useCallback((requestedReplayGeneration = completedReplayGenerationRef.current) => {
-    if (!isVisibleRef.current) {
-      fitSchedulerRef.current.cancelPending()
-      return
-    }
-    if (!fitRef.current || !termRef.current || !containerRef.current) return
-    const identity = sessionIdentityRef.current
-    if (!identity) return
-    const activationGeneration = currentActivationGenerationRef.current
-    if (!canFitTerminalAfterActivation({
-      isVisible: isVisibleRef.current,
-      activationGeneration,
-      currentActivationGeneration: currentActivationGenerationRef.current,
-      replayGeneration: requestedReplayGeneration,
-      currentReplayGeneration: currentReplayGenerationRef.current,
-      isStale: isStaleRef.current,
-    })) {
-      fitSchedulerRef.current.cancelPending()
-      return
-    }
-    try {
-      fitSchedulerRef.current.requestFit(fitRef.current, (cols, rows) => {
-        if (sessionIdentityRef.current !== identity) return
-        if (!canFitTerminalAfterActivation({
-          isVisible: isVisibleRef.current,
-          activationGeneration,
-          currentActivationGeneration: currentActivationGenerationRef.current,
-          replayGeneration: requestedReplayGeneration,
-          currentReplayGeneration: currentReplayGenerationRef.current,
-          isStale: isStaleRef.current,
-        })) return
-        window.electron.terminal.resize(identity, cols, rows)
-      })
-    } catch { /* ignore */ }
-  }, [tile.id])
+  }, [isRemoteSsh, reconnectPending, registry, snapshot.reconnecting, target])
 
   useEffect(() => {
     attentionEnabledRef.current = attentionEnabled
     if (!attentionEnabled) return
     clearAttentionIfAttended()
-  }, [attentionEnabled, clearAttentionIfAttended, tile.id])
+  }, [attentionEnabled, clearAttentionIfAttended])
 
   useEffect(() => {
-    notificationsMutedRef.current = tile.notificationsMuted === true
     if (tile.notificationsMuted !== true) return
     useCanvasStore.getState().clearTerminalAttention(tile.id)
   }, [tile.id, tile.notificationsMuted])
 
-  // Create terminal + PTY on mount
   useEffect(() => {
-    if (!containerRef.current) return
-
-    const replayGeneration = replaySequenceRef.current + 1
-    replaySequenceRef.current = replayGeneration
-    currentReplayGenerationRef.current = replayGeneration
-    completedReplayGenerationRef.current = null
-    isStaleRef.current = false
-
-    const { activeWorkspaceId, activeWorkspaceConfig: workspaceConfig } = useCanvasStore.getState()
-    const isRemoteSsh = tile.terminalConnection === 'remote-ssh'
-    const shouldPrepareRemote = isRemoteSsh && workspaceConfig.remoteTerminal?.wakeOnLan?.enabled === true
-    setPreparing(shouldPrepareRemote)
-
-    // Create xterm instance
-    const term = new Terminal({
-      theme: getXtermTheme(useSettingsStore.getState().terminal.themeId),
-      fontFamily: '"IBM Plex Mono", "JetBrains Mono", "Consolas", monospace',
-      fontSize: useSettingsStore.getState().tileFontSizePx,
-      lineHeight: 1.15,
-      cursorBlink: true,
-      allowProposedApi: true,
-      scrollback: 5000,
-    })
-
-    const fitAddon = new FitAddon()
-    term.loadAddon(fitAddon)
-    const webLinksAddon = new WebLinksAddon((event, url) => {
-      if (!shouldOpenTerminalLink(event.button)) return
-      void window.electron.shell.openExternal(url).catch((error: unknown) => {
-        console.error('[TerminalTile] Failed to open terminal link externally:', error)
-      })
-    }, {
-      hover: (_event, url) => {
-        hoveredLinkTargetRef.current = { kind: 'web', value: url }
-      },
-      leave: () => {
-        if (hoveredLinkTargetRef.current?.kind === 'web') {
-          hoveredLinkTargetRef.current = null
-        }
-      },
-    })
-    term.loadAddon(webLinksAddon)
-
-    // Clear container to prevent leftover DOM from StrictMode double-mount
-    containerRef.current.innerHTML = ''
-    term.open(containerRef.current)
-
-    if (isVisible) applyTerminalPadding(containerRef.current, edgeToEdge)
-
-    termRef.current = term
-    fitRef.current = fitAddon
-
-    const markdownLinkDisposer = shouldRegisterTerminalMarkdownLinks(
-      tile.terminalConnection,
-      workspaceConfig.rootFolderPath,
-      Boolean(onOpenFileTileRef.current),
-    )
-      ? term.registerLinkProvider(createTerminalMarkdownLinkProvider(term, {
-          baseDirectory: tile.agent?.cwd ?? '',
-          onActivate: (relativePath) => openMarkdownFileTile(relativePath, { markdownView: 'preview' }),
-          onHover: (relativePath) => {
-            hoveredLinkTargetRef.current = { kind: 'markdown', value: relativePath }
-          },
-          onLeave: (relativePath) => {
-            const current = hoveredLinkTargetRef.current
-            if (current?.kind === 'markdown' && current.value === relativePath) {
-              hoveredLinkTargetRef.current = null
-            }
-          },
-        }))
-      : null
-
-    term.attachCustomKeyEventHandler((event) => {
-      if (!isTerminalCopyShortcut(event)) return true
-
-      const selection = getTerminalContextSelectionSnapshot(term)
-      if (!selection) return true
-
-      void window.electron.clipboard.writeText(selection).catch((error: unknown) => {
-        console.error('[TerminalTile] Failed to copy terminal selection:', error)
-      })
-      return false
-    })
-
-    const terminalInput = term.textarea
-    const removeTerminalInputFocusListener = registerTerminalInputFocusListener({
-      terminalInput,
-      textarea: terminalInput,
-      isWindowFocused: () => document.hasFocus(),
-      getActiveElement: () => document.activeElement,
-      attentionEnabled: () => attentionEnabledRef.current,
-      clearActivity: () => {
-        useCanvasStore.getState().clearTerminalAttention(tile.id)
-        const identity = sessionIdentityRef.current
-        if (identity) void window.electron.terminal.acknowledgeAgentAlert(identity)
-      },
-    })
     window.addEventListener('focus', clearAttentionIfAttended)
-
-    // ResizeObserver for container size changes
-    const ro = new ResizeObserver(() => doFit())
-    if (containerRef.current.parentElement) {
-      ro.observe(containerRef.current.parentElement)
-    }
-
-    // Create PTY session
-    let cancelled = false
-    let ptyUnsub: (() => void) | null = null
-    let exitUnsub: (() => void) | null = null
-    let agentAlertUnsub: (() => void) | null = null
-    let inputDisposer: { dispose: () => void } | null = null
-    let replayController: ReturnType<typeof createTerminalReplayController> | null = null
-    const titleDisposer = term.onTitleChange((title) => {
-      useCanvasStore.getState().setTerminalTitle(tile.id, title)
-    })
-    const osc52Disposer = term.parser.registerOscHandler(52, async (data) => {
-      const text = decodeOsc52ClipboardPayload(data)
-      if (text === null) return true
-
-      try {
-        await window.electron.clipboard.writeText(text)
-      } catch (error) {
-        console.error('[TerminalTile] Failed to write OSC 52 clipboard payload:', error)
-      }
-      return true
-    })
-    const initialCommand = isRemoteSsh ? undefined : buildTerminalStartupCommand(tile, workspaceConfig)
-
-    const createPty = async (): Promise<void> => {
-      setPreparing(false)
-      await window.electron.terminal
-        .create({ tileId: tile.id, workspaceId: activeWorkspaceId }, {
-          shellProfileId: tile.shellProfileId ?? 'bash',
-          connection: isRemoteSsh ? 'remote-ssh' : undefined,
-          remoteTerminal: isRemoteSsh ? workspaceConfig.remoteTerminal : undefined,
-          remoteStartupCommand: isRemoteSsh ? tile.startupCommand : undefined,
-          workspaceId: activeWorkspaceId || undefined,
-          workspaceDir: isRemoteSsh ? undefined : workspaceConfig.rootFolderPath,
-          wslStartInHome: !isRemoteSsh && tile.shellProfileId === 'wsl' && !workspaceConfig.rootFolderPath,
-          initialCommand,
-          terminalHistoryEnabled: workspaceConfig.terminalHistoryEnabled !== false,
-          agent: isRemoteSsh ? undefined : tile.agent,
-          agentProviderConfig: !isRemoteSsh && tile.agent
-            ? workspaceConfig.agentProviders[tile.agent.provider]
-            : undefined,
-        })
-        .then(async ({ identity: createdIdentity }) => {
-          if (cancelled) return
-          sessionIdentityRef.current = createdIdentity
-          const isCurrent = () => !cancelled && sessionIdentityRef.current === createdIdentity
-          replayController = createTerminalReplayController({
-            isCurrent,
-            write: (data, callback) => term.write(data, callback),
-            onData: (data) => {
-              handleTerminalOutput({
-                data,
-                term,
-                attentionEnabled: attentionEnabledRef.current,
-                notificationsMuted: notificationsMutedRef.current,
-                isWindowFocused: document.hasFocus(),
-                activeElement: document.activeElement,
-                markActivity: () => {
-                  useCanvasStore.getState().markTerminalOutput(tile.id)
-                },
-                clearActivity: () => {
-                  useCanvasStore.getState().clearTerminalAttention(tile.id)
-                },
-              })
-            },
-            onExit: (exitEvent) => {
-              if (!isCurrent() || !isRemoteSsh) return
-              setTerminalExit(exitEvent)
-              setReconnecting(false)
-            },
-            onReplayComplete: () => {
-              if (!isCurrent()) return
-              completedReplayGenerationRef.current = replayGeneration
-              doFit(replayGeneration)
-            },
-          })
-
-          // Register identity-specific listeners before attaching the renderer.
-          ptyUnsub = window.electron.terminal.onData(createdIdentity, replayController.onData)
-          exitUnsub = window.electron.terminal.onExit(createdIdentity, replayController.onExit)
-          agentAlertUnsub = window.electron.terminal.onAgentAlert(tile.id, (state: unknown) => {
-            handleTerminalAgentAlert(state, term)
-          })
-
-          // Send user input to PTY
-          inputDisposer = term.onData((data: string) => {
-            if (!isCurrent()) return
-            void window.electron.terminal.write(createdIdentity, data)
-          })
-
-          const attached = await window.electron.terminal.attach(createdIdentity)
-          if (!isCurrent()) return
-          setReconnecting(false)
-          useCanvasStore.getState().registerTerminalCreated(tile.id)
-          // Replay now owns the ordered equivalent of: if (buffer) term.write(sanitizeTerminalReplayBuffer(buffer))
-          replayController.replay({
-            buffer: sanitizeTerminalReplayBuffer(attached.buffer),
-            exitEvent: attached.exitEvent,
-          })
-        })
-    }
-
-    const handleStartError = (err: unknown): void => {
-      if (cancelled) return
-      setPreparing(false)
-      const error = err instanceof Error ? err : new Error(String(err))
-      term.write(`\r\n\x1b[31mFailed to start terminal: ${error.message}\x1b[0m\r\n`)
-      if (isRemoteSsh) {
-        setTerminalExit({ exitCode: -1 })
-        setReconnecting(false)
-      }
-    }
-
-    const start = shouldPrepareRemote
-      ? prepareRemoteTerminal({
-          isCancelled: () => cancelled,
-          prepare: () => window.electron.terminal.prepareRemote(activeWorkspaceId),
-          create: createPty,
-        })
-      : createPty()
-    void start.catch(handleStartError)
-
-    // Cleanup on unmount / before re-run
-    return () => {
-      cancelled = true
-      isStaleRef.current = true
-      fitSchedulerRef.current.cancelPending()
-      ro.disconnect()
-      removeTerminalInputFocusListener()
-      window.removeEventListener('focus', clearAttentionIfAttended)
-      ptyUnsub?.()
-      exitUnsub?.()
-      agentAlertUnsub?.()
-      inputDisposer?.dispose()
-      replayController?.dispose()
-      markdownLinkDisposer?.dispose()
-      osc52Disposer.dispose()
-      titleDisposer.dispose()
-      const identity = sessionIdentityRef.current
-      if (identity) window.electron?.terminal?.detach?.(identity)
-      sessionIdentityRef.current = null
-      currentReplayGenerationRef.current = null
-      completedReplayGenerationRef.current = null
-      term.dispose()
-      termRef.current = null
-      fitRef.current = null
-    }
-  }, [
-    clearAttentionIfAttended,
-    doFit,
-    tile.agent?.cwd,
-    tile.agent?.provider,
-    tile.agent?.sessionId,
-    tile.id,
-    tile.shellProfileId,
-    tile.terminalConnection,
-    sessionGeneration,
-  ])
+    return () => window.removeEventListener('focus', clearAttentionIfAttended)
+  }, [clearAttentionIfAttended])
 
   useEffect(() => {
-    if (!isVisible) {
-      fitSchedulerRef.current.cancelPending()
+    let active = true
+    setRuntime(null)
+    setAcquirePending(true)
+    setAcquireError(null)
+    setAcquireExitEvent(null)
+
+    const request: TerminalRuntimeCreateRequest = {
+      target,
+      createOptions,
+      viewOptions,
+      markdownBaseDirectory: tile.agent?.cwd ?? '',
+    }
+    const create = async (): Promise<TerminalRuntime> => {
+      if (shouldPrepareRemote) {
+        await window.electron.terminal.prepareRemote(target.workspaceId)
+      }
+      return createRuntime(request)
+    }
+
+    registry.acquire(target, create).then(
+      (nextRuntime) => {
+        if (!active) return
+        setRuntime(nextRuntime)
+        setAcquirePending(false)
+        setAcquireError(null)
+        setAcquireExitEvent(null)
+        setReconnectPending(false)
+      },
+      (error: unknown) => {
+        if (!active) return
+        const message = getErrorMessage(error)
+        setAcquirePending(false)
+        setAcquireError(message)
+        if (isRemoteSsh) setAcquireExitEvent({ exitCode: -1 })
+        setReconnectPending(false)
+      },
+    )
+
+    return () => {
+      active = false
+    }
+  // `viewOptions` is intentionally captured when a target starts. Mutable view
+  // callbacks and dimensions are applied by the layout effect below.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [acquireGeneration, target])
+
+  // Park in a layout cleanup so the runtime root moves to the parking root
+  // before React removes the host DOM node. This is also the pending-creation
+  // cancellation path: the registry parks the runtime when it becomes ready.
+  const attachedRuntimeRef = useRef<TerminalRuntime | null>(null)
+  const hostCleanupRef = useRef<(() => void) | null>(null)
+  useLayoutEffect(() => {
+    return () => {
+      const cleanup = hostCleanupRef.current
+      hostCleanupRef.current = null
+      attachedRuntimeRef.current = null
+      if (cleanup) cleanup()
+      else registry.park(target)
+    }
+  }, [registry, target])
+
+  useLayoutEffect(() => {
+    const runtime = activeRuntime
+    const host = containerRef.current
+    if (!runtime || !host) {
+      const cleanup = hostCleanupRef.current
+      hostCleanupRef.current = null
+      attachedRuntimeRef.current = null
+      cleanup?.()
       return
     }
-    applyTerminalPadding(containerRef.current, edgeToEdge)
-    doFit()
-  }, [edgeToEdge, doFit, isVisible, terminalActivationGeneration])
 
-  // Re-fit on width/height changes
-  useEffect(() => {
-    doFit()
-  }, [tile.width, tile.height, doFit])
-
-  useEffect(() => {
-    const term = termRef.current
-    if (!term) return
-    term.options.fontSize = tileFontSizePx
-    doFit()
-  }, [tileFontSizePx, doFit])
-
-  useEffect(() => {
-    const term = termRef.current
-    if (!term) return
-    term.options.theme = getXtermTheme(terminalThemeId)
-  }, [terminalThemeId])
-
-  useEffect(() => {
-    if (isFocused) {
-      termRef.current?.focus()
+    if (attachedRuntimeRef.current !== runtime) {
+      const cleanup = hostCleanupRef.current
+      hostCleanupRef.current = null
+      cleanup?.()
+      attachedRuntimeRef.current = runtime
+      hostCleanupRef.current = attachTerminalRuntimeHost(runtime, host, viewOptions, registry, target)
+      return
     }
-  }, [isFocused])
+
+    runtime.updateView(viewOptions)
+  }, [activeRuntime, registry, target, viewOptions])
 
   useEffect(() => {
-    if (autoFocus) {
-      termRef.current?.focus()
-    }
-  }, [autoFocus])
+    if (!activeRuntime) return
+    if (isFocused && !autoFocus) activeRuntime.focus()
+  }, [activeRuntime, autoFocus, isFocused])
+
+  useEffect(() => {
+    if (!activeRuntime) return
+    const state = useCanvasStore.getState()
+    if (state.activeWorkspaceId !== workspaceId) return
+    if (snapshot.title === null) state.clearTerminalTitle(tile.id)
+    else state.setTerminalTitle(tile.id, snapshot.title)
+  }, [activeRuntime, snapshot.title, tile.id, workspaceId])
 
   const menuItems: MenuItem[] = buildTerminalContextMenuItems({
     selectedText: menuPosition?.selectionText ?? '',
@@ -691,13 +577,20 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
       void pasteClipboard()
     },
     onSelectAll: () => {
-      termRef.current?.focus()
-      termRef.current?.selectAll()
+      const currentRuntime = activeRuntimeRef.current
+      currentRuntime?.focus()
+      currentRuntime?.selectAll()
     },
     onToggleNotifications: () => {
       onUpdate({ notificationsMuted: tile.notificationsMuted ? undefined : true })
     },
-    onOpenBrowserTile,
+    onOpenBrowserTile: onOpenBrowserTile
+      ? (url) => {
+          const currentRuntime = activeRuntimeRef.current
+          if (currentRuntime) currentRuntime.openBrowserTile(url)
+          else onOpenBrowserTileRef.current?.(url)
+        }
+      : undefined,
     onOpenFileTile: openMarkdownFileTile,
     onOpenExternal: (url) => {
       void window.electron.shell.openExternal(url).catch((error: unknown) => {
@@ -716,27 +609,29 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
       <div
         ref={containerRef}
         className="h-full w-full"
+        data-terminal-title={snapshot.title ?? undefined}
         style={{ background: getTerminalContainerBackground(terminalThemeId), overflow: 'hidden' }}
         onMouseDown={focusTerminal}
         onContextMenu={(event) => {
           event.preventDefault()
           focusTerminal()
-          const selectionText = getTerminalContextSelectionSnapshot(termRef.current)
+          const currentRuntime = activeRuntimeRef.current
+          const selectionText = currentRuntime?.hasSelection() ? currentRuntime.getSelection() : ''
           setMenuPosition({
             x: event.clientX,
             y: event.clientY,
             selectionText,
-            linkTarget: hoveredLinkTargetRef.current ?? undefined,
+            linkTarget: getHoveredLinkTarget(target),
           })
         }}
       />
       <RemoteTerminalPreparingNotice
-        visible={preparing}
+        visible={isRemoteSsh && snapshot.preparing}
         message={t('terminal.wakeOnLanPreparing')}
       />
       <RemoteTerminalReconnectNotice
-        visible={!preparing && tile.terminalConnection === 'remote-ssh' && (terminalExit !== null || reconnecting)}
-        reconnecting={reconnecting}
+        visible={!snapshot.preparing && isRemoteSsh && (snapshot.exitEvent !== null || snapshot.reconnecting)}
+        reconnecting={snapshot.reconnecting}
         message={t('terminal.sshConnectionClosed', 'SSH connection closed')}
         reconnectLabel={t('terminal.reconnect', 'Reconnect')}
         reconnectingLabel={t('terminal.reconnecting', 'Reconnecting…')}
@@ -751,6 +646,14 @@ export function TerminalTileWrapper({ tile, isFocused, edgeToEdge = false, isVis
           items={menuItems}
           onClose={() => setMenuPosition(null)}
         />
+      )}
+      {snapshot.error && (
+        <div
+          role="alert"
+          className="absolute inset-x-3 bottom-3 z-10 rounded-md border border-red-400/50 bg-red-950/80 px-3 py-2 text-xs text-red-200"
+        >
+          {snapshot.error}
+        </div>
       )}
     </div>
   )

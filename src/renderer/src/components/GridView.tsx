@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { GripVertical } from 'lucide-react'
-import type { GridLayoutNode, GridLayoutSplitNode, TileState } from '@shared/types'
+import type { GridLayoutNode, GridLayoutSplitNode, TileState, WorkspaceConfig } from '@shared/types'
 import {
   commitGridDragAction,
   resizeGridChild,
@@ -18,10 +18,11 @@ import {
 import { getTerminalDisplayTitle } from '@/utils/terminalDisplayTitle'
 
 interface GridViewProps {
+  workspaceId: string
+  workspaceConfig: WorkspaceConfig
   rootNode: GridLayoutNode | null
   tiles: TileState[]
   tileRefreshKeys: Record<string, number>
-  terminalActivationGeneration?: number
   focusedTileId: string | null
   terminalTitles: Record<string, string>
   onFocusTile: (tileId: string) => void
@@ -88,10 +89,11 @@ function sameGridDropRect(first: GridDropRect | null, second: GridDropRect | nul
 }
 
 export function GridView({
+  workspaceId,
+  workspaceConfig,
   rootNode,
   tiles,
   tileRefreshKeys,
-  terminalActivationGeneration = 0,
   focusedTileId,
   terminalTitles,
   onFocusTile,
@@ -333,6 +335,8 @@ export function GridView({
             <TileContent
               key={`${tile.id}:${tileRefreshKeys[tile.id] ?? 0}`}
               tile={tile}
+              workspaceId={workspaceId}
+              workspaceConfig={workspaceConfig}
               isFocused={focusedTileId === tile.id}
               edgeToEdge
               onFocus={() => onFocusTile(tile.id)}
@@ -340,7 +344,6 @@ export function GridView({
               onOpenBrowserTile={onOpenBrowserTile}
               onOpenFileTile={onOpenFileTile}
               workspaceRootPath={workspaceRootPath}
-              terminalActivationGeneration={terminalActivationGeneration}
             />
           </div>
         </section>

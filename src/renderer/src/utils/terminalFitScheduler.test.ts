@@ -1,4 +1,4 @@
-import { createTerminalFitScheduler } from './terminalFitScheduler'
+import { createTerminalFitScheduler, type TerminalFitResult } from './terminalFitScheduler'
 
 let queuedFrames: Array<{ id: number; callback: () => void }> = []
 let nextFrameId = 1
@@ -17,6 +17,7 @@ const scheduler = createTerminalFitScheduler({
 let fitCalls = 0
 let resizeCalls: Array<{ cols: number; rows: number }> = []
 let dimensions = { cols: 100, rows: 30 }
+const fitResults: TerminalFitResult[] = []
 
 function flushFrame(message: string): void {
   const frame = queuedFrames.shift()
@@ -41,10 +42,10 @@ const fitAddon = {
 
 scheduler.requestFit(fitAddon, (cols, rows) => {
   resizeCalls.push({ cols, rows })
-})
+}, (result) => fitResults.push(result))
 scheduler.requestFit(fitAddon, (cols, rows) => {
   resizeCalls.push({ cols, rows })
-})
+}, (result) => fitResults.push(result))
 
 flushFrame('fit must be scheduled on the next frame')
 
@@ -58,6 +59,9 @@ flushFrame('stabilization fit must be scheduled on the following frame')
 
 if (getFitCalls() !== 2) throw new Error(`stabilization frame must fit again, got ${getFitCalls()}`)
 if (getResizeCallCount() !== 1) throw new Error('unchanged stabilization dimensions must not resize the PTY again')
+if (fitResults[0] !== 'fitted' || fitResults[1] !== 'unchanged') {
+  throw new Error(`fit completion results must describe both frames, got ${fitResults.join(',')}`)
+}
 
 scheduler.requestFit(fitAddon, (cols, rows) => {
   resizeCalls.push({ cols, rows })
@@ -194,3 +198,42 @@ try {
 }
 
 if (fitErrorEscaped) throw new Error('fit errors must stay contained inside the scheduler')
+throwingScheduler.cancelPending()
+
+const unmeasurableScheduler = createTerminalFitScheduler({
+  requestFrame: (callback) => {
+    const id = nextFrameId++
+    queuedFrames.push({ id, callback })
+    return id
+  },
+  cancelFrame: (id) => {
+    queuedFrames = queuedFrames.filter((frame) => frame.id !== id)
+  },
+})
+
+let unmeasurableDimensions: { cols: number; rows: number } | undefined
+const unmeasurableResults: TerminalFitResult[] = []
+unmeasurableScheduler.requestFit({
+  fit: () => {},
+  proposeDimensions: () => unmeasurableDimensions,
+}, () => {
+  throw new Error('an unmeasurable fit must not resize')
+}, (result) => unmeasurableResults.push(result))
+flushFrame('unmeasurable fit must be scheduled on the next frame')
+flushFrame('unmeasurable stabilization fit must be scheduled on the following frame')
+
+if (unmeasurableResults.join(',') !== 'unmeasurable,unmeasurable') {
+  throw new Error(`missing unmeasurable fit results: ${unmeasurableResults.join(',')}`)
+}
+
+unmeasurableDimensions = { cols: 90, rows: 22 }
+unmeasurableScheduler.requestFit({
+  fit: () => {},
+  proposeDimensions: () => unmeasurableDimensions,
+}, () => {}, (result) => unmeasurableResults.push(result))
+flushFrame('measurable retry must be scheduled on the next frame')
+flushFrame('measurable retry stabilization must be scheduled on the following frame')
+
+if (unmeasurableResults[2] !== 'fitted' || unmeasurableResults[3] !== 'unchanged') {
+  throw new Error(`measurable retry must report fitted then unchanged, got ${unmeasurableResults.join(',')}`)
+}

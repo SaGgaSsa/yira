@@ -1,6 +1,6 @@
 import React from 'react'
 import { Terminal, StickyNote, Globe, Clock, FileText } from 'lucide-react'
-import type { FileTileOpenOptions, TileState } from '@shared/types'
+import type { FileTileOpenOptions, TileState, WorkspaceConfig } from '@shared/types'
 import { TerminalTileWrapper } from './TerminalTile'
 import { NoteTile } from './NoteTile'
 import { BrowserTile } from './BrowserTile'
@@ -17,6 +17,8 @@ export const TILE_META = {
 
 interface TileContentProps {
   tile: TileState
+  workspaceId: string
+  workspaceConfig: WorkspaceConfig
   isFocused: boolean
   edgeToEdge?: boolean
   isVisible?: boolean
@@ -26,14 +28,15 @@ interface TileContentProps {
   onOpenBrowserTile?: (url: string) => void
   onOpenFileTile?: (relativePath: string, options?: FileTileOpenOptions) => void | Promise<void>
   workspaceRootPath?: string
-  terminalActivationGeneration?: number
 }
 
-export function TileContent({ tile, isFocused, edgeToEdge = false, isVisible = true, autoFocus = false, onFocus, onUpdate, onOpenBrowserTile, onOpenFileTile, workspaceRootPath = '', terminalActivationGeneration = 0 }: TileContentProps): React.ReactElement {
+export function TileContent({ tile, workspaceId, workspaceConfig, isFocused, edgeToEdge = false, isVisible = true, autoFocus = false, onFocus, onUpdate, onOpenBrowserTile, onOpenFileTile, workspaceRootPath = '' }: TileContentProps): React.ReactElement {
   if (tile.type === 'terminal') {
     return (
       <TerminalTileWrapper
         tile={tile}
+        workspaceId={workspaceId}
+        workspaceConfig={workspaceConfig}
         isFocused={isFocused}
         edgeToEdge={edgeToEdge}
         isVisible={isVisible}
@@ -43,7 +46,6 @@ export function TileContent({ tile, isFocused, edgeToEdge = false, isVisible = t
         onDelete={() => {}}
         onOpenBrowserTile={onOpenBrowserTile}
         onOpenFileTile={onOpenFileTile}
-        terminalActivationGeneration={terminalActivationGeneration}
       />
     )
   }

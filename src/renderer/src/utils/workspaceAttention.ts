@@ -2,6 +2,18 @@ import { formatTerminalAttentionCount, type TerminalAttentionEntry } from './ter
 
 export type WorkspaceAttentionCounts = Record<string, number>
 
+export function incrementWorkspaceAttentionCount(
+  counts: WorkspaceAttentionCounts,
+  workspaceId: string | null | undefined,
+): WorkspaceAttentionCounts {
+  if (!workspaceId) return counts
+
+  return {
+    ...counts,
+    [workspaceId]: (counts[workspaceId] ?? 0) + 1,
+  }
+}
+
 export function sumTerminalAttentionCounts(terminalAttention: Record<string, TerminalAttentionEntry>): number {
   return Object.values(terminalAttention).reduce((total, entry) => (
     entry.count > 0 ? total + entry.count : total

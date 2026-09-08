@@ -62,7 +62,8 @@ export function FloatingTileWindow(): React.ReactElement {
         return
       }
 
-      setWorkspace(snapshot.workspaceId, snapshot.workspaceName, normalizeWorkspaceConfig(snapshot.workspaceConfig))
+      const normalizedConfig = normalizeWorkspaceConfig(snapshot.workspaceConfig)
+      setWorkspace(snapshot.workspaceId, snapshot.workspaceName, normalizedConfig)
       setProfiles(profiles.map((profile) => ({
         id: profile.id as ShellProfileId,
         label: profile.label,
@@ -70,7 +71,7 @@ export function FloatingTileWindow(): React.ReactElement {
       })))
       setTile(snapshot.tile)
       setTerminalTitle(snapshot.terminalTitle)
-      setWorkspaceConfig(snapshot.workspaceConfig)
+      setWorkspaceConfig(normalizedConfig)
     }
 
     void loadSnapshot()
@@ -108,7 +109,7 @@ export function FloatingTileWindow(): React.ReactElement {
     )
   }
 
-  if (!tile) {
+  if (!tile || !workspaceConfig) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-bg-primary text-text-secondary">
         <span className="nd-label">[ LOADING TILE ]</span>
@@ -137,6 +138,8 @@ export function FloatingTileWindow(): React.ReactElement {
       <div className="min-h-0 flex-1">
         <TileContent
           tile={tile}
+          workspaceId={workspaceId}
+          workspaceConfig={workspaceConfig}
           isFocused
           edgeToEdge
           onFocus={() => undefined}

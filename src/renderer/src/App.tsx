@@ -13,6 +13,7 @@ import { SplitviewPanel } from './components/SplitviewPanel'
 import { GridView } from './components/GridView'
 import { BoardView } from './components/BoardView'
 import { FloatingTileWindow } from './components/FloatingTileWindow'
+import { TerminalRuntimeProvider, useTerminalRuntimeContext } from './components/TerminalRuntimeProvider'
 import { AppDialog, type ConfirmDialogOptions, type PromptDialogOptions } from './components/AppDialog'
 import { GroupEditorDialog, type GroupEditorRequest, type GroupEditorValue } from './components/GroupEditorDialog'
 import { WorkspaceDialog, type WorkspaceDialogRequest, type WorkspaceDialogValue } from './components/WorkspaceDialog'
@@ -46,12 +47,8 @@ import {
 } from './utils/emptyWorkspaceView'
 import { normalizeCanvasStateForJson } from './utils/canvasStateNormalization'
 import {
-  clearActivatedWorkspaceAttentionCount,
   getWorkspaceAttentionLabel,
-  pruneWorkspaceAttentionCounts,
   sumTerminalAttentionCounts,
-  updateActiveWorkspaceAttentionCount,
-  type WorkspaceAttentionCounts,
 } from './utils/workspaceAttention'
 import { TILE_META } from './components/TileContent'
 import { resolveWorkspaceFocusTarget } from './utils/workspaceFocus'
@@ -60,6 +57,12 @@ import { getInitialWorkspaceDialogCopy, getWorkspaceDialogCopy } from './utils/w
 import { buildTileConfigurationMenuItems } from './components/tileConfigurationMenu'
 import { createFileTileOpenRequestTracker, deriveFileTileTitle, planFileTileOpen } from './utils/fileTileLifecycle'
 import { windowBufferRegistry } from './utils/windowBufferRegistry'
+import {
+  destroyRemovedWorkspaceRuntimes,
+  destroyTerminalRuntime,
+  pruneWorkspaceTerminalRuntimes,
+} from './utils/terminalRuntimeCleanup'
+import type { TerminalSessionTarget } from '@shared/terminalSessionIdentity'
 import { Terminal, StickyNote, ChevronDown, SlidersHorizontal, Trash2, Pencil, Lock, Columns, Download, X, Plus } from 'lucide-react'
 
 const GROUP_SHOW_TOP_PADDING = 42
@@ -266,10 +269,15 @@ function isPromptDialog(dialog: PromptDialogState | ConfirmDialogState): dialog 
   return dialog.request.mode === 'prompt'
 }
 
-export default function App(): React.ReactElement {
-  const rendererMode = new URLSearchParams(window.location.search).get('mode')
-  if (rendererMode === 'floating-tile') return <FloatingTileWindow />
-
+function AppContent(): React.ReactElement {
+  const {
+    registry,
+    workspaceAttentionCounts,
+    updateWorkspaceAttentionCount,
+    clearWorkspaceAttentionCount,
+    pruneWorkspaceAttentionCounts,
+    clearAllWorkspaceAttentionCounts,
+  } = useTerminalRuntimeContext()
   const { t } = useTranslation()
   const [agentUsage, setAgentUsage] = useState<AgentUsageSnapshot | null>(null)
   // Keep startup copy stable: this effect must stay mount-only to avoid reloading persisted workspace state on language changes.
@@ -378,7 +386,14 @@ export default function App(): React.ReactElement {
     })
   }, [])
 
-  const { addTerminal, addRemoteTerminal, duplicateTerminalTile, addNote, addBrowser, addTimer, deleteTile: deleteCanvasTile, resetZoom } = useCanvasActions({ requestConfirm })
+  const destroyTerminalRuntimeForTile = useCallback(async (target: TerminalSessionTarget): Promise<void> => {
+    await destroyTerminalRuntime(registry, target, true)
+  }, [registry])
+
+  const { addTerminal, addRemoteTerminal, duplicateTerminalTile, addNote, addBrowser, addTimer, deleteTile: deleteCanvasTile, resetZoom } = useCanvasActions({
+    requestConfirm,
+    destroyTerminalRuntime: destroyTerminalRuntimeForTile,
+  })
 
   // UI state
   const [showProfilePicker, setShowProfilePicker] = useState(false)
@@ -387,7 +402,6 @@ export default function App(): React.ReactElement {
   const [showWorkspacePicker, setShowWorkspacePicker] = useState(false)
   const [showWorkspaceManager, setShowWorkspaceManager] = useState(false)
   const [workspaceMetadata, setWorkspaceMetadata] = useState<WorkspaceMetadata[]>([])
-  const [workspaceAttentionCounts, setWorkspaceAttentionCounts] = useState<WorkspaceAttentionCounts>({})
   const [boardState, setBoardState] = useState<BoardState>(EMPTY_BOARD_STATE)
   const [showSettings, setShowSettings] = useState(false)
   const [settingsSection, setSettingsSection] = useState<SettingsSectionId>('appearance')
@@ -400,7 +414,6 @@ export default function App(): React.ReactElement {
   const [tileRefreshKeys, setTileRefreshKeys] = useState<Record<string, number>>({})
   const [tileMenu, setTileMenu] = useState<{ tileId: string; x: number; y: number } | null>(null)
   const [groupMenu, setGroupMenu] = useState<{ groupId: string; x: number; y: number } | null>(null)
-  const [terminalActivationGeneration, setTerminalActivationGeneration] = useState(0)
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const workspaceTransitionRef = useRef(0)
   const previousSidebarWorkspaceIdRef = useRef(activeWorkspaceId)
@@ -575,11 +588,7 @@ export default function App(): React.ReactElement {
     }
     if (currentWorkspaceId && currentWorkspaceId !== workspace.id) {
       const outgoingAttentionCount = sumTerminalAttentionCounts(currentState.terminalAttention)
-      setWorkspaceAttentionCounts((current) => updateActiveWorkspaceAttentionCount(
-        current,
-        currentWorkspaceId,
-        outgoingAttentionCount,
-      ))
+      updateWorkspaceAttentionCount(currentWorkspaceId, outgoingAttentionCount)
       await window.electron.floating.closeWorkspace(currentWorkspaceId)
     }
 
@@ -615,7 +624,9 @@ export default function App(): React.ReactElement {
     } else {
       restoreWorkspaceState(workspace.id, workspace.name, workspace.config, restoredState as CanvasState)
     }
-    setTerminalActivationGeneration((generation) => generation + 1)
+
+    await pruneWorkspaceTerminalRuntimes(registry, workspace.id, restoredState.tiles)
+    if (transitionId !== workspaceTransitionRef.current) return
 
     if (options?.activationMode === 'focus-last') {
       const focusTarget = resolveWorkspaceFocusTarget(restoredState.tiles, rememberedTileId)
@@ -627,9 +638,9 @@ export default function App(): React.ReactElement {
       }
     }
 
-    setWorkspaceAttentionCounts((current) => clearActivatedWorkspaceAttentionCount(current, workspace.id))
+    clearWorkspaceAttentionCount(workspace.id)
     setShowWorkspacePicker(false)
-  }, [focusTile, restoreGridWorkspaceState, restoreWorkspaceState, saveToDisk, selectTiles, setFullviewActiveTileId, setViewMode])
+  }, [clearWorkspaceAttentionCount, focusTile, registry, restoreGridWorkspaceState, restoreWorkspaceState, saveToDisk, selectTiles, setFullviewActiveTileId, setViewMode, updateWorkspaceAttentionCount])
 
   useEffect(() => {
     return window.electron.floating.onSnapshotRequest(({ workspaceId, tileId }) => {
@@ -908,16 +919,12 @@ export default function App(): React.ReactElement {
 
   useEffect(() => {
     if (!terminalAttentionEnabled) {
-      setWorkspaceAttentionCounts({})
+      clearAllWorkspaceAttentionCounts()
       return
     }
 
-    setWorkspaceAttentionCounts((current) => updateActiveWorkspaceAttentionCount(
-      current,
-      activeWorkspaceId,
-      activeWorkspaceAttentionCount,
-    ))
-  }, [activeWorkspaceAttentionCount, activeWorkspaceId, terminalAttentionEnabled])
+    updateWorkspaceAttentionCount(activeWorkspaceId, activeWorkspaceAttentionCount)
+  }, [activeWorkspaceAttentionCount, activeWorkspaceId, clearAllWorkspaceAttentionCounts, terminalAttentionEnabled, updateWorkspaceAttentionCount])
 
   const canCreateNote = tileCreationAvailability.note
   const canCreateBrowser = tileCreationAvailability.browser
@@ -1499,16 +1506,19 @@ export default function App(): React.ReactElement {
     setTileMenu(null)
 
     const workspaceId = activeWorkspaceId
+    const terminalTarget = tile.type === 'terminal' && workspaceId
+      ? { workspaceId, tileId: tile.id }
+      : null
     const confirmed = await requestRefreshTileConfirmation(tile)
     if (!confirmed) return
 
-    if (tile.type === 'terminal' && workspaceId) {
-      clearTerminalTitle(tile.id)
-      await window.electron.terminal.destroyCurrent({ workspaceId, tileId: tile.id })
+    if (terminalTarget) {
+      await destroyTerminalRuntime(registry, terminalTarget, true)
+      clearTerminalTitle(terminalTarget.tileId)
     }
 
     bumpTileRefreshKey(tile.id)
-  }, [activeWorkspaceId, bumpTileRefreshKey, clearTerminalTitle, requestRefreshTileConfirmation])
+  }, [activeWorkspaceId, bumpTileRefreshKey, clearTerminalTitle, registry, requestRefreshTileConfirmation])
 
   const handleConfirmWorkspaceEditor = useCallback(async (value: WorkspaceDialogValue) => {
     if (!workspaceEditor) return
@@ -1576,12 +1586,10 @@ export default function App(): React.ReactElement {
 
     const result = await window.electron.workspace.commitManagementChanges({ workspaces: entries })
 
+    await destroyRemovedWorkspaceRuntimes(registry, result.removedWorkspaceIds)
     setWorkspaceMetadata(result.workspaces)
     if (result.removedWorkspaceIds.length > 0) {
-      setWorkspaceAttentionCounts((current) => pruneWorkspaceAttentionCounts(
-        current,
-        result.workspaces.map((workspace) => workspace.id),
-      ))
+      pruneWorkspaceAttentionCounts(result.workspaces.map((workspace) => workspace.id))
     }
     setShowWorkspaceManager(false)
     setShowWorkspacePicker(false)
@@ -1621,7 +1629,7 @@ export default function App(): React.ReactElement {
     }
 
     await activateWorkspace(result.activeWorkspace, { persistCurrent: false, updateMain: false })
-  }, [activeWorkspaceId, activateWorkspace, pruneWorkspaceAttentionCounts, restoreState, saveToDisk, setWorkspace, t])
+  }, [activeWorkspaceId, activateWorkspace, pruneWorkspaceAttentionCounts, registry, restoreState, saveToDisk, setWorkspace, t])
 
   const openCreateWorkspaceDialog = useCallback(() => {
     setShowWorkspacePicker(false)
@@ -2282,10 +2290,11 @@ export default function App(): React.ReactElement {
                 ) : activeWorkspaceType === 'grid' && viewMode === 'gridview' ? (
                   <GridView
                     key={activeWorkspaceId}
+                    workspaceId={activeWorkspaceId}
+                    workspaceConfig={activeWorkspaceConfig}
                     rootNode={gridViewState.rootNode}
                     tiles={attachedTiles}
                     tileRefreshKeys={tileRefreshKeys}
-                    terminalActivationGeneration={terminalActivationGeneration}
                     focusedTileId={focusedTileId}
                     terminalTitles={terminalTitles}
                     onFocusTile={(tileId) => {
@@ -2308,6 +2317,8 @@ export default function App(): React.ReactElement {
                 ) : (
                   <Canvas
                     key={activeWorkspaceId}
+                    workspaceId={activeWorkspaceId}
+                    workspaceConfig={activeWorkspaceConfig}
                     tileCreationSelectorProps={tileCreationSelectorProps}
                     profiles={availableProfiles}
                     onCreateTerminal={(profileId) => addTerminal(profileId)}
@@ -2333,7 +2344,6 @@ export default function App(): React.ReactElement {
                     onDetachTile={detachTile}
                     onConfirmRemoveFromGroup={confirmRemoveTileFromGroup}
                     tileRefreshKeys={tileRefreshKeys}
-                    terminalActivationGeneration={terminalActivationGeneration}
                     viewMode={viewMode}
                     fullviewActiveTileId={fullviewActiveTileId}
                     splitViewState={splitViewState}
@@ -2443,5 +2453,15 @@ export default function App(): React.ReactElement {
         onConfirm={handleConfirmTileEditor}
       />
     </div>
+  )
+}
+
+export default function App(): React.ReactElement {
+  const rendererMode = new URLSearchParams(window.location.search).get('mode')
+
+  return (
+    <TerminalRuntimeProvider>
+      {rendererMode === 'floating-tile' ? <FloatingTileWindow /> : <AppContent />}
+    </TerminalRuntimeProvider>
   )
 }

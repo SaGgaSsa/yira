@@ -7,6 +7,7 @@ import { getBrowserTileUrl } from '@/utils/browserUrl'
 import type { ConfirmDialogOptions } from '@/components/AppDialog'
 import { GRID_MAX_TILES, getDefaultTileSize } from '@shared/types'
 import type { TileState, ShellProfileId, NoteColor, NoteKind, SplitPanelId, TerminalAgentMetadata } from '@shared/types'
+import type { TerminalSessionTarget } from '@shared/terminalSessionIdentity'
 
 const TILE_TYPE_LABELS: Record<TileState['type'], string> = {
   terminal: 'Terminal',
@@ -22,9 +23,29 @@ function generateId(): string {
 
 interface UseCanvasActionsOptions {
   requestConfirm: (options: ConfirmDialogOptions) => Promise<boolean>
+  destroyTerminalRuntime: (target: TerminalSessionTarget) => Promise<void>
 }
 
-export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
+interface RemoveTileAfterTerminalRuntimeCleanupOptions {
+  tile: Pick<TileState, 'id' | 'type'>
+  workspaceId: string | null | undefined
+  destroyTerminalRuntime: (target: TerminalSessionTarget) => Promise<void>
+  removeTile: (tileId: string) => void
+}
+
+export async function removeTileAfterTerminalRuntimeCleanup({
+  tile,
+  workspaceId,
+  destroyTerminalRuntime,
+  removeTile,
+}: RemoveTileAfterTerminalRuntimeCleanupOptions): Promise<void> {
+  if (tile.type === 'terminal' && workspaceId) {
+    await destroyTerminalRuntime({ workspaceId, tileId: tile.id })
+  }
+  removeTile(tile.id)
+}
+
+export function useCanvasActions({ requestConfirm, destroyTerminalRuntime }: UseCanvasActionsOptions) {
   const browserHomeUrl = useSettingsStore((s) => s.browser.homeUrl)
   const tileCreationAvailability = useSettingsStore((s) => s.tiles.creationAvailability)
   const groupsEnabled = useSettingsStore((s) => s.groups.enabled)
@@ -306,11 +327,12 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
 
   const deleteTile = useCallback(
     async (tileId: string): Promise<boolean> => {
-      const tile = useCanvasStore.getState().tiles.find((t) => t.id === tileId)
+      const state = useCanvasStore.getState()
+      const tile = state.tiles.find((t) => t.id === tileId)
       if (!tile) return false
 
       const label = tile.label?.trim() || TILE_TYPE_LABELS[tile.type]
-      const workspaceId = useCanvasStore.getState().activeWorkspaceId
+      const workspaceId = state.activeWorkspaceId
       const confirmed = await requestConfirm({
         title: 'Close tile',
         message: `Close "${label}"? Any running session or unsaved surface state may be lost.`,
@@ -320,14 +342,16 @@ export function useCanvasActions({ requestConfirm }: UseCanvasActionsOptions) {
       })
       if (!confirmed) return false
 
-      if (tile.type === 'terminal' && workspaceId) {
-        void window.electron.terminal.destroyCurrent({ workspaceId, tileId })
-      }
       if (tile?.type === 'note') window.electron.note.delete(tileId)
-      removeTile(tileId)
+      await removeTileAfterTerminalRuntimeCleanup({
+        tile,
+        workspaceId,
+        destroyTerminalRuntime,
+        removeTile,
+      })
       return true
     },
-    [removeTile, requestConfirm],
+    [destroyTerminalRuntime, removeTile, requestConfirm],
   )
 
   const resetZoom = useCallback(() => {

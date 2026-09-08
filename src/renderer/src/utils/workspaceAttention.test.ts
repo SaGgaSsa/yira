@@ -1,6 +1,7 @@
 import {
   clearActivatedWorkspaceAttentionCount,
   getWorkspaceAttentionLabel,
+  incrementWorkspaceAttentionCount,
   pruneWorkspaceAttentionCounts,
   sumTerminalAttentionCounts,
   updateActiveWorkspaceAttentionCount,
@@ -43,3 +44,12 @@ const total = sumTerminalAttentionCounts({
   terminalB: { count: 8, lastOutputAt: 200 },
 })
 if (total !== 10) throw new Error(`terminal attention summaries must be summed, got ${total}`)
+
+const hiddenWorkspaceCounts = { inactive: 2 }
+const incremented = incrementWorkspaceAttentionCount(hiddenWorkspaceCounts, 'inactive')
+if (incremented.inactive !== 3) throw new Error('hidden workspace activity must increment its workspace count')
+if (incremented === hiddenWorkspaceCounts) throw new Error('incrementing workspace attention must return a new reference')
+if (hiddenWorkspaceCounts.inactive !== 2) throw new Error('incrementing workspace attention must not mutate existing counts')
+if (incrementWorkspaceAttentionCount(hiddenWorkspaceCounts, '') !== hiddenWorkspaceCounts) {
+  throw new Error('invalid workspace attention ids must preserve the same reference')
+}

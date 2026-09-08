@@ -16,6 +16,7 @@ import {
 } from '@shared/terminalSessionIdentity'
 import { detectShellProfiles, detectSshClient } from '../shell-profiles'
 import { buildTerminalHistorySetup } from '../terminal-history'
+import { resizeTerminalDimensions, type TerminalDimensions } from '../terminalDimensions'
 import { resolveTerminalWorkspaceRoot } from '../workspace-root'
 import {
   getWorkspacePathById,
@@ -62,6 +63,7 @@ interface SpawnedPtyInstance extends Omit<PtyInstance, 'onExit'> {
 interface TerminalSession extends ManagedTerminalSession {
   pty: PtyInstance
   delivery: TerminalDelivery<WebContents>
+  dimensions: TerminalDimensions
   alertListeners: Set<WebContents>
   agentProvider?: AgentTerminalLaunch['provider']
   agentLifecycle?: AgentTerminalLifecycle
@@ -123,6 +125,13 @@ function getTerminalSession(
     return undefined
   }
   return session
+}
+
+function terminalCreateResult(session: TerminalSession): TerminalCreateResult {
+  return {
+    ...session.dimensions,
+    ...session.delivery.snapshot(),
+  }
 }
 
 function attachTerminalListener(
@@ -300,7 +309,7 @@ export function registerTerminalIPC(): void {
     // Check for existing session (reattach) before rejecting new sessions during shutdown.
     const existing = getTerminalSession(runtimeTarget)
     if (existing) {
-      return { cols: 80, rows: 24, ...existing.delivery.snapshot() }
+      return terminalCreateResult(existing)
     }
 
     if (!terminalSessionManager.isAcceptingSessions()) {
@@ -312,7 +321,7 @@ export function registerTerminalIPC(): void {
       await creating
       const session = getTerminalSession(runtimeTarget)
       if (!session) throw new Error('Terminal session was not registered')
-      return { cols: 80, rows: 24, ...session.delivery.snapshot() }
+      return terminalCreateResult(session)
     }
 
     const creation = (async (): Promise<TerminalCreateResult> => {
@@ -483,6 +492,7 @@ export function registerTerminalIPC(): void {
       const session: TerminalSession = {
         pty: term,
         delivery,
+        dimensions: { cols: 80, rows: 24 },
         alertListeners: new Set(),
         agentProvider: agentLaunch?.provider,
         agentLifecycle,
@@ -538,7 +548,7 @@ export function registerTerminalIPC(): void {
         term.write(`${historySetup.prependCommand}\r`)
       }
 
-      return { cols: 80, rows: 24, ...delivery.snapshot() }
+      return terminalCreateResult(session)
     })()
     terminalSessionCreations.set(sessionKey, creation)
     try {
@@ -555,7 +565,7 @@ export function registerTerminalIPC(): void {
     if (!attachTerminalListener(session, runtimeIdentity, event.sender)) {
       throw new Error('Terminal session identity is stale')
     }
-    return { cols: 80, rows: 24, ...session.delivery.snapshot() }
+    return terminalCreateResult(session)
   })
 
   ipcMain.handle('terminal:write', (_, identity: TerminalSessionIdentity, data: string) => {
@@ -582,9 +592,15 @@ export function registerTerminalIPC(): void {
 
   ipcMain.handle('terminal:resize', (_, identity: TerminalSessionIdentity, cols: number, rows: number) => {
     const runtimeIdentity = normalizeTerminalSessionIdentity(identity)
-    if (cols > 0 && rows > 0) {
-      getTerminalSession(runtimeIdentity)?.pty.resize(Math.floor(cols), Math.floor(rows))
-    }
+    const session = getTerminalSession(runtimeIdentity)
+    if (!session) return
+
+    session.dimensions = resizeTerminalDimensions(
+      session.dimensions,
+      (nextCols, nextRows) => session.pty.resize(nextCols, nextRows),
+      cols,
+      rows,
+    )
   })
 
   ipcMain.handle('terminal:destroy', (_, identity: TerminalSessionIdentity) => {

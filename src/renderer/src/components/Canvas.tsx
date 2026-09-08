@@ -8,7 +8,7 @@ import { findMergeTargetGroup, findSelectedGroup, getGroupingBlockedReason } fro
 import { clampViewportToWorld } from '@/utils/canvasWorld'
 import { calculateCanvasFitViewport, CANVAS_FIT_MARGIN, type CanvasFitBounds, type CanvasFitPadding } from '@/utils/canvasViewportFit'
 import { LayoutGrid, Lock } from 'lucide-react'
-import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type TileGroup, type GroupColorId, type ViewMode, type SplitViewState, type SplitPanelId, type SplitOrientation } from '@shared/types'
+import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type TileGroup, type GroupColorId, type ViewMode, type SplitViewState, type SplitPanelId, type SplitOrientation, type WorkspaceConfig } from '@shared/types'
 import { getAttachedTiles } from '@shared/floatingTiles'
 import { shouldAutoFocusTile } from '@/utils/focusView'
 import { TileCreationSelector, type TileCreationSelectorProps } from './TileCreationSelector'
@@ -82,6 +82,8 @@ export function getCanvasMethods(): CanvasMethods | null {
 }
 
 interface CanvasProps extends CanvasCreationMenuInput {
+  workspaceId: string
+  workspaceConfig: WorkspaceConfig
   tileCreationSelectorProps: TileCreationSelectorProps
   onOpenBrowserTile: (url: string) => void
   onOpenFileTile: (relativePath: string) => void | Promise<void>
@@ -99,10 +101,11 @@ interface CanvasProps extends CanvasCreationMenuInput {
   splitOrientation?: SplitOrientation
   onFocusSplitPanel?: (panel: SplitPanelId) => void
   workspaceRootPath: string
-  terminalActivationGeneration?: number
 }
 
 export function Canvas({
+  workspaceId,
+  workspaceConfig,
   tileCreationSelectorProps,
   onOpenBrowserTile,
   onOpenFileTile,
@@ -129,7 +132,6 @@ export function Canvas({
   splitOrientation = 'vertical',
   onFocusSplitPanel,
   workspaceRootPath,
-  terminalActivationGeneration = 0,
 }: CanvasProps): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<DragState | null>(null)
@@ -728,6 +730,8 @@ export function Canvas({
                 <TileContent
                   key={`${tile.id}:${tileRefreshKeys[tile.id] ?? 0}`}
                   tile={tile}
+                  workspaceId={workspaceId}
+                  workspaceConfig={workspaceConfig}
                   isFocused={tile.id === focusedTileId}
                   edgeToEdge={isFixedView}
                   isVisible={!(isFixedView && hiddenInFixedView)}
@@ -742,7 +746,6 @@ export function Canvas({
                   onOpenBrowserTile={onOpenBrowserTile}
                   onOpenFileTile={onOpenFileTile}
                   workspaceRootPath={workspaceRootPath}
-                  terminalActivationGeneration={terminalActivationGeneration}
                 />
               </TileChrome>
             )

@@ -178,6 +178,7 @@ const loadWithJiti = require('jiti')(fileURLToPath(import.meta.url), {
 }) as <T>(id: string) => T
 const ReactDOM = await import('react-dom/client')
 const testIcon = () => React.createElement('span')
+let capturedTileContentProps: Record<string, unknown> | null = null
 const mockedModules: Record<string, Record<string, unknown>> = {
   [require.resolve('./TileContent.tsx')]: {
     TILE_META: {
@@ -187,7 +188,10 @@ const mockedModules: Record<string, Record<string, unknown>> = {
       terminal: { icon: testIcon, label: 'Terminal' },
       timer: { icon: testIcon, label: 'Timer' },
     },
-    TileContent: () => React.createElement('div'),
+    TileContent: (props: Record<string, unknown>) => {
+      capturedTileContentProps = props
+      return React.createElement('div')
+    },
   },
   [require.resolve('./TileActionButtons.tsx')]: {
     TileActionButtons: () => null,
@@ -214,11 +218,26 @@ const tile = {
   timerStatus: 'idle',
 } as any
 const rootNode = { id: 'leaf-a', type: 'leaf', tileId: tile.id } as any
+const workspaceId = 'workspace-grid'
+const workspaceConfig = {
+  type: 'grid' as const,
+  rootFolderPath: '',
+  workspacePanelOpen: false,
+  sourceControlViewMode: 'list' as const,
+  sourceControlRepositoryPaths: [],
+  agentProviders: {
+    claude: { enabled: true, args: [] },
+    codex: { enabled: true, args: [] },
+  },
+}
 
 async function renderGridView(): Promise<{ container: any; root: any; moveHandle: any }> {
+  capturedTileContentProps = null
   const container = document.createElement('div')
   const root = ReactDOM.createRoot(container)
   root.render(React.createElement(GridView, {
+    workspaceId,
+    workspaceConfig,
     rootNode,
     tiles: [tile],
     tileRefreshKeys: {},
@@ -249,6 +268,18 @@ async function renderGridView(): Promise<{ container: any; root: any; moveHandle
   assert.ok(moveHandle, 'the rendered grid must expose a move handle')
   return { container, root, moveHandle }
 }
+
+test('passes workspace identity and config to TileContent', async () => {
+  const { root } = await renderGridView()
+
+  try {
+    assert.ok(capturedTileContentProps)
+    assert.equal(capturedTileContentProps.workspaceId, workspaceId)
+    assert.equal(capturedTileContentProps.workspaceConfig, workspaceConfig)
+  } finally {
+    root.unmount()
+  }
+})
 
 test('captures the pointer on the tile move handle when a drag starts', async () => {
   const { root, moveHandle } = await renderGridView()

@@ -194,7 +194,7 @@ test('defers renderer attachment until terminal:attach verifies the complete ide
   assert.match(attachBlock, /normalizeTerminalSessionIdentity\(identity\)/)
   assert.match(attachBlock, /getTerminalSession\(runtimeIdentity\)/)
   assert.match(attachBlock, /attachTerminalListener\(/)
-  assert.match(attachBlock, /delivery\.snapshot\(\)/)
+  assert.match(attachBlock, /terminalCreateResult\(session\)/)
 })
 
 test('keeps user-requested current destruction separate from generation-checked lifecycle destruction', async () => {

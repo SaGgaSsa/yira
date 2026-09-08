@@ -1,8 +1,10 @@
+import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { readFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createElement } from 'react'
+import test from 'node:test'
 import type { CanvasState, RemotePreparationResult, TileState } from '@shared/types'
 import { useCanvasStore } from '@/store/canvasStore'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -39,11 +41,68 @@ const {
   registerTerminalInputFocusListener,
   shouldRegisterTerminalMarkdownLinks,
   prepareRemoteTerminal,
+  attachTerminalRuntimeHost,
 } = loadWithJiti<typeof import('./TerminalTile')>('./TerminalTile.tsx')
+
+test('attaches a runtime host and parks it once during cleanup', () => {
+  const target = { workspaceId: 'workspace-host', tileId: 'tile-host' }
+  const host = {} as HTMLElement
+  const viewOptions = {
+    visible: true,
+    edgeToEdge: false,
+    autoFocus: false,
+    fontSize: 14,
+    themeId: 'yira-default' as const,
+    notificationsMuted: false,
+    workspaceRootPath: '',
+    onFocus: () => {},
+  }
+  let attachCalls = 0
+  let parkCalls = 0
+  let disposeCalls = 0
+  let destroyCalls = 0
+  let detachCalls = 0
+  const runtime: Parameters<typeof attachTerminalRuntimeHost>[0] & {
+    dispose: () => Promise<void>
+  } = {
+    attachHost: (receivedHost, receivedOptions) => {
+      attachCalls += 1
+      assert.equal(receivedHost, host)
+      assert.deepEqual(receivedOptions, viewOptions)
+    },
+    dispose: async () => {
+      disposeCalls += 1
+    },
+  }
+  const registry: Parameters<typeof attachTerminalRuntimeHost>[3] & {
+    destroy: () => void
+    detach: () => void
+  } = {
+    park: (receivedTarget) => {
+      parkCalls += 1
+      assert.deepEqual(receivedTarget, target)
+    },
+    destroy: () => {
+      destroyCalls += 1
+    },
+    detach: () => {
+      detachCalls += 1
+    },
+  }
+
+  const cleanup = attachTerminalRuntimeHost(runtime, host, viewOptions, registry, target)
+  assert.equal(attachCalls, 1)
+  assert.equal(parkCalls, 0)
+
+  cleanup()
+  assert.equal(parkCalls, 1)
+  assert.equal(disposeCalls, 0)
+  assert.equal(destroyCalls, 0)
+  assert.equal(detachCalls, 0)
+})
 
 const preloadSource = await readFile(resolve(repositoryRoot, 'src/preload/index.ts'), 'utf8')
 const electronTypesSource = await readFile(resolve(repositoryRoot, 'src/renderer/src/electron.d.ts'), 'utf8')
-const terminalTileSource = await readFile(resolve(repositoryRoot, 'src/renderer/src/components/TerminalTile.tsx'), 'utf8')
 
 if (!preloadSource.includes('terminalSessionDataChannel') || !preloadSource.includes('terminalSessionExitChannel')) {
   throw new Error('terminal preload listeners must use canonical identity channel helpers')
@@ -65,16 +124,6 @@ for (const operation of ['resize', 'destroy', 'detach', 'acknowledgeAgentAlert',
     throw new Error(`terminal ${operation} must require a complete session identity`)
   }
 }
-if (!terminalTileSource.includes('sessionIdentityRef')) {
-  throw new Error('TerminalTile must retain its session identity in a ref')
-}
-if (!terminalTileSource.includes('workspaceId: activeWorkspaceId')) {
-  throw new Error('TerminalTile must create sessions with the active workspace id')
-}
-if (terminalTileSource.includes('term.reset()') || terminalTileSource.includes('term.clear()')) {
-  throw new Error('terminal exit finalization must not reset or clear xterm')
-}
-
 const hiddenReconnectNotice = renderToStaticMarkup(
   createElement(RemoteTerminalReconnectNotice, {
     visible: false,
