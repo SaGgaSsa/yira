@@ -34,6 +34,7 @@ export function WorkspaceListItem({
     <ListRow
       icon={Icon}
       label={workspace.name}
+      variant="workspace"
       active={active}
       attentionCount={attentionCount}
       attentionTitle={t(attentionCount === 1 ? 'workspace.attention_one' : 'workspace.attention_other', { count: attentionCount })}

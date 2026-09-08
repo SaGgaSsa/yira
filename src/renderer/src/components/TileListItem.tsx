@@ -8,6 +8,7 @@ import { TILE_META } from './TileContent'
 export interface ListRowProps {
   icon: LucideIcon
   label: string
+  variant?: 'default' | 'workspace'
   active?: boolean
   attentionCount?: number
   attentionTitle?: string
@@ -42,12 +43,13 @@ interface ListRowActionButtonProps {
   children: React.ReactNode
   pressed?: boolean
   disabled?: boolean
+  workspaceVariant?: boolean
 }
 
-function ListRowActionButton({ title, onClick, children, pressed, disabled = false }: ListRowActionButtonProps): React.ReactElement {
+function ListRowActionButton({ title, onClick, children, pressed, disabled = false, workspaceVariant = false }: ListRowActionButtonProps): React.ReactElement {
   return (
     <button
-      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display disabled:cursor-not-allowed disabled:opacity-50"
+      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display disabled:cursor-not-allowed disabled:opacity-50 ${workspaceVariant ? 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent' : ''}`}
       onMouseDown={(event) => event.stopPropagation()}
       onClick={(event) => {
         event.stopPropagation()
@@ -67,6 +69,7 @@ function ListRowActionButton({ title, onClick, children, pressed, disabled = fal
 export function ListRow({
   icon: Icon,
   label,
+  variant = 'default',
   active = false,
   attentionCount = 0,
   attentionTitle,
@@ -96,36 +99,53 @@ export function ListRow({
 }: ListRowProps): React.ReactElement {
   const attentionLabel = formatTerminalAttentionCount(attentionCount)
   const actionCount = [onConfigure, onFocus, onPin, onDetach, onClose].filter(Boolean).length
+  const isWorkspace = variant === 'workspace'
   const actionPaddingClass = actionCount >= 4
     ? 'pr-[7.75rem]'
     : actionCount > 0
       ? 'pr-[5.75rem]'
       : ''
+  const rowStateClassName = isWorkspace
+    ? active
+      ? 'bg-accent-subtle'
+      : 'bg-bg-secondary hover:bg-hover-bg'
+    : ''
+  const iconClassName = isWorkspace && active
+    ? 'border-accent text-accent'
+    : 'border-border-visible text-text-secondary'
+  const labelClassName = isWorkspace && !active
+    ? 'text-text-secondary'
+    : 'text-text-display'
 
   return (
     <div
-      className={`relative rounded-2xl border ${className}`.trim()}
+      className={`relative rounded-2xl border ${rowStateClassName} ${className}`.trim()}
       draggable={draggable}
       onDragStart={onDragStart}
       onDragOver={onDragOver}
       onDrop={onDrop}
-      style={{
-        background: active ? 'var(--surface-raised)' : 'var(--surface)',
-        borderColor: active ? 'var(--text-display)' : 'var(--border)',
-      }}
+      style={isWorkspace
+        ? {
+            borderColor: active ? 'var(--accent)' : 'var(--border)',
+            boxShadow: active ? 'inset 3px 0 0 var(--accent)' : undefined,
+          }
+        : {
+            background: active ? 'var(--surface-raised)' : 'var(--surface)',
+            borderColor: active ? 'var(--text-display)' : 'var(--border)',
+          }}
     >
       <button
-        className={`flex h-full w-full items-center gap-2 px-3 py-2.5 ${actionPaddingClass}`}
+        className={`flex h-full w-full items-center gap-2 px-3 py-2.5 ${actionPaddingClass} ${isWorkspace ? 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent' : ''}`}
         onClick={onClick}
         onDoubleClick={onDoubleClick}
         title={label}
         type="button"
       >
-        <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-border-visible text-text-secondary">
+        <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${iconClassName}`}>
           <Icon size={11} className="shrink-0" />
         </div>
         <div className="flex min-w-0 flex-1 items-center justify-center gap-2 text-center">
-          <div className="min-w-0 truncate text-sm text-text-display">
+          <div className={`min-w-0 truncate text-sm ${labelClassName}`}>
             {label}
           </div>
           {attentionLabel && (
@@ -147,12 +167,12 @@ export function ListRow({
       {actionCount > 0 && (
         <div className="absolute right-2 top-1/2 flex shrink-0 -translate-y-1/2 items-center gap-1">
           {onConfigure && (
-            <ListRowActionButton title={configureTitle} onClick={onConfigure}>
+            <ListRowActionButton title={configureTitle} onClick={onConfigure} workspaceVariant={isWorkspace}>
               <Settings size={13} />
             </ListRowActionButton>
           )}
           {onFocus && (
-            <ListRowActionButton title={focusTitle} onClick={() => onFocus()}>
+            <ListRowActionButton title={focusTitle} onClick={() => onFocus()} workspaceVariant={isWorkspace}>
               <Maximize2 size={13} />
             </ListRowActionButton>
           )}
@@ -162,20 +182,22 @@ export function ListRow({
               onClick={() => onPin()}
               pressed={pinned}
               disabled={pinDisabled}
+              workspaceVariant={isWorkspace}
             >
-              <Pin size={13} className={pinned ? 'fill-current text-text-display' : undefined} aria-hidden="true" />
+              <Pin size={13} className={pinned ? `fill-current ${isWorkspace && !active ? 'text-text-secondary' : 'text-text-display'}` : undefined} aria-hidden="true" />
             </ListRowActionButton>
           )}
           {onDetach && (
             <ListRowActionButton
               title={detached ? attachTitle : detachTitle}
               onClick={() => onDetach()}
+              workspaceVariant={isWorkspace}
             >
               {detached ? <PanelBottomClose size={13} /> : <PanelTopOpen size={13} />}
             </ListRowActionButton>
           )}
           {onClose && (
-            <ListRowActionButton title={closeTitle} onClick={() => onClose()}>
+            <ListRowActionButton title={closeTitle} onClick={() => onClose()} workspaceVariant={isWorkspace}>
               <X size={13} />
             </ListRowActionButton>
           )}
