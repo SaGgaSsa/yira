@@ -93,7 +93,7 @@ function createEmptyCanvasState(): CanvasState {
 }
 
 type CanvasSnapshotSource = Pick<ReturnType<typeof useCanvasStore.getState>, 'tiles' | 'groups' | 'viewport' | 'nextZIndex' | 'focusedTileId' | 'viewMode' | 'fullviewActiveTileId' | 'boardVisible' | 'splitViewState'>
-type GridSnapshotSource = Pick<ReturnType<typeof useCanvasStore.getState>, 'tiles' | 'nextZIndex' | 'focusedTileId' | 'viewMode' | 'fullviewActiveTileId' | 'boardVisible' | 'gridViewState'>
+type GridSnapshotSource = Pick<ReturnType<typeof useCanvasStore.getState>, 'tiles' | 'nextZIndex' | 'focusedTileId' | 'viewMode' | 'fullviewActiveTileId' | 'boardVisible' | 'gridViewState' | 'splitViewState'>
 
 function createCanvasSnapshot(source: CanvasSnapshotSource): CanvasState {
   return {
@@ -121,7 +121,12 @@ function createGridSnapshot(source: GridSnapshotSource): GridWorkspaceState {
     tiles: source.tiles.map((tile) => ({ ...tile })),
     nextZIndex: source.nextZIndex,
     focusedTileId: source.focusedTileId,
-    viewMode: source.viewMode === 'fullview' ? 'fullview' : 'gridview',
+    viewMode: source.viewMode === 'fullview' || source.viewMode === 'splitview' ? source.viewMode : 'gridview',
+    splitViewState: {
+      ...source.splitViewState,
+      leftTileIds: [...source.splitViewState.leftTileIds],
+      rightTileIds: [...source.splitViewState.rightTileIds],
+    },
     fullviewActiveTileId: source.fullviewActiveTileId,
     boardVisible: source.boardVisible,
     gridViewState: {
@@ -526,8 +531,9 @@ function AppContent(): React.ReactElement {
       fullviewActiveTileId,
       boardVisible,
       gridViewState,
+      splitViewState,
     }),
-    [tiles, nextZIndex, focusedTileId, viewMode, fullviewActiveTileId, boardVisible, gridViewState],
+    [tiles, nextZIndex, focusedTileId, viewMode, fullviewActiveTileId, boardVisible, gridViewState, splitViewState],
   )
 
   const refreshWorkspaceMetadata = useCallback(async (): Promise<WorkspaceMetadata[]> => {
@@ -1029,7 +1035,7 @@ function AppContent(): React.ReactElement {
     const currentMode = state.viewMode
     if (currentMode === 'fullview') return
 
-    if (workspaceType === 'grid') {
+    if (workspaceType === 'grid' && currentMode !== 'splitview') {
       if (currentMode === 'board') state.setViewMode('gridview')
       return
     }
@@ -1180,11 +1186,6 @@ function AppContent(): React.ReactElement {
 
     if (transition.viewMode === 'gridview') {
       setViewMode('gridview')
-      return
-    }
-
-    if (activeWorkspaceType !== 'canvas') {
-      setViewMode(transition.viewMode)
       return
     }
 
@@ -1780,7 +1781,7 @@ function AppContent(): React.ReactElement {
       return
     }
 
-    if (activeWorkspaceType === 'grid' && viewMode !== 'gridview' && viewMode !== 'fullview' && viewMode !== 'board') {
+    if (activeWorkspaceType === 'grid' && viewMode !== 'gridview' && viewMode !== 'fullview' && viewMode !== 'board' && viewMode !== 'splitview') {
       setViewMode('gridview')
       return
     }
@@ -1791,7 +1792,7 @@ function AppContent(): React.ReactElement {
   }, [activeWorkspaceType, boardState.enabled, boardVisible, setViewMode, viewMode])
 
   useEffect(() => {
-    if (activeWorkspaceType !== 'canvas' || viewMode !== 'splitview') return
+    if (viewMode !== 'splitview') return
 
     if (attachedTiles.length < 2) {
       const fallback = attachedTiles[0]?.id ?? null
@@ -2175,7 +2176,7 @@ function AppContent(): React.ReactElement {
         {activeWorkspaceId ? (
             <div className="flex min-h-0 flex-1 overflow-hidden">
               <div className="relative min-w-0 flex flex-1 flex-col overflow-hidden">
-                {activeWorkspaceType === 'canvas' && viewMode === 'splitview' && (
+                {viewMode === 'splitview' && (
                 <SplitviewPanel
                   tiles={sortedTiles}
                   splitViewState={splitViewState}

@@ -59,7 +59,7 @@ function reverseDirection(direction: GridLayoutSplitNode['direction']): GridLayo
 }
 
 function normalizeViewMode(mode: unknown): GridViewMode {
-  return mode === 'fullview' ? 'fullview' : 'gridview'
+  return mode === 'fullview' || mode === 'splitview' ? mode : 'gridview'
 }
 
 function normalizeTile(tile: TileState): TileState {
@@ -430,6 +430,7 @@ export function normalizeGridWorkspaceState(state: GridWorkspaceState): GridWork
     focusedTileId,
     fullviewActiveTileId,
     viewMode: normalizeViewMode(state.viewMode),
+    splitViewState: state.splitViewState,
     boardVisible: state.boardVisible !== false,
     gridViewState: {
       rootNode: normalizeGridLayout(state.gridViewState?.rootNode, tiles),

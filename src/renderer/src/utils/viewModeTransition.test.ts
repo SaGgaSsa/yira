@@ -40,7 +40,7 @@ if (gridFocus.fullviewActiveTileId !== 'second') {
   throw new Error('Grid Focus must use the focused tile as the fullview active tile')
 }
 
-const invalidGridMode = resolveViewModeTransition({
+const gridSplitMode = resolveViewModeTransition({
   activeWorkspaceType: 'grid',
   currentViewMode: 'gridview',
   requestedMode: 'splitview',
@@ -50,8 +50,8 @@ const invalidGridMode = resolveViewModeTransition({
   splitViewState,
 })
 
-if (invalidGridMode !== null) {
-  throw new Error('Grid workspaces must reject canvas-only modes')
+if (gridSplitMode?.viewMode !== 'splitview' || gridSplitMode.workspaceTypeSwitch) {
+  throw new Error('Grid workspaces must allow split view without changing workspace type')
 }
 
 const canvasToGridSwitch = resolveViewModeTransition({

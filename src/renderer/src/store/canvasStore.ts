@@ -50,7 +50,7 @@ function normalizeViewMode(mode: CanvasState['viewMode'] | undefined): ViewMode 
 }
 
 function normalizeWorkspaceViewMode(mode: ViewMode | undefined, type: WorkspaceType): ViewMode {
-  if (type === 'grid') return mode === 'board' || mode === 'fullview' ? mode : 'gridview'
+  if (type === 'grid') return mode === 'board' || mode === 'fullview' || mode === 'splitview' ? mode : 'gridview'
   return mode === 'canvas' || mode === 'splitview' || mode === 'fullview' || mode === 'board' ? mode : 'fullview'
 }
 
@@ -439,18 +439,13 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
 
   addTile: (tile) => set((s) => {
     const normalizedTile = normalizeTile(tile)
-    if (s.activeWorkspaceConfig.type === 'grid') {
-      return {
-        tiles: [...s.tiles, normalizedTile],
-        nextZIndex: tile.zIndex + 1,
-        gridViewState: {
-          rootNode: insertTileIntoGridLayout(s.gridViewState.rootNode, tile.id),
-        },
-      }
-    }
+    const gridState = s.activeWorkspaceConfig.type === 'grid'
+      ? { gridViewState: { rootNode: insertTileIntoGridLayout(s.gridViewState.rootNode, tile.id) } }
+      : {}
 
     if (s.viewMode !== 'splitview' || isTileInSplitState(s.splitViewState, tile.id)) {
       return {
+        ...gridState,
         tiles: [...s.tiles, normalizedTile],
         nextZIndex: tile.zIndex + 1,
       }
@@ -459,6 +454,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     const targetPanel = s.splitViewState.focusedPanel
 
     return {
+      ...gridState,
       tiles: [...s.tiles, normalizedTile],
       nextZIndex: tile.zIndex + 1,
       splitViewState: targetPanel === 'left'
@@ -882,7 +878,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       viewMode: normalized.viewMode,
       boardVisible: normalized.boardVisible !== false,
       fullviewActiveTileId: normalized.fullviewActiveTileId,
-      splitViewState: { ...EMPTY_SPLIT_VIEW_STATE },
+      splitViewState: normalizeSplitViewState(normalized.splitViewState, normalized.tiles, normalized.focusedTileId, normalized.fullviewActiveTileId),
       gridViewState: normalized.gridViewState,
       selectedTileIds: [],
       terminalTitles: {},

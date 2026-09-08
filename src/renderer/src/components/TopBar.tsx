@@ -121,6 +121,14 @@ export function TopBar({
               icon={Columns}
               onClick={() => onSetViewMode('fullview')}
             />
+            <SegmentedButton
+              active={viewMode === 'splitview'}
+              label={t('shortcuts.split')}
+              title={splitOrientation === 'horizontal' ? 'Split top/bottom' : 'Split left/right'}
+              icon={SplitIcon}
+              onClick={() => onSetViewMode('splitview')}
+              disabled={!canSplitView}
+            />
             {isGridWorkspace ? (
               <SegmentedButton
                 active={viewMode === 'gridview'}
@@ -130,23 +138,13 @@ export function TopBar({
                 onClick={() => onSetViewMode(viewMode === 'gridview' ? 'canvas' : 'gridview')}
               />
             ) : (
-              <>
-                <SegmentedButton
-                  active={viewMode === 'splitview'}
-                  label={t('shortcuts.split')}
-                  title={splitOrientation === 'horizontal' ? 'Split top/bottom' : 'Split left/right'}
-                  icon={SplitIcon}
-                  onClick={() => onSetViewMode('splitview')}
-                  disabled={!canSplitView}
-                />
-                <SegmentedButton
-                  active={viewMode === 'canvas'}
-                  label={t('shortcuts.canvas')}
-                  title={viewMode === 'canvas' ? t('shortcuts.grid') : t('shortcuts.canvas')}
-                  icon={LayoutGrid}
-                  onClick={() => onSetViewMode(viewMode === 'canvas' ? 'gridview' : 'canvas')}
-                />
-              </>
+              <SegmentedButton
+                active={viewMode === 'canvas'}
+                label={t('shortcuts.canvas')}
+                title={viewMode === 'canvas' ? t('shortcuts.grid') : t('shortcuts.canvas')}
+                icon={LayoutGrid}
+                onClick={() => onSetViewMode(viewMode === 'canvas' ? 'gridview' : 'canvas')}
+              />
             )}
             {boardEnabled && boardVisible && (
               <SegmentedButton

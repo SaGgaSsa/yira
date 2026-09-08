@@ -839,7 +839,7 @@ export interface CanvasState {
 }
 
 export type CanvasViewMode = 'canvas' | 'fullview' | 'splitview' | 'board'
-export type GridViewMode = 'gridview' | 'fullview' | 'board'
+export type GridViewMode = 'gridview' | 'fullview' | 'splitview' | 'board'
 export type ViewMode = CanvasViewMode | GridViewMode
 
 export type SplitPanelId = 'left' | 'right'
@@ -885,6 +885,7 @@ export interface GridWorkspaceState {
   /** Legacy persisted layouts may omit this presentation property. */
   boardVisible?: boolean
   gridViewState: GridViewState
+  splitViewState?: SplitViewState
 }
 
 export interface Viewport {

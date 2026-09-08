@@ -324,7 +324,7 @@ const dirtyState: GridWorkspaceState = {
   nextZIndex: 4,
   focusedTileId: 'missing',
   fullviewActiveTileId: 'missing',
-  viewMode: 'splitview' as 'gridview',
+  viewMode: 'splitview',
   gridViewState: {
     rootNode: {
       id: 'root',
@@ -343,7 +343,7 @@ const dirtyState: GridWorkspaceState = {
 }
 
 const normalized = normalizeGridWorkspaceState(dirtyState)
-if (normalized.viewMode !== 'gridview') throw new Error('invalid grid view mode must normalize to gridview')
+if (normalized.viewMode !== 'splitview') throw new Error('grid normalization must preserve split view')
 if (normalized.focusedTileId !== null) throw new Error('missing focused tile id must normalize to null')
 if (normalized.fullviewActiveTileId !== 'one') throw new Error('missing fullview active id must fall back to first tile')
 if (!normalized.gridViewState.rootNode) throw new Error('normalization must keep or rebuild root node')

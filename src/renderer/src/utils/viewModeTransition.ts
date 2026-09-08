@@ -47,7 +47,7 @@ export function resolveViewModeTransition({
     }
   }
 
-  if (activeWorkspaceType === 'grid' && requestedMode !== 'gridview' && requestedMode !== 'fullview' && requestedMode !== 'board') return null
+  if (activeWorkspaceType === 'grid' && requestedMode !== 'gridview' && requestedMode !== 'fullview' && requestedMode !== 'board' && requestedMode !== 'splitview') return null
 
   if (requestedMode === 'fullview') {
     const splitActiveId = splitViewState.focusedPanel === 'left'
