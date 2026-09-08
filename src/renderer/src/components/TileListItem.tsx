@@ -1,6 +1,6 @@
 import React from 'react'
 import type { LucideIcon } from 'lucide-react'
-import { Maximize2, PanelBottomClose, PanelTopOpen, Settings, X } from 'lucide-react'
+import { Maximize2, PanelBottomClose, PanelTopOpen, Pin, Settings, X } from 'lucide-react'
 import type { TileState } from '@shared/types'
 import { formatTerminalAttentionCount } from '@/utils/terminalAttention'
 import { TILE_META } from './TileContent'
@@ -15,11 +15,16 @@ export interface ListRowProps {
   onDoubleClick?: () => void
   onConfigure?: (event: React.MouseEvent<HTMLButtonElement>) => void
   onFocus?: () => void
+  onPin?: () => void
+  pinned?: boolean
+  pinDisabled?: boolean
   onDetach?: () => void
   detached?: boolean
   onClose?: () => void
   configureTitle?: string
   focusTitle?: string
+  pinTitle?: string
+  unpinTitle?: string
   detachTitle?: string
   attachTitle?: string
   closeTitle?: string
@@ -35,17 +40,22 @@ interface ListRowActionButtonProps {
   title: string
   onClick: (event: React.MouseEvent<HTMLButtonElement>) => void
   children: React.ReactNode
+  pressed?: boolean
+  disabled?: boolean
 }
 
-function ListRowActionButton({ title, onClick, children }: ListRowActionButtonProps): React.ReactElement {
+function ListRowActionButton({ title, onClick, children, pressed, disabled = false }: ListRowActionButtonProps): React.ReactElement {
   return (
     <button
-      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
+      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display disabled:cursor-not-allowed disabled:opacity-50"
       onMouseDown={(event) => event.stopPropagation()}
       onClick={(event) => {
         event.stopPropagation()
         onClick(event)
       }}
+      aria-label={title}
+      aria-pressed={pressed}
+      disabled={disabled}
       title={title}
       type="button"
     >
@@ -64,11 +74,16 @@ export function ListRow({
   onDoubleClick,
   onConfigure,
   onFocus,
+  onPin,
+  pinned = false,
+  pinDisabled = false,
   onDetach,
   detached = false,
   onClose,
   configureTitle = 'Configure',
   focusTitle = 'Focus',
+  pinTitle = 'Pin',
+  unpinTitle = 'Unpin',
   detachTitle = 'Detach',
   attachTitle = 'Attach',
   closeTitle = 'Close',
@@ -80,7 +95,7 @@ export function ListRow({
   className = '',
 }: ListRowProps): React.ReactElement {
   const attentionLabel = formatTerminalAttentionCount(attentionCount)
-  const actionCount = [onConfigure, onFocus, onDetach, onClose].filter(Boolean).length
+  const actionCount = [onConfigure, onFocus, onPin, onDetach, onClose].filter(Boolean).length
   const actionPaddingClass = actionCount >= 4
     ? 'pr-[7.75rem]'
     : actionCount > 0
@@ -139,6 +154,16 @@ export function ListRow({
           {onFocus && (
             <ListRowActionButton title={focusTitle} onClick={() => onFocus()}>
               <Maximize2 size={13} />
+            </ListRowActionButton>
+          )}
+          {onPin && (
+            <ListRowActionButton
+              title={pinned ? unpinTitle : pinTitle}
+              onClick={() => onPin()}
+              pressed={pinned}
+              disabled={pinDisabled}
+            >
+              <Pin size={13} className={pinned ? 'fill-current text-text-display' : undefined} aria-hidden="true" />
             </ListRowActionButton>
           )}
           {onDetach && (

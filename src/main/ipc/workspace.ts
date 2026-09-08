@@ -8,6 +8,12 @@ import {
   normalizeWorkspaceConfig,
   normalizeWorkspaceRootFolderPath,
 } from '@shared/workspaceConfig'
+import { createSerialTaskQueue } from '@shared/serialTaskQueue'
+import {
+  latestWorkspaceSelectionTimestamp,
+  normalizeWorkspaceSelectionMetadata,
+  nextWorkspaceSelectionTimestamp,
+} from '@shared/workspaceSelection'
 import { applyWorkspaceManagementChanges, setWorkspaceType } from '@shared/workspaceManagement'
 import { YIRA_HOME, CONFIG_PATH, WORKSPACES_DIR } from '../paths'
 import {
@@ -17,6 +23,8 @@ import {
 } from '../workspace-root'
 
 const { ipcMain, dialog, BrowserWindow } = electron
+const configMutationQueue = createSerialTaskQueue()
+let lastSelectionTimestamp = 0
 
 async function ensureDir(dir: string): Promise<void> {
   await fs.mkdir(dir, { recursive: true })
@@ -52,13 +60,31 @@ export function normalizeWorkspace(workspace: Partial<Workspace> & { id: string;
     agentProvider: workspace.config?.agentProvider,
     agentProviders: workspace.config?.agentProviders,
   })
+  const selection = normalizeWorkspaceSelectionMetadata(workspace)
 
   return {
     id: workspace.id,
     name: workspace.name?.trim() || 'Untitled Workspace',
     path: storagePath,
     config,
+    ...selection,
   }
+}
+
+function normalizeWorkspaceSelectionInPlace(workspace: Workspace): void {
+  const selection = normalizeWorkspaceSelectionMetadata(workspace)
+
+  if (selection.pinned === undefined) delete workspace.pinned
+  else workspace.pinned = selection.pinned
+
+  if (selection.lastSelectedAt === undefined) delete workspace.lastSelectedAt
+  else workspace.lastSelectedAt = selection.lastSelectedAt
+}
+
+function nextSelectionTimestamp(workspaces: Workspace[]): number {
+  lastSelectionTimestamp = Math.max(lastSelectionTimestamp, latestWorkspaceSelectionTimestamp(workspaces))
+  lastSelectionTimestamp = nextWorkspaceSelectionTimestamp(lastSelectionTimestamp, Date.now())
+  return lastSelectionTimestamp
 }
 
 async function readConfig(): Promise<Config> {
@@ -94,7 +120,9 @@ export function readSettingsSync(): AppSettings {
 }
 
 async function writeConfig(config: Config): Promise<void> {
-  await fs.writeFile(CONFIG_PATH, JSON.stringify(config, null, 2))
+  const temporaryPath = `${CONFIG_PATH}.tmp`
+  await fs.writeFile(temporaryPath, JSON.stringify(config, null, 2))
+  await fs.rename(temporaryPath, CONFIG_PATH)
 }
 
 export async function getWorkspacePathById(workspaceId: string): Promise<string | null> {
@@ -131,16 +159,18 @@ export async function getConfiguredAgentProviders(): Promise<AgentProvider[]> {
 }
 
 export async function initWorkspaces(): Promise<void> {
-  await ensureDir(YIRA_HOME)
-  await ensureDir(WORKSPACES_DIR)
-  const config = await readConfig()
+  await configMutationQueue.run(async () => {
+    await ensureDir(YIRA_HOME)
+    await ensureDir(WORKSPACES_DIR)
+    const config = await readConfig()
 
-  // Ensure all workspace dirs exist
-  for (const ws of config.workspaces) {
-    await ensureDir(ws.path)
-  }
+    // Ensure all workspace dirs exist
+    for (const ws of config.workspaces) {
+      await ensureDir(ws.path)
+    }
 
-  await writeConfig(config)
+    await writeConfig(config)
+  })
 }
 
 function parseWorkspaceCreateInput(input: string | WorkspaceCreateInput): WorkspaceCreateInput {
@@ -214,6 +244,7 @@ export function updateWorkspace(workspace: Workspace, patch: WorkspaceUpdatePatc
     agentProvider: hasAgentProviderPatch ? patch.config?.agentProvider : workspace.config.agentProvider,
     agentProviders: mergeAgentProvidersConfig(workspace.config.agentProviders, patch.config?.agentProviders),
   })
+  normalizeWorkspaceSelectionInPlace(workspace)
 
   return workspace
 }
@@ -239,93 +270,103 @@ export function registerWorkspaceIPC(): void {
   })
 
   ipcMain.handle('workspace:create', async (_, input: string | WorkspaceCreateInput) => {
-    const config = await readConfig()
-    const workspace = createWorkspaceFromInput(parseWorkspaceCreateInput(input))
-    await ensureDir(workspace.path)
-    config.workspaces.push(workspace)
-    config.activeWorkspaceId = workspace.id
-    await writeConfig(config)
-    return workspace
+    return configMutationQueue.run(async () => {
+      const config = await readConfig()
+      const workspace = createWorkspaceFromInput(parseWorkspaceCreateInput(input))
+      await ensureDir(workspace.path)
+      config.workspaces.push(workspace)
+      config.activeWorkspaceId = workspace.id
+      await writeConfig(config)
+      return workspace
+    })
   })
 
   ipcMain.handle('workspace:update', async (_, id: string, patch: WorkspaceUpdatePatch) => {
-    const config = await readConfig()
-    const workspace = config.workspaces.find((w) => w.id === id)
-    if (!workspace) return null
+    return configMutationQueue.run(async () => {
+      const config = await readConfig()
+      const workspace = config.workspaces.find((w) => w.id === id)
+      if (!workspace) return null
 
-    const updated = updateWorkspace(workspace, patch)
-    await writeConfig(config)
-    return updated
+      const updated = updateWorkspace(workspace, patch)
+      await writeConfig(config)
+      return updated
+    })
   })
 
   ipcMain.handle('workspace:rename', async (_, id: string, name: string) => {
-    const config = await readConfig()
-    const workspace = config.workspaces.find((w) => w.id === id)
-    if (!workspace) return null
+    return configMutationQueue.run(async () => {
+      const config = await readConfig()
+      const workspace = config.workspaces.find((w) => w.id === id)
+      if (!workspace) return null
 
-    const updated = updateWorkspace(workspace, { name })
-    await writeConfig(config)
-    return updated
+      const updated = updateWorkspace(workspace, { name })
+      await writeConfig(config)
+      return updated
+    })
   })
 
   ipcMain.handle('workspace:delete', async (_, id: string) => {
-    const config = await readConfig()
-    const workspace = config.workspaces.find((w) => w.id === id)
-    if (!workspace) return
+    return configMutationQueue.run(async () => {
+      const config = await readConfig()
+      const workspace = config.workspaces.find((w) => w.id === id)
+      if (!workspace) return
 
-    config.workspaces = config.workspaces.filter((w) => w.id !== id)
+      config.workspaces = config.workspaces.filter((w) => w.id !== id)
 
-    if (workspace.path.startsWith(WORKSPACES_DIR)) {
-      try {
-        await fs.rm(workspace.path, { recursive: true, force: true })
-      } catch {
-        // ignore delete failures for local workspace dir cleanup
+      if (workspace.path.startsWith(WORKSPACES_DIR)) {
+        try {
+          await fs.rm(workspace.path, { recursive: true, force: true })
+        } catch {
+          // ignore delete failures for local workspace dir cleanup
+        }
       }
-    }
 
-    if (config.workspaces.length === 0) {
-      config.activeWorkspaceId = ''
-    } else if (config.activeWorkspaceId === id) {
-      config.activeWorkspaceId = config.workspaces[0].id
-    }
+      if (config.workspaces.length === 0) {
+        config.activeWorkspaceId = ''
+      } else if (config.activeWorkspaceId === id) {
+        config.activeWorkspaceId = config.workspaces[0].id
+      }
 
-    await writeConfig(config)
+      await writeConfig(config)
+    })
   })
 
   ipcMain.handle('workspace:commitManagementChanges', async (_, input: WorkspaceManagementCommitInput) => {
-    const config = await readConfig()
-    const result = applyWorkspaceManagementChanges({
-      existingWorkspaces: config.workspaces,
-      activeWorkspaceId: config.activeWorkspaceId,
-      desiredWorkspaces: Array.isArray(input?.workspaces) ? input.workspaces : [],
-      nextWorkspaceId: createWorkspaceId,
-      internalWorkspacePath,
+    return configMutationQueue.run(async () => {
+      const config = await readConfig()
+      const result = applyWorkspaceManagementChanges({
+        existingWorkspaces: config.workspaces,
+        activeWorkspaceId: config.activeWorkspaceId,
+        desiredWorkspaces: Array.isArray(input?.workspaces) ? input.workspaces : [],
+        nextWorkspaceId: createWorkspaceId,
+        internalWorkspacePath,
+      })
+
+      const existingById = new Map(config.workspaces.map((workspace) => [workspace.id, workspace]))
+
+      for (const workspace of result.workspaces) {
+        if (!existingById.has(workspace.id)) {
+          await ensureDir(workspace.path)
+        }
+      }
+
+      for (const workspaceId of result.removedWorkspaceIds) {
+        const workspace = existingById.get(workspaceId)
+        if (!workspace || !isInsideWorkspacesDir(workspace.path)) continue
+
+        try {
+          await fs.rm(workspace.path, { recursive: true, force: true })
+        } catch {
+          // ignore cleanup failures for internal workspace dirs
+        }
+      }
+
+      config.workspaces = result.workspaces
+      config.activeWorkspaceId = result.activeWorkspaceId
+      await writeConfig(config)
+
+      return result
     })
-
-    const existingById = new Map(config.workspaces.map((workspace) => [workspace.id, workspace]))
-
-    for (const workspace of result.workspaces) {
-      if (!existingById.has(workspace.id)) {
-        await ensureDir(workspace.path)
-      }
-    }
-
-    for (const workspaceId of result.removedWorkspaceIds) {
-      const workspace = existingById.get(workspaceId)
-      if (!workspace || !isInsideWorkspacesDir(workspace.path)) continue
-
-      try {
-        await fs.rm(workspace.path, { recursive: true, force: true })
-      } catch {
-        // ignore cleanup failures for internal workspace dirs
-      }
-    }
-
-    config.workspaces = result.workspaces
-    config.activeWorkspaceId = result.activeWorkspaceId
-    await writeConfig(config)
-
-    return result
   })
 
   ipcMain.handle('workspace:openFolder', async (): Promise<WorkspaceOpenFolderResult> => {
@@ -339,33 +380,63 @@ export function registerWorkspaceIPC(): void {
     }
 
     const folderPath = await canonicalizeRootFolderPath(result.filePaths[0])
-    const config = await readConfig()
-    const existing = findWorkspaceByRootFolder(config.workspaces, folderPath)
-    if (existing) {
-      config.activeWorkspaceId = existing.id
-      await writeConfig(config)
-      return { workspace: existing, canceled: false }
-    }
+    return configMutationQueue.run(async () => {
+      const config = await readConfig()
+      const existing = findWorkspaceByRootFolder(config.workspaces, folderPath)
+      if (existing) {
+        config.activeWorkspaceId = existing.id
+        await writeConfig(config)
+        return { workspace: existing, canceled: false }
+      }
 
-    return buildUnknownWorkspaceFolderResult(folderPath)
+      return buildUnknownWorkspaceFolderResult(folderPath)
+    })
+  })
+
+  ipcMain.handle('workspace:recordSelection', async (_, id: string) => {
+    return configMutationQueue.run(async () => {
+      const config = await readConfig()
+      const workspace = config.workspaces.find((entry) => entry.id === id)
+      if (!workspace) return null
+
+      workspace.lastSelectedAt = nextSelectionTimestamp(config.workspaces)
+      await writeConfig(config)
+      return workspace
+    })
+  })
+
+  ipcMain.handle('workspace:setPinned', async (_, id: string, pinned: boolean) => {
+    return configMutationQueue.run(async () => {
+      const config = await readConfig()
+      const workspace = config.workspaces.find((entry) => entry.id === id)
+      if (!workspace) return null
+
+      workspace.pinned = pinned === true
+      await writeConfig(config)
+      return workspace
+    })
   })
 
   ipcMain.handle('workspace:setActive', async (_, id: string) => {
-    const config = await readConfig()
-    if (config.workspaces.some(w => w.id === id)) {
-      config.activeWorkspaceId = id
-      await writeConfig(config)
-    }
+    return configMutationQueue.run(async () => {
+      const config = await readConfig()
+      if (config.workspaces.some(w => w.id === id)) {
+        config.activeWorkspaceId = id
+        await writeConfig(config)
+      }
+    })
   })
 
   ipcMain.handle('workspace:setType', async (_, id: string, type: WorkspaceType) => {
-    const config = await readConfig()
-    const workspaces = setWorkspaceType(config.workspaces, id, type)
-    if (!workspaces) return null
+    return configMutationQueue.run(async () => {
+      const config = await readConfig()
+      const workspaces = setWorkspaceType(config.workspaces, id, type)
+      if (!workspaces) return null
 
-    config.workspaces = workspaces
-    await writeConfig(config)
-    return config.workspaces.find((workspace) => workspace.id === id) ?? null
+      config.workspaces = workspaces
+      await writeConfig(config)
+      return config.workspaces.find((workspace) => workspace.id === id) ?? null
+    })
   })
 
   ipcMain.handle('settings:get', async () => {
@@ -374,9 +445,11 @@ export function registerWorkspaceIPC(): void {
   })
 
   ipcMain.handle('settings:set', async (_, settings: AppSettings) => {
-    const config = await readConfig()
-    config.settings = { ...DEFAULT_SETTINGS, ...settings }
-    await writeConfig(config)
-    return config.settings
+    return configMutationQueue.run(async () => {
+      const config = await readConfig()
+      config.settings = { ...DEFAULT_SETTINGS, ...settings }
+      await writeConfig(config)
+      return config.settings
+    })
   })
 }

@@ -41,6 +41,10 @@ const existing = [
   workspace('ws-beta', 'Beta', '/repo/beta', 'grid', ['.']),
   workspace('ws-gamma', 'Gamma', '/repo/gamma'),
 ]
+existing[0].pinned = true
+existing[0].lastSelectedAt = 100
+existing[1].pinned = false
+existing[1].lastSelectedAt = 200
 
 let idCounter = 0
 const nextWorkspaceId = () => `ws-new-${++idCounter}`
@@ -84,6 +88,8 @@ if (managed.workspaces.map((entry) => entry.id).join(',') !== 'ws-gamma,ws-new-1
   throw new Error('managed workspace order must match desired order and assign ids to new entries')
 }
 if (managed.workspaces[0].name !== 'Gamma Renamed') throw new Error('existing workspace names must be editable')
+if (managed.workspaces[2].pinned !== false) throw new Error('management edits must preserve pinned state')
+if (managed.workspaces[2].lastSelectedAt !== 200) throw new Error('management edits must preserve selection timestamp')
 if (managed.workspaces[0].config.rootFolderPath !== '/repo/gamma-renamed') throw new Error('existing workspace root folder must be editable')
 if (managed.workspaces[0].config.initialCommand !== 'npm test') throw new Error('initial command must be normalized')
 if (managed.workspaces[0].config.terminalHistoryEnabled !== false) throw new Error('terminal history toggle must be preserved')

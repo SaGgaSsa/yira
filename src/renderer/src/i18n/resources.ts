@@ -221,8 +221,6 @@ type TranslationResources = {
     workspaceDraft: string
     applyDraft: string
     saveChangesFailed: string
-    moveUp: string
-    moveDown: string
     willRemove: string
     new: string
     confirmRemovalByName: string
@@ -231,6 +229,8 @@ type TranslationResources = {
     discardDraft: string
     configure: string
     focus: string
+    pin: string
+    unpin: string
     attention_one: string
     attention_other: string
   }
@@ -571,8 +571,6 @@ const en: TranslationResources = {
     workspaceDraft: 'Workspace Draft',
     applyDraft: 'Apply Draft',
     saveChangesFailed: 'Could not save workspace changes',
-    moveUp: 'Move up',
-    moveDown: 'Move down',
     willRemove: 'Will remove',
     new: 'New',
     confirmRemovalByName: 'Type {{name}}',
@@ -581,6 +579,8 @@ const en: TranslationResources = {
     discardDraft: 'Discard draft',
     configure: 'Configure workspace',
     focus: 'Focus workspace',
+    pin: 'Pin workspace',
+    unpin: 'Unpin workspace',
     attention_one: '{{count}} terminal output event in this workspace',
     attention_other: '{{count}} terminal output events in this workspace',
   },
@@ -921,8 +921,6 @@ const es: TranslationResources = {
     workspaceDraft: 'Borrador del espacio de trabajo',
     applyDraft: 'Aplicar borrador',
     saveChangesFailed: 'No se pudieron guardar los cambios del espacio de trabajo',
-    moveUp: 'Mover hacia arriba',
-    moveDown: 'Mover hacia abajo',
     willRemove: 'Se eliminará',
     new: 'Nuevo',
     confirmRemovalByName: 'Escribe {{name}}',
@@ -931,6 +929,8 @@ const es: TranslationResources = {
     discardDraft: 'Descartar borrador',
     configure: 'Configurar espacio de trabajo',
     focus: 'Enfocar espacio de trabajo',
+    pin: 'Fijar espacio de trabajo',
+    unpin: 'Desfijar espacio de trabajo',
     attention_one: '{{count}} evento de salida de terminal en este espacio de trabajo',
     attention_other: '{{count}} eventos de salida de terminal en este espacio de trabajo',
   },

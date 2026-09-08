@@ -51,6 +51,7 @@ import {
 } from './utils/workspaceAttention'
 import { TILE_META } from './components/TileContent'
 import { resolveWorkspaceFocusTarget } from './utils/workspaceFocus'
+import { mergeWorkspaceSelectionResult, setWorkspacePinnedOptimistically } from './utils/workspaceSelectionActions'
 import { getWorkspaceSidebarOrder } from './utils/workspaceOrdering'
 import { getInitialWorkspaceDialogCopy, getWorkspaceDialogCopy } from './utils/workspaceDialogCopy'
 import { buildTileConfigurationMenuItems } from './components/tileConfigurationMenu'
@@ -405,6 +406,8 @@ function AppContent(): React.ReactElement {
   const [remoteSshAvailable, setRemoteSshAvailable] = useState(false)
   const [showWorkspaceManager, setShowWorkspaceManager] = useState(false)
   const [workspaceMetadata, setWorkspaceMetadata] = useState<WorkspaceMetadata[]>([])
+  const pendingWorkspacePinsRef = useRef(new Set<string>())
+  const [pendingWorkspacePinIds, setPendingWorkspacePinIds] = useState<Set<string>>(new Set())
   const [boardState, setBoardState] = useState<BoardState>(EMPTY_BOARD_STATE)
   const [showSettings, setShowSettings] = useState(false)
   const [settingsSection, setSettingsSection] = useState<SettingsSectionId>('appearance')
@@ -644,6 +647,45 @@ function AppContent(): React.ReactElement {
     clearWorkspaceAttentionCount(workspace.id)
   }, [clearWorkspaceAttentionCount, focusTile, registry, restoreGridWorkspaceState, restoreWorkspaceState, saveToDisk, selectTiles, setFullviewActiveTileId, setViewMode, updateWorkspaceAttentionCount])
 
+  const recordWorkspaceSelection = useCallback((workspaceId: string) => {
+    void window.electron.workspace.recordSelection(workspaceId)
+      .then((updatedWorkspace) => {
+        if (!updatedWorkspace || updatedWorkspace.id !== workspaceId) return
+        setWorkspaceMetadata((current) => mergeWorkspaceSelectionResult(current, updatedWorkspace, 'lastSelectedAt'))
+      })
+      .catch((error) => {
+        console.error('[App] Failed to record workspace selection:', error)
+      })
+  }, [])
+
+  const toggleWorkspacePinned = useCallback((workspaceId: string, currentPinned: boolean) => {
+    if (pendingWorkspacePinsRef.current.has(workspaceId)) return
+
+    const desiredPinned = !currentPinned
+    pendingWorkspacePinsRef.current.add(workspaceId)
+    setPendingWorkspacePinIds((current) => new Set(current).add(workspaceId))
+    setWorkspaceMetadata((current) => setWorkspacePinnedOptimistically(current, workspaceId, desiredPinned))
+
+    void window.electron.workspace.setPinned(workspaceId, desiredPinned)
+      .then((updatedWorkspace) => {
+        setWorkspaceMetadata((current) => updatedWorkspace && updatedWorkspace.id === workspaceId
+          ? mergeWorkspaceSelectionResult(current, updatedWorkspace, 'pinned')
+          : setWorkspacePinnedOptimistically(current, workspaceId, currentPinned))
+      })
+      .catch((error) => {
+        console.error('[App] Failed to update workspace pin:', error)
+        setWorkspaceMetadata((current) => setWorkspacePinnedOptimistically(current, workspaceId, currentPinned))
+      })
+      .finally(() => {
+        pendingWorkspacePinsRef.current.delete(workspaceId)
+        setPendingWorkspacePinIds((current) => {
+          const next = new Set(current)
+          next.delete(workspaceId)
+          return next
+        })
+      })
+  }, [])
+
   useEffect(() => {
     return window.electron.floating.onSnapshotRequest(({ workspaceId, tileId }) => {
       const state = useCanvasStore.getState()
@@ -765,11 +807,12 @@ function AppContent(): React.ReactElement {
 
   const switchWorkspace = useCallback(
     (workspace: WorkspaceMetadata) => {
+      recordWorkspaceSelection(workspace.id)
       if (workspace.id === activeWorkspaceId) return
 
       void activateWorkspace(workspace)
     },
-    [activeWorkspaceId, activateWorkspace],
+    [activeWorkspaceId, activateWorkspace, recordWorkspaceSelection],
   )
 
   const switchWorkspaceType = useCallback(async (nextType: WorkspaceType, nextViewMode?: ViewMode) => {
@@ -791,7 +834,9 @@ function AppContent(): React.ReactElement {
 
     const restoredConfig = updatedWorkspace.config
     setWorkspaceMetadata((current) => current.map((workspace) => (
-      workspace.id === updatedWorkspace.id ? updatedWorkspace : workspace
+      workspace.id === updatedWorkspace.id
+        ? { ...workspace, name: updatedWorkspace.name, config: updatedWorkspace.config }
+        : workspace
     )))
     skipNextAutosaveRef.current = true
 
@@ -941,7 +986,9 @@ function AppContent(): React.ReactElement {
   const handleWorkspaceConfigUpdated = useCallback((updatedWorkspace: WorkspaceMetadata) => {
     setWorkspace(updatedWorkspace.id, updatedWorkspace.name, updatedWorkspace.config)
     setWorkspaceMetadata((current) => current.map((workspace) => (
-      workspace.id === updatedWorkspace.id ? updatedWorkspace : workspace
+      workspace.id === updatedWorkspace.id
+        ? { ...workspace, name: updatedWorkspace.name, config: updatedWorkspace.config }
+        : workspace
     )))
   }, [setWorkspace])
 
@@ -2127,8 +2174,11 @@ function AppContent(): React.ReactElement {
                     onClick={() => switchWorkspace(workspace)}
                     onConfigure={() => openWorkspaceEditor(workspace)}
                     onFocus={() => {
+                      recordWorkspaceSelection(workspace.id)
                       void activateWorkspace(workspace, { activationMode: 'focus-last' })
                     }}
+                    onTogglePinned={() => toggleWorkspacePinned(workspace.id, workspace.pinned === true)}
+                    pinPending={pendingWorkspacePinIds.has(workspace.id)}
                   />
                 ))}
               </div>

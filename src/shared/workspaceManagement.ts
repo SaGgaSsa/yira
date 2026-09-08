@@ -9,6 +9,7 @@ import {
   normalizeWorkspaceConfig,
   normalizeWorkspaceRootFolderPath,
 } from './workspaceConfig'
+import { normalizeWorkspaceSelectionMetadata } from './workspaceSelection'
 
 interface ApplyWorkspaceManagementChangesInput {
   existingWorkspaces: Workspace[]
@@ -43,6 +44,14 @@ function validateUniqueRootFolders(workspaces: WorkspaceManagementEntry[]): void
 
     if (seen.has(rootFolderPath)) throw new Error('Workspace root folders must be unique')
     seen.add(rootFolderPath)
+  }
+}
+
+function normalizeWorkspaceMetadata(workspace: Workspace): Workspace {
+  const { pinned: _pinned, lastSelectedAt: _lastSelectedAt, ...base } = workspace
+  return {
+    ...base,
+    ...normalizeWorkspaceSelectionMetadata(workspace),
   }
 }
 
@@ -88,7 +97,7 @@ export function applyWorkspaceManagementChanges({
       })
 
       return {
-        ...existing,
+        ...normalizeWorkspaceMetadata(existing),
         name,
         config,
       }
@@ -149,10 +158,11 @@ export function setWorkspaceType(
     if (workspace.id !== workspaceId) return workspace
 
     found = true
+    const normalizedWorkspace = normalizeWorkspaceMetadata(workspace)
     return {
-      ...workspace,
+      ...normalizedWorkspace,
       config: normalizeWorkspaceConfig({
-        ...workspace.config,
+        ...normalizedWorkspace.config,
         type,
       }),
     }

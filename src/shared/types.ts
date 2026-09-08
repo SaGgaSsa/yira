@@ -180,6 +180,10 @@ export interface Workspace {
   config: WorkspaceConfig
   /** Internal storage location for persisted Yira state. */
   path: string
+  /** Keep this workspace at the top of workspace selectors. */
+  pinned?: boolean
+  /** Monotonic timestamp of the last explicit workspace selection. */
+  lastSelectedAt?: number
 }
 
 /** Config-only workspace data used for selectors and workspace editing. */

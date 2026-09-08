@@ -11,6 +11,8 @@ export interface WorkspaceListItemProps {
   onClick: () => void
   onConfigure: () => void
   onFocus: () => void
+  onTogglePinned: () => void
+  pinPending?: boolean
   className?: string
 }
 
@@ -21,6 +23,8 @@ export function WorkspaceListItem({
   onClick,
   onConfigure,
   onFocus,
+  onTogglePinned,
+  pinPending = false,
   className = '',
 }: WorkspaceListItemProps): React.ReactElement {
   const { t } = useTranslation()
@@ -39,8 +43,13 @@ export function WorkspaceListItem({
         onConfigure()
       }}
       onFocus={onFocus}
+      onPin={onTogglePinned}
+      pinned={workspace.pinned === true}
+      pinDisabled={pinPending}
       configureTitle={t('workspace.configure')}
       focusTitle={t('workspace.focus')}
+      pinTitle={t('workspace.pin')}
+      unpinTitle={t('workspace.unpin')}
       className={className}
     />
   )

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowDown, ArrowUp, Grid3X3, LayoutGrid, Pencil, RotateCcw, Save, Trash2, X } from 'lucide-react'
+import { Grid3X3, LayoutGrid, Pencil, RotateCcw, Save, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { WorkspaceManagementEntry, WorkspaceMetadata } from '@shared/types'
 import { createDefaultAgentProvidersConfig, normalizeAgentProvidersConfig, normalizeWorkspaceAgentProvider } from '@shared/workspaceConfig'
@@ -99,19 +99,6 @@ export function WorkspaceManagementDialog({
 
   if (!open) return null
 
-  const moveDraft = (key: string, direction: -1 | 1) => {
-    setDrafts((current) => {
-      const index = current.findIndex((draft) => draft.key === key)
-      const targetIndex = index + direction
-      if (index < 0 || targetIndex < 0 || targetIndex >= current.length) return current
-
-      const next = [...current]
-      const [draft] = next.splice(index, 1)
-      next.splice(targetIndex, 0, draft)
-      return next
-    })
-  }
-
   const openEditor = (draft: WorkspaceDraft | null) => {
     setEditor({
       key: draft?.key ?? null,
@@ -186,7 +173,7 @@ export function WorkspaceManagementDialog({
           )}
 
           <div className="space-y-3">
-            {drafts.map((draft, index) => {
+            {drafts.map((draft) => {
               const isNewDraft = !draft.id
               const canMarkRemoval = draft.removalText.trim() === draft.name.trim()
 
@@ -196,25 +183,6 @@ export function WorkspaceManagementDialog({
                   className={`rounded-[20px] border px-4 py-4 ${draft.markedForRemoval ? 'border-red-500/40 bg-red-500/10' : 'border-border bg-bg-tertiary'}`}
                 >
                   <div className="flex items-start gap-3">
-                    <div className="flex shrink-0 flex-col gap-2">
-                      <button
-                        className="flex h-9 w-9 items-center justify-center rounded-full border border-border-visible text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
-                        onClick={() => moveDraft(draft.key, -1)}
-                        disabled={index === 0}
-                        title={t('workspace.moveUp')}
-                      >
-                        <ArrowUp size={14} />
-                      </button>
-                      <button
-                        className="flex h-9 w-9 items-center justify-center rounded-full border border-border-visible text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
-                        onClick={() => moveDraft(draft.key, 1)}
-                        disabled={index === drafts.length - 1}
-                        title={t('workspace.moveDown')}
-                      >
-                        <ArrowDown size={14} />
-                      </button>
-                    </div>
-
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <div className="truncate text-base text-text-display">{draft.name || t('workspace.untitledWorkspace')}</div>

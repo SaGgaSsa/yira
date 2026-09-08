@@ -65,6 +65,8 @@ interface ElectronWorld {
     rename: (id: string, name: string) => Promise<Workspace | null>
     delete: (id: string) => Promise<void>
     setActive: (id: string) => Promise<void>
+    recordSelection: (id: string) => Promise<Workspace | null>
+    setPinned: (id: string, pinned: boolean) => Promise<Workspace | null>
     setType: (id: string, type: WorkspaceType) => Promise<Workspace | null>
     getActive: () => Promise<Workspace | null>
     openFolder: () => Promise<WorkspaceOpenFolderResult>

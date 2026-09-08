@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AgentActiveSessionSnapshot, AgentProviderAvailabilitySnapshot, AgentSessionHistoryQuery, AgentSessionHistoryResult, AgentUsageSnapshot, BoardTask, FileListOptions, FileSearchResult, FileWriteInput, FloatingNavigationEvent, FloatingNavigationRequest, GitCommitHistoryResult, GitRepository, GitStatusResult, NotificationAttentionOptions, RemotePreparationResult, TerminalCreateOptions, TerminalCreateResult, TerminalExitEvent, UpdateState, WindowBounds, WindowClosePreparationRequest, WindowClosePreparationResponse, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
+import type { AgentActiveSessionSnapshot, AgentProviderAvailabilitySnapshot, AgentSessionHistoryQuery, AgentSessionHistoryResult, AgentUsageSnapshot, BoardTask, FileListOptions, FileSearchResult, FileWriteInput, FloatingNavigationEvent, FloatingNavigationRequest, GitCommitHistoryResult, GitRepository, GitStatusResult, NotificationAttentionOptions, RemotePreparationResult, TerminalCreateOptions, TerminalCreateResult, TerminalExitEvent, UpdateState, WindowBounds, WindowClosePreparationRequest, WindowClosePreparationResponse, Workspace, WorkspaceCreateInput, WorkspaceManagementCommitInput, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
 import { createSerialTaskQueue } from '@shared/serialTaskQueue'
 import {
   terminalSessionDataChannel,
@@ -21,6 +21,8 @@ contextBridge.exposeInMainWorld('electron', {
     rename: (id: string, name: string) => ipcRenderer.invoke('workspace:rename', id, name),
     delete: (id: string) => ipcRenderer.invoke('workspace:delete', id),
     setActive: (id: string) => ipcRenderer.invoke('workspace:setActive', id),
+    recordSelection: (id: string) => ipcRenderer.invoke('workspace:recordSelection', id) as Promise<Workspace | null>,
+    setPinned: (id: string, pinned: boolean) => ipcRenderer.invoke('workspace:setPinned', id, pinned) as Promise<Workspace | null>,
     setType: (id: string, type: WorkspaceType) => ipcRenderer.invoke('workspace:setType', id, type),
     getActive: () => ipcRenderer.invoke('workspace:getActive'),
     openFolder: () => ipcRenderer.invoke('workspace:openFolder'),

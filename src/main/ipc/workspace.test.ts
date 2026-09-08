@@ -1,8 +1,60 @@
 import assert from 'node:assert/strict'
+import { createRequire } from 'node:module'
 import test from 'node:test'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import type { AgentProvider, Workspace } from '@shared/types'
 import { normalizeWorkspaceConfig } from '@shared/workspaceConfig'
-import { createWorkspaceFromInput, getWorkspaceRemoteTerminalById, normalizeWorkspace, updateWorkspace } from './workspace'
+
+type WorkspaceModule = typeof import('./workspace')
+
+type Handler = (event: unknown, ...args: unknown[]) => unknown
+
+class FakeIpcMain {
+  readonly handlers = new Map<string, Handler>()
+
+  handle(channel: string, handler: Handler): void {
+    this.handlers.set(channel, handler)
+  }
+
+  async invoke(channel: string, ...args: unknown[]): Promise<unknown> {
+    const handler = this.handlers.get(channel)
+    if (!handler) throw new Error(`Missing IPC handler: ${channel}`)
+    return handler({}, ...args)
+  }
+}
+
+function loadWorkspaceModule(ipcMain: FakeIpcMain): WorkspaceModule {
+  const nodeRequire = createRequire(import.meta.url)
+  const nodeModule = nodeRequire('node:module') as {
+    _load: (request: string, parent: unknown, isMain: boolean) => unknown
+  }
+  const originalLoad = nodeModule._load
+  nodeModule._load = function(request, parent, isMain) {
+    if (request === 'electron') return { ipcMain, dialog: {}, BrowserWindow: {} }
+    return originalLoad.call(this, request, parent, isMain)
+  }
+
+  try {
+    return nodeRequire('./workspace.ts') as WorkspaceModule
+  } finally {
+    nodeModule._load = originalLoad
+  }
+}
+
+const previousYiraHome = process.env.YIRA_HOME
+const ipcConfigRoot = await mkdtemp(join(tmpdir(), 'yira-workspace-ipc-'))
+process.env.YIRA_HOME = ipcConfigRoot
+const ipcMain = new FakeIpcMain()
+const workspaceModule = loadWorkspaceModule(ipcMain)
+const { createWorkspaceFromInput, getWorkspaceRemoteTerminalById, normalizeWorkspace, updateWorkspace } = workspaceModule
+
+test.after(async () => {
+  await rm(ipcConfigRoot, { recursive: true, force: true })
+  if (previousYiraHome === undefined) delete process.env.YIRA_HOME
+  else process.env.YIRA_HOME = previousYiraHome
+})
 
 type SourceControlConfig = Workspace['config'] & {
   sourceControlRepositoryPaths: string[]
@@ -38,6 +90,80 @@ test('persists workspace agent provider through load, create, and update normali
 
   const cleared = updateWorkspace(workspace('cleared', 'claude'), { config: { agentProvider: undefined } })
   assert.equal(cleared.config.agentProvider, undefined)
+})
+
+test('normalizes and preserves workspace selection metadata', () => {
+  const loaded = normalizeWorkspace({
+    id: 'selection-loaded',
+    name: 'Loaded',
+    pinned: true,
+    lastSelectedAt: 456,
+  })
+  assert.equal(loaded.pinned, true)
+  assert.equal(loaded.lastSelectedAt, 456)
+
+  const corrupt = normalizeWorkspace({
+    id: 'selection-corrupt',
+    name: 'Corrupt',
+    pinned: 'yes' as unknown as boolean,
+    lastSelectedAt: Number.NaN,
+  })
+  assert.equal(corrupt.pinned, undefined)
+  assert.equal(corrupt.lastSelectedAt, undefined)
+
+  const existing = workspace('selection-preserved')
+  existing.pinned = true
+  existing.lastSelectedAt = 789
+  const updated = updateWorkspace(existing, { name: 'Renamed' })
+  assert.equal(updated.pinned, true)
+  assert.equal(updated.lastSelectedAt, 789)
+})
+
+test('persists selection and pin mutations through concurrent IPC calls', async () => {
+  await workspaceModule.initWorkspaces()
+  workspaceModule.registerWorkspaceIPC()
+
+  const alpha = await ipcMain.invoke('workspace:create', { name: 'Alpha' }) as Workspace
+  const beta = await ipcMain.invoke('workspace:create', { name: 'Beta' }) as Workspace
+
+  const originalNow = Date.now
+  Date.now = () => 1_700_000_000_000
+  try {
+    await Promise.all([
+      ipcMain.invoke('workspace:recordSelection', alpha.id),
+      ipcMain.invoke('workspace:setPinned', alpha.id, true),
+      ipcMain.invoke('workspace:setActive', beta.id),
+      ipcMain.invoke('settings:set', { snapToGrid: false }),
+    ])
+
+    const firstSelection = (await ipcMain.invoke('workspace:list') as Workspace[])
+      .find((workspace) => workspace.id === alpha.id)?.lastSelectedAt
+    assert.equal(firstSelection, 1_700_000_000_000)
+
+    const selectedAgain = await ipcMain.invoke('workspace:recordSelection', beta.id) as Workspace
+    assert.equal(selectedAgain.lastSelectedAt, 1_700_000_000_001)
+
+    const activeWithoutSelection = await ipcMain.invoke('workspace:setActive', alpha.id)
+    assert.equal(activeWithoutSelection, undefined)
+    const afterSetActive = (await ipcMain.invoke('workspace:list') as Workspace[])
+      .find((workspace) => workspace.id === alpha.id)
+    assert.equal(afterSetActive?.lastSelectedAt, firstSelection)
+
+    const unpinned = await ipcMain.invoke('workspace:setPinned', alpha.id, false) as Workspace
+    assert.equal(unpinned.pinned, false)
+    assert.equal(unpinned.lastSelectedAt, firstSelection)
+
+    const persisted = JSON.parse(await readFile(join(ipcConfigRoot, 'config.json'), 'utf8')) as {
+      workspaces: Workspace[]
+      settings: { snapToGrid: boolean }
+    }
+    const persistedAlpha = persisted.workspaces.find((workspace) => workspace.id === alpha.id)
+    assert.equal(persistedAlpha?.pinned, false)
+    assert.equal(persistedAlpha?.lastSelectedAt, firstSelection)
+    assert.equal(persisted.settings.snapToGrid, false)
+  } finally {
+    Date.now = originalNow
+  }
 })
 
 test('persists Wake-on-LAN through workspace creation and update normalization', () => {
