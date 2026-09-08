@@ -94,6 +94,7 @@ contextBridge.exposeInMainWorld('electron', {
 
   // Files
   files: {
+    openFolder: (folderPath: string) => ipcRenderer.invoke('files:openFolder', folderPath),
     selectFolder: (defaultPath?: string) =>
       ipcRenderer.invoke('files:selectFolder', defaultPath),
     list: (rootPath: string, relativeDir: string, options?: FileListOptions) =>

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { FolderOpen, GitBranch, Grid3X3, History, Info, LayoutGrid, TerminalSquare, X } from 'lucide-react'
+import { ExternalLink, FolderOpen, GitBranch, Grid3X3, History, Info, LayoutGrid, TerminalSquare, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { AgentProvider, AgentProvidersConfig, GitRepository, RemoteTerminalConfig, WakeOnLanConfig, WorkspaceType } from '@shared/types'
 import { normalizeAgentProvidersConfig, normalizeWorkspaceAgentProvider } from '@shared/workspaceConfig'
@@ -108,6 +108,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
   const nameInputRef = useRef<HTMLInputElement | null>(null)
   const [value, setValue] = useState<WorkspaceDialogValue | null>(request?.value ?? null)
   const [showRemoteHelp, setShowRemoteHelp] = useState(false)
+  const [folderOpenFailed, setFolderOpenFailed] = useState(false)
   const [activeTab, setActiveTab] = useState<WorkspaceDialogTabId>('general')
   const [repositories, setRepositories] = useState<GitRepository[]>([])
   const [repositoriesLoading, setRepositoriesLoading] = useState(false)
@@ -115,6 +116,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
   useEffect(() => {
     setValue(request?.value ?? null)
     setShowRemoteHelp(false)
+    setFolderOpenFailed(false)
     setActiveTab(request?.initialTab ?? 'general')
     setRepositories([])
     setRepositoriesLoading(false)
@@ -217,6 +219,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
   }
 
   const updateRootFolderPath = (rootFolderPath: string) => {
+    setFolderOpenFailed(false)
     setValue((current) => {
       if (!current) return current
       const rootChanged = current.rootFolderPath.trim() !== rootFolderPath.trim()
@@ -355,6 +358,24 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
                 <div className="mb-4 flex items-center gap-2">
                   <FolderOpen size={14} className="text-text-secondary" />
                   <span className="nd-label text-text-secondary">{t('workspace.rootFolder')}</span>
+                  <button
+                    type="button"
+                    className="ml-auto shrink-0 rounded-full p-2 text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display disabled:cursor-not-allowed disabled:opacity-50"
+                    title={t('files.openFolder')}
+                    aria-label={t('files.openFolder')}
+                    disabled={!value.rootFolderPath.trim()}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') event.stopPropagation()
+                    }}
+                    onClick={() => {
+                      setFolderOpenFailed(false)
+                      void window.electron.files.openFolder(value.rootFolderPath).catch(() => {
+                        setFolderOpenFailed(true)
+                      })
+                    }}
+                  >
+                    <ExternalLink size={14} aria-hidden="true" />
+                  </button>
                 </div>
                 <div className="flex items-center gap-2">
                   <div
@@ -384,6 +405,9 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
                     {t('workspace.clearFolder')}
                   </button>
                 </div>
+                {folderOpenFailed && (
+                  <p role="alert" className="mt-2 text-xs text-red-300">{t('files.fileOperationFailed')}</p>
+                )}
               </section>
             </div>
           )}

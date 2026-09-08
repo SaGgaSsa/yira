@@ -332,6 +332,17 @@ export async function searchFiles(rootPath: string, query: string): Promise<File
 }
 
 export function registerFilesIPC(): void {
+  ipcMain.handle('files:openFolder', async (_event, folderPath: string): Promise<void> => {
+    if (typeof folderPath !== 'string' || !folderPath.trim() || !isAbsolute(folderPath)) {
+      throw new Error('Invalid folder path')
+    }
+    if (!(await fs.stat(folderPath)).isDirectory()) {
+      throw new Error('Path is not a folder')
+    }
+    const error = await electronApi.shell.openPath(folderPath)
+    if (error) throw new Error(error)
+  })
+
   ipcMain.handle('files:selectFolder', async (_event, defaultPath?: string): Promise<FileSelectFolderResult | null> => {
     const win = BrowserWindow.getFocusedWindow()
     const options: OpenDialogOptions = {

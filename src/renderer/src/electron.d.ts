@@ -105,6 +105,7 @@ interface ElectronWorld {
     rejectReviewTask: (workspaceId: string, input: { taskId: string; note: string }) => Promise<BoardState>
   }
   files: {
+    openFolder: (folderPath: string) => Promise<void>
     selectFolder: (defaultPath?: string) => Promise<FileSelectFolderResult | null>
     list: (rootPath: string, relativeDir: string, options?: FileListOptions) => Promise<FileListResult>
     search: (rootPath: string, query: string) => Promise<FileSearchResult>
