@@ -39,7 +39,7 @@ import { getBoardReviewCount } from '@shared/board'
 import { getAttachedTiles, isTileDetached, selectFloatingTileWindowOpenRequests } from '@shared/floatingTiles'
 import { refreshGridTileContent } from './utils/gridTileRefresh'
 import { DEFAULT_SPLIT_ORIENTATION, toggleSplitOrientation } from './utils/splitViewState'
-import { getTerminalDisplayTitle, normalizeTerminalWindowTitle } from './utils/terminalDisplayTitle'
+import { getActiveWindowTitle } from './utils/windowTitle'
 import { resolveViewModeTransition } from './utils/viewModeTransition'
 import {
   resolveSidebarCollapsedAfterWorkspaceViewChange,
@@ -66,7 +66,6 @@ import type { TerminalSessionTarget } from '@shared/terminalSessionIdentity'
 import { Terminal, StickyNote, SlidersHorizontal, Trash2, Pencil, Lock, Columns, Download, X, Plus } from 'lucide-react'
 
 const GROUP_SHOW_TOP_PADDING = 42
-const BASE_WINDOW_TITLE = 'Yira'
 const EMPTY_BOARD_STATE: BoardState = {
   enabled: false,
   tasks: [],
@@ -487,26 +486,15 @@ function AppContent(): React.ReactElement {
     void initializeUpdates()
   }, [initializeUpdates])
 
-  const windowTitle = useMemo(() => {
-    const tilesById = new Map(tiles.map((tile) => [tile.id, tile]))
-    let activeTile: TileState | null = null
-
-    if (viewMode === 'fullview') {
-      activeTile = fullviewActiveTileId
-        ? tilesById.get(fullviewActiveTileId) ?? null
-        : tiles.slice().sort((a, b) => b.zIndex - a.zIndex)[0] ?? null
-    } else if (viewMode === 'splitview') {
-      const activeTileId = splitViewState.focusedPanel === 'right'
-        ? splitViewState.activeRightTileId
-        : splitViewState.activeLeftTileId
-      activeTile = activeTileId ? tilesById.get(activeTileId) ?? null : null
-    }
-
-    if (!activeTile || activeTile.type !== 'terminal') return BASE_WINDOW_TITLE
-
-    const terminalTitle = normalizeTerminalWindowTitle(getTerminalDisplayTitle(activeTile, terminalTitles))
-    return terminalTitle ? `${terminalTitle} - ${BASE_WINDOW_TITLE}` : BASE_WINDOW_TITLE
-  }, [fullviewActiveTileId, splitViewState, terminalTitles, tiles, viewMode])
+  const windowTitle = useMemo(() => getActiveWindowTitle({
+    tiles,
+    terminalTitles,
+    activeWorkspaceName,
+    viewMode,
+    focusedTileId,
+    fullviewActiveTileId,
+    splitViewState,
+  }), [activeWorkspaceName, focusedTileId, fullviewActiveTileId, splitViewState, terminalTitles, tiles, viewMode])
 
   useEffect(() => {
     void window.electron.window.setTitle(windowTitle)

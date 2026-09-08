@@ -6,6 +6,7 @@ import { normalizeWorkspaceConfig } from '@shared/workspaceConfig'
 import { useCanvasStore } from '@/store/canvasStore'
 import { TileContent, TILE_META } from './TileContent'
 import { getTerminalDisplayTitle } from '@/utils/terminalDisplayTitle'
+import { getTileWindowTitle } from '@/utils/windowTitle'
 import { windowBufferRegistry } from '@/utils/windowBufferRegistry'
 
 interface FloatingTileSnapshot {
@@ -37,9 +38,12 @@ function getParams(): { workspaceId: string; tileId: string } {
 export function FloatingTileWindow(): React.ReactElement {
   const [{ workspaceId, tileId }] = useState(getParams)
   const [tile, setTile] = useState<TileState | null>(null)
-  const [terminalTitle, setTerminalTitle] = useState<string | undefined>()
+  const [initialTerminalTitle, setInitialTerminalTitle] = useState<string | undefined>()
+  const liveTerminalTitle = useCanvasStore((s) => s.terminalTitles[tileId])
+  const terminalTitle = liveTerminalTitle ?? initialTerminalTitle
   const [workspaceConfig, setWorkspaceConfig] = useState<WorkspaceConfig | null>(null)
   const [loadFailed, setLoadFailed] = useState(false)
+  const workspaceName = useCanvasStore((s) => s.activeWorkspaceName)
   const setWorkspace = useCanvasStore((s) => s.setWorkspace)
   const setProfiles = useCanvasStore((s) => s.setProfiles)
 
@@ -70,7 +74,7 @@ export function FloatingTileWindow(): React.ReactElement {
         available: profile.available,
       })))
       setTile(snapshot.tile)
-      setTerminalTitle(snapshot.terminalTitle)
+      setInitialTerminalTitle(snapshot.terminalTitle)
       setWorkspaceConfig(normalizedConfig)
     }
 
@@ -86,9 +90,10 @@ export function FloatingTileWindow(): React.ReactElement {
     return tile.label?.trim() || TILE_META[tile.type].label
   }, [terminalTitle, tile])
 
+  const windowTitle = getTileWindowTitle(tile, terminalTitle && tile ? { [tile.id]: terminalTitle } : {}, workspaceName)
   useEffect(() => {
-    void window.electron.window.setTitle(title)
-  }, [title])
+    void window.electron.window.setTitle(windowTitle)
+  }, [windowTitle])
 
   const updateTile = useCallback(async (patch: Partial<TileState>) => {
     if (!tile) return
