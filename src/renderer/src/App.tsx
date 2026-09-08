@@ -47,7 +47,6 @@ import {
 } from './utils/emptyWorkspaceView'
 import { normalizeCanvasStateForJson } from './utils/canvasStateNormalization'
 import {
-  getWorkspaceAttentionLabel,
   sumTerminalAttentionCounts,
 } from './utils/workspaceAttention'
 import { TILE_META } from './components/TileContent'
@@ -63,7 +62,7 @@ import {
   pruneWorkspaceTerminalRuntimes,
 } from './utils/terminalRuntimeCleanup'
 import type { TerminalSessionTarget } from '@shared/terminalSessionIdentity'
-import { Terminal, StickyNote, ChevronDown, SlidersHorizontal, Trash2, Pencil, Lock, Columns, Download, X, Plus } from 'lucide-react'
+import { Terminal, StickyNote, SlidersHorizontal, Trash2, Pencil, Lock, Columns, Download, X, Plus } from 'lucide-react'
 
 const GROUP_SHOW_TOP_PADDING = 42
 const BASE_WINDOW_TITLE = 'Yira'
@@ -399,7 +398,6 @@ function AppContent(): React.ReactElement {
   const [showProfilePicker, setShowProfilePicker] = useState(false)
   const [showNotePicker, setShowNotePicker] = useState(false)
   const [remoteSshAvailable, setRemoteSshAvailable] = useState(false)
-  const [showWorkspacePicker, setShowWorkspacePicker] = useState(false)
   const [showWorkspaceManager, setShowWorkspaceManager] = useState(false)
   const [workspaceMetadata, setWorkspaceMetadata] = useState<WorkspaceMetadata[]>([])
   const [boardState, setBoardState] = useState<BoardState>(EMPTY_BOARD_STATE)
@@ -424,7 +422,6 @@ function AppContent(): React.ReactElement {
   const skipNextAutosaveRef = useRef(false)
   const prevZoomRef = useRef(1)
   const footerRef = useRef<HTMLDivElement | null>(null)
-  const workspaceMenuRef = useRef<HTMLDivElement | null>(null)
   const fileTileOpenRequestsRef = useRef(createFileTileOpenRequestTracker())
 
   const deleteTile = useCallback(async (tileId: string): Promise<boolean> => {
@@ -639,7 +636,6 @@ function AppContent(): React.ReactElement {
     }
 
     clearWorkspaceAttentionCount(workspace.id)
-    setShowWorkspacePicker(false)
   }, [clearWorkspaceAttentionCount, focusTile, registry, restoreGridWorkspaceState, restoreWorkspaceState, saveToDisk, selectTiles, setFullviewActiveTileId, setViewMode, updateWorkspaceAttentionCount])
 
   useEffect(() => {
@@ -763,10 +759,7 @@ function AppContent(): React.ReactElement {
 
   const switchWorkspace = useCallback(
     (workspace: WorkspaceMetadata) => {
-      if (workspace.id === activeWorkspaceId) {
-        setShowWorkspacePicker(false)
-        return
-      }
+      if (workspace.id === activeWorkspaceId) return
 
       void activateWorkspace(workspace)
     },
@@ -855,19 +848,6 @@ function AppContent(): React.ReactElement {
     return () => window.removeEventListener('mousedown', handlePointerDown)
   }, [showNotePicker, showProfilePicker])
 
-  useEffect(() => {
-    if (!showWorkspacePicker) return
-
-    const handlePointerDown = (event: MouseEvent) => {
-      if (!workspaceMenuRef.current?.contains(event.target as Node)) {
-        setShowWorkspacePicker(false)
-      }
-    }
-
-    window.addEventListener('mousedown', handlePointerDown)
-    return () => window.removeEventListener('mousedown', handlePointerDown)
-  }, [showWorkspacePicker])
-
   // Keyboard shortcuts (extracted hook)
   useKeyboardShortcuts({
     tiles: attachedTiles,
@@ -882,7 +862,6 @@ function AppContent(): React.ReactElement {
     setSplitViewState,
     onClosePicker: () => {
       setShowProfilePicker(false)
-      setShowWorkspacePicker(false)
       setShowWorkspaceManager(false)
       setShowSettings(false)
       setTileMenu(null)
@@ -913,9 +892,6 @@ function AppContent(): React.ReactElement {
     if (!terminalAttentionEnabled) return 0
     return sumTerminalAttentionCounts(terminalAttention)
   }, [terminalAttention, terminalAttentionEnabled])
-  const activeWorkspaceAttentionLabel = activeWorkspaceId
-    ? getWorkspaceAttentionLabel(workspaceAttentionCounts, activeWorkspaceId)
-    : null
 
   useEffect(() => {
     if (!terminalAttentionEnabled) {
@@ -969,7 +945,6 @@ function AppContent(): React.ReactElement {
   }, [])
 
   const openWorkspaceEditor = useCallback((workspace: WorkspaceMetadata, initialTab?: WorkspaceDialogRequest['initialTab']) => {
-    setShowWorkspacePicker(false)
     setWorkspaceEditor({
       mode: 'edit',
       workspaceId: workspace.id,
@@ -1592,7 +1567,6 @@ function AppContent(): React.ReactElement {
       pruneWorkspaceAttentionCounts(result.workspaces.map((workspace) => workspace.id))
     }
     setShowWorkspaceManager(false)
-    setShowWorkspacePicker(false)
 
     if (!result.activeWorkspace) {
       skipNextAutosaveRef.current = true
@@ -1632,7 +1606,6 @@ function AppContent(): React.ReactElement {
   }, [activeWorkspaceId, activateWorkspace, pruneWorkspaceAttentionCounts, registry, restoreState, saveToDisk, setWorkspace, t])
 
   const openCreateWorkspaceDialog = useCallback(() => {
-    setShowWorkspacePicker(false)
     const dialogCopy = getWorkspaceDialogCopy('new', t)
     setWorkspaceEditor({
       mode: 'create',
@@ -2111,74 +2084,29 @@ function AppContent(): React.ReactElement {
         }
       >
         <div className="flex h-full flex-col bg-bg-secondary">
-          <div ref={workspaceMenuRef} className="app-chrome-row relative border-b border-border px-4">
-            <button
-              className="flex h-full w-full items-center justify-between rounded-2xl border border-border-visible bg-bg-tertiary px-3 text-left transition-colors hover:border-text-secondary"
-              onClick={() => setShowWorkspacePicker((v) => !v)}
-              title={t('sidebar.workspaceActions')}
-            >
-              <span className="min-w-0">
-                <span className="flex min-w-0 items-center gap-2 text-base text-text-display">
-                  <span className="truncate">
-                    {activeWorkspaceName || t('common.none')}
-                  </span>
-                  {activeWorkspaceAttentionLabel && (
-                    <span
-                      className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full border border-text-display px-1.5 font-mono text-[10px] leading-none text-text-display"
-                      title={t(
-                        (workspaceAttentionCounts[activeWorkspaceId] ?? 0) === 1
-                          ? 'workspace.attention_one'
-                          : 'workspace.attention_other',
-                        { count: workspaceAttentionCounts[activeWorkspaceId] ?? 0 },
-                      )}
-                    >
-                      {activeWorkspaceAttentionLabel}
-                    </span>
-                  )}
-                </span>
-              </span>
-              <ChevronDown size={16} className="shrink-0 text-text-secondary" />
-            </button>
-
-            {showWorkspacePicker && (
-              <div
-                className="nd-panel-raised absolute left-4 right-4 top-full z-[9998] mt-2 overflow-hidden rounded-2xl"
-                style={{
-                  backdropFilter: 'none',
-                }}
-              >
-                <div className="border-t border-border p-2">
-                  <button
-                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm text-text-primary transition-colors hover:bg-hover-bg"
-                    onClick={openCreateWorkspaceDialog}
-                  >
-                    <Plus size={14} />
-                    <span className="nd-label">{t('app.newWorkspace')}</span>
-                  </button>
-                  <button
-                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm text-text-primary transition-colors hover:bg-hover-bg"
-                    onClick={() => {
-                      setShowWorkspacePicker(false)
-                      setShowWorkspaceManager(true)
-                    }}
-                  >
-                    <SlidersHorizontal size={14} />
-                    <span className="nd-label">{t('app.manageWorkspaces')}</span>
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
           <div className="flex-1 px-3 py-4">
             <div className="mb-3 flex items-center justify-between px-2">
               <span className="nd-label text-text-secondary">{t('sidebar.workspaces')}</span>
-              <span className="nd-caption text-text-secondary">
-                {t(
-                  sidebarWorkspaces.length === 1 ? 'sidebar.workspaceCount_one' : 'sidebar.workspaceCount_other',
-                  { count: sidebarWorkspaces.length },
-                )}
-              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text-display"
+                  onClick={openCreateWorkspaceDialog}
+                  title={t('app.newWorkspace')}
+                  aria-label={t('app.newWorkspace')}
+                >
+                  <Plus size={14} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text-display"
+                  onClick={() => setShowWorkspaceManager(true)}
+                  title={t('app.manageWorkspaces')}
+                  aria-label={t('app.manageWorkspaces')}
+                >
+                  <SlidersHorizontal size={14} aria-hidden="true" />
+                </button>
+              </div>
             </div>
 
             {sidebarWorkspaces.length === 0 ? (
