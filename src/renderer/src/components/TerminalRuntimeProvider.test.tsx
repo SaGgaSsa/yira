@@ -4,7 +4,7 @@ import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { DOMImplementation } from '@xmldom/xmldom'
 import React from 'react'
-import type { TerminalCreateOptions } from '@shared/types'
+import type { FileTileOpenOptions, TerminalCreateOptions } from '@shared/types'
 import type { TerminalSessionIdentity, TerminalSessionTarget } from '@shared/terminalSessionIdentity'
 
 type AnyRecord = Record<PropertyKey, any>
@@ -149,10 +149,17 @@ class FakeTerminal {
   readonly options: AnyRecord = {}
   readonly parser = { registerOscHandler: () => ({ dispose: () => {} }) }
   readonly writes: string[] = []
+  readonly addons: unknown[] = []
+  readonly linkProviders: unknown[] = []
+  buffer: AnyRecord = { active: { getLine: () => undefined } }
   private dataListener: ((data: string) => void) | undefined
   private titleListener: ((title: string) => void) | undefined
 
-  loadAddon(_addon: unknown): void {}
+  constructor(_options?: AnyRecord) {}
+
+  loadAddon(addon: unknown): void {
+    this.addons.push(addon)
+  }
 
   open(root: AnyRecord): void {
     const xterm = document.createElement('div') as AnyRecord
@@ -173,7 +180,15 @@ class FakeTerminal {
   selectAll(): void {}
   paste(_data: string): void {}
   attachCustomKeyEventHandler(_handler: (event: AnyRecord) => boolean): void {}
-  registerLinkProvider(_provider: unknown): { dispose: () => void } { return { dispose: () => {} } }
+  registerLinkProvider(provider: unknown): { dispose: () => void } {
+    this.linkProviders.push(provider)
+    return {
+      dispose: () => {
+        const index = this.linkProviders.indexOf(provider)
+        if (index >= 0) this.linkProviders.splice(index, 1)
+      },
+    }
+  }
   onData(listener: (data: string) => void): { dispose: () => void } {
     this.dataListener = listener
     return { dispose: () => { this.dataListener = undefined } }
@@ -190,7 +205,13 @@ class FakeFitAddon {
 }
 
 class FakeWebLinksAddon {
-  constructor(..._args: unknown[]) {}
+  readonly activate: (event: AnyRecord, url: string) => void
+  readonly options: AnyRecord
+
+  constructor(activate: (event: AnyRecord, url: string) => void, options: AnyRecord) {
+    this.activate = activate
+    this.options = options
+  }
 }
 
 const xtermModule = require.resolve('@xterm/xterm')
@@ -230,6 +251,59 @@ function renderProvider(registry: InstanceType<typeof TerminalRuntimeRegistry<an
   const root = ReactDOM.createRoot(container as HTMLElement)
   root.render(React.createElement(TerminalRuntimeProvider, { registry, children: probe() }))
   return { root, container }
+}
+
+function createTerminalBridge() {
+  return {
+    create: async (requestedTarget: TerminalSessionTarget) => ({
+      cols: 80,
+      rows: 24,
+      buffer: '',
+      identity: { ...requestedTarget, generation: 1 },
+    }),
+    attach: async (identity: TerminalSessionIdentity) => ({
+      cols: 80,
+      rows: 24,
+      buffer: '',
+      identity,
+    }),
+    write: async () => {},
+    resize: async () => {},
+    detach: async () => {},
+    destroy: async () => {},
+    acknowledgeAgentAlert: async () => {},
+    onData: (_identity: TerminalSessionIdentity, _callback: (data: string) => void) => () => {},
+    onExit: (_identity: TerminalSessionIdentity, _callback: (event: AnyRecord) => void) => () => {},
+    onAgentAlert: (_tileId: string, _callback: () => void) => () => {},
+  }
+}
+
+function getWebLinksAddon(terminal: FakeTerminal): FakeWebLinksAddon {
+  const addon = terminal.addons.find((candidate) => candidate instanceof FakeWebLinksAddon)
+  assert.ok(addon)
+  return addon as FakeWebLinksAddon
+}
+
+function createMarkdownLine(text: string): AnyRecord {
+  const cells = Array.from(text, (chars) => ({
+    getChars: () => chars,
+    getWidth: () => 1,
+  }))
+  return {
+    length: cells.length,
+    translateToString: () => text,
+    getCell: (column: number) => cells[column],
+  }
+}
+
+function getRegisteredLinks(terminal: FakeTerminal): AnyRecord[] {
+  assert.equal(terminal.linkProviders.length, 1)
+  const provider = terminal.linkProviders[0] as AnyRecord
+  let links: AnyRecord[] = []
+  provider.provideLinks(1, (nextLinks: AnyRecord[]) => {
+    links = nextLinks
+  })
+  return links
 }
 
 test('configures a connected parking root for the injected registry', async () => {
@@ -297,6 +371,131 @@ test('rerender keeps the initial registry and does not create a runtime on mount
   assert.equal(secondContext.registry, firstRegistry)
   root.unmount()
   await flushReact()
+})
+
+test('opens web links through the shell only on a primary activation', async () => {
+  const registry = new TerminalRuntimeRegistry<any>()
+  const bridge = createTerminalBridge()
+  const openedUrls: string[] = []
+  const previousElectron = (globalThis as AnyRecord).window.electron
+  let root: AnyRecord | undefined
+  let runtime: AnyRecord | undefined
+  ;(globalThis as AnyRecord).window.electron = {
+    terminal: bridge,
+    shell: {
+      openExternal: async (url: string) => {
+        openedUrls.push(url)
+      },
+    },
+    clipboard: { writeText: async () => {} },
+  }
+
+  let currentContext: AnyRecord | null = null
+  const Probe = (): React.ReactElement => {
+    currentContext = useTerminalRuntimeContext() as AnyRecord
+    return React.createElement('span')
+  }
+  try {
+    root = renderProvider(registry, () => React.createElement(Probe)).root
+    await flushReact()
+
+    const createdRuntime = await currentContext!.createRuntime({ target, createOptions, viewOptions })
+    runtime = createdRuntime
+    const webLinksAddon = getWebLinksAddon(createdRuntime.terminal as unknown as FakeTerminal)
+    const url = 'https://example.com/docs'
+
+    webLinksAddon.activate({ button: 2 }, url)
+    await flushReact()
+    assert.deepEqual(openedUrls, [])
+
+    webLinksAddon.activate({ button: 0 }, url)
+    await flushReact()
+    assert.deepEqual(openedUrls, [url])
+  } finally {
+    try {
+      if (runtime) await runtime.dispose(false)
+    } finally {
+      try {
+        root?.unmount()
+        if (root) await flushReact()
+      } finally {
+        ;(globalThis as AnyRecord).window.electron = previousElectron
+      }
+    }
+  }
+})
+
+test('routes primary Markdown link activation to the runtime file tile callback', async () => {
+  const registry = new TerminalRuntimeRegistry<any>()
+  const markdownTarget: TerminalSessionTarget = {
+    workspaceId: 'workspace-markdown-links',
+    tileId: 'tile-markdown',
+  }
+  const bridge = createTerminalBridge()
+  const fileTileCalls: Array<{ relativePath: string; options?: FileTileOpenOptions }> = []
+  const previousElectron = (globalThis as AnyRecord).window.electron
+  let root: AnyRecord | undefined
+  let runtime: AnyRecord | undefined
+  ;(globalThis as AnyRecord).window.electron = {
+    terminal: bridge,
+    shell: { openExternal: async () => {} },
+    clipboard: { writeText: async () => {} },
+  }
+
+  let currentContext: AnyRecord | null = null
+  const Probe = (): React.ReactElement => {
+    currentContext = useTerminalRuntimeContext() as AnyRecord
+    return React.createElement('span')
+  }
+  try {
+    root = renderProvider(registry, () => React.createElement(Probe)).root
+    await flushReact()
+
+    const createdRuntime = await registry.acquire(markdownTarget, () => currentContext!.createRuntime({
+      target: markdownTarget,
+      createOptions,
+      viewOptions: {
+        ...viewOptions,
+        workspaceRootPath: '/workspace/root',
+        onOpenFileTile: (relativePath: string, options?: FileTileOpenOptions) => {
+          fileTileCalls.push({ relativePath, options })
+        },
+      },
+      markdownBaseDirectory: 'packages/app',
+    }))
+    runtime = createdRuntime
+    const terminal = createdRuntime.terminal as unknown as FakeTerminal
+    terminal.buffer = {
+      active: {
+        getLine: () => createMarkdownLine('docs/guide.md'),
+      },
+    }
+    const links = getRegisteredLinks(terminal)
+    assert.equal(links.length, 1)
+    const link = links[0] as AnyRecord
+
+    link.activate({ button: 2 }, link.text)
+    await flushReact()
+    assert.deepEqual(fileTileCalls, [])
+
+    link.activate({ button: 0 }, link.text)
+    await flushReact()
+    assert.deepEqual(fileTileCalls, [{
+      relativePath: 'packages/app/docs/guide.md',
+      options: { markdownView: 'preview' },
+    }])
+  } finally {
+    try {
+      if (runtime) await runtime.dispose(false)
+    } finally {
+      try {
+        root?.unmount()
+        if (root) await flushReact()
+      } finally {
+        ;(globalThis as AnyRecord).window.electron = previousElectron
+      }
+    }
+  }
 })
 
 test('hidden activity increments only the target workspace without mutating the active canvas', async () => {

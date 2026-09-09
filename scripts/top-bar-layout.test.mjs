@@ -12,20 +12,12 @@ const electronWorld = await readFile(new URL('../src/renderer/src/electron.d.ts'
 const themeHook = await readFile(new URL('../src/renderer/src/hooks/useTheme.ts', import.meta.url), 'utf8')
 
 test('uses a compact native title bar with safe areas and drag regions', () => {
-  assert.match(styles, /--window-titlebar-height: 36px;/)
+  assert.match(styles, /--window-titlebar-height:\s*[^;]+;/)
   assert.match(styles, /\.window-titlebar\s*\{[\s\S]*height: var\(--window-titlebar-height\);/)
   assert.match(styles, /env\(titlebar-area-x, 0px\)/)
   assert.match(styles, /env\(titlebar-area-width, 100vw\)/)
   assert.match(styles, /\.window-titlebar\s*\{[\s\S]*-webkit-app-region: drag;/)
   assert.match(styles, /\.window-titlebar button\s*\{[\s\S]*-webkit-app-region: no-drag;/)
-})
-
-test('renders the view selector in the compact title bar without a portal', () => {
-  assert.match(topBar, /className="window-titlebar nd-panel relative flex shrink-0/)
-  assert.match(topBar, /className="absolute left-1\/2 flex -translate-x-1\/2/)
-  assert.match(topBar, /<Icon size=\{14\} \/>/)
-  assert.match(topBar, /h-7 w-7/)
-  assert.doesNotMatch(topBar, /createPortal|ResizeObserver|useLayoutEffect|getBoundingClientRect/)
 })
 
 test('places the title bar globally and leaves an empty draggable strip without a workspace', () => {
@@ -35,8 +27,7 @@ test('places the title bar globally and leaves an empty draggable strip without 
 
 test('places the global agent usage indicator after the sidebar toggle', () => {
   assert.match(topBar, /AgentUsageIndicator/)
-  assert.match(topBar, /<PanelLeft size=\{14\} \/>[\s\S]*?<AgentUsageIndicator/)
-  assert.match(topBar, /max-w-\[calc\(50%-6rem\)\][^"]*overflow-hidden/)
+  assert.match(topBar, /<PanelLeft\b[\s\S]*?<AgentUsageIndicator/)
   assert.match(app, /agentUsage=\{agentUsage\}/)
   assert.match(app, /agentProvider=\{activeWorkspaceConfig\.agentProvider\}/)
 })

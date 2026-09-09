@@ -178,7 +178,10 @@ const loadWithJiti = require('jiti')(fileURLToPath(import.meta.url), {
 }) as <T>(id: string) => T
 const ReactDOM = await import('react-dom/client')
 const testIcon = () => React.createElement('span')
-let capturedTileContentProps: Record<string, unknown> | null = null
+type TileContentLifecycle = { mountCount: number; cleanupCount: number }
+
+const tileContentLifecycles = new WeakMap<object, TileContentLifecycle>()
+const tileContentPropsByWorkspaceConfig = new WeakMap<object, Record<string, unknown>>()
 const mockedModules: Record<string, Record<string, unknown>> = {
   [require.resolve('./TileContent.tsx')]: {
     TILE_META: {
@@ -189,7 +192,19 @@ const mockedModules: Record<string, Record<string, unknown>> = {
       timer: { icon: testIcon, label: 'Timer' },
     },
     TileContent: (props: Record<string, unknown>) => {
-      capturedTileContentProps = props
+      const config = props.workspaceConfig as object
+      let lifecycle = tileContentLifecycles.get(config)
+      if (!lifecycle) {
+        lifecycle = { mountCount: 0, cleanupCount: 0 }
+        tileContentLifecycles.set(config, lifecycle)
+      }
+      tileContentPropsByWorkspaceConfig.set(config, props)
+      React.useLayoutEffect(() => {
+        lifecycle.mountCount += 1
+        return () => {
+          lifecycle.cleanupCount += 1
+        }
+      }, [])
       return React.createElement('div')
     },
   },
@@ -231,31 +246,44 @@ const workspaceConfig = {
   },
 }
 
-async function renderGridView(): Promise<{ container: any; root: any; moveHandle: any }> {
-  capturedTileContentProps = null
+async function renderGridView(
+  tileRefreshKeys: Record<string, number> = {},
+  renderWorkspaceConfig: typeof workspaceConfig = { ...workspaceConfig },
+): Promise<{
+  container: any
+  root: any
+  moveHandle: any
+  tileContentLifecycle: TileContentLifecycle
+  tileContentProps: Record<string, unknown> | null
+  rerender: (nextTileRefreshKeys: Record<string, number>) => Promise<void>
+}> {
   const container = document.createElement('div')
   const root = ReactDOM.createRoot(container)
-  root.render(React.createElement(GridView, {
-    workspaceId,
-    workspaceConfig,
-    rootNode,
-    tiles: [tile],
-    tileRefreshKeys: {},
-    focusedTileId: tile.id,
-    terminalTitles: {},
-    onFocusTile: () => {},
-    onUpdateTile: () => {},
-    onSetRootNode: () => {},
-    onConfigureTile: () => {},
-    onFocusTileInView: () => {},
-    onDetachTile: () => {},
-    onCloseTile: () => {},
-    onOpenBrowserTile: () => {},
-    onOpenFileTile: () => {},
-    tileCreationSelectorProps: {} as any,
-    workspaceRootPath: '',
-  }))
-  await new Promise((resolve) => setTimeout(resolve, 20))
+  const render = (nextTileRefreshKeys: Record<string, number>) => {
+    root.render(React.createElement(GridView, {
+      workspaceId,
+      workspaceConfig: renderWorkspaceConfig,
+      rootNode,
+      tiles: [tile],
+      tileRefreshKeys: nextTileRefreshKeys,
+      focusedTileId: tile.id,
+      terminalTitles: {},
+      onFocusTile: () => {},
+      onUpdateTile: () => {},
+      onSetRootNode: () => {},
+      onConfigureTile: () => {},
+      onFocusTileInView: () => {},
+      onDetachTile: () => {},
+      onCloseTile: () => {},
+      onOpenBrowserTile: () => {},
+      onOpenFileTile: () => {},
+      tileCreationSelectorProps: {} as any,
+      workspaceRootPath: '',
+    }))
+  }
+  const waitForRender = () => new Promise<void>((resolve) => setTimeout(resolve, 20))
+  render(tileRefreshKeys)
+  await waitForRender()
 
   const buttons = container.getElementsByTagName('button')
   let moveHandle: any = null
@@ -266,16 +294,58 @@ async function renderGridView(): Promise<{ container: any; root: any; moveHandle
     }
   }
   assert.ok(moveHandle, 'the rendered grid must expose a move handle')
-  return { container, root, moveHandle }
+  return {
+    container,
+    root,
+    moveHandle,
+    tileContentLifecycle: tileContentLifecycles.get(renderWorkspaceConfig) as TileContentLifecycle,
+    tileContentProps: tileContentPropsByWorkspaceConfig.get(renderWorkspaceConfig) ?? null,
+    rerender: async (nextTileRefreshKeys) => {
+      render(nextTileRefreshKeys)
+      await waitForRender()
+    },
+  }
 }
 
 test('passes workspace identity and config to TileContent', async () => {
-  const { root } = await renderGridView()
+  const { root, tileContentProps } = await renderGridView({}, workspaceConfig)
 
   try {
-    assert.ok(capturedTileContentProps)
-    assert.equal(capturedTileContentProps.workspaceId, workspaceId)
-    assert.equal(capturedTileContentProps.workspaceConfig, workspaceConfig)
+    assert.ok(tileContentProps)
+    assert.equal(tileContentProps.workspaceId, workspaceId)
+    assert.equal(tileContentProps.workspaceConfig, workspaceConfig)
+  } finally {
+    root.unmount()
+  }
+})
+
+test('remounts tile content when its refresh key changes', async () => {
+  const { root, rerender, tileContentLifecycle } = await renderGridView()
+
+  try {
+    assert.equal(tileContentLifecycle.mountCount, 1)
+    assert.equal(tileContentLifecycle.cleanupCount, 0)
+
+    await rerender({ [tile.id]: 1 })
+
+    assert.equal(tileContentLifecycle.mountCount, 2)
+    assert.equal(tileContentLifecycle.cleanupCount, 1)
+  } finally {
+    root.unmount()
+  }
+})
+
+test('preserves tile content when its refresh key is unchanged', async () => {
+  const { root, rerender, tileContentLifecycle } = await renderGridView({ [tile.id]: 1 })
+
+  try {
+    assert.equal(tileContentLifecycle.mountCount, 1)
+    assert.equal(tileContentLifecycle.cleanupCount, 0)
+
+    await rerender({ [tile.id]: 1 })
+
+    assert.equal(tileContentLifecycle.mountCount, 1)
+    assert.equal(tileContentLifecycle.cleanupCount, 0)
   } finally {
     root.unmount()
   }

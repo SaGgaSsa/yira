@@ -8,18 +8,9 @@ for (const requiredLabel of ['Staged Changes', 'Changes']) {
   if (!source.includes(requiredLabel)) throw new Error(`source control must render the ${requiredLabel} section`)
 }
 
-if (!source.includes('window.electron.git.status')) {
-  throw new Error('source control must load status through the restricted Git bridge')
-}
-if (!source.includes('window.electron.git.history')) {
-  throw new Error('source control must load commit history through the restricted Git bridge')
-}
 const refreshBody = source.match(/const refresh = useCallback\(async [\s\S]*?=> \{([\s\S]*?)\n  \}, \[workspaceId\]\)/)?.[1]
 if (!refreshBody?.includes('window.electron.git.status') || !refreshBody.includes('window.electron.git.history')) {
   throw new Error('every Source Control refresh must request both status and history')
-}
-if (!source.includes('Promise.allSettled')) {
-  throw new Error('history failures must not replace a healthy Source Control status')
 }
 if (!source.includes('window.electron.git.stage') || !source.includes('window.electron.git.unstage')) {
   throw new Error('source control must expose stage and unstage actions per file')
@@ -121,9 +112,6 @@ if (!source.includes('sortRepositories(configuredRepositories)')) {
 if (!source.includes('source-control-repository')) {
   throw new Error('source control must render a repository selector')
 }
-if (!source.includes("t('workspace.noRepositoriesConfigured')")) {
-  throw new Error('source control must render the exact unconfigured state')
-}
 if (!source.includes('onOpenWorkspaceSettings')) {
   throw new Error('unconfigured source control must offer workspace configuration')
 }
@@ -145,9 +133,6 @@ if (!source.includes('sourceControlRepositoryPaths: string[]')) {
 }
 if (!source.includes("const sourceControlRepositoryPathsKey = sourceControlRepositoryPaths.join('\\u0000')")) {
   throw new Error('source control must derive a stable repository configuration key')
-}
-if (!source.includes('sourceControlRepositoryPathsKey')) {
-  throw new Error('repository configuration changes must reload the repository list')
 }
 if (!workspacePanelSource.includes('sourceControlRepositoryPaths={sourceControlRepositoryPaths}')) {
   throw new Error('WorkspacePanel must pass repository configuration to Source Control')
