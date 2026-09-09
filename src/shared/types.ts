@@ -169,6 +169,8 @@ export interface RemoteTerminalConfig {
   wakeOnLan?: WakeOnLanConfig
 }
 
+export type RemotePreparationStatus = 'checking' | 'packet-sent' | 'host-online' | 'ssh-ready' | 'unconfirmed'
+
 export interface RemotePreparationResult {
   status: 'disabled' | 'available' | 'host-online' | 'woken'
   wakeSent: boolean

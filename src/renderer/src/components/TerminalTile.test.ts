@@ -35,14 +35,61 @@ const {
   handleTerminalAgentAlert,
   handleTerminalOutput,
   getRemoteTerminalExitEvent,
+  getRemotePreparationMessageKey,
   RemoteTerminalPreparingNotice,
   RemoteTerminalReconnectNotice,
   restartTerminalAfterExit,
   registerTerminalInputFocusListener,
   shouldRegisterTerminalMarkdownLinks,
   prepareRemoteTerminal,
+  subscribeToRemotePreparationProgress,
   attachTerminalRuntimeHost,
 } = loadWithJiti<typeof import('./TerminalTile')>('./TerminalTile.tsx')
+
+const preparationMessageCases = [
+  ['checking', 'terminal.wakeOnLanPreparing'],
+  ['packet-sent', 'terminal.wakeOnLanPacketSent'],
+  ['host-online', 'terminal.wakeOnLanHostOnline'],
+  ['ssh-ready', 'terminal.wakeOnLanSshReady'],
+  ['unconfirmed', 'terminal.wakeOnLanUnconfirmed'],
+] as const
+
+for (const [status, expectedKey] of preparationMessageCases) {
+  if (getRemotePreparationMessageKey(status) !== expectedKey) {
+    throw new Error(`Wake-on-LAN preparation status must map to ${expectedKey}`)
+  }
+}
+
+let progressCallback: (status: 'checking' | 'packet-sent' | 'host-online' | 'ssh-ready' | 'unconfirmed') => void = () => {}
+let progressUnsubscribeCalls = 0
+const receivedProgressStatuses: string[] = []
+let subscribedWorkspaceId = ''
+const releaseProgress = subscribeToRemotePreparationProgress(
+  (workspaceId, callback) => {
+    subscribedWorkspaceId = workspaceId
+    progressCallback = callback
+    return () => {
+      progressUnsubscribeCalls += 1
+    }
+  },
+  'workspace-progress',
+  (status) => {
+    receivedProgressStatuses.push(status)
+  },
+)
+progressCallback('packet-sent')
+releaseProgress()
+progressCallback('host-online')
+releaseProgress()
+if (progressUnsubscribeCalls !== 1) {
+  throw new Error('remote preparation progress cleanup must run once')
+}
+if (subscribedWorkspaceId !== 'workspace-progress') {
+  throw new Error('remote preparation progress must subscribe for the active workspace')
+}
+if (receivedProgressStatuses.join(',') !== 'packet-sent') {
+  throw new Error('late remote preparation progress must not reach a cancelled tile')
+}
 
 test('attaches a runtime host and parks it once during cleanup', () => {
   const target = { workspaceId: 'workspace-host', tileId: 'tile-host' }

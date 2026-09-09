@@ -230,7 +230,7 @@ test('prepares remote hosts from persisted workspace configuration and deduplica
   assert.match(block, /workspaceId:\s*string/)
   assert.match(block, /normalizeTerminalId\(workspaceId\)/)
   assert.match(block, /getWorkspaceRemoteTerminalById\(runtimeWorkspaceId\)/)
-  assert.match(block, /ensureRemoteSshReady\(remoteTerminal\)/)
+  assert.match(block, /ensureRemoteSshReady\(remoteTerminal,\s*\{/)
   assert.match(block, /remotePreparations\.get\(/)
   assert.match(block, /remotePreparations\.set\(/)
   assert.match(block, /\.finally\(/)

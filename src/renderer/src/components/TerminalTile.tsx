@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import type { FileTileOpenOptions, RemotePreparationResult, TerminalCreateOptions, TerminalExitEvent, TileState, WorkspaceConfig } from '@shared/types'
+import type { FileTileOpenOptions, RemotePreparationResult, RemotePreparationStatus, TerminalCreateOptions, TerminalExitEvent, TileState, WorkspaceConfig } from '@shared/types'
 import type { TerminalSessionTarget } from '@shared/terminalSessionIdentity'
 import { useCanvasStore } from '@/store/canvasStore'
 import { useSettingsStore } from '@/store/settingsStore'
@@ -101,6 +101,62 @@ export async function prepareRemoteTerminal({
   await prepare()
   if (isCancelled()) return
   await create()
+}
+
+export type RemotePreparationProgressSubscription = (
+  workspaceId: string,
+  callback: (status: RemotePreparationStatus) => void,
+) => () => void
+
+/**
+ * Keep the progress callback inert after cancellation. The preload cleanup is
+ * still called exactly once, even if React runs more than one teardown path.
+ */
+export function subscribeToRemotePreparationProgress(
+  subscribe: RemotePreparationProgressSubscription,
+  workspaceId: string,
+  onProgress: (status: RemotePreparationStatus) => void,
+): () => void {
+  let active = true
+  let unsubscribe: (() => void) | null = null
+
+  unsubscribe = subscribe(workspaceId, (status) => {
+    if (!active) return
+    onProgress(status)
+  })
+
+  return () => {
+    if (!active) return
+    active = false
+    const cleanup = unsubscribe
+    unsubscribe = null
+    cleanup?.()
+  }
+}
+
+export type RemotePreparationMessageKey =
+  | 'terminal.wakeOnLanPreparing'
+  | 'terminal.wakeOnLanPacketSent'
+  | 'terminal.wakeOnLanHostOnline'
+  | 'terminal.wakeOnLanSshReady'
+  | 'terminal.wakeOnLanUnconfirmed'
+
+export function getRemotePreparationMessageKey(
+  status: RemotePreparationStatus,
+): RemotePreparationMessageKey {
+  switch (status) {
+    case 'packet-sent':
+      return 'terminal.wakeOnLanPacketSent'
+    case 'host-online':
+      return 'terminal.wakeOnLanHostOnline'
+    case 'ssh-ready':
+      return 'terminal.wakeOnLanSshReady'
+    case 'unconfirmed':
+      return 'terminal.wakeOnLanUnconfirmed'
+    case 'checking':
+    default:
+      return 'terminal.wakeOnLanPreparing'
+  }
 }
 
 interface RemoteTerminalPreparingNoticeProps {
@@ -267,6 +323,7 @@ export function TerminalTileWrapper({
   const [acquireExitEvent, setAcquireExitEvent] = useState<TerminalExitEvent | null>(null)
   const [reconnectPending, setReconnectPending] = useState(false)
   const [acquireGeneration, setAcquireGeneration] = useState(0)
+  const [preparationStatus, setPreparationStatus] = useState<RemotePreparationStatus | null>(null)
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number; selectionText: string; linkTarget?: TerminalLinkTarget } | null>(null)
 
   const onFocusRef = useRef(onFocus)
@@ -436,6 +493,7 @@ export function TerminalTileWrapper({
     setAcquirePending(true)
     setAcquireError(null)
     setAcquireExitEvent(null)
+    setPreparationStatus(shouldPrepareRemote ? 'checking' : null)
     currentRuntime?.setReconnecting(true)
     setRuntime(null)
 
@@ -450,7 +508,7 @@ export function TerminalTileWrapper({
       setAcquireError(message)
       setAcquireExitEvent({ exitCode: -1 })
     }
-  }, [isRemoteSsh, reconnectPending, registry, snapshot.reconnecting, target])
+  }, [isRemoteSsh, reconnectPending, registry, shouldPrepareRemote, snapshot.reconnecting, target])
 
   useEffect(() => {
     attentionEnabledRef.current = attentionEnabled
@@ -474,6 +532,32 @@ export function TerminalTileWrapper({
     setAcquirePending(true)
     setAcquireError(null)
     setAcquireExitEvent(null)
+    setPreparationStatus(shouldPrepareRemote ? 'checking' : null)
+
+    let preparationProgressCleanup: (() => void) | null = null
+
+    const releasePreparationProgress = (): void => {
+      const cleanup = preparationProgressCleanup
+      preparationProgressCleanup = null
+      cleanup?.()
+    }
+
+    const subscribeToPreparationProgress = (): void => {
+      if (!active || !shouldPrepareRemote || preparationProgressCleanup) return
+
+      preparationProgressCleanup = subscribeToRemotePreparationProgress(
+        window.electron.terminal.onPreparationProgress,
+        target.workspaceId,
+        (status) => {
+          if (!active) return
+          setPreparationStatus(status)
+        },
+      )
+    }
+
+    // Subscribe before acquire. A shared registry creation may already be
+    // running, so this tile must be ready for its progress events.
+    subscribeToPreparationProgress()
 
     const request: TerminalRuntimeCreateRequest = {
       target,
@@ -490,14 +574,17 @@ export function TerminalTileWrapper({
 
     registry.acquire(target, create).then(
       (nextRuntime) => {
+        releasePreparationProgress()
         if (!active) return
         setRuntime(nextRuntime)
         setAcquirePending(false)
         setAcquireError(null)
         setAcquireExitEvent(null)
         setReconnectPending(false)
+        setPreparationStatus(null)
       },
       (error: unknown) => {
+        releasePreparationProgress()
         if (!active) return
         const message = getErrorMessage(error)
         setAcquirePending(false)
@@ -509,6 +596,7 @@ export function TerminalTileWrapper({
 
     return () => {
       active = false
+      releasePreparationProgress()
     }
   // `viewOptions` is intentionally captured when a target starts. Mutable view
   // callbacks and dimensions are applied by the layout effect below.
@@ -627,7 +715,7 @@ export function TerminalTileWrapper({
       />
       <RemoteTerminalPreparingNotice
         visible={isRemoteSsh && snapshot.preparing}
-        message={t('terminal.wakeOnLanPreparing')}
+        message={t(getRemotePreparationMessageKey(preparationStatus ?? 'checking'))}
       />
       <RemoteTerminalReconnectNotice
         visible={!snapshot.preparing && isRemoteSsh && (snapshot.exitEvent !== null || snapshot.reconnecting)}
@@ -650,7 +738,7 @@ export function TerminalTileWrapper({
       {snapshot.error && (
         <div
           role="alert"
-          className="absolute inset-x-3 bottom-3 z-10 rounded-md border border-red-400/50 bg-red-950/80 px-3 py-2 text-xs text-red-200"
+          className="absolute inset-x-3 bottom-3 z-20 rounded-md border border-red-400/50 bg-red-950/80 px-3 py-2 text-xs text-red-200"
         >
           {snapshot.error}
         </div>

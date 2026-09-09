@@ -2,6 +2,7 @@ import { BrowserWindow, ipcMain, WebContents } from 'electron'
 import { promises as fs } from 'fs'
 import type {
   RemotePreparationResult,
+  RemotePreparationStatus,
   RemoteTerminalConfig,
   ShellProfile,
   TerminalCreateOptions,
@@ -75,6 +76,9 @@ const terminalSessionTargetsByTile = new Map<string, Map<string, TerminalSession
 const localAgentAlertTargetsByTile = new Map<string, Set<string>>()
 const terminalSessionCreations = new Map<string, Promise<TerminalCreateResult>>()
 const remotePreparations = new Map<string, Promise<RemotePreparationResult>>()
+const remotePreparationListeners = new Map<string, Set<WebContents>>()
+const remotePreparationListenerCleanup = new Map<string, Map<WebContents, () => void>>()
+const remotePreparationProgress = new Map<string, { workspaceId: string; status: RemotePreparationStatus }>()
 let profiles: ShellProfile[] = []
 let sshClient: string | null = null
 const TERMINAL_BUFFER_LENGTH = 500_000
@@ -267,7 +271,90 @@ function remotePreparationKey(workspaceId: string, remoteTerminal: RemoteTermina
     remoteTerminal.host,
     remoteTerminal.port ?? 22,
     remoteTerminal.wakeOnLan?.macAddress ?? '',
+    remoteTerminal.wakeOnLan?.broadcastAddress ?? '',
+    remoteTerminal.wakeOnLan?.port ?? 9,
   ])
+}
+
+function removeRemotePreparationListener(key: string, sender: WebContents): void {
+  const listeners = remotePreparationListeners.get(key)
+  listeners?.delete(sender)
+
+  const cleanup = remotePreparationListenerCleanup.get(key)?.get(sender)
+  if (cleanup) {
+    try { sender.removeListener('destroyed', cleanup) } catch { /* ignore */ }
+    remotePreparationListenerCleanup.get(key)?.delete(sender)
+  }
+
+  if (listeners && listeners.size === 0) remotePreparationListeners.delete(key)
+  const cleanupBySender = remotePreparationListenerCleanup.get(key)
+  if (cleanupBySender && cleanupBySender.size === 0) remotePreparationListenerCleanup.delete(key)
+}
+
+function addRemotePreparationListener(key: string, sender: WebContents): void {
+  if (sender.isDestroyed()) return
+
+  const listeners = remotePreparationListeners.get(key) ?? new Set<WebContents>()
+  if (listeners.has(sender)) return
+  listeners.add(sender)
+  remotePreparationListeners.set(key, listeners)
+
+  const onDestroyed = (): void => removeRemotePreparationListener(key, sender)
+  const cleanupBySender = remotePreparationListenerCleanup.get(key) ?? new Map<WebContents, () => void>()
+  cleanupBySender.set(sender, onDestroyed)
+  remotePreparationListenerCleanup.set(key, cleanupBySender)
+  try {
+    sender.once('destroyed', onDestroyed)
+  } catch {
+    removeRemotePreparationListener(key, sender)
+  }
+}
+
+function sendRemotePreparationProgress(
+  sender: WebContents,
+  payload: { workspaceId: string; status: RemotePreparationStatus },
+): boolean {
+  try {
+    if (sender.isDestroyed()) return false
+    sender.send('terminal:preparationProgress', payload)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function publishRemotePreparationProgress(
+  key: string,
+  workspaceId: string,
+  status: RemotePreparationStatus,
+): void {
+  const payload = { workspaceId, status }
+  remotePreparationProgress.set(key, payload)
+  const listeners = remotePreparationListeners.get(key)
+  if (!listeners) return
+
+  for (const sender of [...listeners]) {
+    if (!sendRemotePreparationProgress(sender, payload)) removeRemotePreparationListener(key, sender)
+  }
+}
+
+function replayRemotePreparationProgress(key: string, sender: WebContents): void {
+  const progress = remotePreparationProgress.get(key)
+  if (progress && !sendRemotePreparationProgress(sender, progress)) {
+    removeRemotePreparationListener(key, sender)
+  }
+}
+
+function clearRemotePreparationProgress(key: string): void {
+  const cleanupBySender = remotePreparationListenerCleanup.get(key)
+  if (cleanupBySender) {
+    for (const [sender, cleanup] of cleanupBySender) {
+      try { sender.removeListener('destroyed', cleanup) } catch { /* ignore */ }
+    }
+  }
+  remotePreparationListenerCleanup.delete(key)
+  remotePreparationListeners.delete(key)
+  remotePreparationProgress.delete(key)
 }
 
 export function initShellProfiles(): void {
@@ -283,7 +370,7 @@ export function registerTerminalIPC(): void {
 
   ipcMain.handle('terminal:sshAvailable', async () => sshClient !== null)
 
-  ipcMain.handle('terminal:prepareRemote', async (_event, workspaceId: string) => {
+  ipcMain.handle('terminal:prepareRemote', async (event, workspaceId: string) => {
     const runtimeWorkspaceId = normalizeTerminalId(workspaceId)
     if (!runtimeWorkspaceId) throw new Error('Invalid terminal workspace id')
 
@@ -291,11 +378,20 @@ export function registerTerminalIPC(): void {
     if (!remoteTerminal) throw new Error('Remote SSH is not configured for this workspace')
 
     const key = remotePreparationKey(runtimeWorkspaceId, remoteTerminal)
+    addRemotePreparationListener(key, event.sender)
     const activePreparation = remotePreparations.get(key)
-    if (activePreparation) return activePreparation
+    if (activePreparation) {
+      replayRemotePreparationProgress(key, event.sender)
+      return activePreparation
+    }
 
-    const preparation = ensureRemoteSshReady(remoteTerminal).finally(() => {
-      if (remotePreparations.get(key) === preparation) remotePreparations.delete(key)
+    const preparation = ensureRemoteSshReady(remoteTerminal, {
+      onProgress: (status) => publishRemotePreparationProgress(key, runtimeWorkspaceId, status),
+    }).finally(() => {
+      if (remotePreparations.get(key) === preparation) {
+        remotePreparations.delete(key)
+        clearRemotePreparationProgress(key)
+      }
     })
     remotePreparations.set(key, preparation)
     return preparation

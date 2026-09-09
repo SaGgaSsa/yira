@@ -315,6 +315,10 @@ type TranslationResources = {
     reconnect: string
     reconnecting: string
     wakeOnLanPreparing: string
+    wakeOnLanPacketSent: string
+    wakeOnLanHostOnline: string
+    wakeOnLanSshReady: string
+    wakeOnLanUnconfirmed: string
   }
   canvas: {
     clearSelection: string
@@ -667,6 +671,10 @@ const en: TranslationResources = {
     reconnect: 'Reconnect',
     reconnecting: 'Reconnecting…',
     wakeOnLanPreparing: 'Preparing remote computer…',
+    wakeOnLanPacketSent: 'Packet sent; waiting for response…',
+    wakeOnLanHostOnline: 'Computer responding; waiting for SSH…',
+    wakeOnLanSshReady: 'SSH ready; connecting…',
+    wakeOnLanUnconfirmed: 'No response; activation not confirmed',
   },
   canvas: {
     clearSelection: 'Clear Selection',
@@ -1019,6 +1027,10 @@ const es: TranslationResources = {
     reconnect: 'Reconectar',
     reconnecting: 'Reconectando…',
     wakeOnLanPreparing: 'Preparando computadora remota…',
+    wakeOnLanPacketSent: 'Paquete enviado; esperando respuesta…',
+    wakeOnLanHostOnline: 'Equipo responde; esperando SSH…',
+    wakeOnLanSshReady: 'SSH listo; conectando…',
+    wakeOnLanUnconfirmed: 'Sin respuesta; activación no confirmada',
   },
   canvas: {
     clearSelection: 'Limpiar selección',

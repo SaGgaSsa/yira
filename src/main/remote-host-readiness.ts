@@ -3,6 +3,7 @@ import { setTimeout as setTimeoutPromise } from 'node:timers/promises'
 
 import type {
   RemotePreparationResult,
+  RemotePreparationStatus,
   RemoteTerminalConfig,
   WakeOnLanConfig,
 } from '@shared/types'
@@ -41,6 +42,7 @@ export interface RemoteSshReadinessDependencies extends RemoteSshProbeDependenci
   wake?: (config: WakeOnLanConfig) => Promise<void>
   delay?: (milliseconds: number) => Promise<void>
   now?: () => number
+  onProgress?: (status: RemotePreparationStatus) => void
 }
 
 export type EnsureRemoteSshReadyDependencies = RemoteSshReadinessDependencies
@@ -178,10 +180,32 @@ function createDefaultDelay(milliseconds: number): Promise<void> {
   return setTimeoutPromise(milliseconds).then(() => undefined)
 }
 
+function reportProgress(
+  onProgress: ((status: RemotePreparationStatus) => void) | undefined,
+  status: RemotePreparationStatus,
+): void {
+  try {
+    onProgress?.(status)
+  } catch {
+    // Progress delivery must not change the readiness result.
+  }
+}
+
+function timeoutError(hostResponded: boolean): Error {
+  return createStableError(
+    hostResponded
+      ? 'Equipo responde, SSH no disponible tras 60 segundos'
+      : 'Sin respuesta; activación no confirmada tras 60 segundos',
+  )
+}
+
 export async function ensureRemoteSshReady(
   target: RemoteTerminalConfig,
   dependencies: RemoteSshReadinessDependencies = {},
 ): Promise<RemotePreparationResult> {
+  const onProgress = dependencies.onProgress
+  reportProgress(onProgress, 'checking')
+
   const wakeOnLan = target.wakeOnLan
   if (!wakeOnLan?.enabled) return { status: 'disabled', wakeSent: false }
 
@@ -193,8 +217,14 @@ export async function ensureRemoteSshReady(
   const now = dependencies.now ?? Date.now
   const initialResult = await probe(target)
 
-  if (initialResult === 'available') return { status: 'available', wakeSent: false }
-  if (initialResult === 'refused') return { status: 'host-online', wakeSent: false }
+  if (initialResult === 'available') {
+    reportProgress(onProgress, 'ssh-ready')
+    return { status: 'available', wakeSent: false }
+  }
+  if (initialResult === 'refused') {
+    reportProgress(onProgress, 'host-online')
+    return { status: 'host-online', wakeSent: false }
+  }
   if (initialResult === 'invalid-host') {
     throw createStableError('No se pudo resolver el host remoto')
   }
@@ -204,25 +234,40 @@ export async function ensureRemoteSshReady(
   } catch (error) {
     throw createStableError('No se pudo enviar Wake-on-LAN', error)
   }
+  reportProgress(onProgress, 'packet-sent')
 
   const deadline = now() + SSH_STARTUP_TIMEOUT_MS
+  let hostResponded = false
   while (true) {
     if (now() >= deadline) {
-      throw createStableError('La computadora remota no habilitó SSH en 60 segundos')
+      if (!hostResponded) reportProgress(onProgress, 'unconfirmed')
+      throw timeoutError(hostResponded)
     }
 
     await delay(SSH_POLL_INTERVAL_MS)
     if (now() >= deadline) {
-      throw createStableError('La computadora remota no habilitó SSH en 60 segundos')
+      if (!hostResponded) reportProgress(onProgress, 'unconfirmed')
+      throw timeoutError(hostResponded)
     }
 
     const result = await probe(target)
-    if (now() >= deadline) {
-      throw createStableError('La computadora remota no habilitó SSH en 60 segundos')
+    if (result === 'available') {
+      reportProgress(onProgress, 'ssh-ready')
+      if (now() >= deadline) {
+        throw createStableError('SSH respondió fuera del plazo de 60 segundos')
+      }
+      return { status: 'woken', wakeSent: true }
     }
-    if (result === 'available') return { status: 'woken', wakeSent: true }
+    if (result === 'refused') {
+      hostResponded = true
+      reportProgress(onProgress, 'host-online')
+    }
     if (result === 'invalid-host') {
       throw createStableError('No se pudo resolver el host remoto')
+    }
+    if (now() >= deadline) {
+      if (!hostResponded) reportProgress(onProgress, 'unconfirmed')
+      throw timeoutError(hostResponded)
     }
   }
 }

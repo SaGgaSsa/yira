@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AgentActiveSessionSnapshot, AgentProviderAvailabilitySnapshot, AgentSessionHistoryQuery, AgentSessionHistoryResult, AgentUsageSnapshot, BoardTask, FileListOptions, FileSearchResult, FileWriteInput, FloatingNavigationEvent, FloatingNavigationRequest, GitCommitHistoryResult, GitRepository, GitStatusResult, NotificationAttentionOptions, RemotePreparationResult, TerminalCreateOptions, TerminalCreateResult, TerminalExitEvent, UpdateState, WindowBounds, WindowClosePreparationRequest, WindowClosePreparationResponse, Workspace, WorkspaceCreateInput, WorkspaceGitDiffResult, WorkspaceManagementCommitInput, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
+import type { AgentActiveSessionSnapshot, AgentProviderAvailabilitySnapshot, AgentSessionHistoryQuery, AgentSessionHistoryResult, AgentUsageSnapshot, BoardTask, FileListOptions, FileSearchResult, FileWriteInput, FloatingNavigationEvent, FloatingNavigationRequest, GitCommitHistoryResult, GitRepository, GitStatusResult, NotificationAttentionOptions, RemotePreparationResult, RemotePreparationStatus, TerminalCreateOptions, TerminalCreateResult, TerminalExitEvent, UpdateState, WindowBounds, WindowClosePreparationRequest, WindowClosePreparationResponse, Workspace, WorkspaceCreateInput, WorkspaceGitDiffResult, WorkspaceManagementCommitInput, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
 import { createSerialTaskQueue } from '@shared/serialTaskQueue'
 import {
   terminalSessionDataChannel,
@@ -135,6 +135,13 @@ contextBridge.exposeInMainWorld('electron', {
   terminal: {
     prepareRemote: (workspaceId: string) =>
       ipcRenderer.invoke('terminal:prepareRemote', workspaceId) as Promise<RemotePreparationResult>,
+    onPreparationProgress: (workspaceId: string, callback: (status: RemotePreparationStatus) => void) => {
+      const handler = (_event: unknown, payload: { workspaceId: string; status: RemotePreparationStatus }) => {
+        if (payload?.workspaceId === workspaceId) callback(payload.status)
+      }
+      ipcRenderer.on('terminal:preparationProgress', handler)
+      return () => { ipcRenderer.removeListener('terminal:preparationProgress', handler) }
+    },
     create: (target: TerminalSessionTarget, options: TerminalCreateOptions) =>
       ipcRenderer.invoke('terminal:create', target, options) as Promise<TerminalCreateResult>,
     attach: (identity: TerminalSessionIdentity) =>

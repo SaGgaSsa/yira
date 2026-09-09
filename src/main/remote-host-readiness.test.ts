@@ -207,6 +207,7 @@ test('propagates unknown TCP errors after destroying the socket', async () => {
 test('returns disabled without probing when Wake-on-LAN is disabled', async () => {
   let probeCalls = 0
   let wakeCalls = 0
+  const progress: string[] = []
 
   const result = await ensureRemoteSshReady(remoteConfig(false), {
     probe: async () => {
@@ -216,15 +217,19 @@ test('returns disabled without probing when Wake-on-LAN is disabled', async () =
     wake: async () => {
       wakeCalls += 1
     },
+    onProgress: (status) => progress.push(status),
   })
 
   assert.deepEqual(result, { status: 'disabled', wakeSent: false })
   assert.equal(probeCalls, 0)
   assert.equal(wakeCalls, 0)
+  assert.deepEqual(progress, ['checking'])
 })
 
 test('returns available and host-online without Wake-on-LAN when the initial probe succeeds or is refused', async () => {
   let wakeCalls = 0
+  const availableProgress: string[] = []
+  const refusedProgress: string[] = []
   const dependencies = {
     wake: async () => {
       wakeCalls += 1
@@ -233,14 +238,24 @@ test('returns available and host-online without Wake-on-LAN when the initial pro
   }
 
   assert.deepEqual(
-    await ensureRemoteSshReady(remoteConfig(), { ...dependencies, probe: async () => 'available' }),
+    await ensureRemoteSshReady(remoteConfig(), {
+      ...dependencies,
+      probe: async () => 'available',
+      onProgress: (status) => availableProgress.push(status),
+    }),
     { status: 'available', wakeSent: false },
   )
   assert.deepEqual(
-    await ensureRemoteSshReady(remoteConfig(), { ...dependencies, probe: async () => 'refused' }),
+    await ensureRemoteSshReady(remoteConfig(), {
+      ...dependencies,
+      probe: async () => 'refused',
+      onProgress: (status) => refusedProgress.push(status),
+    }),
     { status: 'host-online', wakeSent: false },
   )
   assert.equal(wakeCalls, 0)
+  assert.deepEqual(availableProgress, ['checking', 'ssh-ready'])
+  assert.deepEqual(refusedProgress, ['checking', 'host-online'])
 })
 
 test('returns a stable error for an invalid initial host without sending Wake-on-LAN', async () => {
@@ -261,6 +276,7 @@ test('returns a stable error for an invalid initial host without sending Wake-on
 test('wakes an unreachable host and waits until SSH is available', async () => {
   const probes: Array<'unreachable' | 'refused' | 'available'> = ['unreachable', 'refused', 'available']
   const delays: number[] = []
+  const progress: string[] = []
   let wakeCalls = 0
   let clock = 0
 
@@ -274,16 +290,19 @@ test('wakes an unreachable host and waits until SSH is available', async () => {
       clock += milliseconds
     },
     now: () => clock,
+    onProgress: (status) => progress.push(status),
   })
 
   assert.deepEqual(result, { status: 'woken', wakeSent: true })
   assert.equal(wakeCalls, 1)
   assert.deepEqual(delays, [2000, 2000])
+  assert.deepEqual(progress, ['checking', 'packet-sent', 'host-online', 'ssh-ready'])
 })
 
 test('rejects when a post-Wake-on-LAN probe completes after the startup deadline', async () => {
   let clock = 0
   let probeCalls = 0
+  const progress: string[] = []
 
   await assert.rejects(
     ensureRemoteSshReady(remoteConfig(), {
@@ -298,9 +317,11 @@ test('rejects when a post-Wake-on-LAN probe completes after the startup deadline
         clock = 59_999
       },
       now: () => clock,
+      onProgress: (status) => progress.push(status),
     }),
-    { message: 'La computadora remota no habilitó SSH en 60 segundos' },
+    { message: 'SSH respondió fuera del plazo de 60 segundos' },
   )
+  assert.deepEqual(progress, ['checking', 'packet-sent', 'ssh-ready'])
 })
 
 test('wraps Wake-on-LAN errors with a stable message and cause', async () => {
@@ -327,6 +348,7 @@ test('fails with a stable timeout after 60 seconds of SSH polling', async () => 
   let clock = 0
   let wakeCalls = 0
   const delays: number[] = []
+  const progress: string[] = []
 
   await assert.rejects(
     ensureRemoteSshReady(remoteConfig(), {
@@ -339,10 +361,65 @@ test('fails with a stable timeout after 60 seconds of SSH polling', async () => 
         clock += milliseconds
       },
       now: () => clock,
+      onProgress: (status) => progress.push(status),
     }),
-    { message: 'La computadora remota no habilitó SSH en 60 segundos' },
+    { message: 'Sin respuesta; activación no confirmada tras 60 segundos' },
   )
   assert.equal(wakeCalls, 1)
   assert.equal(delays.length, 30)
   assert.equal(delays.every((milliseconds) => milliseconds === 2000), true)
+  assert.deepEqual(progress, ['checking', 'packet-sent', 'unconfirmed'])
+})
+
+test('keeps host-online after a refused probe and reports the host-response timeout', async () => {
+  let clock = 0
+  let probeCalls = 0
+  const progress: string[] = []
+
+  await assert.rejects(
+    ensureRemoteSshReady(remoteConfig(), {
+      probe: async () => {
+        probeCalls += 1
+        if (probeCalls === 1) return 'unreachable'
+        if (probeCalls === 2) return 'refused'
+        return 'unreachable'
+      },
+      wake: async () => undefined,
+      delay: async (milliseconds) => {
+        clock += milliseconds
+      },
+      now: () => clock,
+      onProgress: (status) => progress.push(status),
+    }),
+    { message: 'Equipo responde, SSH no disponible tras 60 segundos' },
+  )
+
+  assert.equal(probeCalls, 30)
+  assert.deepEqual(progress, ['checking', 'packet-sent', 'host-online'])
+})
+
+test('does not emit unconfirmed when the final in-flight probe is refused after the deadline', async () => {
+  let clock = 0
+  let probeCalls = 0
+  const progress: string[] = []
+
+  await assert.rejects(
+    ensureRemoteSshReady(remoteConfig(), {
+      probe: async () => {
+        probeCalls += 1
+        if (probeCalls === 1) return 'unreachable'
+        clock = 60_001
+        return 'refused'
+      },
+      wake: async () => undefined,
+      delay: async () => {
+        clock = 59_999
+      },
+      now: () => clock,
+      onProgress: (status) => progress.push(status),
+    }),
+    { message: 'Equipo responde, SSH no disponible tras 60 segundos' },
+  )
+
+  assert.deepEqual(progress, ['checking', 'packet-sent', 'host-online'])
 })
