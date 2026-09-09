@@ -1,4 +1,6 @@
-export const TERMINAL_THEME_IDS = ['yira-default', 'classic-dark', 'light', 'high-contrast'] as const
+import { COLOR_PRESET_IDS, COLOR_PRESETS } from './appThemes'
+
+export const TERMINAL_THEME_IDS = ['yira-default', 'classic-dark', 'light', 'high-contrast', ...COLOR_PRESET_IDS] as const
 
 export type TerminalThemeId = typeof TERMINAL_THEME_IDS[number]
 
@@ -35,9 +37,14 @@ export interface TerminalThemeDefinition {
 export const DEFAULT_TERMINAL_THEME_ID: TerminalThemeId = 'yira-default'
 
 const TERMINAL_THEME_MAP: Record<TerminalThemeId, TerminalThemeDefinition> = {
+  'dracula': { id: 'dracula', label: COLOR_PRESETS['dracula'].label, colors: COLOR_PRESETS['dracula'].terminal },
+  'nord': { id: 'nord', label: COLOR_PRESETS['nord'].label, colors: COLOR_PRESETS['nord'].terminal },
+  'tokyo-night': { id: 'tokyo-night', label: COLOR_PRESETS['tokyo-night'].label, colors: COLOR_PRESETS['tokyo-night'].terminal },
+  'catppuccin-mocha': { id: 'catppuccin-mocha', label: COLOR_PRESETS['catppuccin-mocha'].label, colors: COLOR_PRESETS['catppuccin-mocha'].terminal },
+  'gruvbox-dark': { id: 'gruvbox-dark', label: COLOR_PRESETS['gruvbox-dark'].label, colors: COLOR_PRESETS['gruvbox-dark'].terminal },
   'yira-default': {
     id: 'yira-default',
-    label: 'Yira Default',
+    label: 'Default',
     colors: {
       background: '#111111',
       foreground: '#e8e8e8',

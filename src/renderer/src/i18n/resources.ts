@@ -78,6 +78,9 @@ type TranslationResources = {
     agentHookSetupDescription: string
     configure: string
     uninstall: string
+    appThemeDescription: string
+    defaultAppearanceDescription: string
+    followAppTheme: string
     appearance: string
     aboutAndUpdates: string
     advanced: string
@@ -434,6 +437,9 @@ const en: TranslationResources = {
     agentHookSetupDescription: 'Configure or repair only Yira-managed hooks. Codex requires approving new hooks with /hooks.',
     configure: 'Configure',
     uninstall: 'Uninstall',
+    appThemeDescription: 'Applies to the interface and terminals that follow the application theme.',
+    defaultAppearanceDescription: 'Light, dark, and system modes apply to Default. The other presets use their own dark palette.',
+    followAppTheme: 'Default · Follow application',
     appearance: 'Appearance',
     aboutAndUpdates: 'About & Updates',
     advanced: 'Advanced',
@@ -790,6 +796,9 @@ const es: TranslationResources = {
     agentHookSetupDescription: 'Configura o repara sólo hooks administrados por Yira. Codex requiere aprobar los nuevos hooks con /hooks.',
     configure: 'Configurar',
     uninstall: 'Desinstalar',
+    appThemeDescription: 'Se aplica a la interfaz y a las terminales que siguen el tema de la aplicación.',
+    defaultAppearanceDescription: 'Los modos claro, oscuro y del sistema se aplican a Default. Los otros temas usan su propia paleta oscura.',
+    followAppTheme: 'Default · Seguir aplicación',
     appearance: 'Apariencia',
     aboutAndUpdates: 'Acerca de y actualizaciones',
     advanced: 'Avanzado',

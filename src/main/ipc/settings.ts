@@ -57,6 +57,7 @@ export async function loadStoredUserSettings(): Promise<UserSettings | null> {
       parsed.updateDiagnosticsMigrationComplete !== normalized.updateDiagnosticsMigrationComplete ||
       !hasLanguage ||
       parsed.language !== normalized.language ||
+      parsed.themeId !== normalized.themeId ||
       typeof parsed?.terminal?.agentAlertsEnabled !== 'boolean' ||
       parsed?.terminal?.themeId !== normalized.terminal.themeId
     ) {

@@ -1,3 +1,4 @@
+import type { AppThemeId } from './appThemes'
 import type { TerminalThemeId } from './terminalThemes'
 import type { TerminalSessionIdentity } from './terminalSessionIdentity'
 
@@ -326,6 +327,7 @@ export type TileCreationAvailability = Record<ConfigurableTileCreationType, bool
 
 export interface UserSettings {
   language: 'en' | 'es'
+  themeId: AppThemeId
   appearance: AppearanceMode
   interfaceFontSizePx: number
   tileFontSizePx: number
@@ -355,6 +357,7 @@ export interface UserSettings {
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
   language: 'en',
+  themeId: 'default',
   appearance: 'dark',
   interfaceFontSizePx: 16,
   tileFontSizePx: 16,

@@ -1,3 +1,5 @@
+import { APP_THEMES } from '@shared/appThemes'
+import { getXtermTheme, resolveTerminalThemeId } from '@/utils/terminalTheme'
 import React, { useEffect, useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
@@ -233,6 +235,30 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
             </div>
           </div>
 
+          <p className="mb-4 text-sm text-text-secondary">{t('settings.appThemeDescription')}</p>
+          <div className="mb-5 grid gap-3 lg:grid-cols-2">
+            {APP_THEMES.map((theme) => (
+              <button
+                key={theme.id}
+                type="button"
+                aria-pressed={draft.themeId === theme.id}
+                onClick={() => setDraft((current) => ({ ...current, themeId: theme.id }))}
+                className={`rounded-[20px] border p-4 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--interactive)] ${draft.themeId === theme.id ? 'border-text-primary' : 'border-border-visible'}`}
+                style={{ background: theme.tokens['--surface'], color: theme.tokens['--text-primary'] }}
+              >
+                <span className="flex items-center justify-between gap-2">
+                  <span className="nd-label">{theme.label}</span>
+                  {draft.themeId === theme.id && <span className="nd-caption">[ {t('settings.active')} ]</span>}
+                </span>
+                <span className="mt-4 flex gap-2" aria-hidden="true">
+                  {(['--black', '--surface-raised', '--accent', '--success', '--interactive'] as const).map((token) => (
+                    <span key={token} className="h-5 w-5 rounded-full border" style={{ background: theme.tokens[token], borderColor: theme.tokens['--border-visible'] }} />
+                  ))}
+                </span>
+              </button>
+            ))}
+          </div>
+          <p className="mb-3 text-sm text-text-secondary">{t('settings.defaultAppearanceDescription')}</p>
           <div className="grid gap-3 lg:grid-cols-3">
             {([
               { value: 'dark' as const, icon: Moon, label: t('settings.dark') },
@@ -241,9 +267,11 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
             ]).map(({ value, icon: Icon, label }) => (
               <button
                 key={value}
-                className={`rounded-[20px] border px-4 py-4 text-left transition-colors ${
+                className={`rounded-[20px] border px-4 py-4 text-left transition-colors disabled:opacity-40 ${
                   appearance === value ? 'border-text-display bg-bg-tertiary' : 'border-border bg-bg-secondary'
                 }`}
+                disabled={draft.themeId !== 'default'}
+                aria-pressed={appearance === value}
                 onClick={() => setAppearance(value)}
               >
                 <div className="flex items-center justify-between">
@@ -507,31 +535,33 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
           <div className="space-y-3">
             <div className="grid gap-3 lg:grid-cols-2">
               {TERMINAL_THEMES.map((theme) => {
+                const colors = getXtermTheme(resolveTerminalThemeId(theme.id, draft.themeId))
                 const isActive = terminalThemeId === theme.id
 
                 return (
                   <button
                     key={theme.id}
+                    aria-pressed={isActive}
                     className={`rounded-[20px] border px-4 py-4 text-left transition-colors ${
                       isActive ? 'border-text-display bg-bg-primary' : 'border-border-visible bg-bg-primary hover:border-text-secondary'
                     }`}
                     onClick={() => setTerminalThemeId(theme.id as TerminalThemeId)}
                   >
                     <span className="flex items-center justify-between gap-3">
-                      <span className="nd-label text-text-display">{theme.label}</span>
+                      <span className="nd-label text-text-display">{theme.id === 'yira-default' ? t('settings.followAppTheme') : theme.label}</span>
                       {isActive && <span className="nd-caption text-text-secondary">[ {t('settings.active')} ]</span>}
                     </span>
                     <span
                       className="mt-4 flex h-12 items-center gap-2 rounded-[14px] border px-3 font-mono text-sm"
                       style={{
-                        background: theme.colors.background,
-                        borderColor: theme.colors.brightBlack,
-                        color: theme.colors.foreground,
+                        background: colors.background,
+                        borderColor: colors.brightBlack,
+                        color: colors.foreground,
                       }}
                     >
-                      <span style={{ color: theme.colors.green }}>$</span>
+                      <span style={{ color: colors.green }}>$</span>
                       <span>yira --theme</span>
-                      <span className="ml-auto h-4 w-2" style={{ background: theme.colors.cursor }} />
+                      <span className="ml-auto h-4 w-2" style={{ background: colors.cursor }} />
                     </span>
                   </button>
                 )

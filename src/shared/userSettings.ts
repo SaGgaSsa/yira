@@ -1,3 +1,4 @@
+import { normalizeAppThemeId } from './appThemes'
 import type { UserSettings } from './types'
 import { DEFAULT_USER_SETTINGS } from './types'
 import { normalizeTerminalThemeId } from './terminalThemes'
@@ -46,6 +47,7 @@ export function normalizeUserSettings(raw: RawUserSettings = {}): UserSettings {
     ...DEFAULT_USER_SETTINGS,
     ...settings,
     language: normalizeLanguage(raw.language),
+    themeId: normalizeAppThemeId(raw.themeId),
     interfaceFontSizePx: clampFontSizePx(raw.interfaceFontSizePx, fontFallback),
     tileFontSizePx: clampFontSizePx(raw.tileFontSizePx, fontFallback),
     updateDiagnosticsEnabled: diagnosticsMigrationComplete ? updateDiagnosticsEnabled === true : true,

@@ -1,3 +1,4 @@
+import type { AppThemeId } from '@shared/appThemes'
 import { contextBridge, ipcRenderer } from 'electron'
 import type { AgentActiveSessionSnapshot, AgentProviderAvailabilitySnapshot, AgentSessionHistoryQuery, AgentSessionHistoryResult, AgentUsageSnapshot, BoardTask, FileListOptions, FileSearchResult, FileWriteInput, FloatingNavigationEvent, FloatingNavigationRequest, GitCommitHistoryResult, GitRepository, GitStatusResult, NotificationAttentionOptions, RemotePreparationResult, RemotePreparationStatus, TerminalCreateOptions, TerminalCreateResult, TerminalExitEvent, UpdateState, WindowBounds, WindowClosePreparationRequest, WindowClosePreparationResponse, Workspace, WorkspaceCreateInput, WorkspaceGitDiffResult, WorkspaceManagementCommitInput, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
 import { createSerialTaskQueue } from '@shared/serialTaskQueue'
@@ -198,7 +199,7 @@ contextBridge.exposeInMainWorld('electron', {
 
   window: {
     setTitle: (title: string) => ipcRenderer.invoke('window:setTitle', title),
-    setTitleBarOverlayTheme: (theme: 'dark' | 'light') =>
+    setTitleBarOverlayTheme: (theme: 'dark' | 'light' | AppThemeId) =>
       ipcRenderer.invoke('window:setTitleBarOverlayTheme', theme),
     onClosePreparationRequest: (
       callback: (request: WindowClosePreparationRequest) => void | Promise<void>,

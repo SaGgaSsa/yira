@@ -73,6 +73,7 @@ test('applySettings persists the complete draft before replacing the active sett
     const draft: UserSettings = {
       ...DEFAULT_USER_SETTINGS,
       language: 'es',
+      themeId: 'nord',
       appearance: 'light',
       interfaceFontSizePx: 18,
       tileFontSizePx: 20,
@@ -109,6 +110,8 @@ test('applySettings persists the complete draft before replacing the active sett
     await applying
 
     const state = useSettingsStore.getState()
+    assert.equal(state.themeId, 'nord')
+    assert.equal(createUserSettingsDraft(state).themeId, 'nord')
     assert.equal(state.language, 'es')
     assert.equal(state.appearance, 'light')
     assert.equal(state.interfaceFontSizePx, 18)

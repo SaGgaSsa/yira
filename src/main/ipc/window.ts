@@ -1,3 +1,4 @@
+import { getAppThemeTokens, normalizeAppThemeId } from '@shared/appThemes'
 import { BrowserWindow, ipcMain } from 'electron'
 import type { WindowClosePreparationResponse } from '@shared/types'
 import {
@@ -50,15 +51,19 @@ export function registerWindowIPC(getMainWindow: () => BrowserWindow | null): Wi
   })
 
   ipcMain.handle('window:setTitleBarOverlayTheme', (event, theme: unknown): void => {
-    if (theme !== 'dark' && theme !== 'light') return
+    if (theme !== 'dark' && theme !== 'light' && theme !== 'default' && normalizeAppThemeId(theme) === 'default') return
     if (process.platform !== 'win32' && process.platform !== 'linux') return
 
     const nativeWindow = BrowserWindow.fromWebContents(event.sender)
     if (!nativeWindow || nativeWindow.isDestroyed()) return
     if (nativeWindow !== getMainWindow()) return
 
+    const tokens = getAppThemeTokens(theme)
+    const colors = theme === 'dark' || theme === 'light'
+      ? TITLE_BAR_OVERLAY_COLORS[theme]
+      : { color: tokens['--surface'], symbolColor: tokens['--text-display'] }
     nativeWindow.setTitleBarOverlay({
-      ...TITLE_BAR_OVERLAY_COLORS[theme],
+      ...colors,
       height: 36,
     })
   })

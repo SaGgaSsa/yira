@@ -1,3 +1,4 @@
+import { COLOR_PRESETS } from '@shared/appThemes'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import Editor, { type Monaco } from '@monaco-editor/react'
 import { AlertTriangle, Check, Code2, Columns2, Eye, RefreshCw, Save } from 'lucide-react'
@@ -31,6 +32,29 @@ interface FilesTileProps {
 }
 
 function defineYiraThemes(monaco: Monaco): void {
+  for (const preset of Object.values(COLOR_PRESETS)) {
+    monaco.editor.defineTheme(`yira-${preset.id}`, {
+      base: 'vs-dark',
+      inherit: true,
+      rules: [
+        { token: 'comment', foreground: preset.tokens['--text-disabled'].slice(1) },
+        { token: 'string', foreground: preset.terminal.green.slice(1) },
+        { token: 'keyword', foreground: preset.terminal.magenta.slice(1) },
+        { token: 'number', foreground: preset.terminal.yellow.slice(1) },
+      ],
+      colors: {
+        'editor.background': preset.tokens['--surface'],
+        'editor.foreground': preset.tokens['--text-primary'],
+        'editorLineNumber.foreground': preset.tokens['--text-disabled'],
+        'editorLineNumber.activeForeground': preset.tokens['--text-display'],
+        'editor.selectionBackground': preset.terminal.selectionBackground,
+        'editor.inactiveSelectionBackground': preset.tokens['--surface-raised'],
+        'editorCursor.foreground': preset.terminal.cursor,
+        'editorWidget.background': preset.tokens['--surface-raised'],
+        'editorWidget.border': preset.tokens['--border-visible'],
+      },
+    })
+  }
   monaco.editor.defineTheme('yira-dark', {
     base: 'vs-dark',
     inherit: true,
@@ -65,6 +89,7 @@ function hasPatch(patch: Partial<TileState>): boolean {
 
 export function FilesTile({ tile, rootPath, isFocused, isVisible, onUpdate, onOpenFile, onOpenBrowser }: FilesTileProps): React.ReactElement {
   const { t } = useTranslation()
+  const themeId = useSettingsStore((state) => state.themeId)
   const appearance = useSettingsStore((state) => state.appearance)
   const tileFontSizePx = useSettingsStore((state) => state.tileFontSizePx)
   const filePath = tile.filePath?.trim() ?? ''
@@ -359,7 +384,7 @@ export function FilesTile({ tile, rootPath, isFocused, isVisible, onUpdate, onOp
               language={fileLanguage(filePath)}
               value={state.draft}
               beforeMount={defineYiraThemes}
-              theme={lightTheme ? 'yira-light' : 'yira-dark'}
+              theme={themeId === 'default' ? (lightTheme ? 'yira-light' : 'yira-dark') : `yira-${themeId}`}
               onChange={(value) => {
                 const current = stateRef.current
                 if (current.status !== 'ready') return

@@ -35,6 +35,7 @@ const autosaveTimer = { current: null as ReturnType<typeof setTimeout> | null }
 export function createUserSettingsDraft(settings: UserSettings): UserSettings {
   return {
     language: settings.language,
+    themeId: settings.themeId,
     appearance: settings.appearance,
     interfaceFontSizePx: settings.interfaceFontSizePx,
     tileFontSizePx: settings.tileFontSizePx,
@@ -59,6 +60,7 @@ function scheduleSave() {
     const state = useSettingsStore.getState()
     const settings: UserSettings = {
       language: state.language,
+      themeId: state.themeId,
       appearance: state.appearance,
       interfaceFontSizePx: state.interfaceFontSizePx,
       tileFontSizePx: state.tileFontSizePx,
@@ -206,6 +208,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         const normalized = normalizeUserSettings(settings)
         set({
           language: normalized.language,
+          themeId: normalized.themeId,
           appearance: normalized.appearance,
           interfaceFontSizePx: normalized.interfaceFontSizePx,
           tileFontSizePx: normalized.tileFontSizePx,
@@ -250,6 +253,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     const state = get()
     const settings: UserSettings = {
       language: state.language,
+      themeId: state.themeId,
       appearance: state.appearance,
       interfaceFontSizePx: state.interfaceFontSizePx,
       tileFontSizePx: state.tileFontSizePx,

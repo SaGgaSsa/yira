@@ -1,3 +1,4 @@
+import { resolveTerminalThemeId } from '@/utils/terminalTheme'
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -316,7 +317,7 @@ export function TerminalTileWrapper({
   const attentionEnabled = useSettingsStore((s) => s.terminal.attentionEnabled)
   const attentionEnabledRef = useRef(attentionEnabled)
   const tileFontSizePx = useSettingsStore((s) => s.tileFontSizePx)
-  const terminalThemeId = useSettingsStore((s) => s.terminal.themeId)
+  const terminalThemeId = useSettingsStore((s) => resolveTerminalThemeId(s.terminal.themeId, s.themeId))
   const [runtime, setRuntime] = useState<TerminalRuntime | null>(null)
   const [acquirePending, setAcquirePending] = useState(true)
   const [acquireError, setAcquireError] = useState<string | null>(null)

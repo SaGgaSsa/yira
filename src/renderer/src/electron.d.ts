@@ -1,3 +1,4 @@
+import type { AppThemeId } from '@shared/appThemes'
 import type {
   ShellProfileId,
   CanvasState,
@@ -167,7 +168,7 @@ interface ElectronWorld {
   }
   window: {
     setTitle: (title: string) => Promise<void>
-    setTitleBarOverlayTheme: (theme: 'dark' | 'light') => Promise<void>
+    setTitleBarOverlayTheme: (theme: 'dark' | 'light' | AppThemeId) => Promise<void>
     onClosePreparationRequest: (
       callback: (request: WindowClosePreparationRequest) => void | Promise<void>,
     ) => () => void

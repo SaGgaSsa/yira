@@ -1,34 +1,30 @@
-import { useEffect } from 'react'
+import { useLayoutEffect } from 'react'
 import { useSettingsStore } from '@/store/settingsStore'
+import { getAppThemeTokens } from '@shared/appThemes'
 
 export function useTheme() {
   const appearance = useSettingsStore((s) => s.appearance)
+  const themeId = useSettingsStore((s) => s.themeId)
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const root = document.documentElement
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
 
-    const applyTheme = (dark: boolean) => {
-      if (dark) {
-        root.classList.remove('light')
-      } else {
-        root.classList.add('light')
+    const applyTheme = () => {
+      const light = themeId === 'default' && (appearance === 'light' || (appearance === 'system' && !mq.matches))
+      root.classList.toggle('light', light)
+      root.dataset.theme = themeId
+      root.style.colorScheme = light ? 'light' : 'dark'
+      for (const [token, value] of Object.entries(getAppThemeTokens(themeId, light))) {
+        root.style.setProperty(token, value)
       }
-
-      void window.electron.window.setTitleBarOverlayTheme(dark ? 'dark' : 'light')
+      void window.electron.window.setTitleBarOverlayTheme(themeId === 'default' ? (light ? 'light' : 'dark') : themeId)
     }
 
-    if (appearance === 'system') {
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-      applyTheme(prefersDark)
-
-      const listener = (e: MediaQueryListEvent) => applyTheme(e.matches)
-      const mq = window.matchMedia('(prefers-color-scheme: dark)')
-      mq.addEventListener('change', listener)
-      return () => mq.removeEventListener('change', listener)
-    }
-
-    applyTheme(appearance === 'dark')
-  }, [appearance])
+    applyTheme()
+    mq.addEventListener('change', applyTheme)
+    return () => mq.removeEventListener('change', applyTheme)
+  }, [appearance, themeId])
 
   return appearance
 }
