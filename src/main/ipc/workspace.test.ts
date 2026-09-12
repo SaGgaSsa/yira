@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import test from 'node:test'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { access, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { AgentProvider, Workspace } from '@shared/types'
@@ -248,4 +248,83 @@ test('normalizes selected repositories through workspace creation and update', (
   } as Parameters<typeof updateWorkspace>[1])
   assert.equal(cleared.config.rootFolderPath, undefined)
   assert.deepEqual(sourceControlPaths(cleared), [])
+})
+
+test('awaits beforeDelete and preserves workspace state when it fails', async () => {
+  const callbackOrder: string[] = []
+  const removable = await ipcMain.invoke('workspace:create', { name: 'Callback removable' }) as Workspace
+
+  workspaceModule.registerWorkspaceIPC({
+    beforeDelete: async (workspaceId) => {
+      callbackOrder.push(`start:${workspaceId}`)
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      callbackOrder.push(`end:${workspaceId}`)
+    },
+  })
+
+  await ipcMain.invoke('workspace:delete', removable.id)
+  assert.deepEqual(callbackOrder, [`start:${removable.id}`, `end:${removable.id}`])
+  assert.equal((await ipcMain.invoke('workspace:list') as Workspace[]).some((workspace) => workspace.id === removable.id), false)
+
+  const preserved = await ipcMain.invoke('workspace:create', { name: 'Callback preserved' }) as Workspace
+  const callbackError = new Error('terminal cleanup failed')
+  workspaceModule.registerWorkspaceIPC({
+    beforeDelete: async (workspaceId) => {
+      assert.equal(workspaceId, preserved.id)
+      throw callbackError
+    },
+  })
+
+  await assert.rejects(ipcMain.invoke('workspace:delete', preserved.id), callbackError)
+  assert.equal((await ipcMain.invoke('workspace:list') as Workspace[]).some((workspace) => workspace.id === preserved.id), true)
+  await access(preserved.path)
+})
+
+test('calls beforeDelete for exact management removals only', async () => {
+  const created = await ipcMain.invoke('workspace:create', { name: 'Management callback target' }) as Workspace
+  const callbackIds: string[] = []
+  workspaceModule.registerWorkspaceIPC({
+    beforeDelete: async (workspaceId) => {
+      callbackIds.push(workspaceId)
+    },
+  })
+
+  await ipcMain.invoke('workspace:rename', created.id, 'Management callback renamed')
+  await ipcMain.invoke('workspace:commitManagementChanges', {
+    workspaces: (await ipcMain.invoke('workspace:list') as Workspace[])
+      .map((workspace) => ({ id: workspace.id, name: workspace.name }))
+      .reverse(),
+  })
+  assert.deepEqual(callbackIds, [])
+
+  const current = await ipcMain.invoke('workspace:list') as Workspace[]
+  const result = await ipcMain.invoke('workspace:commitManagementChanges', {
+    workspaces: current
+      .filter((workspace) => workspace.id !== created.id)
+      .map((workspace) => ({ id: workspace.id, name: workspace.name })),
+  }) as { removedWorkspaceIds: string[] }
+
+  assert.deepEqual(result.removedWorkspaceIds, [created.id])
+  assert.deepEqual(callbackIds, [created.id])
+})
+
+test('preserves management state when beforeDelete fails', async () => {
+  const preserved = await ipcMain.invoke('workspace:create', { name: 'Management callback preserved' }) as Workspace
+  const callbackError = new Error('management terminal cleanup failed')
+  workspaceModule.registerWorkspaceIPC({
+    beforeDelete: async (workspaceId) => {
+      assert.equal(workspaceId, preserved.id)
+      throw callbackError
+    },
+  })
+
+  const current = await ipcMain.invoke('workspace:list') as Workspace[]
+  await assert.rejects(ipcMain.invoke('workspace:commitManagementChanges', {
+    workspaces: current
+      .filter((workspace) => workspace.id !== preserved.id)
+      .map((workspace) => ({ id: workspace.id, name: workspace.name })),
+  }), callbackError)
+
+  assert.equal((await ipcMain.invoke('workspace:list') as Workspace[]).some((workspace) => workspace.id === preserved.id), true)
+  await access(preserved.path)
 })

@@ -25,7 +25,10 @@ export default defineConfig({
             outDir: 'dist-electron/main',
             minify: false,
             rollupOptions: {
-              input: resolve(__dirname, 'src/main/index.ts'),
+              input: {
+                index: resolve(__dirname, 'src/main/index.ts'),
+                terminalDaemon: resolve(__dirname, 'src/main/terminalDaemonEntry.ts'),
+              },
               external: ['node-pty'],
               treeshake: false,
             },

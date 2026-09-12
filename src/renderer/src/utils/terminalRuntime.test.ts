@@ -95,7 +95,10 @@ class FakeTerminal implements TerminalLike {
   selectAllCalls = 0
   selection = ''
 
-  constructor(events: FakeTerminalEvents) {
+  constructor(
+    events: FakeTerminalEvents,
+    private readonly openError?: Error,
+  ) {
     this.events = events.events
   }
 
@@ -105,6 +108,7 @@ class FakeTerminal implements TerminalLike {
   }
 
   open(container: HTMLElement): void {
+    if (this.openError) throw this.openError
     this.openedIn = container
     this.events.push('terminal:open')
   }
@@ -341,12 +345,16 @@ function viewOptions(overrides: Partial<TerminalRuntimeViewOptions> = {}): Termi
 function createRuntimeHarness(overrides: {
   createResult?: Partial<TerminalCreateResult>
   attachResult?: Partial<TerminalCreateResult>
+  createElementError?: Error
+  createTerminalError?: Error
+  openError?: Error
+  attachError?: Error
 } = {}): RuntimeHarness {
   const target = { workspaceId: 'workspace-a', tileId: 'tile-a' }
   const events: string[] = []
   const createResult = makeResult(target, overrides.createResult)
   const identity = createResult.identity
-  let attachResult = makeResult(target, { ...overrides.attachResult, identity })
+  let attachResult = makeResult(target, { identity, ...overrides.attachResult })
   const terminals: FakeTerminal[] = []
   const fitAddons: FakeFitAddon[] = []
   const schedulers: FakeFitScheduler[] = []
@@ -371,6 +379,7 @@ function createRuntimeHarness(overrides: {
     attach: async (attachedIdentity) => {
       events.push('bridge:attach')
       assert.deepEqual(attachedIdentity, identity)
+      if (overrides.attachError) throw overrides.attachError
       return attachResult
     },
     write: async (writeIdentity, data) => {
@@ -426,11 +435,15 @@ function createRuntimeHarness(overrides: {
   }
 
   const terminalCreations: Array<{ cols: number; rows: number }> = []
-  const createElement = (): HTMLDivElement => new FakeElement() as unknown as HTMLDivElement
+  const createElement = (): HTMLDivElement => {
+    if (overrides.createElementError) throw overrides.createElementError
+    return new FakeElement() as unknown as HTMLDivElement
+  }
   const createTerminal = ({ cols, rows }: { cols: number; rows: number }): TerminalLike => {
     events.push(`terminal:create:${cols}x${rows}`)
     terminalCreations.push({ cols, rows })
-    const terminal = new FakeTerminal({ events })
+    if (overrides.createTerminalError) throw overrides.createTerminalError
+    const terminal = new FakeTerminal({ events }, overrides.openError)
     terminals.push(terminal)
     return terminal
   }
@@ -592,7 +605,7 @@ test('exposes selection and paste operations on the persistent xterm instance', 
   assert.deepEqual(terminal.pastedData, ['pasted text', 'pasted while parked'])
 })
 
-test('destroys the identity returned by create when it does not match the target', async () => {
+test('detaches without destroying when create returns an identity for another target', async () => {
   const harness = createRuntimeHarness({
     createResult: {
       identity: {
@@ -608,8 +621,80 @@ test('destroys the identity returned by create when it does not match the target
     /inconsistent session identity/,
   )
 
-  assert.deepEqual(harness.bridge.destroyCalls, [harness.createResult.identity])
+  assert.deepEqual(harness.bridge.destroyCalls, [])
+  assert.deepEqual(harness.bridge.detachCalls, [harness.createResult.identity])
   assert.equal(harness.terminals.length, 0)
+})
+
+test('detaches the durable session when xterm allocation fails', async () => {
+  const allocationError = new Error('xterm allocation failed')
+  const harness = createRuntimeHarness({ createTerminalError: allocationError })
+
+  await assert.rejects(
+    createTerminalRuntime(harness.options),
+    allocationError,
+  )
+
+  assert.deepEqual(harness.bridge.destroyCalls, [])
+  assert.deepEqual(harness.bridge.detachCalls, [harness.identity])
+  assert.equal(harness.terminals.length, 0)
+})
+
+test('disposes xterm and detaches when xterm open fails', async () => {
+  const openError = new Error('xterm open failed')
+  const harness = createRuntimeHarness({ openError })
+
+  await assert.rejects(
+    createTerminalRuntime(harness.options),
+    openError,
+  )
+
+  assert.deepEqual(harness.bridge.destroyCalls, [])
+  assert.deepEqual(harness.bridge.detachCalls, [harness.identity])
+  assert.equal(harness.terminals[0].disposeCalls, 1)
+  assert.equal(harness.bridge.dataCallbacks.length, 0)
+  assert.equal(harness.bridge.exitCallbacks.length, 0)
+})
+
+test('disposes listeners and detaches when renderer attach fails', async () => {
+  const attachError = new Error('renderer attach failed')
+  const harness = createRuntimeHarness({ attachError })
+
+  await assert.rejects(
+    createTerminalRuntime(harness.options),
+    attachError,
+  )
+
+  assert.deepEqual(harness.bridge.destroyCalls, [])
+  assert.deepEqual(harness.bridge.detachCalls, [harness.identity])
+  assert.equal(harness.terminals[0].disposeCalls, 1)
+  assert.equal(harness.bridge.dataCallbacks.length, 0)
+  assert.equal(harness.bridge.exitCallbacks.length, 0)
+  assert.equal(harness.terminals[0].inputCallbacks.length, 0)
+  assert.equal(harness.terminals[0].titleCallbacks.length, 0)
+})
+
+test('detaches without destroying when attach returns an inconsistent identity', async () => {
+  const harness = createRuntimeHarness({
+    attachResult: {
+      identity: {
+        workspaceId: 'wrong-workspace',
+        tileId: 'tile-a',
+        generation: 7,
+      },
+    },
+  })
+
+  await assert.rejects(
+    createTerminalRuntime(harness.options),
+    /inconsistent session identity/,
+  )
+
+  assert.deepEqual(harness.bridge.destroyCalls, [])
+  assert.deepEqual(harness.bridge.detachCalls, [harness.identity])
+  assert.equal(harness.terminals[0].disposeCalls, 1)
+  assert.equal(harness.bridge.dataCallbacks.length, 0)
+  assert.equal(harness.bridge.exitCallbacks.length, 0)
 })
 
 test('keeps one xterm instance and one replay while parked output continues', async () => {

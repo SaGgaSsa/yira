@@ -4,7 +4,13 @@ import { existsSync } from 'fs'
 import { is } from '@electron-toolkit/utils'
 import { getConfiguredAgentProviders, initWorkspaces, registerWorkspaceIPC } from './ipc/workspace'
 import { registerCanvasIPC } from './ipc/canvas'
-import { registerTerminalIPC, initShellProfiles, shutdownTerminalSessions } from './ipc/terminal'
+import {
+  registerTerminalIPC,
+  initShellProfiles,
+  hydrateTerminalSessions,
+  shutdownTerminalSessions,
+  destroyWorkspaceTerminalSessions,
+} from './ipc/terminal'
 import { registerSettingsIPC } from './ipc/settings'
 import { registerNotesIPC } from './ipc/notes'
 import { registerBoardsIPC } from './ipc/boards'
@@ -69,6 +75,7 @@ async function prepareApplicationClose(): Promise<boolean> {
   closePreparationInFlight = (async () => {
     const bridge = closePreparationBridge
     if (!bridge) {
+      await shutdownTerminalSessions()
       closePreparationApproved = true
       return true
     }
@@ -211,10 +218,13 @@ app.whenReady().then(async () => {
   initShellProfiles()
 
   // Register all IPC handlers
-  registerWorkspaceIPC()
+  registerWorkspaceIPC({ beforeDelete: destroyWorkspaceTerminalSessions })
   registerAgentsIPC({ usageService: agentUsageService })
   registerCanvasIPC()
   registerTerminalIPC()
+  void hydrateTerminalSessions().catch((error) => {
+    console.warn('[main] terminal session hydration failed:', error instanceof Error ? error.message : String(error))
+  })
   registerSettingsIPC()
   registerNotesIPC()
   registerBoardsIPC()

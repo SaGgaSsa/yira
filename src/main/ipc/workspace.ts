@@ -256,7 +256,9 @@ function createWorkspaceId(): string {
   return `ws-${Date.now()}-${workspaceIdCounter}`
 }
 
-export function registerWorkspaceIPC(): void {
+export function registerWorkspaceIPC(
+  options: { beforeDelete?: (workspaceId: string) => Promise<void> } = {},
+): void {
   ipcMain.handle('workspace:list', async () => {
     const config = await readConfig()
     // Metadata only: selectors/editors need config rows, not canvas, boards, notes, or tile state.
@@ -311,6 +313,8 @@ export function registerWorkspaceIPC(): void {
       const workspace = config.workspaces.find((w) => w.id === id)
       if (!workspace) return
 
+      await options.beforeDelete?.(id)
+
       config.workspaces = config.workspaces.filter((w) => w.id !== id)
 
       if (workspace.path.startsWith(WORKSPACES_DIR)) {
@@ -343,6 +347,10 @@ export function registerWorkspaceIPC(): void {
       })
 
       const existingById = new Map(config.workspaces.map((workspace) => [workspace.id, workspace]))
+
+      for (const workspaceId of result.removedWorkspaceIds) {
+        await options.beforeDelete?.(workspaceId)
+      }
 
       for (const workspace of result.workspaces) {
         if (!existingById.has(workspace.id)) {

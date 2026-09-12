@@ -812,20 +812,23 @@ export async function createTerminalRuntime(
   if (!sameTerminalSessionIdentity(created.identity, expectedIdentity)) {
     const error = new Error('Terminal create returned an inconsistent session identity')
     try {
-      await dependencies.bridge.destroy(created.identity)
+      // The returned identity is not verified for this target. Detach the
+      // renderer boundary without risking an unrelated durable session.
+      await dependencies.bridge.detach(created.identity)
     } catch (cleanupError) {
-      report(dependencies, target, 'destroy', cleanupError)
+      report(dependencies, target, 'detach', cleanupError)
     }
     report(dependencies, target, 'create', error)
     throw error
   }
 
-  const runtimeRoot = dependencies.createElement()
+  let runtimeRoot: HTMLDivElement | null = null
   let terminal: TerminalLike | null = null
   let runtime: TerminalRuntime | null = null
   let failedOperation = 'runtime'
 
   try {
+    runtimeRoot = dependencies.createElement()
     terminal = dependencies.createTerminal({
       cols: created.cols,
       rows: created.rows,
@@ -851,7 +854,7 @@ export async function createTerminalRuntime(
 
     if (!sameTerminalSessionIdentity(attached.identity, created.identity)) {
       const error = new Error('Terminal attach returned an inconsistent session identity')
-      await runtime.dispose(true)
+      await runtime.dispose(false)
       throw error
     }
 
@@ -862,22 +865,26 @@ export async function createTerminalRuntime(
     return runtime
   } catch (error) {
     if (runtime) {
-      await runtime.dispose(true)
-    } else if (terminal) {
-      try {
-        terminal.dispose()
-      } catch {
-        // Preserve the original startup error.
+      await runtime.dispose(false)
+    } else {
+      if (terminal) {
+        try {
+          terminal.dispose()
+        } catch {
+          // Preserve the original startup error.
+        }
       }
       try {
-        await dependencies.bridge.destroy(created.identity)
+        await dependencies.bridge.detach(created.identity)
       } catch (cleanupError) {
-        report(dependencies, target, 'destroy', cleanupError)
+        report(dependencies, target, 'detach', cleanupError)
       }
     }
     try {
-      if (runtimeRoot.parentElement) runtimeRoot.parentElement.removeChild(runtimeRoot)
-      else runtimeRoot.remove?.()
+      if (runtimeRoot) {
+        if (runtimeRoot.parentElement) runtimeRoot.parentElement.removeChild(runtimeRoot)
+        else runtimeRoot.remove?.()
+      }
     } catch {
       // Preserve the original startup error.
     }

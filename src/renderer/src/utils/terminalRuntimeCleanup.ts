@@ -19,9 +19,11 @@ export async function destroyTerminalRuntime(
   registry: TerminalRuntimeCleanupRegistry,
   target: TerminalSessionTarget | null | undefined,
   destroyPty = true,
+  destroyCurrent?: (target: TerminalSessionTarget) => Promise<void>,
 ): Promise<void> {
   if (!target) return
   await registry.destroy(target, destroyPty)
+  if (destroyPty) await destroyCurrent?.(target)
 }
 
 export async function destroyRemovedWorkspaceRuntimes(

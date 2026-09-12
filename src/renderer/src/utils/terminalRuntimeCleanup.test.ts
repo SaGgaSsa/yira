@@ -65,6 +65,69 @@ test('destroyTerminalRuntime waits for the exact target and destroys its PTY', a
   assert.deepEqual(events, ['release-destroy', 'after-destroy'])
 })
 
+test('destroyTerminalRuntime awaits destroyCurrent after registry cleanup', async () => {
+  const fake = createFakeRegistry()
+  const target = buildTerminalRuntimeTarget('workspace-a', 'terminal-a')
+  const events: string[] = []
+  let releaseFallback = (): void => {}
+  const fallbackReady = new Promise<void>((resolve) => {
+    releaseFallback = resolve
+  })
+  let callbackTarget: TerminalSessionTarget | null = null
+  let callbackFinished = false
+
+  const cleanup = destroyTerminalRuntime(fake.registry, target, true, async (fallbackTarget) => {
+    events.push('destroy-current')
+    callbackTarget = fallbackTarget
+    await fallbackReady
+    callbackFinished = true
+  })
+
+  await Promise.resolve()
+  assert.deepEqual(fake.calls, [{
+    kind: 'destroy',
+    target: { workspaceId: 'workspace-a', tileId: 'terminal-a' },
+    destroyPty: true,
+  }])
+  assert.deepEqual(callbackTarget, target)
+  assert.deepEqual(events, ['destroy-current'])
+  assert.equal(callbackFinished, false)
+
+  releaseFallback()
+  await cleanup
+  assert.equal(callbackFinished, true)
+})
+
+test('destroyTerminalRuntime propagates destroyCurrent failure', async () => {
+  const fake = createFakeRegistry()
+  const target = buildTerminalRuntimeTarget('workspace-a', 'terminal-a')
+  const error = new Error('destroyCurrent failed')
+
+  await assert.rejects(
+    destroyTerminalRuntime(fake.registry, target, true, async () => {
+      throw error
+    }),
+    error,
+  )
+})
+
+test('destroyTerminalRuntime does not call destroyCurrent while detaching', async () => {
+  const fake = createFakeRegistry()
+  const target = buildTerminalRuntimeTarget('workspace-a', 'terminal-a')
+  let fallbackCalls = 0
+
+  await destroyTerminalRuntime(fake.registry, target, false, async () => {
+    fallbackCalls += 1
+  })
+
+  assert.equal(fallbackCalls, 0)
+  assert.deepEqual(fake.calls, [{
+    kind: 'destroy',
+    target: { workspaceId: 'workspace-a', tileId: 'terminal-a' },
+    destroyPty: false,
+  }])
+})
+
 test('destroyRemovedWorkspaceRuntimes destroys each normalized workspace id once', async () => {
   const fake = createFakeRegistry()
 

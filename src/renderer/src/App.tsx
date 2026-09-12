@@ -391,7 +391,7 @@ function AppContent(): React.ReactElement {
   }, [])
 
   const destroyTerminalRuntimeForTile = useCallback(async (target: TerminalSessionTarget): Promise<void> => {
-    await destroyTerminalRuntime(registry, target, true)
+    await destroyTerminalRuntime(registry, target, true, window.electron.terminal.destroyCurrent)
   }, [registry])
 
   const { addTerminal, addRemoteTerminal, duplicateTerminalTile, addNote, addBrowser, addTimer, deleteTile: deleteCanvasTile, resetZoom } = useCanvasActions({
@@ -1554,7 +1554,7 @@ function AppContent(): React.ReactElement {
     if (!confirmed) return
 
     if (terminalTarget) {
-      await destroyTerminalRuntime(registry, terminalTarget, true)
+      await destroyTerminalRuntime(registry, terminalTarget, true, window.electron.terminal.destroyCurrent)
       clearTerminalTitle(terminalTarget.tileId)
     }
 
