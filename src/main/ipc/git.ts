@@ -96,16 +96,22 @@ export function createGitIPCHandlers(dependencies: GitIPCDependencies): Record<s
       const unavailable: WorkspaceGitDiffResult = { additions: 0, deletions: 0, available: false }
       try {
         const { rootPath, configuredRepositoryPaths } = await getConfig(workspaceId)
-        if (configuredRepositoryPaths.length === 0) return unavailable
+        const discoveredRepositories = await dependencies.discoverGitRepositories(rootPath, 1)
+        const repositoryPaths = [...new Set([
+          ...configuredRepositoryPaths,
+          ...discoveredRepositories.map(({ relativePath }) => relativePath),
+        ])]
+        if (repositoryPaths.length === 0) return { ...unavailable, repositoryCount: 0 }
 
         const seenRepositoryPaths = new Set<string>()
         let additions = 0
         let deletions = 0
-        for (const repositoryPath of configuredRepositoryPaths) {
-          if (seenRepositoryPaths.has(repositoryPath)) continue
-          seenRepositoryPaths.add(repositoryPath)
-
-          const repository = await dependencies.resolveConfiguredGitRepository(rootPath, configuredRepositoryPaths, repositoryPath)
+        for (const repositoryPath of repositoryPaths) {
+          // Automatic discovery only expands this read. Mutations still require configured paths.
+          const repository = await dependencies.resolveConfiguredGitRepository(rootPath, repositoryPaths, repositoryPath)
+          const canonicalPath = process.platform === 'win32' ? repository.absolutePath.toLowerCase() : repository.absolutePath
+          if (seenRepositoryPaths.has(canonicalPath)) continue
+          seenRepositoryPaths.add(canonicalPath)
           const result = await dependencies.getGitDiffSummary(repository.absolutePath)
           if (!result.available
             || !Number.isSafeInteger(result.additions)
@@ -116,6 +122,7 @@ export function createGitIPCHandlers(dependencies: GitIPCDependencies): Record<s
           }
           additions += result.additions
           deletions += result.deletions
+          if (!Number.isSafeInteger(additions) || !Number.isSafeInteger(deletions)) return unavailable
         }
 
         return { additions, deletions, available: true }

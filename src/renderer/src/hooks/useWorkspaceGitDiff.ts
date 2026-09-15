@@ -16,14 +16,10 @@ interface WorkspaceGitDiffRequestControllerOptions {
 
 export const WORKSPACE_GIT_DIFF_REFRESH_INTERVAL_MS = 10_000
 
-export function hasConfiguredWorkspaceGitDiff(
+export function canReadWorkspaceGitDiff(
   rootFolderPath: string | undefined,
-  sourceControlRepositoryPaths: readonly string[] | undefined,
 ): boolean {
-  return Boolean(
-    rootFolderPath?.trim()
-    && sourceControlRepositoryPaths?.some((repositoryPath) => repositoryPath.trim()),
-  )
+  return Boolean(rootFolderPath?.trim())
 }
 
 export function createWorkspaceGitDiffRequestController({
@@ -88,7 +84,7 @@ export function useWorkspaceGitDiff({
     [sourceControlRepositoryPaths],
   )
   const configurationKey = `${workspaceId}\u0000${normalizedRootFolderPath}\u0000${repositoryPathsKey}`
-  const configured = hasConfiguredWorkspaceGitDiff(normalizedRootFolderPath, repositoryPathsKey.split('\u0000'))
+  const configured = canReadWorkspaceGitDiff(normalizedRootFolderPath)
   const [snapshot, setSnapshot] = useState<{ key: string; result: WorkspaceGitDiffResult | null }>({
     key: '',
     result: null,

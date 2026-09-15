@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict'
+import { execFile } from 'node:child_process'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { promisify } from 'node:util'
 import test from 'node:test'
 import type { GitCommitHistoryResult, GitRepository, GitStatusResult } from '@shared/types'
+import { getGitDiffSummary } from '../git/diff'
+import { discoverGitRepositories, resolveConfiguredGitRepository } from '../git/repositories'
 
 type Handler = (event: unknown, ...args: unknown[]) => unknown
 
@@ -165,6 +172,7 @@ test('returns an unavailable workspace diff for invalid or empty workspace confi
     additions: 0,
     deletions: 0,
     available: false,
+    repositoryCount: 0,
   })
   assert.equal(resolverCalled, false)
   assert.deepEqual(await createHandlers({ sourceControlRepositoryPaths: ['.'] })['git:workspaceDiff']({}, 'workspace-a'), {
@@ -318,4 +326,105 @@ test('registers discovery by root path for unsaved workspace roots', async () =>
 
   assert.deepEqual(await ipcMain.invoke('git:discoverRepositoriesAtRoot', '/new-root'), [{ relativePath: '.', name: 'new-root' }])
   assert.deepEqual(roots, ['/new-root'])
+})
+
+test('automatically sums shallow repositories, preserves selected deep repositories, and avoids duplicates', async () => {
+  const { createGitIPCHandlers } = loadGitIPC(new FakeIpcMain())
+  let configuredPaths = ['api', 'packages/web']
+  let failChild = false
+  const readPaths: string[] = []
+  const handlers = createGitIPCHandlers({
+    getWorkspaceGitConfigById: async () => ({ rootFolderPath: '/workspace', sourceControlRepositoryPaths: configuredPaths }),
+    discoverGitRepositories: async (rootPath, maxDepth) => {
+      assert.equal(rootPath, '/workspace')
+      assert.equal(maxDepth, 1)
+      return [{ relativePath: '.', name: 'workspace' }, { relativePath: 'api', name: 'api' }]
+    },
+    resolveConfiguredGitRepository: async (_rootPath, allowedPaths, requestedPath) => {
+      assert.ok((allowedPaths as string[]).includes(requestedPath as string))
+      const relativePath = requestedPath as string
+      return {
+        absolutePath: relativePath === '.' ? '/workspace' : `/workspace/${relativePath}`,
+        relativePath,
+        repository: { relativePath, name: relativePath },
+      }
+    },
+    getGitStatus: async () => statusResult(),
+    getGitCommitHistory: async () => historyResult(),
+    getGitDiffSummary: async (rootPath) => {
+      readPaths.push(rootPath)
+      if (failChild && rootPath.endsWith('/api')) return { additions: 0, deletions: 0, available: false }
+      return rootPath === '/workspace'
+        ? { additions: 1, deletions: 0, available: true }
+        : { additions: 3, deletions: 2, available: true }
+    },
+    stageGitFiles: async () => undefined,
+    unstageGitFiles: async () => undefined,
+    commitGitChanges: async () => undefined,
+    syncGitRepository: async () => undefined,
+  })
+
+  assert.deepEqual(await handlers['git:workspaceDiff']({}, 'workspace-a'), {
+    additions: 7, deletions: 4, available: true,
+  })
+  assert.deepEqual(readPaths, ['/workspace/api', '/workspace/packages/web', '/workspace'])
+
+  configuredPaths = []
+  readPaths.length = 0
+  assert.deepEqual(await handlers['git:workspaceDiff']({}, 'workspace-a'), {
+    additions: 4, deletions: 2, available: true,
+  })
+  assert.deepEqual(readPaths, ['/workspace', '/workspace/api'])
+
+  failChild = true
+  assert.deepEqual(await handlers['git:workspaceDiff']({}, 'workspace-a'), {
+    additions: 0, deletions: 0, available: false,
+  })
+})
+
+test('calculates a real multimodule workspace diff without a root repository or selected repositories', async () => {
+  const rootPath = await mkdtemp(join(tmpdir(), 'yira-workspace-diff-'))
+  const execFileAsync = promisify(execFile)
+  try {
+    for (const relativePath of ['api', 'web', 'container/deep']) {
+      const repositoryPath = join(rootPath, relativePath)
+      await mkdir(repositoryPath, { recursive: true })
+      const git = (args: string[]) => execFileAsync('git', ['-C', repositoryPath, ...args])
+      await git(['init', '--quiet', '--initial-branch=main'])
+      await git(['config', 'user.name', 'Yira Tests'])
+      await git(['config', 'user.email', 'yira-tests@example.com'])
+      await writeFile(join(repositoryPath, 'file.txt'), 'base\n')
+      await git(['add', '.'])
+      await git(['commit', '--quiet', '-m', 'base'])
+      await git(['config', 'remote.origin.url', '.'])
+      await git(['config', 'remote.origin.fetch', '+refs/heads/*:refs/remotes/origin/*'])
+      await git(['update-ref', 'refs/remotes/origin/main', 'HEAD'])
+      await git(['branch', '--set-upstream-to=origin/main', 'main'])
+      await writeFile(join(repositoryPath, 'file.txt'), 'changed\nnew\n')
+    }
+
+    const { createGitIPCHandlers } = loadGitIPC(new FakeIpcMain())
+    const handlers = createGitIPCHandlers({
+      getWorkspaceGitConfigById: async () => ({ rootFolderPath: rootPath, sourceControlRepositoryPaths: [] }),
+      discoverGitRepositories,
+      resolveConfiguredGitRepository,
+      getGitDiffSummary,
+      getGitStatus: async () => statusResult(),
+      getGitCommitHistory: async () => historyResult(),
+      stageGitFiles: async () => undefined,
+      unstageGitFiles: async () => undefined,
+      commitGitChanges: async () => undefined,
+      syncGitRepository: async () => undefined,
+    })
+
+    assert.deepEqual(await handlers['git:workspaceDiff']({}, 'workspace-a'), {
+      additions: 4, deletions: 2, available: true,
+    })
+    await rm(join(rootPath, 'web'), { recursive: true, force: true })
+    assert.deepEqual(await handlers['git:workspaceDiff']({}, 'workspace-a'), {
+      additions: 2, deletions: 1, available: true,
+    })
+  } finally {
+    await rm(rootPath, { recursive: true, force: true })
+  }
 })

@@ -1,7 +1,7 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import type { WorkspaceGitDiffResult } from '@shared/types'
-import { hasConfiguredWorkspaceGitDiff, useWorkspaceGitDiff } from '@/hooks/useWorkspaceGitDiff'
+import { canReadWorkspaceGitDiff, useWorkspaceGitDiff } from '@/hooks/useWorkspaceGitDiff'
 
 export interface WorkspaceGitDiffProps {
   workspaceId: string
@@ -52,13 +52,13 @@ export function WorkspaceGitDiff({
   sourceControlRepositoryPaths,
 }: WorkspaceGitDiffProps): React.ReactElement | null {
   const { t } = useTranslation()
-  const configured = hasConfiguredWorkspaceGitDiff(rootFolderPath, sourceControlRepositoryPaths)
+  const configured = canReadWorkspaceGitDiff(rootFolderPath)
   const result = useWorkspaceGitDiff({
     workspaceId,
     rootFolderPath,
     sourceControlRepositoryPaths,
   })
-  if (!configured) return null
+  if (!configured || result?.repositoryCount === 0) return null
 
   const available = isAvailableResult(result)
   const tooltip = available

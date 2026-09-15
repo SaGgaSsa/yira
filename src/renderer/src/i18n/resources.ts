@@ -595,7 +595,7 @@ const en: TranslationResources = {
     unpin: 'Unpin workspace',
     attention_one: '{{count}} terminal output event in this workspace',
     attention_other: '{{count}} terminal output events in this workspace',
-    gitDiffTooltip: 'Net diff of pending commits and uncommitted changes since the common ancestor with the known remote reference (+{{additions}} −{{deletions}}). It may not represent the latest push.',
+    gitDiffTooltip: 'Includes repositories at the workspace root, in its direct child folders, and those selected in settings. Net diff of pending commits and uncommitted changes since the common ancestor with the known remote reference (+{{additions}} −{{deletions}}). It may not represent the latest push.',
     gitDiffUnavailable: 'Git diff unavailable for this workspace.',
   },
   tile: {
@@ -954,7 +954,7 @@ const es: TranslationResources = {
     unpin: 'Desfijar espacio de trabajo',
     attention_one: '{{count}} evento de salida de terminal en este espacio de trabajo',
     attention_other: '{{count}} eventos de salida de terminal en este espacio de trabajo',
-    gitDiffTooltip: 'Diff neto de commits pendientes y cambios sin commit desde el ancestro común con la referencia remota conocida (+{{additions}} −{{deletions}}). Puede no representar el último push.',
+    gitDiffTooltip: 'Incluye los repositorios de la raíz, de las carpetas hijas directas y los seleccionados en la configuración. Diff neto de commits pendientes y cambios sin commit desde el ancestro común con la referencia remota conocida (+{{additions}} −{{deletions}}). Puede no representar el último push.',
     gitDiffUnavailable: 'El diff de Git no está disponible para este espacio de trabajo.',
   },
   tile: {

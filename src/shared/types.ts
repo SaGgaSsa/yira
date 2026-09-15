@@ -310,6 +310,8 @@ export interface WorkspaceGitDiffResult {
   additions: number
   deletions: number
   available: boolean
+  /** Zero distinguishes an empty workspace from an unavailable repository diff. */
+  repositoryCount?: number
 }
 
 export interface Config {

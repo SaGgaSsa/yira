@@ -2,14 +2,14 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   createWorkspaceGitDiffRequestController,
-  hasConfiguredWorkspaceGitDiff,
+  canReadWorkspaceGitDiff,
 } from './useWorkspaceGitDiff'
 
-test('requires a root folder and at least one configured repository', () => {
-  assert.equal(hasConfiguredWorkspaceGitDiff(undefined, ['.']), false)
-  assert.equal(hasConfiguredWorkspaceGitDiff('/workspace', []), false)
-  assert.equal(hasConfiguredWorkspaceGitDiff('/workspace', ['  ']), false)
-  assert.equal(hasConfiguredWorkspaceGitDiff('  /workspace  ', ['  repo  ']), true)
+test('requires only a root folder to discover workspace repositories automatically', () => {
+  assert.equal(canReadWorkspaceGitDiff(undefined), false)
+  assert.equal(canReadWorkspaceGitDiff('  '), false)
+  assert.equal(canReadWorkspaceGitDiff('/workspace'), true)
+  assert.equal(canReadWorkspaceGitDiff('  /workspace  '), true)
 })
 
 test('coalesces refreshes while one workspace diff request is pending', async () => {

@@ -11,11 +11,10 @@ import {
 
 await initializeI18n('en')
 
-test('does not render a workspace diff without both workspace Git settings', () => {
+test('does not render a workspace diff without a root folder', () => {
   const markup = renderToStaticMarkup(
     <WorkspaceGitDiff
       workspaceId="workspace-a"
-      rootFolderPath="/workspace"
       sourceControlRepositoryPaths={[]}
     />,
   )
@@ -23,13 +22,13 @@ test('does not render a workspace diff without both workspace Git settings', () 
   assert.equal(markup, '')
 })
 
-test('renders a translated unavailable marker when Git diff cannot be loaded', () => {
+test('renders the diff indicator with a root folder and no selected repositories', () => {
   const markup = renderToStaticMarkup(
     <I18nextProvider i18n={i18n}>
       <WorkspaceGitDiff
         workspaceId="workspace-a"
         rootFolderPath="/workspace"
-        sourceControlRepositoryPaths={['.']}
+        sourceControlRepositoryPaths={[]}
       />
     </I18nextProvider>,
   )

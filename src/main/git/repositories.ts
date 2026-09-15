@@ -90,12 +90,12 @@ function validateConfiguredRepositoryPaths(value: unknown): string[] {
   return normalized
 }
 
-async function listCandidateDirectories(rootPath: string): Promise<CandidateDirectory[]> {
+async function listCandidateDirectories(rootPath: string, maxDepth: number): Promise<CandidateDirectory[]> {
   const candidates: CandidateDirectory[] = []
 
   async function visitDirectory(absolutePath: string, relativePath: string, depth: number): Promise<void> {
     candidates.push({ absolutePath, relativePath })
-    if (depth >= 2) return
+    if (depth >= maxDepth) return
 
     let entries
     try {
@@ -154,10 +154,10 @@ function compareRepositories(left: GitRepository, right: GitRepository): number 
   return left.name.localeCompare(right.name) || left.relativePath.localeCompare(right.relativePath)
 }
 
-/** Discover real Git roots in a workspace and its first two directory levels. */
-export async function discoverGitRepositories(rootPathInput: unknown): Promise<GitRepository[]> {
+/** Discover real Git roots up to the requested depth. Source control defaults to two levels. */
+export async function discoverGitRepositories(rootPathInput: unknown, maxDepth: 1 | 2 = 2): Promise<GitRepository[]> {
   const rootPath = await resolveWorkspaceRootPath(rootPathInput)
-  const candidates = await listCandidateDirectories(rootPath)
+  const candidates = await listCandidateDirectories(rootPath, maxDepth)
   const repositories: GitRepository[] = []
 
   for (const candidate of candidates) {

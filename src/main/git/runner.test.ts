@@ -377,6 +377,11 @@ test('discovers Git roots at workspace depth zero, one, and two only', async () 
     assert.equal(repositories.some(({ relativePath }) => relativePath === 'parent/child'), false)
     assert.equal(repositories.some(({ relativePath }) => relativePath === 'linked'), false)
     assert.equal(repositories.some(({ relativePath }) => relativePath.includes('node_modules')), false)
+
+    const shallowRepositories = await discoverGitRepositories(rootPath, 1)
+    assert.deepEqual(shallowRepositories.map(({ relativePath }) => relativePath).sort(), [
+      '.', 'alpha', 'parent', 'zeta',
+    ])
   } finally {
     await rm(rootPath, { recursive: true, force: true })
     await rm(outsidePath, { recursive: true, force: true })
