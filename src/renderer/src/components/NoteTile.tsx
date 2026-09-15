@@ -9,14 +9,17 @@ import type { MarkdownViewMode, NoteBlocks, NoteColor, NoteFont, TileState } fro
 import { normalizeMarkdownViewMode, NOTE_COLORS } from '@shared/types'
 import { createElectronClipboardPayload } from '@/utils/noteClipboard'
 import { getMarkdownEditorKey } from '@/utils/markdownEditor'
+import { MARKDOWN_NOTE_SOURCE_PATH } from '@/utils/markdownImage'
 import { safeMarkdownPreviewOptions } from '@/utils/markdownPlugins'
 import { safeMarkdownUrl } from '@/utils/markdownPreview'
+import { createMarkdownComponents } from './MarkdownImage'
 import { MarkdownPreviewPane } from './MarkdownPreviewPane'
 
 interface NoteTileProps {
   tile: TileState
   autoFocus?: boolean
   onUpdate: (patch: Partial<TileState>) => void
+  workspaceRootPath?: string
 }
 
 type NoteData = {
@@ -310,6 +313,7 @@ const MARKDOWN_COMMANDS = [
   commands.title2,
   commands.divider,
   commands.link,
+  commands.image,
   commands.quote,
   commands.code,
   commands.codeBlock,
@@ -323,7 +327,7 @@ const MARKDOWN_VIEW_OPTIONS: Array<{ mode: MarkdownViewMode; label: string }> = 
   { mode: 'live', label: 'Split' },
 ]
 
-function MarkdownNoteTile({ tile, autoFocus = false, onUpdate }: NoteTileProps): React.ReactElement {
+function MarkdownNoteTile({ tile, autoFocus = false, onUpdate, workspaceRootPath = '' }: NoteTileProps): React.ReactElement {
   const [title, setTitle] = useState(titleFromTile(tile))
   const [markdown, setMarkdown] = useState(tile.markdown ?? '')
   const [viewMode, setViewMode] = useState<MarkdownViewMode>(normalizeMarkdownViewMode(tile.markdownView))
@@ -341,6 +345,17 @@ function MarkdownNoteTile({ tile, autoFocus = false, onUpdate }: NoteTileProps):
     if (!tile.noteColor) return 'var(--border-visible)'
     return NOTE_COLORS[tile.noteColor]?.bg || 'var(--border-visible)'
   }, [tile.noteColor])
+
+  const markdownComponents = useMemo(() => createMarkdownComponents({
+    sourcePath: MARKDOWN_NOTE_SOURCE_PATH,
+    rootPath: workspaceRootPath,
+  }), [workspaceRootPath])
+
+  const markdownPreviewOptions = useMemo(() => ({
+    ...safeMarkdownPreviewOptions,
+    urlTransform: safeMarkdownUrl,
+    components: markdownComponents,
+  }), [markdownComponents])
 
   useEffect(() => {
     onUpdateRef.current = onUpdate
@@ -500,6 +515,8 @@ function MarkdownNoteTile({ tile, autoFocus = false, onUpdate }: NoteTileProps):
             <MarkdownPreviewPane
               source={markdown}
               colorMode={document.documentElement.classList.contains('light') ? 'light' : 'dark'}
+              rootPath={workspaceRootPath}
+              imageSourcePath={MARKDOWN_NOTE_SOURCE_PATH}
             />
           ) : (
             <MDEditor
@@ -512,10 +529,7 @@ function MarkdownNoteTile({ tile, autoFocus = false, onUpdate }: NoteTileProps):
               visibleDragbar={false}
               height="100%"
               data-color-mode="dark"
-              previewOptions={{
-                ...safeMarkdownPreviewOptions,
-                urlTransform: safeMarkdownUrl,
-              }}
+              previewOptions={markdownPreviewOptions}
             />
           )}
         </div>
@@ -524,8 +538,8 @@ function MarkdownNoteTile({ tile, autoFocus = false, onUpdate }: NoteTileProps):
   )
 }
 
-export function NoteTile({ tile, autoFocus = false, onUpdate }: NoteTileProps): React.ReactElement {
+export function NoteTile({ tile, autoFocus = false, onUpdate, workspaceRootPath = '' }: NoteTileProps): React.ReactElement {
   return tile.noteKind === 'markdown'
-    ? <MarkdownNoteTile tile={tile} autoFocus={autoFocus} onUpdate={onUpdate} />
+    ? <MarkdownNoteTile tile={tile} autoFocus={autoFocus} onUpdate={onUpdate} workspaceRootPath={workspaceRootPath} />
     : <RichNoteTile tile={tile} autoFocus={autoFocus} onUpdate={onUpdate} />
 }

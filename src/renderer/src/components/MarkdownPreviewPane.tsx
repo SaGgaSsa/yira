@@ -1,8 +1,10 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useMemo, useRef } from 'react'
 import MDEditor from '@uiw/react-md-editor'
 import '@uiw/react-markdown-preview/markdown.css'
-import { useTranslation } from 'react-i18next'
-import { resolveMarkdownAssetPath, resolveMarkdownNavigation } from '@/utils/markdownNavigation'
+import type { Components } from 'react-markdown'
+import { MARKDOWN_NOTE_SOURCE_PATH } from '@/utils/markdownImage'
+import { createMarkdownComponents } from './MarkdownImage'
+import { resolveMarkdownNavigation } from '@/utils/markdownNavigation'
 import { safeMarkdownPreviewOptions } from '@/utils/markdownPlugins'
 import { safeMarkdownUrl } from '@/utils/markdownPreview'
 
@@ -11,54 +13,12 @@ interface MarkdownPreviewPaneProps {
   colorMode: 'light' | 'dark'
   rootPath?: string
   filePath?: string
+  imageSourcePath?: string
   onOpenFile?: (relativePath: string) => void | Promise<void>
   onOpenBrowser?: (url: string) => void
 }
 
-interface LocalMarkdownImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
-  rootPath: string
-  filePath: string
-  node?: unknown
-}
-
-function LocalMarkdownImage({ rootPath, filePath, src = '', alt = '', node: _node, ...props }: LocalMarkdownImageProps): React.ReactElement {
-  const { t } = useTranslation()
-  const [dataUrl, setDataUrl] = useState<string | null>(null)
-  const [failed, setFailed] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-    const relativePath = resolveMarkdownAssetPath(filePath, src)
-    setDataUrl(null)
-    setFailed(!relativePath)
-    if (!relativePath) return () => { cancelled = true }
-
-    void window.electron.files.readPreviewAsset(rootPath, relativePath)
-      .then((result) => {
-        if (cancelled) return
-        if (result.status !== 'ready') {
-          setFailed(true)
-          return
-        }
-        setDataUrl(`data:${result.mimeType};base64,${result.dataBase64}`)
-      })
-      .catch(() => {
-        if (!cancelled) setFailed(true)
-      })
-
-    return () => { cancelled = true }
-  }, [filePath, rootPath, src])
-
-  if (failed) {
-    return <span className="inline-flex rounded border border-border-visible px-2 py-1 text-xs text-text-secondary">{alt || t('files.imageUnavailable')}</span>
-  }
-  if (!dataUrl) {
-    return <span className="inline-flex animate-pulse rounded bg-hover-bg px-3 py-2 text-xs text-text-disabled">{alt || t('common.loading')}</span>
-  }
-  return <img {...props} src={dataUrl} alt={alt} />
-}
-
-export function MarkdownPreviewPane({ source, colorMode, rootPath, filePath, onOpenFile, onOpenBrowser }: MarkdownPreviewPaneProps): React.ReactElement {
+export function MarkdownPreviewPane({ source, colorMode, rootPath, filePath, imageSourcePath, onOpenFile, onOpenBrowser }: MarkdownPreviewPaneProps): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null)
 
   const activateLink = useCallback((href: string) => {
@@ -78,25 +38,29 @@ export function MarkdownPreviewPane({ source, colorMode, rootPath, filePath, onO
     }
   }, [filePath, onOpenBrowser, onOpenFile])
 
-  const components = filePath && rootPath
-    ? {
-        a: ({ href = '', children, node: _node, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { node?: unknown }) => (
-          <a
-            {...props}
-            href={safeMarkdownUrl(href)}
-            onClick={(event) => {
-              event.preventDefault()
-              activateLink(href)
-            }}
-          >
-            {children}
-          </a>
-        ),
-        img: ({ src = '', alt = '', ...props }: React.ImgHTMLAttributes<HTMLImageElement>) => (
-          <LocalMarkdownImage {...props} rootPath={rootPath} filePath={filePath} src={src} alt={alt} />
-        ),
-      }
-    : undefined
+  const components = useMemo<Components>(() => {
+    const markdownComponents = createMarkdownComponents({
+      rootPath,
+      sourcePath: imageSourcePath ?? filePath ?? MARKDOWN_NOTE_SOURCE_PATH,
+    })
+    if (!filePath) return markdownComponents
+
+    return {
+      ...markdownComponents,
+      a: ({ href = '', children, node: _node, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { node?: unknown }) => (
+        <a
+          {...props}
+          href={safeMarkdownUrl(href)}
+          onClick={(event) => {
+            event.preventDefault()
+            activateLink(href)
+          }}
+        >
+          {children}
+        </a>
+      ),
+    }
+  }, [activateLink, filePath, imageSourcePath, rootPath])
 
   return (
     <div ref={containerRef} className="h-full min-h-0 overflow-auto bg-bg-secondary">

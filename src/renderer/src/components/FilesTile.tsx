@@ -17,6 +17,8 @@ import {
 } from '@/utils/fileEditorState'
 import { windowBufferRegistry } from '@/utils/windowBufferRegistry'
 import { fileMarkdownLayout, isMarkdownFilePath, normalizeFileMarkdownViewMode } from '@/utils/fileMarkdown'
+import { isImageFilePath } from '@/utils/fileImage'
+import { ImageFilePreview } from './ImageFilePreview'
 import { MarkdownPreviewPane } from './MarkdownPreviewPane'
 
 const FILE_POLL_INTERVAL_MS = 2_000
@@ -87,7 +89,24 @@ function hasPatch(patch: Partial<TileState>): boolean {
   return Object.keys(patch).length > 0
 }
 
-export function FilesTile({ tile, rootPath, isFocused, isVisible, onUpdate, onOpenFile, onOpenBrowser }: FilesTileProps): React.ReactElement {
+export function FilesTile(props: FilesTileProps): React.ReactElement {
+  const filePath = props.tile.filePath?.trim() ?? ''
+  if (isImageFilePath(filePath)) {
+    return (
+      <ImageFilePreview
+        key={`${props.rootPath}\u0000${filePath}`}
+        rootPath={props.rootPath}
+        relativePath={filePath}
+        filePreview={props.tile.filePreview}
+        isVisible={props.isVisible}
+      />
+    )
+  }
+
+  return <TextFileTile {...props} />
+}
+
+function TextFileTile({ tile, rootPath, isFocused, isVisible, onUpdate, onOpenFile, onOpenBrowser }: FilesTileProps): React.ReactElement {
   const { t } = useTranslation()
   const themeId = useSettingsStore((state) => state.themeId)
   const appearance = useSettingsStore((state) => state.appearance)

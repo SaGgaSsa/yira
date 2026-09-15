@@ -51,7 +51,7 @@ export function TileContent({ tile, workspaceId, workspaceConfig, isFocused, edg
   }
 
   if (tile.type === 'note') {
-    return <NoteTile tile={tile} autoFocus={autoFocus} onUpdate={onUpdate} />
+    return <NoteTile tile={tile} autoFocus={autoFocus} onUpdate={onUpdate} workspaceRootPath={workspaceRootPath} />
   }
 
   if (tile.type === 'browser') {

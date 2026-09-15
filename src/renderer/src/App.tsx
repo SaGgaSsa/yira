@@ -56,6 +56,7 @@ import { getWorkspaceSidebarOrder } from './utils/workspaceOrdering'
 import { getInitialWorkspaceDialogCopy, getWorkspaceDialogCopy } from './utils/workspaceDialogCopy'
 import { buildTileConfigurationMenuItems } from './components/tileConfigurationMenu'
 import { createFileTileOpenRequestTracker, deriveFileTileTitle, planFileTileOpen } from './utils/fileTileLifecycle'
+import { isImageFilePath } from './utils/fileImage'
 import { windowBufferRegistry } from './utils/windowBufferRegistry'
 import {
   destroyRemovedWorkspaceRuntimes,
@@ -1174,16 +1175,18 @@ function AppContent(): React.ReactElement {
         currentRootPath,
       ) ? current : null
     }
-    let readResult
-    try {
-      readResult = await window.electron.files.read(workspaceRootPath, path)
-    } catch (error) {
-      if (!getCurrentRequestState()) return
-      throw error
+    let readResult: Awaited<ReturnType<typeof window.electron.files.read>> | null = null
+    if (!isImageFilePath(path)) {
+      try {
+        readResult = await window.electron.files.read(workspaceRootPath, path)
+      } catch (error) {
+        if (!getCurrentRequestState()) return
+        throw error
+      }
     }
     const currentState = getCurrentRequestState()
     if (!currentState) return
-    const initializedTile = readResult.status === 'ready'
+    const initializedTile = readResult?.status === 'ready'
       ? {
           ...proposed,
           fileVersion: readResult.revision.sha256,
