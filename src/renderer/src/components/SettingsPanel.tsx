@@ -4,7 +4,7 @@ import React, { useEffect, useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
-import { X, Monitor, Moon, Sun, Type, Grid3X3, Globe, Code2, Info, RefreshCw, Download, LayoutGrid, Keyboard, Terminal } from 'lucide-react'
+import { X, Monitor, Moon, Sun, Type, Grid3X3, Globe, Code2, Info, RefreshCw, Download, LayoutGrid, Keyboard, Terminal, ExternalLink } from 'lucide-react'
 import { createUserSettingsDraft, useSettingsStore } from '@/store/settingsStore'
 import { useUpdateStore } from '@/store/updateStore'
 import { SHORTCUT_CATALOG } from '@/utils/shortcutCatalog'
@@ -31,6 +31,8 @@ interface SettingsPanelProps {
   onOpenJsonEditor: () => void
   initialSection?: SettingsSectionId
 }
+
+const SUPPORT_REPOSITORY_URL = 'https://github.com/SaGgaSsa/yira-releases'
 
 const SETTINGS_SECTIONS: Array<{
   id: SettingsSectionId
@@ -108,6 +110,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
   const [draft, setDraft] = useState<UserSettings>(() => createUserSettingsDraft(useSettingsStore.getState()))
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
+  const [supportLinkFailed, setSupportLinkFailed] = useState(false)
   const applySettings = useSettingsStore((s) => s.applySettings)
   const language = draft.language
   const appearance = draft.appearance
@@ -189,7 +192,16 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
     setActiveSection(initialSection)
     setDraft(createUserSettingsDraft(useSettingsStore.getState()))
     setSaveError('')
+    setSupportLinkFailed(false)
   }, [initialSection, open])
+
+  const handleSupportLinkClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault()
+    setSupportLinkFailed(false)
+    void window.electron.shell.openExternal(event.currentTarget.href).catch(() => {
+      setSupportLinkFailed(true)
+    })
+  }
 
   const handleCancel = useCallback(() => {
     if (saving) return
@@ -675,6 +687,31 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
               </button>
             )}
           </div>
+        </div>
+
+        <div className="mt-4 rounded-[20px] border border-border-visible bg-bg-primary px-4 py-4">
+          <h4 className="nd-label text-text-display">{t('settings.supportAndReports')}</h4>
+          <p className="mt-3 text-sm leading-6 text-text-secondary">{t('settings.supportDescription')}</p>
+          <a
+            href={SUPPORT_REPOSITORY_URL}
+            onClick={handleSupportLinkClick}
+            className="mt-3 inline-flex max-w-full items-center gap-2 text-sm text-text-display underline underline-offset-4 hover:text-text-secondary"
+          >
+            <span className="break-all">{SUPPORT_REPOSITORY_URL}</span>
+            <ExternalLink size={14} className="shrink-0" aria-hidden="true" />
+          </a>
+          <p className="mt-3 text-sm leading-6 text-text-secondary">{t('settings.publicReportsHint')}</p>
+          <a
+            href={`${SUPPORT_REPOSITORY_URL}/issues/new/choose`}
+            onClick={handleSupportLinkClick}
+            className="mt-4 inline-flex items-center gap-2 rounded-full border border-border-visible px-4 py-2 text-sm text-text-display transition-colors hover:border-text-secondary"
+          >
+            <ExternalLink size={14} aria-hidden="true" />
+            <span>{t('settings.reportBug')}</span>
+          </a>
+          {supportLinkFailed && (
+            <p role="alert" className="mt-3 text-sm text-text-secondary">{t('settings.supportLinkError')}</p>
+          )}
         </div>
       </section>
     )

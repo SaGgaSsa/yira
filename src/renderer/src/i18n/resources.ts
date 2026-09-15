@@ -83,6 +83,11 @@ type TranslationResources = {
     followAppTheme: string
     appearance: string
     aboutAndUpdates: string
+    supportAndReports: string
+    supportDescription: string
+    publicReportsHint: string
+    reportBug: string
+    supportLinkError: string
     advanced: string
     browser: string
     canvas: string
@@ -442,6 +447,11 @@ const en: TranslationResources = {
     followAppTheme: 'Default · Follow application',
     appearance: 'Appearance',
     aboutAndUpdates: 'About & Updates',
+    supportAndReports: 'Support and reports',
+    supportDescription: 'Yira is a closed-source application. This public GitHub repository hosts releases, bug reports, and suggestions.',
+    publicReportsHint: 'Reports are public. A GitHub account is required to submit a report.',
+    reportBug: 'Report a bug',
+    supportLinkError: 'Could not open the browser. Copy the repository link and open it in your browser.',
     advanced: 'Advanced',
     browser: 'Browser',
     canvas: 'Canvas',
@@ -801,6 +811,11 @@ const es: TranslationResources = {
     followAppTheme: 'Default · Seguir aplicación',
     appearance: 'Apariencia',
     aboutAndUpdates: 'Acerca de y actualizaciones',
+    supportAndReports: 'Soporte y reportes',
+    supportDescription: 'Yira es una aplicación de código cerrado. Este repositorio público de GitHub contiene versiones, reportes de errores y sugerencias.',
+    publicReportsHint: 'Los reportes son públicos. Necesitas una cuenta de GitHub para enviar un reporte.',
+    reportBug: 'Reportar un error',
+    supportLinkError: 'No se pudo abrir el navegador. Copia el enlace del repositorio y ábrelo en tu navegador.',
     advanced: 'Avanzado',
     browser: 'Navegador',
     canvas: 'Lienzo',
