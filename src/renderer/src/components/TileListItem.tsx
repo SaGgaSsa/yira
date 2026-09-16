@@ -4,9 +4,11 @@ import { Maximize2, PanelBottomClose, PanelTopOpen, Pin, Settings, X } from 'luc
 import type { TileState } from '@shared/types'
 import { formatTerminalAttentionCount } from '@/utils/terminalAttention'
 import { TILE_META } from './TileContent'
+import { TerminalTileActivityIcon } from './TerminalActivityIcon'
 
 export interface ListRowProps {
-  icon: LucideIcon
+  icon?: LucideIcon
+  leadingIcon?: React.ReactNode
   label: string
   variant?: 'default' | 'workspace'
   workspaceDiff?: React.ReactNode
@@ -70,6 +72,7 @@ function ListRowActionButton({ title, onClick, children, pressed, disabled = fal
 
 export function ListRow({
   icon: Icon,
+  leadingIcon,
   label,
   variant = 'default',
   workspaceDiff,
@@ -146,7 +149,7 @@ export function ListRow({
         type="button"
       >
         <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${iconClassName}`}>
-          <Icon size={11} className="shrink-0" />
+          {leadingIcon ?? (Icon ? <Icon size={11} className="shrink-0" /> : null)}
         </div>
         <div className={`flex min-w-0 flex-1 items-center gap-2 ${isWorkspace ? 'justify-start text-left' : 'justify-center text-center'}`}>
           <div className={`min-w-0 truncate text-sm ${labelClassName}`}>
@@ -259,6 +262,7 @@ export function TileListItem({
   return (
     <ListRow
       icon={meta.icon}
+      leadingIcon={tile.type === 'terminal' ? <TerminalTileActivityIcon tileId={tile.id} attentionCount={attentionCount} /> : undefined}
       label={label}
       active={active}
       attentionCount={attentionCount}

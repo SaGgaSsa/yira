@@ -9,6 +9,7 @@ import {
 } from '@shared/gridWorkspaceState'
 import { TileContent, TILE_META } from './TileContent'
 import { TileActionButtons } from './TileActionButtons'
+import { TerminalTileActivityIcon } from './TerminalActivityIcon'
 import { TileCreationSelector, type TileCreationSelectorProps } from './TileCreationSelector'
 import {
   getGridDragPreviewRect,
@@ -322,7 +323,7 @@ export function GridView({
             >
               <GripVertical size={14} />
             </button>
-            <Icon size={15} className="shrink-0 text-text-secondary" />
+            {tile.type === 'terminal' ? <TerminalTileActivityIcon tileId={tile.id} size={15} /> : <Icon size={15} className="shrink-0 text-text-secondary" />}
             <div className="min-w-0 flex-1 truncate text-sm text-text-display">{title}</div>
             <TileActionButtons
               onConfigure={(event) => onConfigureTile(tile, event.currentTarget)}

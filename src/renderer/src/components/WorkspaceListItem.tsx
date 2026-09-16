@@ -1,6 +1,8 @@
 import React from 'react'
-import { Grid3X3, LayoutGrid } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useAgentSessionSnapshot } from '@/hooks/useAgentSessionSnapshot'
+import { summarizeTerminalActivity } from '@/utils/terminalActivity'
+import { TerminalActivityIcon } from './TerminalActivityIcon'
 import type { WorkspaceMetadata } from '@shared/types'
 import { canReadWorkspaceGitDiff } from '@/hooks/useWorkspaceGitDiff'
 import { WorkspaceGitDiff } from './WorkspaceGitDiff'
@@ -32,14 +34,15 @@ export function WorkspaceListItem({
   className = '',
 }: WorkspaceListItemProps): React.ReactElement {
   const { t } = useTranslation()
-  const Icon = workspace.config.type === 'grid' ? Grid3X3 : LayoutGrid
+  const { sessions } = useAgentSessionSnapshot()
+  const activity = summarizeTerminalActivity(sessions, workspace.id, attentionCount)
   const hasWorkspaceGitDiff = canReadWorkspaceGitDiff(
     workspace.config.rootFolderPath,
   )
 
   return (
     <ListRow
-      icon={Icon}
+      leadingIcon={<TerminalActivityIcon activity={activity} />}
       label={workspace.name}
       variant="workspace"
       workspaceDiff={hasWorkspaceGitDiff ? (

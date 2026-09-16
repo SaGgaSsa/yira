@@ -45,6 +45,14 @@ type TranslationResources = {
     collapse: string
     open: string
   }
+  terminalActivity: {
+    'needs-input': string
+    working: string
+    unread: string
+    done: string
+    idle: string
+    summary: string
+  }
   agents: {
     title: string
     unconfigured: string
@@ -409,6 +417,14 @@ const en: TranslationResources = {
     collapse: 'Collapse sidebar',
     open: 'Open sidebar',
   },
+  terminalActivity: {
+    'needs-input': 'Needs input',
+    working: 'Working',
+    unread: 'Unreviewed activity',
+    done: 'Completed activity',
+    idle: 'No detected activity',
+    summary: '{{working}} working; {{needsInput}} need input; {{done}} completed; {{unread}} unreviewed output events',
+  },
   agents: {
     title: 'Agents',
     unconfigured: 'Choose an agent provider in this workspace to view its sessions and history.',
@@ -772,6 +788,14 @@ const es: TranslationResources = {
     workspaceActions: 'Acciones del espacio de trabajo',
     collapse: 'Contraer barra lateral',
     open: 'Abrir barra lateral',
+  },
+  terminalActivity: {
+    'needs-input': 'Requiere intervención',
+    working: 'Trabajando',
+    unread: 'Actividad sin revisar',
+    done: 'Actividad finalizada',
+    idle: 'Sin actividad detectada',
+    summary: '{{working}} trabajando; {{needsInput}} requieren intervención; {{done}} finalizados; {{unread}} eventos de salida sin revisar',
   },
   agents: {
     title: 'Agentes',

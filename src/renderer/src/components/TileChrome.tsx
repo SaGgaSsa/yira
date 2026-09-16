@@ -7,6 +7,7 @@ import type { TileState, ViewMode, SplitPanelId, SplitOrientation } from '@share
 import { getTileSizePreset, NOTE_COLORS } from '@shared/types'
 import { GripVertical, StickyNote, Globe, Terminal, Clock, Lock } from 'lucide-react'
 import { TileActionButtons } from './TileActionButtons'
+import { TerminalTileActivityIcon } from './TerminalActivityIcon'
 
 interface Props {
   tile: TileState
@@ -307,6 +308,7 @@ export function TileChrome({
 
             {/* Type icon */}
             {(() => {
+              if (tile.type === 'terminal') return <TerminalTileActivityIcon tileId={tile.id} size={12} />
               const Icon = TYPE_ICONS[tile.type]
               return Icon ? <Icon size={12} className="text-text-secondary shrink-0" /> : null
             })()}

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useAgentSessionSnapshot } from '@/hooks/useAgentSessionSnapshot'
 import { Bot, Clock3, History, Play, RefreshCw, Search, Settings } from 'lucide-react'
 import type {
   AgentActiveSession,
@@ -46,12 +47,6 @@ type HistoryState = {
   status: 'idle' | 'loading' | 'ready' | 'error'
   items: AgentSessionHistoryItem[]
   hasMore: boolean
-}
-
-type SessionSubscription = {
-  generation: number
-  disposed: boolean
-  token: string | null
 }
 
 function providerLabel(provider: AgentProvider): string {
@@ -205,13 +200,13 @@ export function AgentPanel({
 }: AgentPanelProps): React.ReactElement {
   const { t } = useTranslation()
   const [availability, setAvailability] = useState<AgentProviderAvailabilitySnapshot | null>(null)
-  const [sessions, setSessions] = useState<AgentActiveSession[]>([])
+  const sessionSnapshot = useAgentSessionSnapshot(shouldRequestAgentData(selectedProvider))
+  const sessions = useMemo(() => filterAgentSessions(sessionSnapshot, workspaceId, selectedProvider), [sessionSnapshot, workspaceId, selectedProvider])
   const [historySearch, setHistorySearch] = useState('')
   const [historyState, setHistoryState] = useState<HistoryState>({ status: 'idle', items: [], hasMore: false })
   const historyRequestRef = useRef(0)
   const historyRefreshSchedulerRef = useRef(createAgentHistoryRefreshScheduler())
   const availabilityRequestRef = useRef(0)
-  const sessionSubscriptionRef = useRef<SessionSubscription | null>(null)
 
   const availableProfile = useMemo(
     () => availableProfiles.find((profile) => profile.available),
@@ -233,54 +228,6 @@ export function AgentPanel({
       availabilityRequestRef.current += 1
     }
   }, [selectedProvider])
-
-  useEffect(() => {
-    let cancelled = false
-    setSessions([])
-    if (!shouldRequestAgentData(selectedProvider)) return
-
-    const subscription: SessionSubscription = {
-      generation: (sessionSubscriptionRef.current?.generation ?? 0) + 1,
-      disposed: false,
-      token: null,
-    }
-    sessionSubscriptionRef.current = subscription
-
-    const removeListener = window.electron.agents.onSessionsChanged((snapshot) => {
-      if (!cancelled) setSessions(filterAgentSessions(snapshot, workspaceId, selectedProvider))
-    })
-
-    void window.electron.agents.sessionsSnapshot(workspaceId)
-      .then((snapshot) => {
-        if (!cancelled) setSessions(filterAgentSessions(snapshot, workspaceId, selectedProvider))
-      })
-      .catch(() => {
-        if (!cancelled) setSessions([])
-      })
-
-    void window.electron.agents.subscribeSessions(workspaceId)
-      .then((result) => {
-        const token = typeof result === 'string' ? result : null
-        if (!token) return
-        if (subscription.disposed || sessionSubscriptionRef.current !== subscription || sessionSubscriptionRef.current.generation !== subscription.generation) {
-          void window.electron.agents.unsubscribeSessions(token)
-          return
-        }
-        subscription.token = token
-      })
-      .catch(() => undefined)
-
-    return () => {
-      cancelled = true
-      subscription.disposed = true
-      removeListener()
-      if (sessionSubscriptionRef.current !== subscription || sessionSubscriptionRef.current.generation !== subscription.generation) return
-      sessionSubscriptionRef.current = null
-      const token = subscription.token
-      subscription.token = null
-      if (token) void window.electron.agents.unsubscribeSessions(token)
-    }
-  }, [selectedProvider, workspaceId])
 
   const canResume = useCallback((provider: AgentProvider): boolean => {
     return canResumeAgent(provider, selectedProvider, agentProviders, availability, Boolean(availableProfile))

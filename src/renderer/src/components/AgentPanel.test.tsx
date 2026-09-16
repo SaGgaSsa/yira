@@ -53,9 +53,6 @@ if (!source.includes('<h3 className="nd-label text-text-display">{copy.history}<
 
 for (const requiredBridgeCall of [
   'window.electron.agents.availability()',
-  'window.electron.agents.sessionsSnapshot(workspaceId)',
-  'window.electron.agents.subscribeSessions(workspaceId)',
-  'window.electron.agents.unsubscribeSessions(token)',
   'window.electron.agents.history(query)',
 ]) {
   if (!source.includes(requiredBridgeCall)) throw new Error(`Agents panel must use ${requiredBridgeCall}`)
@@ -84,12 +81,9 @@ if (!source.includes('buildAgentHistoryQuery')) throw new Error('history refresh
 if (!source.includes('shouldRequestAgentData')) throw new Error('agent data requests must be gated by provider selection')
 if (!source.includes('filterAgentSessions')) throw new Error('session snapshots must use a testable provider filter')
 if (!source.includes('sanitizeAgentCwd')) throw new Error('history cwd must be sanitized before display and resume')
-if (!source.includes('onSessionsChanged')) throw new Error('running sessions must subscribe to live changes')
+if (!source.includes('useAgentSessionSnapshot(shouldRequestAgentData(selectedProvider))')) throw new Error('running sessions must share the live subscription and retain provider gating')
 if (!source.includes('onFocusTile(session.tileId)')) throw new Error('running cards must focus their terminal tile')
 if (!source.includes('canResume(item.provider)')) throw new Error('resume must gate the selected provider before creating a tile')
 if (!source.includes('resumeDisabled={!canResume(item.provider)}')) throw new Error('unavailable providers must disable resume actions')
 if (!source.includes('}, [historySearch, workspaceId, selectedProvider])')) throw new Error('search changes must invalidate in-flight history requests')
-if (!source.includes('sessionSubscriptionRef')) throw new Error('session cleanup must be tied to a subscription generation')
-if (!source.includes('sessionSubscriptionRef.current !== subscription')) throw new Error('stale subscription cleanup must not unsubscribe a newer subscription')
-if (source.includes('unsubscribeSessions()')) throw new Error('session teardown must always pass its own subscription token')
 if (!workspacePanelSource.includes('key={`${workspaceId}:${agentProvider ?? \'none\'}`}')) throw new Error('Agents panel must remount when its workspace provider scope changes')
