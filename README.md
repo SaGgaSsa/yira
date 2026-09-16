@@ -13,6 +13,13 @@ Yira is an Electron desktop app for building terminal-centered workspaces on an 
 - Settings for theme, density, grid, and browser defaults
 - Persistent workspace state through Electron IPC
 
+## Legal and support
+
+- [Privacy Policy](docs/legal/PRIVACY.md)
+- [Terms of Use and EULA](docs/legal/TERMS.md)
+- [Tested platforms](docs/TESTED-PLATFORMS.md)
+- [Public support and permission requests](https://github.com/SaGgaSsa/yira-releases/issues)
+
 ## Stack
 
 - Electron

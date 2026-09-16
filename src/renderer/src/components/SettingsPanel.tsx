@@ -1,10 +1,10 @@
 import { APP_THEMES } from '@shared/appThemes'
 import { getXtermTheme, resolveTerminalThemeId } from '@/utils/terminalTheme'
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
-import { X, Monitor, Moon, Sun, Type, Grid3X3, Globe, Code2, Info, RefreshCw, Download, LayoutGrid, Keyboard, Terminal, ExternalLink } from 'lucide-react'
+import { X, Monitor, Moon, Sun, Type, Grid3X3, Globe, Code2, Info, RefreshCw, Download, LayoutGrid, Keyboard, Terminal, ExternalLink, FileText } from 'lucide-react'
 import { createUserSettingsDraft, useSettingsStore } from '@/store/settingsStore'
 import { useUpdateStore } from '@/store/updateStore'
 import { SHORTCUT_CATALOG } from '@/utils/shortcutCatalog'
@@ -13,6 +13,7 @@ import { DEFAULT_USER_SETTINGS } from '@shared/types'
 import type { TerminalThemeId } from '@shared/terminalThemes'
 import { TERMINAL_THEMES } from '@shared/terminalThemes'
 import { MAX_FONT_SIZE_PX, MIN_FONT_SIZE_PX } from '@shared/userSettings'
+import { LegalDocuments, type LegalDocumentId } from './LegalDocuments'
 
 export type SettingsSectionId =
   | 'appearance'
@@ -111,6 +112,10 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [supportLinkFailed, setSupportLinkFailed] = useState(false)
+  const [legalDocument, setLegalDocument] = useState<LegalDocumentId | null>(null)
+  const privacyDocumentButtonRef = useRef<HTMLButtonElement | null>(null)
+  const termsDocumentButtonRef = useRef<HTMLButtonElement | null>(null)
+  const restoreLegalDocumentFocusRef = useRef<LegalDocumentId | null>(null)
   const applySettings = useSettingsStore((s) => s.applySettings)
   const language = draft.language
   const appearance = draft.appearance
@@ -193,7 +198,19 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
     setDraft(createUserSettingsDraft(useSettingsStore.getState()))
     setSaveError('')
     setSupportLinkFailed(false)
+    setLegalDocument(null)
+    restoreLegalDocumentFocusRef.current = null
   }, [initialSection, open])
+
+  useEffect(() => {
+    const documentToRestore = restoreLegalDocumentFocusRef.current
+    if (legalDocument !== null || !documentToRestore) return
+    restoreLegalDocumentFocusRef.current = null
+    requestAnimationFrame(() => {
+      const buttonRef = documentToRestore === 'privacy' ? privacyDocumentButtonRef : termsDocumentButtonRef
+      buttonRef.current?.focus()
+    })
+  }, [legalDocument])
 
   const handleSupportLinkClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault()
@@ -207,6 +224,11 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
     if (saving) return
     onClose()
   }, [onClose, saving])
+
+  const handleLegalDocumentBack = useCallback(() => {
+    restoreLegalDocumentFocusRef.current = legalDocument
+    setLegalDocument(null)
+  }, [legalDocument])
 
   const handleSave = useCallback(async () => {
     if (saving) return
@@ -236,6 +258,10 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
   const ActiveSectionIcon = activeMeta.icon
 
   const renderActiveSection = (): React.ReactElement => {
+    if (legalDocument) {
+      return <LegalDocuments documentId={legalDocument} onBack={handleLegalDocumentBack} />
+    }
+
     if (activeSection === 'appearance') {
       return (
         <section>
@@ -713,6 +739,35 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
             <p role="alert" className="mt-3 text-sm text-text-secondary">{t('settings.supportLinkError')}</p>
           )}
         </div>
+
+        <div className="mt-4 rounded-[20px] border border-border-visible bg-bg-primary px-4 py-4">
+          <h4 className="nd-label text-text-display">{t('settings.legalDocuments')}</h4>
+          <p className="mt-3 text-sm leading-6 text-text-secondary">{t('settings.legalDocumentsDescription')}</p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <button
+              ref={privacyDocumentButtonRef}
+              type="button"
+              className="flex items-center gap-3 rounded-[16px] border border-border-visible px-4 py-3 text-left text-sm text-text-display transition-colors hover:border-text-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--interactive)]"
+              onClick={() => {
+                setLegalDocument('privacy')
+              }}
+            >
+              <FileText size={15} className="shrink-0 text-text-secondary" aria-hidden="true" />
+              <span>{t('settings.privacyPolicy')}</span>
+            </button>
+            <button
+              ref={termsDocumentButtonRef}
+              type="button"
+              className="flex items-center gap-3 rounded-[16px] border border-border-visible px-4 py-3 text-left text-sm text-text-display transition-colors hover:border-text-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--interactive)]"
+              onClick={() => {
+                setLegalDocument('terms')
+              }}
+            >
+              <FileText size={15} className="shrink-0 text-text-secondary" aria-hidden="true" />
+              <span>{t('settings.termsOfUse')}</span>
+            </button>
+          </div>
+        </div>
       </section>
     )
   }
@@ -768,7 +823,10 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
                         ? 'border-text-display bg-bg-primary text-text-display'
                         : 'border-transparent text-text-secondary hover:border-border-visible hover:bg-bg-secondary'
                     }`}
-                    onClick={() => setActiveSection(id)}
+                    onClick={() => {
+                      setLegalDocument(null)
+                      setActiveSection(id)
+                    }}
                   >
                     <Icon size={15} className={isActive ? 'text-text-display' : 'text-text-secondary'} />
                     <span className="nd-label">{id === 'appearance' ? t('settings.appearance') : id === 'density' ? t('settings.fontSize') : id === 'canvas' ? t('settings.canvas') : id === 'tiles' ? t('settings.tiles') : id === 'terminal' ? t('settings.terminal') : id === 'shortcuts' ? t('settings.shortcuts') : id === 'browser' ? t('settings.browser') : id === 'advanced' ? t('settings.advanced') : t('settings.aboutAndUpdates')}</span>

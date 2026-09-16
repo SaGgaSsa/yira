@@ -84,6 +84,7 @@ type TranslationResources = {
     agentAlertsDescription: string
     agentHookSetup: string
     agentHookSetupDescription: string
+    backToAbout: string
     configure: string
     uninstall: string
     appThemeDescription: string
@@ -94,8 +95,10 @@ type TranslationResources = {
     supportAndReports: string
     supportDescription: string
     publicReportsHint: string
+    privacyPolicy: string
     reportBug: string
     supportLinkError: string
+    termsOfUse: string
     advanced: string
     browser: string
     canvas: string
@@ -108,6 +111,10 @@ type TranslationResources = {
     density: string
     language: string
     languageDescription: string
+    legalDocumentEnglish: string
+    legalDocumentLinkError: string
+    legalDocuments: string
+    legalDocumentsDescription: string
     english: string
     spanish: string
     fonts: string
@@ -456,6 +463,7 @@ const en: TranslationResources = {
     agentAlertsDescription: 'Show semantic completion and intervention alerts from configured Codex and Claude hooks.',
     agentHookSetup: 'Codex and Claude hooks',
     agentHookSetupDescription: 'Configure or repair only Yira-managed hooks. Codex requires approving new hooks with /hooks.',
+    backToAbout: 'Back to About',
     configure: 'Configure',
     uninstall: 'Uninstall',
     appThemeDescription: 'Applies to the interface and terminals that follow the application theme.',
@@ -466,8 +474,10 @@ const en: TranslationResources = {
     supportAndReports: 'Support and reports',
     supportDescription: 'Yira is a closed-source application. This public GitHub repository hosts releases, bug reports, and suggestions.',
     publicReportsHint: 'Reports are public. A GitHub account is required to submit a report.',
+    privacyPolicy: 'Privacy Policy',
     reportBug: 'Report a bug',
     supportLinkError: 'Could not open the browser. Copy the repository link and open it in your browser.',
+    termsOfUse: 'Terms of Use / EULA',
     advanced: 'Advanced',
     browser: 'Browser',
     canvas: 'Canvas',
@@ -480,6 +490,10 @@ const en: TranslationResources = {
     density: 'Density',
     language: 'Language',
     languageDescription: 'Choose the language used throughout Yira.',
+    legalDocumentEnglish: 'This document is provided in English and is included in this Yira build for offline reading.',
+    legalDocumentLinkError: 'Could not open this link in the browser. Copy the link and open it in your browser.',
+    legalDocuments: 'Legal documents',
+    legalDocumentsDescription: 'Read the versioned documents included with this Yira build. No internet connection is required.',
     english: 'English',
     spanish: 'Español',
     fonts: 'Fonts',
@@ -828,6 +842,7 @@ const es: TranslationResources = {
     agentAlertsDescription: 'Muestra alertas semánticas de finalización e intervención de los hooks configurados de Codex y Claude.',
     agentHookSetup: 'Hooks de Codex y Claude',
     agentHookSetupDescription: 'Configura o repara sólo hooks administrados por Yira. Codex requiere aprobar los nuevos hooks con /hooks.',
+    backToAbout: 'Volver a Acerca de',
     configure: 'Configurar',
     uninstall: 'Desinstalar',
     appThemeDescription: 'Se aplica a la interfaz y a las terminales que siguen el tema de la aplicación.',
@@ -838,8 +853,10 @@ const es: TranslationResources = {
     supportAndReports: 'Soporte y reportes',
     supportDescription: 'Yira es una aplicación de código cerrado. Este repositorio público de GitHub contiene versiones, reportes de errores y sugerencias.',
     publicReportsHint: 'Los reportes son públicos. Necesitas una cuenta de GitHub para enviar un reporte.',
+    privacyPolicy: 'Política de privacidad',
     reportBug: 'Reportar un error',
     supportLinkError: 'No se pudo abrir el navegador. Copia el enlace del repositorio y ábrelo en tu navegador.',
+    termsOfUse: 'Términos de uso / EULA',
     advanced: 'Avanzado',
     browser: 'Navegador',
     canvas: 'Lienzo',
@@ -852,6 +869,10 @@ const es: TranslationResources = {
     density: 'Densidad',
     language: 'Idioma',
     languageDescription: 'Elige el idioma que se usa en Yira.',
+    legalDocumentEnglish: 'Este documento está disponible en inglés y está incluido en esta versión de Yira para lectura sin conexión.',
+    legalDocumentLinkError: 'No se pudo abrir este enlace en el navegador. Copia el enlace y ábrelo en tu navegador.',
+    legalDocuments: 'Documentos legales',
+    legalDocumentsDescription: 'Lee los documentos versionados incluidos en esta versión de Yira. No se requiere conexión a Internet.',
     english: 'English',
     spanish: 'Español',
     fonts: 'Fuentes',
