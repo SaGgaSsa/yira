@@ -323,6 +323,11 @@ function normalizeExitEvent(value: unknown): TerminalExitEvent {
     : { exitCode: value.exitCode as number }
 }
 
+function isPtyAlreadyExitedError(value: unknown): boolean {
+  const message = value instanceof Error ? value.message : String(value)
+  return /(?:pty|pseudo[- ]terminal).*already exited|already exited.*(?:pty|pseudo[- ]terminal)/i.test(message)
+}
+
 function splitTextByBytes(value: string, maxBytes: number): string[] {
   if (byteLength(value) <= maxBytes) return [value]
   const parts: string[] = []
@@ -546,7 +551,8 @@ class DaemonSession {
 
   private disposed = false
 
-  private exited = false
+  /** Set as soon as node-pty reports exit, before queued output is drained. */
+  private exitObserved = false
 
   private exitEvent: TerminalExitEvent | undefined
 
@@ -559,6 +565,8 @@ class DaemonSession {
   private localAlertRegistered = false
 
   private processExitHandled = false
+
+  private processExitPromise: Promise<void> | undefined
 
   constructor(
     readonly daemon: TerminalDaemonServer,
@@ -589,6 +597,7 @@ class DaemonSession {
   initialize(): void {
     this.dataSubscription = this.pty.onData((data) => this.receiveData(data))
     this.exitSubscription = this.pty.onExit((event) => {
+      this.exitObserved = true
       void this.enqueueProcessExit(event).catch(() => undefined)
     })
 
@@ -620,7 +629,7 @@ class DaemonSession {
   }
 
   hasExited(): boolean {
-    return this.exited
+    return this.exitObserved
   }
 
   subscribe(client: DaemonClient): void {
@@ -642,9 +651,11 @@ class DaemonSession {
     // requests hang under a busy process.
     const operationBarrier = this.operationSerial
     const outputBarrier = this.receivedOutputCount
+    const processExit = this.processExitPromise
     await Promise.all([
       this.waitForOperations(operationBarrier),
       this.waitForOutput(outputBarrier),
+      ...(processExit ? [processExit] : []),
     ])
   }
 
@@ -676,22 +687,33 @@ class DaemonSession {
   }
 
   reportAlert(alert: unknown): void {
-    if (this.disposed || this.exited) return
+    if (this.disposed || this.exitObserved) return
     this.alertState.report(alert)
   }
 
   async write(data: string): Promise<void> {
     await this.enqueue(() => {
       if (this.disposed) throw new Error('Terminal session is no longer active')
+      if (this.exitObserved) return
       if (data) this.clearAlertNow()
-      this.pty.write(data)
+      try {
+        this.pty.write(data)
+      } catch (error) {
+        if (!isPtyAlreadyExitedError(error)) throw error
+      }
     })
   }
 
   async resize(cols: number, rows: number): Promise<void> {
     await this.enqueue(() => {
       if (this.disposed) throw new Error('Terminal session is no longer active')
-      this.pty.resize(cols, rows)
+      if (this.exitObserved) return
+      try {
+        this.pty.resize(cols, rows)
+      } catch (error) {
+        if (!isPtyAlreadyExitedError(error)) throw error
+        return
+      }
       this.terminal.resize(cols, rows)
     })
   }
@@ -764,15 +786,15 @@ class DaemonSession {
   async startCommands(): Promise<void> {
     if (this.spawn.prependCommand?.trim()) {
       await this.enqueue(() => {
-        if (!this.disposed) this.pty.write(`${this.spawn.prependCommand}\r`)
+        if (!this.disposed && !this.exitObserved) this.pty.write(`${this.spawn.prependCommand}\r`)
       })
     }
-    if (this.spawn.initialCommand?.trim() && !this.disposed && !this.exited) {
+    if (this.spawn.initialCommand?.trim() && !this.disposed && !this.exitObserved) {
       this.startupCommand = new DeferredTerminalStartupCommand({
         command: this.spawn.initialCommand,
         write: (data) => {
           void this.enqueue(() => {
-            if (!this.disposed) this.pty.write(data)
+            if (!this.disposed && !this.exitObserved) this.pty.write(data)
           }).catch(() => undefined)
         },
       })
@@ -879,7 +901,7 @@ class DaemonSession {
   private async handleProcessExit(value: unknown): Promise<void> {
     if (this.processExitHandled || this.disposed) return
     this.processExitHandled = true
-    this.exited = true
+    this.exitObserved = true
     this.exitEvent = normalizeExitEvent(value)
     this.startupCommand?.dispose()
     this.startupCommand = undefined
@@ -898,10 +920,14 @@ class DaemonSession {
     })
   }
 
-  private async enqueueProcessExit(event: unknown): Promise<void> {
+  private enqueueProcessExit(event: unknown): Promise<void> {
+    if (this.processExitPromise) return this.processExitPromise
     const outputBarrier = this.receivedOutputCount
-    await this.waitForOutput(outputBarrier)
-    await this.enqueue(() => this.handleProcessExit(event))
+    const processExit = this.waitForOutput(outputBarrier)
+      .then(() => this.enqueue(() => this.handleProcessExit(event)))
+      .then(() => undefined)
+    this.processExitPromise = processExit
+    return processExit
   }
 
   private clearAlertNow(): void {

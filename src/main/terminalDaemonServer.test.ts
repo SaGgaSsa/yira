@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { createRequire } from 'node:module'
 import { request as httpRequest } from 'node:http'
 import { mkdtemp, readFile, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -21,6 +22,8 @@ class FakePty implements TerminalDaemonPty {
   readonly pid: number
   readonly options: TerminalDaemonPtyOptions
   killed = 0
+  exited = false
+  resizeError: Error | undefined
   paused = 0
   resumed = 0
 
@@ -37,6 +40,8 @@ class FakePty implements TerminalDaemonPty {
   }
 
   resize(cols: number, rows: number): void {
+    if (this.resizeError) throw this.resizeError
+    if (this.exited) throw new Error('Cannot resize a pty that has already exited')
     this.resizeCalls.push({ cols, rows })
   }
 
@@ -67,6 +72,7 @@ class FakePty implements TerminalDaemonPty {
   }
 
   emitExit(event: { exitCode: number; signal?: number }): void {
+    this.exited = true
     for (const listener of [...this.exitListeners]) listener(event)
   }
 }
@@ -78,6 +84,43 @@ class FakePtyFactory implements TerminalDaemonPtyFactory {
     const pty = new FakePty(10_000 + this.instances.length, options)
     this.instances.push(pty)
     return pty
+  }
+}
+
+interface DelayedTerminal {
+  readonly cols: number
+  readonly rows: number
+  write(data: string, callback?: () => void): void
+  resize(cols: number, rows: number): void
+  loadAddon(addon: unknown): void
+  dispose(): void
+}
+
+function createDelayedTerminalFactory(): {
+  factory: (options: { cols: number; rows: number; scrollback: number }) => DelayedTerminal
+  pendingWrites: () => number
+  release: () => void
+} {
+  const require = createRequire(import.meta.url)
+  const { Terminal } = require('@xterm/headless') as {
+    Terminal: new (options: Record<string, unknown>) => DelayedTerminal
+  }
+  const callbacks: Array<() => void> = []
+  return {
+    factory: (options) => {
+      const terminal = new Terminal({ ...options, allowProposedApi: true })
+      const originalWrite = terminal.write.bind(terminal)
+      terminal.write = (data, callback) => {
+        originalWrite(data, () => {
+          if (callback) callbacks.push(callback)
+        })
+      }
+      return terminal
+    },
+    pendingWrites: () => callbacks.length,
+    release: () => {
+      for (const callback of callbacks.splice(0)) callback()
+    },
   }
 }
 
@@ -305,6 +348,165 @@ test('orders all received output before the natural exit event', async (t) => {
   ))
   assert.match(snapshot.buffer, /final output/)
   assert.deepEqual(snapshot.exitEvent, { exitCode: 9 })
+})
+
+test('does not resize a PTY after exit while final output is draining', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'yira-daemon-'))
+  const ptyFactory = new FakePtyFactory()
+  const delayedTerminal = createDelayedTerminalFactory()
+  const handle = await startTerminalDaemon({
+    directory,
+    ptyFactory,
+    terminalFactory: delayedTerminal.factory,
+    token: 'exit-resize-token',
+    idleMs: 5_000,
+  })
+  t.after(() => handle.close())
+
+  const client = await connectClient(handle.endpoint.port)
+  const created = snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    1,
+    'create',
+    spawnParams({ workspaceId: 'w', tileId: 'exit-resize' }),
+  ))
+  const pty = ptyFactory.instances[0]
+  pty.emitData('final output before exit\r\n')
+  pty.emitExit({ exitCode: 130, signal: 2 })
+
+  const resizePromise = request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    2,
+    'resize',
+    { identity: created.identity, cols: 120, rows: 40 },
+  )
+  const snapshotPromise = request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    3,
+    'snapshot',
+    created.identity,
+  )
+  for (let attempt = 0; attempt < 100 && delayedTerminal.pendingWrites() === 0; attempt += 1) {
+    await wait(5)
+  }
+  assert.equal(delayedTerminal.pendingWrites() > 0, true)
+  delayedTerminal.release()
+
+  const [resized, snapshot] = await Promise.all([resizePromise, snapshotPromise])
+  assert.equal(resized.error, undefined)
+  assert.deepEqual(resized.result, null)
+  assert.deepEqual(pty.resizeCalls, [])
+  assert.match(snapshotResult(snapshot).buffer, /final output before exit/)
+  assert.deepEqual(snapshotResult(snapshot).exitEvent, { exitCode: 130, signal: 2 })
+
+  await wait(40)
+  const events = client.messages.filter(message => message.event === 'data' || message.event === 'exit')
+  assert.deepEqual(events.map(message => message.event), ['data', 'exit'])
+  assert.deepEqual((events.at(-1)?.exitEvent), { exitCode: 130, signal: 2 })
+  client.socket.destroy()
+})
+
+test('suppresses only the native already-exited resize error', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'yira-daemon-'))
+  const ptyFactory = new FakePtyFactory()
+  const handle = await startTerminalDaemon({ directory, ptyFactory, token: 'resize-error-token', idleMs: 5_000 })
+  t.after(() => handle.close())
+
+  const client = await connectClient(handle.endpoint.port)
+  const created = snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    1,
+    'create',
+    spawnParams({ workspaceId: 'w', tileId: 'resize-error' }),
+  ))
+  const pty = ptyFactory.instances[0]
+
+  pty.resizeError = new Error('Cannot resize a pty that has already exited')
+  const expected = await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    2,
+    'resize',
+    { identity: created.identity, cols: 120, rows: 40 },
+  )
+  assert.equal(expected.error, undefined)
+  assert.deepEqual(expected.result, null)
+
+  pty.resizeError = new Error('resize is unavailable')
+  const unexpected = await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    3,
+    'resize',
+    { identity: created.identity, cols: 121, rows: 41 },
+  )
+  assert.match(unexpected.error ?? '', /resize is unavailable/i)
+  client.socket.destroy()
+})
+
+test('keeps a live shell writable after Ctrl+C input', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'yira-daemon-'))
+  const ptyFactory = new FakePtyFactory()
+  const handle = await startTerminalDaemon({ directory, ptyFactory, token: 'live-shell-token', idleMs: 5_000 })
+  t.after(() => handle.close())
+
+  const client = await connectClient(handle.endpoint.port)
+  const created = snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    1,
+    'create',
+    spawnParams({ workspaceId: 'w', tileId: 'live-shell' }),
+  ))
+  const pty = ptyFactory.instances[0]
+
+  const input = await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    2,
+    'write',
+    { identity: created.identity, data: '\u0003' },
+  )
+  assert.equal(input.error, undefined)
+  assert.deepEqual(input.result, null)
+  assert.equal(pty.writes.at(-1), '\u0003')
+
+  const resized = await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    3,
+    'resize',
+    { identity: created.identity, cols: 100, rows: 30 },
+  )
+  assert.equal(resized.error, undefined)
+  assert.deepEqual(pty.resizeCalls.at(-1), { cols: 100, rows: 30 })
+
+  pty.emitData('shell prompt after Ctrl+C\r\n')
+  await wait(40)
+  const snapshot = snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    4,
+    'snapshot',
+    created.identity,
+  ))
+  assert.match(snapshot.buffer, /shell prompt after Ctrl\+C/)
+  assert.equal(snapshot.exitEvent, undefined)
+  client.socket.destroy()
 })
 
 test('runs prepend and deferred initial commands once, rejects stale identities, and handles alternate screen snapshots', async (t) => {

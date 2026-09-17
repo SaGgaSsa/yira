@@ -820,6 +820,23 @@ test('preserves remote exit state while parked and after host reattachment', asy
   await runtime.dispose(false)
 })
 
+test('does not resize or write after the PTY exit event', async () => {
+  const harness = createRuntimeHarness()
+  const runtime = await createReadyRuntime(harness)
+  runtime.attachHost(harness.host(), viewOptions({ visible: true }))
+
+  harness.bridge.emitExit({ exitCode: 130, signal: 2 })
+  harness.flushFit()
+  harness.terminals[0].emitInput('input after exit')
+  await Promise.resolve()
+
+  assert.deepEqual(harness.bridge.resizeCalls, [])
+  assert.deepEqual(harness.bridge.writeCalls, [])
+  assert.deepEqual(harness.terminals[0].refreshCalls, [{ start: 0, end: 23 }])
+  assert.deepEqual(runtime.getSnapshot().exitEvent, { exitCode: 130, signal: 2 })
+  await runtime.dispose(false)
+})
+
 test('dispose(true) destroys the current PTY and dispose(false) only detaches it', async () => {
   const destroyHarness = createRuntimeHarness()
   const destroyRuntime = await createReadyRuntime(destroyHarness)

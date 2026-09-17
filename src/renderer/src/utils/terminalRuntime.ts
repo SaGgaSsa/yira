@@ -253,6 +253,7 @@ function createRuntime(
   let replayComplete = false
   let replayStarted = false
   let fitDirty = true
+  let processExited = false
   let disposed = false
   let disposePromise: Promise<void> | null = null
   let fontWaitGeneration = 0
@@ -299,7 +300,7 @@ function createRuntime(
   }
 
   const writeInput = (identity: TerminalSessionIdentity, data: string): void => {
-    if (!isCurrentIdentity(identity)) return
+    if (!isCurrentIdentity(identity) || processExited) return
 
     try {
       void Promise.resolve(dependencies.bridge.write(identity, data)).catch((error: unknown) => {
@@ -382,13 +383,14 @@ function createRuntime(
         (cols, rows) => {
           if (!isCurrentIdentity(identity)) return
           if (!currentViewOptions.visible || currentHost !== host || !replayComplete) return
+          if (processExited) return
 
           try {
             void Promise.resolve(dependencies.bridge.resize(identity, cols, rows)).catch((error: unknown) => {
-              if (isCurrentIdentity(identity)) handleError('resize', error)
+              if (isCurrentIdentity(identity) && !processExited) handleError('resize', error)
             })
           } catch (error) {
-            handleError('resize', error)
+            if (!processExited) handleError('resize', error)
           }
         },
         (result) => {
@@ -699,6 +701,7 @@ function createRuntime(
     onData: (data) => processOutput(identity, data),
     onExit: (event) => {
       if (!isCurrentIdentity(identity)) return
+      processExited = true
       updateSnapshot({ exitEvent: event, reconnecting: false })
     },
     onReplayComplete: () => {
