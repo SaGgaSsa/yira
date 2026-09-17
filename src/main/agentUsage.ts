@@ -441,7 +441,7 @@ export async function createCodexAppServerClient(
     await client.initialize(options.clientInfo ?? {
       name: 'yira',
       title: 'Yira',
-      version: '0.1.54',
+      version: '0.1.74',
     })
     return client
   } catch {
