@@ -145,6 +145,38 @@ test('uses the resolver to focus the left split panel', () => {
   assert.deepEqual(calls, ['preventDefault'])
 })
 
+test('suspends tile navigation while the activity view is open but keeps picker dismissal', () => {
+  const tabCalls: string[] = []
+  const tabEvent = keyboardEvent({
+    key: 'Tab',
+    ctrlKey: true,
+    preventDefault: () => tabCalls.push('preventDefault'),
+  })
+
+  handleKeyboardShortcut(tabEvent, createDeps({
+    viewMode: 'fullview',
+    activityOpen: true,
+    focusTile: () => tabCalls.push('focusTile'),
+    selectTiles: () => tabCalls.push('selectTiles'),
+    setFullviewActiveTileId: () => tabCalls.push('setFullviewActiveTileId'),
+  }))
+
+  assert.deepEqual(tabCalls, [])
+
+  const escapeCalls: string[] = []
+  handleKeyboardShortcut(
+    keyboardEvent(),
+    createDeps({
+      activityOpen: true,
+      onClosePicker: () => escapeCalls.push('closePicker'),
+      focusTile: () => escapeCalls.push('focusTile'),
+      selectTiles: () => escapeCalls.push('selectTiles'),
+    }),
+  )
+
+  assert.deepEqual(escapeCalls, ['closePicker'])
+})
+
 test('keeps editable controls out of tab navigation', () => {
   const previousHTMLElement = globalThis.HTMLElement
 

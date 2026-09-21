@@ -25,10 +25,28 @@ interface RuntimeCreation<T extends TerminalRuntimeHandle> {
 export class TerminalRuntimeRegistry<T extends TerminalRuntimeHandle = TerminalRuntimeHandle> {
   private readonly runtimes = new Map<string, T>()
   private readonly creations = new Map<string, RuntimeCreation<T>>()
+  private readonly listeners = new Set<() => void>()
+  private revision = 0
   private parkingRoot: HTMLElement | null = null
 
   setParkingRoot(root: HTMLElement | null): void {
     this.parkingRoot = root
+  }
+
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener)
+    return () => {
+      this.listeners.delete(listener)
+    }
+  }
+
+  getRevision(): number {
+    return this.revision
+  }
+
+  private notify(): void {
+    this.revision += 1
+    for (const listener of [...this.listeners]) listener()
   }
 
   acquire(target: TerminalSessionTarget, factory: TerminalRuntimeFactory<T>): Promise<T> {
@@ -51,11 +69,15 @@ export class TerminalRuntimeRegistry<T extends TerminalRuntimeHandle = TerminalR
 
           this.creations.delete(key)
           this.runtimes.set(key, createdRuntime)
+          this.notify()
           if (creation.parkWhenReady) createdRuntime.park(this.parkingRoot)
           return createdRuntime
         },
         (error: unknown) => {
-          if (this.creations.get(key) === creation) this.creations.delete(key)
+          if (this.creations.get(key) === creation) {
+            this.creations.delete(key)
+            this.notify()
+          }
           throw error
         },
       )
@@ -68,11 +90,32 @@ export class TerminalRuntimeRegistry<T extends TerminalRuntimeHandle = TerminalR
       parkWhenReady: false,
     }
     this.creations.set(key, creation)
+    this.notify()
     return promise
   }
 
   get(target: TerminalSessionTarget): T | undefined {
     return this.runtimes.get(terminalRuntimeKey(target))
+  }
+
+  listTargets(): TerminalSessionTarget[] {
+    const targets = new Map<string, TerminalSessionTarget>()
+    for (const runtime of this.runtimes.values()) {
+      targets.set(terminalRuntimeKey(runtime.target), runtime.target)
+    }
+    for (const creation of this.creations.values()) {
+      targets.set(terminalRuntimeKey(creation.target), creation.target)
+    }
+    return [...targets.values()]
+  }
+
+  countTerminalsByWorkspace(): Record<string, number> {
+    const counts: Record<string, number> = {}
+    for (const target of this.listTargets()) {
+      if (!target.workspaceId || !target.tileId) continue
+      counts[target.workspaceId] = (counts[target.workspaceId] ?? 0) + 1
+    }
+    return counts
   }
 
   park(target: TerminalSessionTarget): void {
@@ -129,6 +172,7 @@ export class TerminalRuntimeRegistry<T extends TerminalRuntimeHandle = TerminalR
       creation.cancelled = true
       this.creations.delete(key)
     }
+    if (runtimes.length > 0 || creations.length > 0) this.notify()
 
     await Promise.all([
       ...runtimes.map((runtime) => runtime.dispose(false)),
@@ -143,6 +187,7 @@ export class TerminalRuntimeRegistry<T extends TerminalRuntimeHandle = TerminalR
     const runtime = this.runtimes.get(key)
     if (runtime) {
       this.runtimes.delete(key)
+      this.notify()
       return runtime.dispose(destroyPty)
     }
 
@@ -152,6 +197,7 @@ export class TerminalRuntimeRegistry<T extends TerminalRuntimeHandle = TerminalR
     creation.cancelled = true
     creation.destroyPty = creation.destroyPty || destroyPty
     this.creations.delete(key)
+    this.notify()
 
     return creation.promise.then(
       () => undefined,

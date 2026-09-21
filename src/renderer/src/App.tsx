@@ -19,6 +19,10 @@ import { GroupEditorDialog, type GroupEditorRequest, type GroupEditorValue } fro
 import { WorkspaceDialog, type WorkspaceDialogRequest, type WorkspaceDialogValue } from './components/WorkspaceDialog'
 import { WorkspaceManagementDialog } from './components/WorkspaceManagementDialog'
 import { WorkspaceListItem } from './components/WorkspaceListItem'
+import { WorkspaceActivityView } from './components/WorkspaceActivityView'
+import { useAgentSessionSnapshot } from './hooks/useAgentSessionSnapshot'
+import { useWorkspaceTerminalCounts } from './hooks/useWorkspaceTerminalCounts'
+import { buildWorkspaceActivityCards, resolveActivationFocusTarget } from './utils/workspaceActivity'
 import { TileEditorDialog, type TileEditorRequest, type TileEditorValue } from './components/TileEditorDialog'
 import { useCanvasStore } from './store/canvasStore'
 import { useSettingsStore } from './store/settingsStore'
@@ -64,7 +68,7 @@ import {
   pruneWorkspaceTerminalRuntimes,
 } from './utils/terminalRuntimeCleanup'
 import type { TerminalSessionTarget } from '@shared/terminalSessionIdentity'
-import { Terminal, StickyNote, SlidersHorizontal, Trash2, Pencil, Lock, Columns, Download, X, Plus } from 'lucide-react'
+import { Terminal, StickyNote, SlidersHorizontal, Trash2, Pencil, Lock, Columns, Download, X, Plus, Activity } from 'lucide-react'
 
 const GROUP_SHOW_TOP_PADDING = 42
 const EMPTY_BOARD_STATE: BoardState = {
@@ -414,6 +418,7 @@ function AppContent(): React.ReactElement {
   const [settingsSection, setSettingsSection] = useState<SettingsSectionId>('appearance')
   const [showJsonEditor, setShowJsonEditor] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [activityOpen, setActivityOpen] = useState(false)
   const [groupEditor, setGroupEditor] = useState<GroupEditorState>(null)
   const [workspaceEditor, setWorkspaceEditor] = useState<WorkspaceEditorState>(null)
   const [tileEditor, setTileEditor] = useState<TileEditorState>(null)
@@ -930,6 +935,7 @@ function AppContent(): React.ReactElement {
     selectTiles,
     setFullviewActiveTileId,
     setSplitViewState,
+    activityOpen,
     onClosePicker: () => {
       setShowProfilePicker(false)
       setShowWorkspaceManager(false)
@@ -962,6 +968,38 @@ function AppContent(): React.ReactElement {
     if (!terminalAttentionEnabled) return 0
     return sumTerminalAttentionCounts(terminalAttention)
   }, [terminalAttention, terminalAttentionEnabled])
+
+  const { sessions: agentSessions } = useAgentSessionSnapshot()
+  const liveWorkspaceTerminalCounts = useWorkspaceTerminalCounts(registry)
+  const workspaceTerminalCounts = useMemo(() => {
+    if (!activeWorkspaceId) return liveWorkspaceTerminalCounts
+    return {
+      ...liveWorkspaceTerminalCounts,
+      [activeWorkspaceId]: tiles.filter((tile) => tile.type === 'terminal').length,
+    }
+  }, [liveWorkspaceTerminalCounts, activeWorkspaceId, tiles])
+  const activeWorkspaceAttentionByTile = useMemo(() => (
+    Object.fromEntries(
+      Object.entries(terminalAttention).map(([tileId, entry]) => [tileId, entry.count]),
+    )
+  ), [terminalAttention])
+  const activityCards = useMemo(() => buildWorkspaceActivityCards({
+    workspaces: workspaceMetadata,
+    sessionActiveIds: sessionActiveWorkspaceIds,
+    sessions: agentSessions,
+    attentionCounts: workspaceAttentionCounts,
+    terminalCounts: workspaceTerminalCounts,
+    activeWorkspaceId,
+    activeWorkspaceAttentionByTile,
+  }), [
+    workspaceMetadata,
+    sessionActiveWorkspaceIds,
+    agentSessions,
+    workspaceAttentionCounts,
+    workspaceTerminalCounts,
+    activeWorkspaceId,
+    activeWorkspaceAttentionByTile,
+  ])
 
   useEffect(() => {
     if (!terminalAttentionEnabled) {
@@ -1476,6 +1514,43 @@ function AppContent(): React.ReactElement {
     if (!tile) return
     focusTileInFullview(tile)
   }, [focusTileInFullview])
+
+  const openActivityWorkspace = useCallback((workspace: WorkspaceMetadata) => {
+    setActivityOpen(false)
+    switchWorkspace(workspace)
+  }, [switchWorkspace])
+
+  const goToWorkspaceTerminal = useCallback((workspace: WorkspaceMetadata, tileId: string | null) => {
+    setActivityOpen(false)
+    void (async () => {
+      try {
+        if (workspace.id !== useCanvasStore.getState().activeWorkspaceId) {
+          recordWorkspaceSelection(workspace.id)
+          await activateWorkspace(workspace)
+        }
+        const state = useCanvasStore.getState()
+        const focusTileId = resolveActivationFocusTarget({
+          tiles: state.tiles,
+          requestedWorkspaceId: workspace.id,
+          activeWorkspaceId: state.activeWorkspaceId,
+          tileId,
+        })
+        if (!focusTileId) return
+        const tile = state.tiles.find((entry) => entry.id === focusTileId)
+        if (!tile) return
+        if (isTileDetached(tile)) {
+          focusTile(tile.id)
+          selectTiles([tile.id])
+          setFullviewActiveTileId(tile.id)
+          void window.electron.floating.focus(tile.id)
+          return
+        }
+        focusTileInFullview(tile)
+      } catch (error) {
+        console.error('[App] Failed to navigate to workspace terminal:', error)
+      }
+    })()
+  }, [activateWorkspace, focusTile, focusTileInFullview, recordWorkspaceSelection, selectTiles, setFullviewActiveTileId])
 
   const detachTile = useCallback((tile: TileState) => {
     if (!activeWorkspaceId || isTileDetached(tile)) return
@@ -2060,12 +2135,18 @@ function AppContent(): React.ReactElement {
         canSplitView={attachedTiles.length >= 2}
         sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={() => setSidebarCollapsed(c => !c)}
+        activityOpen={activityOpen}
+        activityCount={activityCards.length}
+        onToggleActivity={() => setActivityOpen((value) => !value)}
         agentProvider={activeWorkspaceConfig.agentProvider}
         agentUsage={agentUsage}
         hasWorkspacePanel={hasWorkspacePanel}
         workspacePanelOpen={activeWorkspaceConfig.workspacePanelOpen}
         onToggleWorkspacePanel={toggleWorkspacePanel}
-        onSetViewMode={handleSetViewMode}
+        onSetViewMode={(mode) => {
+          setActivityOpen(false)
+          handleSetViewMode(mode)
+        }}
         onFitToContent={() => getCanvasMethods()?.fitViewToContent()}
         onZoomToggle={handleZoomToggle}
         onOpenSettings={() => openSettings()}
@@ -2155,6 +2236,36 @@ function AppContent(): React.ReactElement {
       >
         <div className="flex h-full flex-col bg-bg-secondary">
           <div className="flex-1 px-3 py-4">
+            <button
+              type="button"
+              className={`mb-3 flex w-full items-center gap-2 rounded-2xl border px-3 py-2.5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${activityOpen ? '' : 'bg-bg-secondary hover:bg-hover-bg'}`}
+              style={{
+                background: activityOpen ? 'var(--surface-raised)' : undefined,
+                borderColor: activityOpen ? 'var(--text-primary)' : 'var(--border)',
+              }}
+              onClick={() => setActivityOpen(true)}
+              title={t('activity.title')}
+              aria-label={t('activity.title')}
+              aria-pressed={activityOpen}
+            >
+              <span
+                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-text-secondary"
+                style={{ borderColor: 'var(--border-visible)' }}
+              >
+                <Activity size={11} aria-hidden="true" />
+              </span>
+              <span className={`min-w-0 flex-1 truncate text-left text-sm ${activityOpen ? 'text-text-primary' : 'text-text-secondary'}`}>
+                {t('activity.activity')}
+              </span>
+              {sessionActiveWorkspaceIds.size > 0 && (
+                <span
+                  className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full border px-1.5 font-mono text-[10px] leading-none text-text-primary"
+                  style={{ borderColor: 'var(--text-primary)' }}
+                >
+                  {sessionActiveWorkspaceIds.size > 9 ? '9+' : String(sessionActiveWorkspaceIds.size)}
+                </span>
+              )}
+            </button>
             <div className="mb-3 flex items-center justify-between px-2">
               <span className="nd-label text-text-secondary">{t('sidebar.workspaces')}</span>
               <div className="flex items-center gap-1">
@@ -2194,9 +2305,13 @@ function AppContent(): React.ReactElement {
                     sessionActive={sessionActiveWorkspaceIds.has(workspace.id)}
                     attentionCount={workspaceAttentionCounts[workspace.id] ?? 0}
                     className="w-full transition-colors"
-                    onClick={() => switchWorkspace(workspace)}
+                    onClick={() => {
+                      setActivityOpen(false)
+                      switchWorkspace(workspace)
+                    }}
                     onConfigure={() => openWorkspaceEditor(workspace)}
                     onFocus={() => {
+                      setActivityOpen(false)
                       recordWorkspaceSelection(workspace.id)
                       void activateWorkspace(workspace, { activationMode: 'focus-last' })
                     }}
@@ -2248,6 +2363,13 @@ function AppContent(): React.ReactElement {
 
         {activeWorkspaceId ? (
             <div className="flex min-h-0 flex-1 overflow-hidden">
+              <div
+                className="min-w-0 flex-1 overflow-hidden"
+                hidden={activityOpen}
+                aria-hidden={activityOpen}
+                inert={activityOpen}
+              >
+              <div className="flex h-full min-h-0 overflow-hidden">
               <div className="relative min-w-0 flex flex-1 flex-col overflow-hidden">
                 {viewMode === 'splitview' && (
                 <SplitviewPanel
@@ -2375,7 +2497,24 @@ function AppContent(): React.ReactElement {
                   onOpenWorkspaceSettings={openActiveWorkspaceEditor}
                 />
               )}
+              </div>
+              </div>
+              {activityOpen && (
+                <WorkspaceActivityView
+                  cards={activityCards}
+                  onOpenWorkspace={openActivityWorkspace}
+                  onGoToTerminal={goToWorkspaceTerminal}
+                  onClose={() => setActivityOpen(false)}
+                />
+              )}
             </div>
+          ) : activityOpen ? (
+            <WorkspaceActivityView
+              cards={activityCards}
+              onOpenWorkspace={openActivityWorkspace}
+              onGoToTerminal={goToWorkspaceTerminal}
+              onClose={() => setActivityOpen(false)}
+            />
           ) : (
             <div className="flex flex-1 items-center justify-center bg-bg-primary" />
           )}

@@ -23,6 +23,8 @@ interface UseKeyboardShortcutsDeps {
   setFullviewActiveTileId: (id: string | null) => void
   setSplitViewState: (state: SplitViewState) => void
   onClosePicker?: () => void
+  /** Suspend tile-management actions while the global activity view covers the workspace. */
+  activityOpen?: boolean
 }
 
 function isEditableShortcutTarget(target: EventTarget | null): boolean {
@@ -57,10 +59,16 @@ export function handleKeyboardShortcut(e: KeyboardEvent, deps: UseKeyboardShortc
     setFullviewActiveTileId,
     setSplitViewState,
     onClosePicker,
+    activityOpen = false,
   } = deps
 
   if (isTerminalShortcutTarget(e.target)) return
   if (isDialogShortcutTarget(e.target)) return
+
+  if (activityOpen) {
+    if (e.key === 'Escape') onClosePicker?.()
+    return
+  }
 
   const isEditableTarget = isEditableShortcutTarget(e.target)
   const shortcut = resolveKeyboardShortcut(e)
@@ -138,6 +146,7 @@ export function useKeyboardShortcuts(deps: UseKeyboardShortcutsDeps) {
     setFullviewActiveTileId,
     setSplitViewState,
     onClosePicker,
+    activityOpen = false,
   } = deps
 
   useEffect(() => {
@@ -153,6 +162,7 @@ export function useKeyboardShortcuts(deps: UseKeyboardShortcutsDeps) {
       setFullviewActiveTileId,
       setSplitViewState,
       onClosePicker,
+      activityOpen,
     })
 
     window.addEventListener('keydown', onKeyDown)
@@ -169,5 +179,6 @@ export function useKeyboardShortcuts(deps: UseKeyboardShortcutsDeps) {
     setFullviewActiveTileId,
     setSplitViewState,
     onClosePicker,
+    activityOpen,
   ])
 }

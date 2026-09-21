@@ -45,12 +45,35 @@ type TranslationResources = {
     collapse: string
     open: string
   }
+  activity: {
+    activity: string
+    title: string
+    summary: string
+    searchPlaceholder: string
+    filterStatus: string
+    filterAll: string
+    openWorkspace: string
+    goToTerminal: string
+    emptyTitle: string
+    emptyMessage: string
+    noResultsTitle: string
+    noResultsMessage: string
+    clearFilters: string
+    sessions: string
+    moreSessions_one: string
+    moreSessions_other: string
+    terminals_one: string
+    terminals_other: string
+    agents_one: string
+    agents_other: string
+  }
   terminalActivity: {
     'needs-input': string
     working: string
     unread: string
     done: string
     idle: string
+    exited: string
     summary: string
   }
   agents: {
@@ -424,12 +447,35 @@ const en: TranslationResources = {
     collapse: 'Collapse sidebar',
     open: 'Open sidebar',
   },
+  activity: {
+    activity: 'Activity',
+    title: 'Global activity',
+    summary: '{{active}} active · {{attention}} need attention',
+    searchPlaceholder: 'Search active workspaces…',
+    filterStatus: 'Status',
+    filterAll: 'All',
+    openWorkspace: 'Open workspace',
+    goToTerminal: 'Go to terminal',
+    emptyTitle: 'No active workspaces',
+    emptyMessage: 'Open a workspace to see it here. Only workspaces visited in this session appear.',
+    noResultsTitle: 'No matching workspaces',
+    noResultsMessage: 'No active workspace matches this search or filter.',
+    clearFilters: 'Clear search and filters',
+    sessions: 'Sessions',
+    moreSessions_one: '+{{count}} more',
+    moreSessions_other: '+{{count}} more',
+    terminals_one: '{{count}} terminal',
+    terminals_other: '{{count}} terminals',
+    agents_one: '{{count}} active agent',
+    agents_other: '{{count}} active agents',
+  },
   terminalActivity: {
     'needs-input': 'Needs input',
     working: 'Working',
     unread: 'Unreviewed activity',
     done: 'Completed activity',
     idle: 'No detected activity',
+    exited: 'Exited',
     summary: '{{working}} working; {{needsInput}} need input; {{done}} completed; {{unread}} unreviewed output events',
   },
   agents: {
@@ -803,12 +849,35 @@ const es: TranslationResources = {
     collapse: 'Contraer barra lateral',
     open: 'Abrir barra lateral',
   },
+  activity: {
+    activity: 'Actividad',
+    title: 'Actividad global',
+    summary: '{{active}} activos · {{attention}} requieren atención',
+    searchPlaceholder: 'Buscar espacios activos…',
+    filterStatus: 'Estado',
+    filterAll: 'Todos',
+    openWorkspace: 'Abrir espacio de trabajo',
+    goToTerminal: 'Ir a la terminal',
+    emptyTitle: 'Sin espacios de trabajo activos',
+    emptyMessage: 'Abre un espacio de trabajo para verlo aquí. Solo aparecen los visitados en esta sesión.',
+    noResultsTitle: 'Sin coincidencias',
+    noResultsMessage: 'Ningún espacio activo coincide con esta búsqueda o filtro.',
+    clearFilters: 'Limpiar búsqueda y filtros',
+    sessions: 'Sesiones',
+    moreSessions_one: '+{{count}} más',
+    moreSessions_other: '+{{count}} más',
+    terminals_one: '{{count}} terminal',
+    terminals_other: '{{count}} terminales',
+    agents_one: '{{count}} agente activo',
+    agents_other: '{{count}} agentes activos',
+  },
   terminalActivity: {
     'needs-input': 'Requiere intervención',
     working: 'Trabajando',
     unread: 'Actividad sin revisar',
     done: 'Actividad finalizada',
     idle: 'Sin actividad detectada',
+    exited: 'Finalizada',
     summary: '{{working}} trabajando; {{needsInput}} requieren intervención; {{done}} finalizados; {{unread}} eventos de salida sin revisar',
   },
   agents: {

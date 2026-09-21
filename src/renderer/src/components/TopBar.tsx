@@ -1,5 +1,5 @@
 import React from 'react'
-import { Settings, Grid3X3, LayoutGrid, Columns, PanelLeft, PanelRight, SplitSquareHorizontal, SplitSquareVertical, ClipboardList } from 'lucide-react'
+import { Settings, Grid3X3, LayoutGrid, Columns, PanelLeft, PanelRight, SplitSquareHorizontal, SplitSquareVertical, ClipboardList, Activity } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { AgentProvider, AgentUsageSnapshot, SplitOrientation, ViewMode, WorkspaceType } from '@shared/types'
 import { AgentUsageIndicator } from './AgentUsageIndicator'
@@ -16,6 +16,9 @@ interface TopBarProps {
   canSplitView: boolean
   sidebarCollapsed: boolean
   onToggleSidebar: () => void
+  activityOpen: boolean
+  activityCount: number
+  onToggleActivity: () => void
   agentProvider?: AgentProvider
   agentUsage: AgentUsageSnapshot | null
   hasWorkspacePanel: boolean
@@ -83,6 +86,9 @@ export function TopBar({
   canSplitView,
   sidebarCollapsed,
   onToggleSidebar,
+  activityOpen,
+  activityCount,
+  onToggleActivity,
   agentProvider,
   agentUsage,
   hasWorkspacePanel,
@@ -110,6 +116,24 @@ export function TopBar({
               aria-label={sidebarCollapsed ? t('sidebar.open') : t('sidebar.collapse')}
             >
               <PanelLeft size={14} />
+            </button>
+            <button
+              className={`relative inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
+                activityOpen
+                  ? 'bg-text-primary text-bg-primary'
+                  : 'text-text-secondary hover:bg-hover-bg hover:text-text-primary'
+              }`}
+              onClick={onToggleActivity}
+              title={t('activity.activity')}
+              aria-label={t('activity.activity')}
+              aria-pressed={activityOpen}
+            >
+              <Activity size={14} />
+              {activityCount > 0 && (
+                <span className="absolute -right-1 -top-1 inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full border border-current bg-bg-secondary px-0.5 font-mono text-[8px] leading-none text-text-primary">
+                  {activityCount > 9 ? '9+' : String(activityCount)}
+                </span>
+              )}
             </button>
             {agentProvider && <AgentUsageIndicator provider={agentProvider} snapshot={agentUsage?.[agentProvider]} />}
           </div>
@@ -158,7 +182,7 @@ export function TopBar({
           </div>
 
           <div className="ml-auto flex items-center justify-end gap-1">
-            {!isGridWorkspace && (
+            {!isGridWorkspace && !activityOpen && (
               <>
                 <button
                   className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
@@ -179,7 +203,7 @@ export function TopBar({
               </>
             )}
 
-            {hasWorkspacePanel && (
+            {hasWorkspacePanel && !activityOpen && (
               <button
                 className={`inline-flex h-7 w-7 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display ${workspacePanelOpen ? 'text-text-display' : ''}`}
                 onClick={onToggleWorkspacePanel}
