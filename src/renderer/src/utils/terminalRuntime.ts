@@ -257,6 +257,7 @@ function createRuntime(
   let replayStarted = false
   let fitDirty = true
   let forceRefresh = false
+  let pendingFocusAfterFit = false
   let observedHost: HTMLElement | null = null
   let processExited = false
   let disposed = false
@@ -416,13 +417,27 @@ function createRuntime(
             fitDirty = false
             forceRefresh = false
             refreshTerminal()
+            if (pendingFocusAfterFit) {
+              pendingFocusAfterFit = false
+              focusIfAutoFocus()
+            }
             return
           }
 
           fitDirty = false
-          if (!forceRefresh) return
+          if (!forceRefresh) {
+            if (pendingFocusAfterFit) {
+              pendingFocusAfterFit = false
+              focusIfAutoFocus()
+            }
+            return
+          }
           forceRefresh = false
           refreshTerminal()
+          if (pendingFocusAfterFit) {
+            pendingFocusAfterFit = false
+            focusIfAutoFocus()
+          }
         },
       )
     } catch (error) {
@@ -576,6 +591,7 @@ function createRuntime(
     currentHost = null
     fitDirty = true
     forceRefresh = false
+    pendingFocusAfterFit = false
     fontWaitGeneration += 1
     disconnectObserver()
     fitScheduler.cancelPending()
@@ -607,6 +623,7 @@ function createRuntime(
     currentViewOptions = next
     fitDirty = true
     forceRefresh = false
+    pendingFocusAfterFit = next.visible === true && next.autoFocus === true
     fontWaitGeneration += 1
 
     try {
@@ -618,13 +635,16 @@ function createRuntime(
       return
     }
 
-    // Apply mutable options after the root is in the host. Auto-focus must
-    // run against the visible DOM node, not the parking root or a prior host.
+    // Apply mutable options after the root is in the host. The pending
+    // attach focus is consumed once after the fit/repaint completion, so an
+    // early focus cannot reach the PTY before the viewport is stable.
     applyChangedViewOptions(previous, next)
     connectObserver(host)
-    if (!currentViewOptions.visible) return
+    if (!currentViewOptions.visible) {
+      pendingFocusAfterFit = false
+      return
+    }
 
-    focusIfAutoFocus()
     forceRefresh = true
     retryAfterFonts()
     requestFit()
@@ -642,6 +662,7 @@ function createRuntime(
       disconnectObserver()
       fitDirty = true
       forceRefresh = false
+      pendingFocusAfterFit = false
       fontWaitGeneration += 1
       return
     }
@@ -650,7 +671,7 @@ function createRuntime(
       currentViewOptions = next
       applyChangedViewOptions(previous, next)
       connectObserver(host)
-      focusIfAutoFocus()
+      pendingFocusAfterFit = next.visible === true && next.autoFocus === true
       fitDirty = true
       forceRefresh = true
       retryAfterFonts()
@@ -667,13 +688,14 @@ function createRuntime(
 
     if (fontChanged || edgeChanged) {
       connectObserver(host)
-      if (next.visible && next.autoFocus) focus()
       if (!next.visible) {
         fitDirty = true
         forceRefresh = false
+        pendingFocusAfterFit = false
         fitScheduler.cancelPending()
         return
       }
+      pendingFocusAfterFit = next.autoFocus === true
       fitDirty = true
       forceRefresh = true
       retryAfterFonts()
@@ -741,6 +763,7 @@ function createRuntime(
     fitScheduler.cancelPending()
     disconnectObserver()
     forceRefresh = false
+    pendingFocusAfterFit = false
     fitDirty = false
     replayController?.dispose()
     replayController = null

@@ -3,21 +3,21 @@ import { createTerminalFitScheduler, type TerminalFitResult } from './terminalFi
 let queuedFrames: Array<{ id: number; callback: () => void }> = []
 let nextFrameId = 1
 
-const scheduler = createTerminalFitScheduler({
-  requestFrame: (callback) => {
-    const id = nextFrameId++
-    queuedFrames.push({ id, callback })
-    return id
-  },
-  cancelFrame: (id) => {
-    queuedFrames = queuedFrames.filter((frame) => frame.id !== id)
-  },
-})
-
-let fitCalls = 0
-let resizeCalls: Array<{ cols: number; rows: number }> = []
-let dimensions = { cols: 100, rows: 30 }
-const fitResults: TerminalFitResult[] = []
+function makeFrameHost(): {
+  requestFrame: (callback: () => void) => number
+  cancelFrame: (id: number) => void
+} {
+  return {
+    requestFrame: (callback) => {
+      const id = nextFrameId++
+      queuedFrames.push({ id, callback })
+      return id
+    },
+    cancelFrame: (id) => {
+      queuedFrames = queuedFrames.filter((frame) => frame.id !== id)
+    },
+  }
+}
 
 function flushFrame(message: string): void {
   const frame = queuedFrames.shift()
@@ -25,78 +25,90 @@ function flushFrame(message: string): void {
   frame.callback()
 }
 
-function getFitCalls(): number {
-  return fitCalls
+interface SampleCounters {
+  fitCalls: number
+  proposeCalls: number
 }
 
-function getResizeCallCount(): number {
-  return resizeCalls.length
+function makeAddon(
+  getDimensions: () => { cols: number; rows: number } | undefined,
+  counters: SampleCounters,
+): { fit: () => void; proposeDimensions: () => { cols: number; rows: number } | undefined } {
+  return {
+    fit: () => {
+      counters.fitCalls += 1
+    },
+    proposeDimensions: () => {
+      counters.proposeCalls += 1
+      return getDimensions()
+    },
+  }
 }
 
-const fitAddon = {
-  fit: () => {
-    fitCalls += 1
-  },
-  proposeDimensions: () => dimensions,
+const scheduler = createTerminalFitScheduler(makeFrameHost())
+
+const mainCounters: SampleCounters = { fitCalls: 0, proposeCalls: 0 }
+let dimensions: { cols: number; rows: number } | undefined = { cols: 100, rows: 30 }
+const resizeCalls: Array<{ cols: number; rows: number }> = []
+const fitResults: TerminalFitResult[] = []
+const mainAddon = makeAddon(() => dimensions, mainCounters)
+
+function requestMainFit(): void {
+  scheduler.requestFit(mainAddon, (cols, rows) => {
+    resizeCalls.push({ cols, rows })
+  }, (result) => fitResults.push(result))
 }
 
-scheduler.requestFit(fitAddon, (cols, rows) => {
+// Coalesced requests share one stable measurement cycle.
+scheduler.requestFit(mainAddon, (cols, rows) => {
   resizeCalls.push({ cols, rows })
 }, (result) => fitResults.push(result))
-scheduler.requestFit(fitAddon, (cols, rows) => {
-  resizeCalls.push({ cols, rows })
-}, (result) => fitResults.push(result))
-
-flushFrame('preparation frame must not fit yet')
-
-if (getFitCalls() !== 0) throw new Error(`preparation frame must not call fit, got ${getFitCalls()}`)
-if (getResizeCallCount() !== 0) throw new Error(`preparation frame must not resize, got ${getResizeCallCount()}`)
-if (fitResults.length !== 0) throw new Error(`preparation frame must not complete, got ${fitResults.length}`)
-
-scheduler.requestFit(fitAddon, (cols, rows) => {
+scheduler.requestFit(mainAddon, (cols, rows) => {
   resizeCalls.push({ cols, rows })
 }, (result) => fitResults.push(result))
 
-flushFrame('single fit must run once on the following frame')
+if (queuedFrames.length !== 1) throw new Error(`coalesced requests must share one frame, got ${queuedFrames.length}`)
 
-if (getFitCalls() !== 1) throw new Error(`coalesced requests must fit once, got ${getFitCalls()}`)
-if (getResizeCallCount() !== 1) throw new Error(`coalesced requests must resize once, got ${getResizeCallCount()}`)
+flushFrame('first sample must be read-only without fit')
+if ((mainCounters.fitCalls as number) !== 0) throw new Error(`first sample must not call fit, got ${mainCounters.fitCalls}`)
+if ((mainCounters.proposeCalls as number) !== 1) throw new Error(`first sample must propose once, got ${mainCounters.proposeCalls}`)
+if (resizeCalls.length !== 0) throw new Error('first sample must not resize the PTY')
+if (fitResults.length !== 0) throw new Error(`first sample must not complete, got ${fitResults.length}`)
+
+flushFrame('stable second sample fits once and resizes')
+if ((mainCounters.fitCalls as number) !== 1) throw new Error(`stable fit must call fit once, got ${mainCounters.fitCalls}`)
+if ((mainCounters.proposeCalls as number) !== 2) throw new Error(`stable fit must propose twice, got ${mainCounters.proposeCalls}`)
+if ((resizeCalls.length as number) !== 1) throw new Error(`stable fit must resize once, got ${resizeCalls.length}`)
 if (resizeCalls[0].cols !== 100 || resizeCalls[0].rows !== 30) {
   throw new Error(`unexpected resize dimensions ${resizeCalls[0].cols}x${resizeCalls[0].rows}`)
 }
 if (fitResults.join(',') !== 'fitted') {
-  throw new Error(`single fit must complete once as fitted, got ${fitResults.join(',')}`)
+  throw new Error(`stable fit must complete once as fitted, got ${fitResults.join(',')}`)
 }
 
-scheduler.requestFit(fitAddon, (cols, rows) => {
-  resizeCalls.push({ cols, rows })
-}, (result) => fitResults.push(result))
-flushFrame('second preparation frame must not fit yet')
-
-if (getFitCalls() !== 1) throw new Error(`second preparation must not fit, got ${getFitCalls()}`)
-if (getResizeCallCount() !== 1) throw new Error('second preparation must not resize the PTY')
-
-flushFrame('second single fit must deduplicate unchanged dimensions')
-
-if (getFitCalls() !== 2) throw new Error(`second request must fit once, got ${getFitCalls()}`)
-if (getResizeCallCount() !== 1) throw new Error('same terminal dimensions must not send a redundant PTY resize')
+// Same dimensions stay stable, fit once to keep xterm in sync, no PTY resize.
+requestMainFit()
+flushFrame('second first sample must not call fit')
+if ((mainCounters.fitCalls as number) !== 1) throw new Error(`second first sample must not call fit, got ${mainCounters.fitCalls}`)
+if (Number(resizeCalls.length) !== 1) throw new Error('second first sample must not resize the PTY')
+if (fitResults.join(',') !== 'fitted') {
+  throw new Error(`second first sample must not complete, got ${fitResults.join(',')}`)
+}
+flushFrame('second stable fit must deduplicate without PTY resize')
+if ((mainCounters.fitCalls as number) !== 2) throw new Error(`second stable fit must call fit once, got ${mainCounters.fitCalls}`)
+if (Number(resizeCalls.length) !== 1) throw new Error('same terminal dimensions must not send a redundant PTY resize')
 if (fitResults.join(',') !== 'fitted,unchanged') {
   throw new Error(`unchanged dimensions must complete as unchanged, got ${fitResults.join(',')}`)
 }
 
+// A real stable change resizes the PTY with the current dimensions.
 dimensions = { cols: 120, rows: 35 }
-scheduler.requestFit(fitAddon, (cols, rows) => {
-  resizeCalls.push({ cols, rows })
-}, (result) => fitResults.push(result))
-flushFrame('dimension change preparation must not fit yet')
-
-if (getFitCalls() !== 2) throw new Error(`dimension change preparation must not fit, got ${getFitCalls()}`)
-if (getResizeCallCount() !== 1) throw new Error('dimension change preparation must not resize the PTY')
-
-flushFrame('dimension change single fit must use current dimensions')
-
-if (getFitCalls() !== 3) throw new Error(`dimension change must fit once, got ${getFitCalls()}`)
-if (getResizeCallCount() !== 2) throw new Error(`changed dimensions must send a PTY resize, got ${getResizeCallCount()}`)
+requestMainFit()
+flushFrame('dimension change first sample must not call fit')
+if ((mainCounters.fitCalls as number) !== 2) throw new Error(`dimension change first sample must not fit, got ${mainCounters.fitCalls}`)
+flushFrame('dimension change stable fit must use current dimensions')
+if ((mainCounters.fitCalls as number) !== 3) throw new Error(`dimension change must fit once, got ${mainCounters.fitCalls}`)
+if (Number(resizeCalls.length) !== 2) throw new Error(`changed dimensions must send a PTY resize, got ${resizeCalls.length}`)
 if (resizeCalls[1].cols !== 120 || resizeCalls[1].rows !== 35) {
   throw new Error(`unexpected changed resize dimensions ${resizeCalls[1].cols}x${resizeCalls[1].rows}`)
 }
@@ -104,7 +116,112 @@ if (fitResults[2] !== 'fitted') {
   throw new Error(`dimension change must complete as fitted, got ${fitResults.join(',')}`)
 }
 
-scheduler.requestFit(fitAddon, () => {
+// A transient size between samples never calls fit nor PTY resize,
+// and recovers on the next internal frame without an external event.
+const transientScheduler = createTerminalFitScheduler(makeFrameHost())
+const transientCounters: SampleCounters = { fitCalls: 0, proposeCalls: 0 }
+let transientDimensions: { cols: number; rows: number } | undefined = { cols: 120, rows: 35 }
+const transientResizeCalls: Array<{ cols: number; rows: number }> = []
+const transientResults: TerminalFitResult[] = []
+transientScheduler.requestFit(makeAddon(() => transientDimensions, transientCounters), (cols, rows) => {
+  transientResizeCalls.push({ cols, rows })
+}, (result) => transientResults.push(result))
+
+flushFrame('transient first sample must not call fit')
+if ((transientCounters.fitCalls as number) !== 0) throw new Error('transient first sample must not call fit')
+if ((transientCounters.proposeCalls as number) !== 1) throw new Error('transient first sample must propose once')
+
+transientDimensions = { cols: 40, rows: 12 }
+flushFrame('mismatched second sample must not fit nor resize')
+if ((transientCounters.fitCalls as number) !== 0) {
+  throw new Error(`mismatch must not call fit, got ${transientCounters.fitCalls}`)
+}
+if ((transientResizeCalls.length as number) !== 0) {
+  throw new Error(`mismatch must not resize the PTY, got ${transientResizeCalls.length}`)
+}
+if (transientResults.length !== 0) {
+  throw new Error(`mismatch must not complete, got ${transientResults.join(',')}`)
+}
+if (queuedFrames.length !== 1) {
+  throw new Error(`mismatch must schedule an internal retry without external event, got ${queuedFrames.length}`)
+}
+
+flushFrame('internal retry with settled size must fit once and resize')
+if ((transientCounters.fitCalls as number) !== 1) {
+  throw new Error(`settled retry must call fit once, got ${transientCounters.fitCalls}`)
+}
+if ((transientResizeCalls.length as number) !== 1) {
+  throw new Error(`settled retry must resize once, got ${transientResizeCalls.length}`)
+}
+if (transientResizeCalls[0].cols !== 40 || transientResizeCalls[0].rows !== 12) {
+  throw new Error(`settled retry must use final dimensions, got ${transientResizeCalls[0].cols}x${transientResizeCalls[0].rows}`)
+}
+if (transientResults.join(',') !== 'fitted') {
+  throw new Error(`settled retry must report fitted, got ${transientResults.join(',')}`)
+}
+
+// A continuous oscillation cannot loop forever: after MAX_SAMPLES valid
+// samples without consecutive equality, the latest size wins once.
+const oscillationScheduler = createTerminalFitScheduler(makeFrameHost())
+const oscillationCounters: SampleCounters = { fitCalls: 0, proposeCalls: 0 }
+const sizeA = { cols: 100, rows: 30 }
+const sizeB = { cols: 120, rows: 35 }
+let oscillationToggle = false
+const oscillationResizeCalls: Array<{ cols: number; rows: number }> = []
+const oscillationResults: TerminalFitResult[] = []
+oscillationScheduler.requestFit(makeAddon(() => {
+  oscillationToggle = !oscillationToggle
+  return oscillationToggle ? sizeA : sizeB
+}, oscillationCounters), (cols, rows) => {
+  oscillationResizeCalls.push({ cols, rows })
+}, (result) => oscillationResults.push(result))
+
+for (let frame = 1; frame <= 8; frame++) {
+  flushFrame(`oscillation sample ${frame} must not complete early`)
+  if (frame < 8 && oscillationResults.length !== 0) {
+    throw new Error(`oscillation must not complete at sample ${frame}`)
+  }
+  if (frame < 8 && (oscillationCounters.fitCalls as number) !== 0) {
+    throw new Error(`oscillation must not call fit at sample ${frame}`)
+  }
+}
+if (oscillationResults.join(',') !== 'fitted') {
+  throw new Error(`oscillation must converge as fitted, got ${oscillationResults.join(',')}`)
+}
+if ((oscillationCounters.fitCalls as number) !== 1) {
+  throw new Error(`oscillation must call fit exactly once, got ${oscillationCounters.fitCalls}`)
+}
+if ((oscillationResizeCalls.length as number) !== 1) {
+  throw new Error(`oscillation must resize exactly once, got ${oscillationResizeCalls.length}`)
+}
+if (oscillationResizeCalls[0].cols !== 120 || oscillationResizeCalls[0].rows !== 35) {
+  throw new Error(`oscillation must use the latest size, got ${oscillationResizeCalls[0].cols}x${oscillationResizeCalls[0].rows}`)
+}
+if (Number(queuedFrames.length) !== 0) {
+  throw new Error(`converged oscillation must not leave a queued frame, got ${queuedFrames.length}`)
+}
+
+// Narrow but legitimate panels keep a stable resize without magic limits.
+const narrowScheduler = createTerminalFitScheduler(makeFrameHost())
+const narrowCounters: SampleCounters = { fitCalls: 0, proposeCalls: 0 }
+const narrowResizeCalls: Array<{ cols: number; rows: number }> = []
+const narrowResults: TerminalFitResult[] = []
+narrowScheduler.requestFit(makeAddon(() => ({ cols: 10, rows: 5 }), narrowCounters), (cols, rows) => {
+  narrowResizeCalls.push({ cols, rows })
+}, (result) => narrowResults.push(result))
+flushFrame('narrow first sample must not call fit')
+if ((narrowCounters.fitCalls as number) !== 0) throw new Error('narrow first sample must not call fit')
+flushFrame('narrow stable size must fit once and resize')
+if ((narrowCounters.fitCalls as number) !== 1) throw new Error(`narrow panel must fit once, got ${narrowCounters.fitCalls}`)
+if (narrowResizeCalls.length !== 1) throw new Error(`narrow panel must resize once, got ${narrowResizeCalls.length}`)
+if (narrowResizeCalls[0].cols !== 10 || narrowResizeCalls[0].rows !== 5) {
+  throw new Error(`narrow panel must keep exact dimensions, got ${narrowResizeCalls[0].cols}x${narrowResizeCalls[0].rows}`)
+}
+if (narrowResults.join(',') !== 'fitted') {
+  throw new Error(`narrow panel must report fitted, got ${narrowResults.join(',')}`)
+}
+
+scheduler.requestFit(mainAddon, () => {
   throw new Error('cancelled fit must not run')
 })
 scheduler.cancelPending()
@@ -112,108 +229,82 @@ if (queuedFrames.length > 0) {
   flushFrame('cancelled fit must not leave a queued frame')
 }
 
-const dimensionsChangeScheduler = createTerminalFitScheduler({
-  requestFrame: (callback) => {
-    const id = nextFrameId++
-    queuedFrames.push({ id, callback })
-    return id
-  },
-  cancelFrame: (id) => {
-    queuedFrames = queuedFrames.filter((frame) => frame.id !== id)
-  },
-})
+const changeScheduler = createTerminalFitScheduler(makeFrameHost())
+const changeCounters: SampleCounters = { fitCalls: 0, proposeCalls: 0 }
+let dimensionsBetweenSamples: { cols: number; rows: number } | undefined = { cols: 100, rows: 30 }
+const changedResizeCalls: Array<{ cols: number; rows: number }> = []
+const changedResults: TerminalFitResult[] = []
+changeScheduler.requestFit(makeAddon(() => dimensionsBetweenSamples, changeCounters), (cols, rows) => {
+  changedResizeCalls.push({ cols, rows })
+}, (result) => changedResults.push(result))
 
-let dimensionsBetweenFits = { cols: 100, rows: 30 }
-let changingFitCalls = 0
-const changedDimensionResizeCalls: Array<{ cols: number; rows: number }> = []
-const changedDimensionResults: TerminalFitResult[] = []
+flushFrame('preparation must sample read-only')
+if ((changeCounters.fitCalls as number) !== 0) throw new Error('preparation sample must not call fit')
+if (changedResizeCalls.length !== 0) throw new Error('preparation sample must not resize')
+if (changedResults.length !== 0) throw new Error('preparation sample must not complete')
 
-dimensionsChangeScheduler.requestFit({
-  fit: () => {
-    changingFitCalls += 1
-  },
-  proposeDimensions: () => dimensionsBetweenFits,
-}, (cols, rows) => {
-  changedDimensionResizeCalls.push({ cols, rows })
-}, (result) => changedDimensionResults.push(result))
+dimensionsBetweenSamples = { cols: 80, rows: 25 }
+flushFrame('changed second sample mismatches and retries internally')
+if ((changeCounters.fitCalls as number) !== 0) throw new Error('mismatched sample must not call fit')
+if (changedResizeCalls.length !== 0) throw new Error('mismatched sample must not resize')
+if (changedResults.length !== 0) throw new Error('mismatched sample must not complete')
+if (queuedFrames.length !== 1) throw new Error('mismatch must retry without external event')
 
-flushFrame('preparation must not fit before dimensions change')
-
-if (changingFitCalls !== 0) throw new Error(`preparation must not call fit, got ${changingFitCalls}`)
-if (changedDimensionResizeCalls.length !== 0) {
-  throw new Error(`preparation must not resize, got ${changedDimensionResizeCalls.length}`)
+flushFrame('settled retry uses final dimensions')
+if ((changeCounters.fitCalls as number) !== 1) throw new Error(`settled retry must fit once, got ${changeCounters.fitCalls}`)
+if ((changedResizeCalls.length as number) !== 1) {
+  throw new Error(`changed dimensions must resize the PTY once, got ${changedResizeCalls.length}`)
 }
-if (changedDimensionResults.length !== 0) {
-  throw new Error(`preparation must not complete, got ${changedDimensionResults.length}`)
+if (changedResizeCalls[0].cols !== 80 || changedResizeCalls[0].rows !== 25) {
+  throw new Error(`settled retry must use final dimensions, got ${changedResizeCalls[0].cols}x${changedResizeCalls[0].rows}`)
+}
+if (changedResults.join(',') !== 'fitted') {
+  throw new Error(`settled retry must complete as fitted, got ${changedResults.join(',')}`)
 }
 
-dimensionsBetweenFits = { cols: 80, rows: 25 }
-flushFrame('single fit must use dimensions current at second frame')
-
-if ((changingFitCalls as number) !== 1) throw new Error(`changed dimensions must fit once, got ${changingFitCalls}`)
-if ((changedDimensionResizeCalls.length as number) !== 1) {
-  throw new Error(`changed dimensions must resize the PTY once, got ${changedDimensionResizeCalls.length}`)
-}
-if (changedDimensionResizeCalls[0].cols !== 80 || changedDimensionResizeCalls[0].rows !== 25) {
-  throw new Error(`single fit must use final dimensions, got ${changedDimensionResizeCalls[0].cols}x${changedDimensionResizeCalls[0].rows}`)
-}
-if (changedDimensionResults.join(',') !== 'fitted') {
-  throw new Error(`single fit must complete as fitted, got ${changedDimensionResults.join(',')}`)
-}
-
-const finalFrameCancellationScheduler = createTerminalFitScheduler({
-  requestFrame: (callback) => {
-    const id = nextFrameId++
-    queuedFrames.push({ id, callback })
-    return id
-  },
-  cancelFrame: (id) => {
-    queuedFrames = queuedFrames.filter((frame) => frame.id !== id)
-  },
-})
-
-let finalFrameFitCalls = 0
-const finalFrameResults: TerminalFitResult[] = []
-
-finalFrameCancellationScheduler.requestFit({
-  fit: () => {
-    finalFrameFitCalls += 1
-  },
-  proposeDimensions: () => ({ cols: 100, rows: 30 }),
-}, () => {}, (result) => finalFrameResults.push(result))
-
-flushFrame('preparation must run before cancelling single fit')
-
-if (finalFrameFitCalls !== 0) throw new Error(`preparation must not fit, got ${finalFrameFitCalls}`)
-finalFrameCancellationScheduler.cancelPending()
-
+const cancelScheduler = createTerminalFitScheduler(makeFrameHost())
+const cancelCounters: SampleCounters = { fitCalls: 0, proposeCalls: 0 }
+const cancelResults: TerminalFitResult[] = []
+cancelScheduler.requestFit(makeAddon(() => ({ cols: 100, rows: 30 }), cancelCounters), () => {}, (result) => cancelResults.push(result))
+flushFrame('preparation must run before cancelling stable fit')
+if ((cancelCounters.fitCalls as number) !== 0) throw new Error('preparation must not fit')
+cancelScheduler.cancelPending()
 if (queuedFrames.length > 0) {
-  flushFrame('cancelled single fit must not run')
+  flushFrame('cancelled stable fit must not run')
 }
-if (finalFrameFitCalls !== 0) {
-  throw new Error(`cancelling between frames must prevent its fit, got ${finalFrameFitCalls}`)
+if ((cancelCounters.fitCalls as number) !== 0) {
+  throw new Error(`cancelling between frames must prevent fit, got ${cancelCounters.fitCalls}`)
 }
-if (finalFrameResults.length !== 0) {
-  throw new Error(`cancelled fit must not complete, got ${finalFrameResults.length}`)
+if (cancelResults.length !== 0) {
+  throw new Error(`cancelled fit must not complete, got ${cancelResults.length}`)
 }
 
-const throwingScheduler = createTerminalFitScheduler({
-  requestFrame: (callback) => {
-    const id = nextFrameId++
-    queuedFrames.push({ id, callback })
-    return id
-  },
-  cancelFrame: (id) => {
-    queuedFrames = queuedFrames.filter((frame) => frame.id !== id)
-  },
-})
+const midCycleScheduler = createTerminalFitScheduler(makeFrameHost())
+const midCounters: SampleCounters = { fitCalls: 0, proposeCalls: 0 }
+const midResults: TerminalFitResult[] = []
+midCycleScheduler.requestFit(makeAddon(() => ({ cols: 100, rows: 30 }), midCounters), () => {
+  throw new Error('cancelled mid-cycle fit must not resize')
+}, (result) => midResults.push(result))
+flushFrame('mid-cycle first sample runs read-only')
+if ((midCounters.fitCalls as number) !== 0) throw new Error('mid-cycle first sample must not call fit')
+if ((midCounters.proposeCalls as number) !== 1) throw new Error('mid-cycle first sample must propose once')
+midCycleScheduler.cancelPending()
+if (queuedFrames.length > 0) {
+  flushFrame('cancelled second sample must not run')
+}
+if ((midCounters.fitCalls as number) !== 0) throw new Error('cancelling after first sample must prevent fit')
+if (midResults.length !== 0) throw new Error('cancelled mid-cycle fit must not complete')
 
+const throwingScheduler = createTerminalFitScheduler(makeFrameHost())
+const throwingCounters: SampleCounters = { fitCalls: 0, proposeCalls: 0 }
 throwingScheduler.requestFit({
   fit: () => {
+    throwingCounters.fitCalls += 1
     throw new Error('fit failed')
   },
   proposeDimensions: () => {
-    throw new Error('dimensions should not be proposed after failed fit')
+    throwingCounters.proposeCalls += 1
+    return { cols: 100, rows: 30 }
   },
 }, () => {
   throw new Error('failed fit must not resize')
@@ -221,48 +312,39 @@ throwingScheduler.requestFit({
 
 let fitErrorEscaped = false
 try {
-  flushFrame('throwing preparation must be scheduled')
-  flushFrame('throwing fit must be scheduled')
+  flushFrame('throwing first sample must be scheduled')
+  flushFrame('throwing second sample must be scheduled')
 } catch {
   fitErrorEscaped = true
 }
 
 if (fitErrorEscaped) throw new Error('fit errors must stay contained inside the scheduler')
+if ((throwingCounters.fitCalls as number) !== 1) throw new Error('stable throwing fit must be attempted once')
 throwingScheduler.cancelPending()
 
-const unmeasurableScheduler = createTerminalFitScheduler({
-  requestFrame: (callback) => {
-    const id = nextFrameId++
-    queuedFrames.push({ id, callback })
-    return id
-  },
-  cancelFrame: (id) => {
-    queuedFrames = queuedFrames.filter((frame) => frame.id !== id)
-  },
-})
-
+const unmeasurableScheduler = createTerminalFitScheduler(makeFrameHost())
+const unmeasurableCounters: SampleCounters = { fitCalls: 0, proposeCalls: 0 }
 let unmeasurableDimensions: { cols: number; rows: number } | undefined
 const unmeasurableResults: TerminalFitResult[] = []
-unmeasurableScheduler.requestFit({
-  fit: () => {},
-  proposeDimensions: () => unmeasurableDimensions,
-}, () => {
+unmeasurableScheduler.requestFit(makeAddon(() => unmeasurableDimensions, unmeasurableCounters), () => {
   throw new Error('an unmeasurable fit must not resize')
 }, (result) => unmeasurableResults.push(result))
-flushFrame('unmeasurable preparation must not complete')
-flushFrame('unmeasurable single fit must be scheduled on the following frame')
+flushFrame('unmeasurable first sample must not call fit')
+if ((unmeasurableCounters.fitCalls as number) !== 0) throw new Error('unmeasurable first sample must not call fit')
+flushFrame('stable unmeasurable pair must not call fit')
+if ((unmeasurableCounters.fitCalls as number) !== 0) throw new Error('unmeasurable stable pair must not call fit')
 
 if (unmeasurableResults.join(',') !== 'unmeasurable') {
   throw new Error(`missing unmeasurable fit result: ${unmeasurableResults.join(',')}`)
 }
 
 unmeasurableDimensions = { cols: 90, rows: 22 }
-unmeasurableScheduler.requestFit({
-  fit: () => {},
-  proposeDimensions: () => unmeasurableDimensions,
-}, () => {}, (result) => unmeasurableResults.push(result))
-flushFrame('measurable retry preparation must not fit yet')
-flushFrame('measurable retry must be scheduled on the following frame')
+unmeasurableScheduler.requestFit(makeAddon(() => unmeasurableDimensions, unmeasurableCounters), () => {}, (result) => unmeasurableResults.push(result))
+flushFrame('measurable retry first sample must not call fit')
+if (unmeasurableResults.join(',') !== 'unmeasurable') {
+  throw new Error(`measurable retry first sample must not complete, got ${unmeasurableResults.join(',')}`)
+}
+flushFrame('measurable retry stable pair must fit once')
 
 if (unmeasurableResults.join(',') !== 'unmeasurable,fitted') {
   throw new Error(`measurable retry must report fitted once, got ${unmeasurableResults.join(',')}`)

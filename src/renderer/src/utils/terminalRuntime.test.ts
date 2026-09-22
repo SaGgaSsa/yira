@@ -228,10 +228,10 @@ class FakeFitScheduler implements TerminalFitSchedulerLike {
     const request = this.requests.shift()
     if (!request) return null
 
-    request.fitAddon.fit()
     const dimensions = request.fitAddon.proposeDimensions()
     let result: TerminalFitResult = 'unmeasurable'
     if (dimensions && dimensions.cols > 0 && dimensions.rows > 0) {
+      request.fitAddon.fit()
       const normalized = { cols: Math.floor(dimensions.cols), rows: Math.floor(dimensions.rows) }
       if (this.lastDimensions
         && this.lastDimensions.cols === normalized.cols
@@ -1190,5 +1190,142 @@ test('park and reattach keep single replay and refresh unchanged without resize'
   assert.deepEqual(harness.terminals[0].writes, ['initial', 'background'])
   assert.deepEqual(harness.bridge.resizeCalls.length, resizeBefore)
   assert.equal(harness.terminals[0].refreshCalls.length, refreshBefore + 1)
+  await runtime.dispose(false)
+})
+
+test('defers autoFocus of a new host until after fit and refresh', async () => {
+  const harness = createRuntimeHarness()
+  const runtime = await createReadyRuntime(harness)
+  const terminal = harness.terminals[0]
+  const firstHost = harness.host()
+
+  runtime.attachHost(firstHost, viewOptions({ visible: true, autoFocus: true }))
+  assert.equal(terminal.focusCalls, 0)
+  assert.equal(terminal.refreshCalls.length, 0)
+  assert.equal(harness.schedulers[0].requests.length, 1)
+
+  harness.flushFit()
+
+  assert.deepEqual(harness.bridge.resizeCalls.length, 1)
+  assert.equal(terminal.refreshCalls.length, 1)
+  assert.equal(terminal.focusCalls, 1)
+  const firstRefreshIndex = harness.events.indexOf('terminal:refresh:0-23')
+  const firstFocusIndex = harness.events.indexOf('terminal:focus')
+  assert.equal(firstRefreshIndex !== -1 && firstFocusIndex !== -1 && firstRefreshIndex < firstFocusIndex, true)
+
+  const secondHost = harness.host()
+  runtime.attachHost(secondHost, viewOptions({ visible: true, autoFocus: true }))
+  assert.equal(terminal.focusCalls, 1)
+  assert.equal(harness.schedulers[0].requests.length, 1)
+
+  harness.flushFit()
+
+  assert.deepEqual(harness.bridge.resizeCalls.length, 1)
+  assert.equal(terminal.refreshCalls.length, 2)
+  assert.equal(terminal.focusCalls, 2)
+  const refreshEvents = harness.events.filter((event) => event.startsWith('terminal:refresh:'))
+  const focusEvents = harness.events.filter((event) => event === 'terminal:focus')
+  assert.equal(refreshEvents.length, 2)
+  assert.equal(focusEvents.length, 2)
+  assert.equal(harness.events.lastIndexOf('terminal:refresh:0-23') < harness.events.lastIndexOf('terminal:focus'), true)
+
+  harness.notifyResize()
+  assert.equal(harness.schedulers[0].requests.length, 1)
+  harness.flushFit()
+
+  assert.deepEqual(harness.bridge.resizeCalls.length, 1)
+  assert.equal(terminal.refreshCalls.length, 2)
+  assert.equal(terminal.focusCalls, 2)
+  await runtime.dispose(false)
+})
+
+test('keeps attach focus pending on unmeasurable without early focus', async () => {
+  const harness = createRuntimeHarness()
+  const runtime = await createReadyRuntime(harness)
+  const terminal = harness.terminals[0]
+  harness.fitAddons[0].dimensions = undefined
+
+  runtime.attachHost(harness.host(), viewOptions({ visible: true, autoFocus: true }))
+  assert.equal(terminal.focusCalls, 0)
+  assert.equal(harness.flushFit(), 'unmeasurable')
+
+  assert.deepEqual(harness.bridge.resizeCalls, [])
+  assert.equal(terminal.refreshCalls.length, 0)
+  assert.equal(terminal.focusCalls, 0)
+
+  harness.fitAddons[0].dimensions = { cols: 110, rows: 33 }
+  harness.notifyResize()
+  assert.equal(harness.schedulers[0].requests.length, 1)
+  assert.equal(harness.flushFit(), 'fitted')
+
+  assert.deepEqual(harness.bridge.resizeCalls.map(({ cols, rows }) => ({ cols, rows })), [{ cols: 110, rows: 33 }])
+  assert.equal(terminal.refreshCalls.length, 1)
+  assert.equal(terminal.focusCalls, 1)
+  await runtime.dispose(false)
+})
+
+test('defers focus on same-host reshow until after refresh and only once', async () => {
+  const harness = createRuntimeHarness()
+  const runtime = await createReadyRuntime(harness)
+  const terminal = harness.terminals[0]
+  const host = harness.host()
+
+  runtime.attachHost(host, viewOptions({ visible: true, autoFocus: true }))
+  harness.flushFit()
+  assert.equal(terminal.focusCalls, 1)
+  const refreshAfterAttach = terminal.refreshCalls.length
+
+  runtime.updateView(viewOptions({ visible: false }))
+  assert.equal(terminal.focusCalls, 1)
+  assert.equal(harness.schedulers[0].requests.length, 0)
+
+  runtime.updateView(viewOptions({ visible: true, autoFocus: true }))
+  assert.equal(terminal.focusCalls, 1)
+  assert.equal(harness.schedulers[0].requests.length, 1)
+
+  harness.flushFit()
+
+  assert.equal(terminal.refreshCalls.length, refreshAfterAttach + 1)
+  assert.equal(terminal.focusCalls, 2)
+  assert.equal(harness.events.lastIndexOf('terminal:refresh:0-23') < harness.events.lastIndexOf('terminal:focus'), true)
+
+  harness.notifyResize()
+  assert.equal(harness.schedulers[0].requests.length, 1)
+  harness.flushFit()
+
+  assert.equal(terminal.focusCalls, 2)
+  await runtime.dispose(false)
+})
+
+test('defers focus on geometric fontSize change until after refresh and only once', async () => {
+  const harness = createRuntimeHarness()
+  const runtime = await createReadyRuntime(harness)
+  const terminal = harness.terminals[0]
+  const host = harness.host()
+
+  runtime.attachHost(host, viewOptions({ visible: true, autoFocus: true, fontSize: 14 }))
+  harness.flushFit()
+  assert.equal(terminal.focusCalls, 1)
+  const resizeAfterAttach = harness.bridge.resizeCalls.length
+  const refreshAfterAttach = terminal.refreshCalls.length
+
+  harness.fitAddons[0].dimensions = { cols: 120, rows: 40 }
+  runtime.updateView(viewOptions({ visible: true, autoFocus: true, fontSize: 16 }))
+  assert.equal(terminal.options.fontSize, 16)
+  assert.equal(terminal.focusCalls, 1)
+  assert.equal(harness.schedulers[0].requests.length, 1)
+
+  harness.flushFit()
+
+  assert.equal(harness.bridge.resizeCalls.length, resizeAfterAttach + 1)
+  assert.equal(terminal.refreshCalls.length, refreshAfterAttach + 1)
+  assert.equal(terminal.focusCalls, 2)
+  assert.equal(harness.events.lastIndexOf('terminal:refresh:0-23') < harness.events.lastIndexOf('terminal:focus'), true)
+
+  harness.notifyResize()
+  assert.equal(harness.schedulers[0].requests.length, 1)
+  harness.flushFit()
+
+  assert.equal(terminal.focusCalls, 2)
   await runtime.dispose(false)
 })
