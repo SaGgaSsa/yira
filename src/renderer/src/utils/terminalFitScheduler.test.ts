@@ -47,51 +47,62 @@ scheduler.requestFit(fitAddon, (cols, rows) => {
   resizeCalls.push({ cols, rows })
 }, (result) => fitResults.push(result))
 
-flushFrame('fit must be scheduled on the next frame')
+flushFrame('preparation frame must not fit yet')
+
+if (getFitCalls() !== 0) throw new Error(`preparation frame must not call fit, got ${getFitCalls()}`)
+if (getResizeCallCount() !== 0) throw new Error(`preparation frame must not resize, got ${getResizeCallCount()}`)
+if (fitResults.length !== 0) throw new Error(`preparation frame must not complete, got ${fitResults.length}`)
+
+scheduler.requestFit(fitAddon, (cols, rows) => {
+  resizeCalls.push({ cols, rows })
+}, (result) => fitResults.push(result))
+
+flushFrame('single fit must run once on the following frame')
 
 if (getFitCalls() !== 1) throw new Error(`coalesced requests must fit once, got ${getFitCalls()}`)
 if (getResizeCallCount() !== 1) throw new Error(`coalesced requests must resize once, got ${getResizeCallCount()}`)
 if (resizeCalls[0].cols !== 100 || resizeCalls[0].rows !== 30) {
   throw new Error(`unexpected resize dimensions ${resizeCalls[0].cols}x${resizeCalls[0].rows}`)
 }
-
-flushFrame('stabilization fit must be scheduled on the following frame')
-
-if (getFitCalls() !== 2) throw new Error(`stabilization frame must fit again, got ${getFitCalls()}`)
-if (getResizeCallCount() !== 1) throw new Error('unchanged stabilization dimensions must not resize the PTY again')
-if (fitResults[0] !== 'fitted' || fitResults[1] !== 'unchanged') {
-  throw new Error(`fit completion results must describe both frames, got ${fitResults.join(',')}`)
+if (fitResults.join(',') !== 'fitted') {
+  throw new Error(`single fit must complete once as fitted, got ${fitResults.join(',')}`)
 }
 
 scheduler.requestFit(fitAddon, (cols, rows) => {
   resizeCalls.push({ cols, rows })
-})
-flushFrame('second fit must be scheduled on the next frame')
+}, (result) => fitResults.push(result))
+flushFrame('second preparation frame must not fit yet')
 
-if (getFitCalls() !== 3) throw new Error(`second request must still allow xterm fit, got ${getFitCalls()}`)
+if (getFitCalls() !== 1) throw new Error(`second preparation must not fit, got ${getFitCalls()}`)
+if (getResizeCallCount() !== 1) throw new Error('second preparation must not resize the PTY')
+
+flushFrame('second single fit must deduplicate unchanged dimensions')
+
+if (getFitCalls() !== 2) throw new Error(`second request must fit once, got ${getFitCalls()}`)
 if (getResizeCallCount() !== 1) throw new Error('same terminal dimensions must not send a redundant PTY resize')
-
-flushFrame('second stabilization fit must be scheduled on the following frame')
-
-if (getFitCalls() !== 4) throw new Error(`second stabilization frame must fit again, got ${getFitCalls()}`)
-if (getResizeCallCount() !== 1) throw new Error('unchanged second stabilization dimensions must not resize the PTY again')
+if (fitResults.join(',') !== 'fitted,unchanged') {
+  throw new Error(`unchanged dimensions must complete as unchanged, got ${fitResults.join(',')}`)
+}
 
 dimensions = { cols: 120, rows: 35 }
 scheduler.requestFit(fitAddon, (cols, rows) => {
   resizeCalls.push({ cols, rows })
-})
-flushFrame('dimension change fit must be scheduled on the next frame')
+}, (result) => fitResults.push(result))
+flushFrame('dimension change preparation must not fit yet')
 
-if (getFitCalls() !== 5) throw new Error(`dimension change must fit once before stabilization, got ${getFitCalls()}`)
+if (getFitCalls() !== 2) throw new Error(`dimension change preparation must not fit, got ${getFitCalls()}`)
+if (getResizeCallCount() !== 1) throw new Error('dimension change preparation must not resize the PTY')
+
+flushFrame('dimension change single fit must use current dimensions')
+
+if (getFitCalls() !== 3) throw new Error(`dimension change must fit once, got ${getFitCalls()}`)
 if (getResizeCallCount() !== 2) throw new Error(`changed dimensions must send a PTY resize, got ${getResizeCallCount()}`)
 if (resizeCalls[1].cols !== 120 || resizeCalls[1].rows !== 35) {
   throw new Error(`unexpected changed resize dimensions ${resizeCalls[1].cols}x${resizeCalls[1].rows}`)
 }
-
-flushFrame('dimension change stabilization fit must be scheduled on the following frame')
-
-if (getFitCalls() !== 6) throw new Error(`dimension change stabilization must fit again, got ${getFitCalls()}`)
-if (getResizeCallCount() !== 2) throw new Error('unchanged dimension change stabilization must not resize the PTY again')
+if (fitResults[2] !== 'fitted') {
+  throw new Error(`dimension change must complete as fitted, got ${fitResults.join(',')}`)
+}
 
 scheduler.requestFit(fitAddon, () => {
   throw new Error('cancelled fit must not run')
@@ -115,6 +126,7 @@ const dimensionsChangeScheduler = createTerminalFitScheduler({
 let dimensionsBetweenFits = { cols: 100, rows: 30 }
 let changingFitCalls = 0
 const changedDimensionResizeCalls: Array<{ cols: number; rows: number }> = []
+const changedDimensionResults: TerminalFitResult[] = []
 
 dimensionsChangeScheduler.requestFit({
   fit: () => {
@@ -123,19 +135,30 @@ dimensionsChangeScheduler.requestFit({
   proposeDimensions: () => dimensionsBetweenFits,
 }, (cols, rows) => {
   changedDimensionResizeCalls.push({ cols, rows })
-})
+}, (result) => changedDimensionResults.push(result))
 
-flushFrame('initial fit must be scheduled before dimensions change')
+flushFrame('preparation must not fit before dimensions change')
+
+if (changingFitCalls !== 0) throw new Error(`preparation must not call fit, got ${changingFitCalls}`)
+if (changedDimensionResizeCalls.length !== 0) {
+  throw new Error(`preparation must not resize, got ${changedDimensionResizeCalls.length}`)
+}
+if (changedDimensionResults.length !== 0) {
+  throw new Error(`preparation must not complete, got ${changedDimensionResults.length}`)
+}
 
 dimensionsBetweenFits = { cols: 80, rows: 25 }
-flushFrame('stabilization fit must use dimensions that changed after the first fit')
+flushFrame('single fit must use dimensions current at second frame')
 
-if (changingFitCalls !== 2) throw new Error(`changed dimensions must fit twice, got ${changingFitCalls}`)
-if (changedDimensionResizeCalls.length !== 2) {
-  throw new Error(`changed stabilization dimensions must resize the PTY twice, got ${changedDimensionResizeCalls.length}`)
+if ((changingFitCalls as number) !== 1) throw new Error(`changed dimensions must fit once, got ${changingFitCalls}`)
+if ((changedDimensionResizeCalls.length as number) !== 1) {
+  throw new Error(`changed dimensions must resize the PTY once, got ${changedDimensionResizeCalls.length}`)
 }
-if (changedDimensionResizeCalls[1].cols !== 80 || changedDimensionResizeCalls[1].rows !== 25) {
-  throw new Error(`stabilization resize must use changed dimensions, got ${changedDimensionResizeCalls[1].cols}x${changedDimensionResizeCalls[1].rows}`)
+if (changedDimensionResizeCalls[0].cols !== 80 || changedDimensionResizeCalls[0].rows !== 25) {
+  throw new Error(`single fit must use final dimensions, got ${changedDimensionResizeCalls[0].cols}x${changedDimensionResizeCalls[0].rows}`)
+}
+if (changedDimensionResults.join(',') !== 'fitted') {
+  throw new Error(`single fit must complete as fitted, got ${changedDimensionResults.join(',')}`)
 }
 
 const finalFrameCancellationScheduler = createTerminalFitScheduler({
@@ -150,22 +173,28 @@ const finalFrameCancellationScheduler = createTerminalFitScheduler({
 })
 
 let finalFrameFitCalls = 0
+const finalFrameResults: TerminalFitResult[] = []
 
 finalFrameCancellationScheduler.requestFit({
   fit: () => {
     finalFrameFitCalls += 1
   },
   proposeDimensions: () => ({ cols: 100, rows: 30 }),
-}, () => {})
+}, () => {}, (result) => finalFrameResults.push(result))
 
-flushFrame('initial fit must run before cancelling stabilization')
+flushFrame('preparation must run before cancelling single fit')
+
+if (finalFrameFitCalls !== 0) throw new Error(`preparation must not fit, got ${finalFrameFitCalls}`)
 finalFrameCancellationScheduler.cancelPending()
 
 if (queuedFrames.length > 0) {
-  flushFrame('cancelled stabilization fit must not run')
+  flushFrame('cancelled single fit must not run')
 }
-if (finalFrameFitCalls !== 1) {
-  throw new Error(`cancelling stabilization must prevent its fit, got ${finalFrameFitCalls}`)
+if (finalFrameFitCalls !== 0) {
+  throw new Error(`cancelling between frames must prevent its fit, got ${finalFrameFitCalls}`)
+}
+if (finalFrameResults.length !== 0) {
+  throw new Error(`cancelled fit must not complete, got ${finalFrameResults.length}`)
 }
 
 const throwingScheduler = createTerminalFitScheduler({
@@ -192,6 +221,7 @@ throwingScheduler.requestFit({
 
 let fitErrorEscaped = false
 try {
+  flushFrame('throwing preparation must be scheduled')
   flushFrame('throwing fit must be scheduled')
 } catch {
   fitErrorEscaped = true
@@ -219,11 +249,11 @@ unmeasurableScheduler.requestFit({
 }, () => {
   throw new Error('an unmeasurable fit must not resize')
 }, (result) => unmeasurableResults.push(result))
-flushFrame('unmeasurable fit must be scheduled on the next frame')
-flushFrame('unmeasurable stabilization fit must be scheduled on the following frame')
+flushFrame('unmeasurable preparation must not complete')
+flushFrame('unmeasurable single fit must be scheduled on the following frame')
 
-if (unmeasurableResults.join(',') !== 'unmeasurable,unmeasurable') {
-  throw new Error(`missing unmeasurable fit results: ${unmeasurableResults.join(',')}`)
+if (unmeasurableResults.join(',') !== 'unmeasurable') {
+  throw new Error(`missing unmeasurable fit result: ${unmeasurableResults.join(',')}`)
 }
 
 unmeasurableDimensions = { cols: 90, rows: 22 }
@@ -231,9 +261,9 @@ unmeasurableScheduler.requestFit({
   fit: () => {},
   proposeDimensions: () => unmeasurableDimensions,
 }, () => {}, (result) => unmeasurableResults.push(result))
-flushFrame('measurable retry must be scheduled on the next frame')
-flushFrame('measurable retry stabilization must be scheduled on the following frame')
+flushFrame('measurable retry preparation must not fit yet')
+flushFrame('measurable retry must be scheduled on the following frame')
 
-if (unmeasurableResults[2] !== 'fitted' || unmeasurableResults[3] !== 'unchanged') {
-  throw new Error(`measurable retry must report fitted then unchanged, got ${unmeasurableResults.join(',')}`)
+if (unmeasurableResults.join(',') !== 'unmeasurable,fitted') {
+  throw new Error(`measurable retry must report fitted once, got ${unmeasurableResults.join(',')}`)
 }

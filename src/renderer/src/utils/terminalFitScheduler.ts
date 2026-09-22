@@ -86,8 +86,6 @@ export function createTerminalFitScheduler(options: TerminalFitSchedulerOptions 
           pendingFrame = null
           fit()
         })
-
-        fit()
       })
     },
 

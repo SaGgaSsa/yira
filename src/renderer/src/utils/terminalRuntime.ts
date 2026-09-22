@@ -157,6 +157,18 @@ function errorMessage(error: unknown): string {
   return String(error)
 }
 
+function setRuntimeRootPadding(runtimeRoot: HTMLElement, edgeToEdge: boolean): void {
+  const xtermElement = runtimeRoot.querySelector?.('.xterm') as HTMLElement | null | undefined
+  if (!xtermElement) return
+
+  const horizontalPadding = edgeToEdge ? '0px' : '14px'
+  const verticalPadding = edgeToEdge ? '0px' : '12px'
+  xtermElement.style.paddingLeft = horizontalPadding
+  xtermElement.style.paddingRight = horizontalPadding
+  xtermElement.style.paddingTop = verticalPadding
+  xtermElement.style.paddingBottom = verticalPadding
+}
+
 function applyTerminalOptions(
   runtimeRoot: HTMLElement,
   terminal: TerminalLike,
@@ -164,16 +176,7 @@ function applyTerminalOptions(
 ): void {
   terminal.options.fontSize = options.fontSize
   terminal.options.theme = getXtermTheme(options.themeId)
-
-  const xtermElement = runtimeRoot.querySelector?.('.xterm') as HTMLElement | null | undefined
-  if (!xtermElement) return
-
-  const horizontalPadding = options.edgeToEdge ? '0px' : '14px'
-  const verticalPadding = options.edgeToEdge ? '0px' : '12px'
-  xtermElement.style.paddingLeft = horizontalPadding
-  xtermElement.style.paddingRight = horizontalPadding
-  xtermElement.style.paddingTop = verticalPadding
-  xtermElement.style.paddingBottom = verticalPadding
+  setRuntimeRootPadding(runtimeRoot, options.edgeToEdge)
 }
 
 function isElementFocused(element: Element | null | undefined): boolean {
@@ -253,6 +256,8 @@ function createRuntime(
   let replayComplete = false
   let replayStarted = false
   let fitDirty = true
+  let forceRefresh = false
+  let observedHost: HTMLElement | null = null
   let processExited = false
   let disposed = false
   let disposePromise: Promise<void> | null = null
@@ -352,8 +357,13 @@ function createRuntime(
     void acknowledgeAgentAlert()
   }
 
-  const applyPaddingAndFocus = (): void => {
-    applyTerminalOptions(runtimeRoot, terminal, currentViewOptions)
+  const applyChangedViewOptions = (previous: TerminalRuntimeViewOptions, next: TerminalRuntimeViewOptions): void => {
+    if (previous.fontSize !== next.fontSize) terminal.options.fontSize = next.fontSize
+    if (previous.themeId !== next.themeId) terminal.options.theme = getXtermTheme(next.themeId)
+    if (previous.edgeToEdge !== next.edgeToEdge) setRuntimeRootPadding(runtimeRoot, next.edgeToEdge)
+  }
+
+  const focusIfAutoFocus = (): void => {
     if (currentHost && currentViewOptions.visible && currentViewOptions.autoFocus) focus()
   }
 
@@ -402,7 +412,16 @@ function createRuntime(
             return
           }
 
+          if (result === 'fitted') {
+            fitDirty = false
+            forceRefresh = false
+            refreshTerminal()
+            return
+          }
+
           fitDirty = false
+          if (!forceRefresh) return
+          forceRefresh = false
           refreshTerminal()
         },
       )
@@ -428,21 +447,34 @@ function createRuntime(
       )
   }
 
-  const connectObserver = (host: HTMLElement): void => {
-    resizeObserver?.disconnect()
+  const disconnectObserver = (): void => {
+    try {
+      resizeObserver?.disconnect()
+    } catch {
+      // Observer disconnect must not break view updates.
+    }
     resizeObserver = null
+    observedHost = null
+  }
+
+  const connectObserver = (host: HTMLElement): void => {
+    if (resizeObserver && observedHost === host) return
+    disconnectObserver()
     if (!currentViewOptions.visible || disposed) return
 
     try {
-      resizeObserver = dependencies.createResizeObserver(() => {
+      const observer = dependencies.createResizeObserver(() => {
         if (disposed || !currentViewOptions.visible || currentHost !== host) return
         fitDirty = true
         requestFit()
       })
-      resizeObserver.observe(host)
+      observer.observe(host)
+      resizeObserver = observer
+      observedHost = host
     } catch (error) {
       handleError('observe', error)
       resizeObserver = null
+      observedHost = null
     }
   }
 
@@ -543,9 +575,9 @@ function createRuntime(
     currentViewOptions = { ...currentViewOptions, visible: false, autoFocus: false }
     currentHost = null
     fitDirty = true
+    forceRefresh = false
     fontWaitGeneration += 1
-    resizeObserver?.disconnect()
-    resizeObserver = null
+    disconnectObserver()
     fitScheduler.cancelPending()
 
     const root = parkingRoot === undefined ? dependencies.getParkingRoot() : parkingRoot
@@ -568,22 +600,14 @@ function createRuntime(
     }
   }
 
-  const attachHost = (host: HTMLElement | null, nextOptions?: TerminalRuntimeViewOptions): void => {
-    if (disposed) return
-
-    currentViewOptions = mergeViewOptions(currentViewOptions, nextOptions)
-
+  const attachNewHost = (host: HTMLElement, next: TerminalRuntimeViewOptions, previous: TerminalRuntimeViewOptions): void => {
     fitScheduler.cancelPending()
-    resizeObserver?.disconnect()
-    resizeObserver = null
+    disconnectObserver()
     currentHost = host
+    currentViewOptions = next
     fitDirty = true
+    forceRefresh = false
     fontWaitGeneration += 1
-
-    if (!host) {
-      park()
-      return
-    }
 
     try {
       host.replaceChildren(runtimeRoot)
@@ -596,23 +620,111 @@ function createRuntime(
 
     // Apply mutable options after the root is in the host. Auto-focus must
     // run against the visible DOM node, not the parking root or a prior host.
-    applyPaddingAndFocus()
+    applyChangedViewOptions(previous, next)
     connectObserver(host)
     if (!currentViewOptions.visible) return
 
+    focusIfAutoFocus()
+    forceRefresh = true
     retryAfterFonts()
     requestFit()
   }
 
-  const updateView = (nextOptions: TerminalRuntimeViewOptions): void => {
-    if (disposed) return
-    if (currentHost) {
-      attachHost(currentHost, nextOptions)
+  const applySameHostViewUpdate = (next: TerminalRuntimeViewOptions): void => {
+    const previous = currentViewOptions
+    const host = currentHost
+    if (!host) return
+
+    if (previous.visible && !next.visible) {
+      currentViewOptions = next
+      applyChangedViewOptions(previous, next)
+      fitScheduler.cancelPending()
+      disconnectObserver()
+      fitDirty = true
+      forceRefresh = false
+      fontWaitGeneration += 1
       return
     }
 
-    currentViewOptions = { ...currentViewOptions, ...nextOptions }
-    applyPaddingAndFocus()
+    if (!previous.visible && next.visible) {
+      currentViewOptions = next
+      applyChangedViewOptions(previous, next)
+      connectObserver(host)
+      focusIfAutoFocus()
+      fitDirty = true
+      forceRefresh = true
+      retryAfterFonts()
+      requestFit()
+      return
+    }
+
+    const fontChanged = previous.fontSize !== next.fontSize
+    const edgeChanged = previous.edgeToEdge !== next.edgeToEdge
+    const themeChanged = previous.themeId !== next.themeId
+    const autoFocusGained = next.autoFocus && !previous.autoFocus
+    currentViewOptions = next
+    applyChangedViewOptions(previous, next)
+
+    if (fontChanged || edgeChanged) {
+      connectObserver(host)
+      if (next.visible && next.autoFocus) focus()
+      if (!next.visible) {
+        fitDirty = true
+        forceRefresh = false
+        fitScheduler.cancelPending()
+        return
+      }
+      fitDirty = true
+      forceRefresh = true
+      retryAfterFonts()
+      requestFit()
+      return
+    }
+
+    if (themeChanged) {
+      if (next.visible) refreshTerminal()
+      if (autoFocusGained) focusIfAutoFocus()
+      return
+    }
+
+    if (autoFocusGained) focusIfAutoFocus()
+  }
+
+  const attachHost = (host: HTMLElement | null, nextOptions?: TerminalRuntimeViewOptions): void => {
+    if (disposed) return
+
+    const next = mergeViewOptions(currentViewOptions, nextOptions)
+    if (!host) {
+      const previous = currentViewOptions
+      currentViewOptions = next
+      applyChangedViewOptions(previous, next)
+      park()
+      return
+    }
+
+    if (host === currentHost && runtimeRoot.parentElement === host) {
+      applySameHostViewUpdate(next)
+      return
+    }
+
+    attachNewHost(host, next, currentViewOptions)
+  }
+
+  const updateView = (nextOptions: TerminalRuntimeViewOptions): void => {
+    if (disposed) return
+    const next = mergeViewOptions(currentViewOptions, nextOptions)
+    if (currentHost && runtimeRoot.parentElement === currentHost) {
+      applySameHostViewUpdate(next)
+      return
+    }
+    if (currentHost) {
+      attachNewHost(currentHost, next, currentViewOptions)
+      return
+    }
+
+    const previousNoHost = currentViewOptions
+    currentViewOptions = next
+    applyChangedViewOptions(previousNoHost, next)
     if (!currentViewOptions.visible) fitScheduler.cancelPending()
     else requestFit()
   }
@@ -627,8 +739,9 @@ function createRuntime(
     currentViewOptions = { ...currentViewOptions, visible: false, autoFocus: false }
     fontWaitGeneration += 1
     fitScheduler.cancelPending()
-    resizeObserver?.disconnect()
-    resizeObserver = null
+    disconnectObserver()
+    forceRefresh = false
+    fitDirty = false
     replayController?.dispose()
     replayController = null
 
