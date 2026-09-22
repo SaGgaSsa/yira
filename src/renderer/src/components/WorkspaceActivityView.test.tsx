@@ -7,7 +7,7 @@ import type { AgentActiveSession, WorkspaceMetadata } from '@shared/types'
 import { i18n, initializeI18n } from '@/i18n'
 import { resources } from '@/i18n/resources'
 import { buildWorkspaceActivityCards } from '@/utils/workspaceActivity'
-import { WorkspaceActivityView, filterWorkspaceActivityCards, resolveActivityListState } from './WorkspaceActivityView'
+import { WorkspaceActivityView } from './WorkspaceActivityView'
 
 await initializeI18n('en')
 
@@ -50,15 +50,12 @@ test('renders one card per workspace visited this session and excludes the rest'
       cards={cards}
       onOpenWorkspace={() => undefined}
       onGoToTerminal={() => undefined}
-      onClose={() => undefined}
     />,
   )
 
   assert.match(markup, /data-activity-view="true"/)
   assert.match(markup, /data-activity-card="visited"/)
   assert.doesNotMatch(markup, /data-activity-card="saved"/)
-  assert.match(markup, /Global activity/)
-  assert.match(markup, /1 active/)
   assert.match(markup, /2 terminals/)
   assert.match(markup, /1 active agent/)
   assert.match(markup, /Working/)
@@ -76,7 +73,6 @@ test('shows an empty state when no workspace is active this session', () => {
       cards={[]}
       onOpenWorkspace={() => undefined}
       onGoToTerminal={() => undefined}
-      onClose={() => undefined}
     />,
   )
 
@@ -85,7 +81,7 @@ test('shows an empty state when no workspace is active this session', () => {
   assert.match(markup, /Only workspaces visited in this session appear/)
 })
 
-test('orders attention first and filters by search and status without inventing data', () => {
+test('orders attention first without inventing data', () => {
   const cards = buildWorkspaceActivityCards({
     workspaces: [workspace('idle'), workspace('busy'), workspace('blocked')],
     sessionActiveIds: new Set(['idle', 'busy', 'blocked']),
@@ -96,15 +92,6 @@ test('orders attention first and filters by search and status without inventing 
   })
 
   assert.deepEqual(cards.map((card) => card.workspace.id), ['blocked', 'busy', 'idle'])
-
-  const searched = filterWorkspaceActivityCards(cards, 'bus', 'all')
-  assert.deepEqual(searched.map((card) => card.workspace.id), ['busy'])
-
-  const workingOnly = filterWorkspaceActivityCards(cards, '', 'working')
-  assert.deepEqual(workingOnly.map((card) => card.workspace.id), ['busy'])
-
-  const idleOnly = filterWorkspaceActivityCards(cards, '  ', 'idle')
-  assert.deepEqual(idleOnly.map((card) => card.workspace.id), ['idle'])
 })
 
 test('omits the terminal button when no real attention target exists', () => {
@@ -122,7 +109,6 @@ test('omits the terminal button when no real attention target exists', () => {
       cards={cards}
       onOpenWorkspace={() => undefined}
       onGoToTerminal={() => undefined}
-      onClose={() => undefined}
     />,
   )
 
@@ -130,24 +116,6 @@ test('omits the terminal button when no real attention target exists', () => {
   assert.doesNotMatch(markup, /Go to terminal/)
   assert.doesNotMatch(markup, /Sessions/)
   assert.match(markup, /No detected activity/)
-})
-
-test('distinguishes no search results from the empty state', () => {
-  const cards = buildWorkspaceActivityCards({
-    workspaces: [workspace('visited')],
-    sessionActiveIds: new Set(['visited']),
-    sessions: [],
-    attentionCounts: {},
-    terminalCounts: {},
-    activeWorkspaceId: null,
-  })
-
-  assert.deepEqual(filterWorkspaceActivityCards(cards, 'missing-name', 'all'), [])
-  assert.deepEqual(filterWorkspaceActivityCards(cards, '', 'working'), [])
-  assert.deepEqual(filterWorkspaceActivityCards(cards, 'visited', 'all').length, 1)
-  assert.equal(resolveActivityListState(0, 0), 'empty')
-  assert.equal(resolveActivityListState(3, 0), 'no-results')
-  assert.equal(resolveActivityListState(3, 2), 'cards')
 })
 
 test('caps session rows at three with an overflow indicator', () => {
@@ -171,7 +139,6 @@ test('caps session rows at three with an overflow indicator', () => {
       cards={cards}
       onOpenWorkspace={() => undefined}
       onGoToTerminal={() => undefined}
-      onClose={() => undefined}
     />,
   )
 
@@ -182,9 +149,8 @@ test('caps session rows at three with an overflow indicator', () => {
   assert.match(markup, /\+2 more/)
 })
 
-test('keeps the Spanish summary and empty copy with accents', () => {
-  assert.equal(resources.es.translation.activity.summary, '{{active}} activos · {{attention}} requieren atención')
-  assert.equal(resources.es.translation.activity.noResultsTitle, 'Sin coincidencias')
-  assert.equal(resources.es.translation.activity.clearFilters, 'Limpiar búsqueda y filtros')
-  assert.equal(resources.en.translation.activity.noResultsTitle, 'No matching workspaces')
+test('keeps the Spanish empty copy with accents', () => {
+  assert.equal(resources.es.translation.activity.emptyTitle, 'Sin espacios de trabajo activos')
+  assert.equal(resources.es.translation.activity.openWorkspace, 'Abrir espacio de trabajo')
+  assert.equal(resources.en.translation.activity.emptyTitle, 'No active workspaces')
 })

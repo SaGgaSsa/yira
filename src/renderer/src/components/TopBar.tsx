@@ -17,7 +17,6 @@ interface TopBarProps {
   sidebarCollapsed: boolean
   onToggleSidebar: () => void
   activityOpen: boolean
-  activityCount: number
   onToggleActivity: () => void
   agentProvider?: AgentProvider
   agentUsage: AgentUsageSnapshot | null
@@ -87,7 +86,6 @@ export function TopBar({
   sidebarCollapsed,
   onToggleSidebar,
   activityOpen,
-  activityCount,
   onToggleActivity,
   agentProvider,
   agentUsage,
@@ -129,11 +127,6 @@ export function TopBar({
               aria-pressed={activityOpen}
             >
               <Activity size={14} />
-              {activityCount > 0 && (
-                <span className="absolute -right-1 -top-1 inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full border border-current bg-bg-secondary px-0.5 font-mono text-[8px] leading-none text-text-primary">
-                  {activityCount > 9 ? '9+' : String(activityCount)}
-                </span>
-              )}
             </button>
             {agentProvider && <AgentUsageIndicator provider={agentProvider} snapshot={agentUsage?.[agentProvider]} />}
           </div>

@@ -68,7 +68,7 @@ import {
   pruneWorkspaceTerminalRuntimes,
 } from './utils/terminalRuntimeCleanup'
 import type { TerminalSessionTarget } from '@shared/terminalSessionIdentity'
-import { Terminal, StickyNote, SlidersHorizontal, Trash2, Pencil, Lock, Columns, Download, X, Plus, Activity } from 'lucide-react'
+import { Terminal, StickyNote, SlidersHorizontal, Trash2, Pencil, Lock, Columns, Download, X, Plus } from 'lucide-react'
 
 const GROUP_SHOW_TOP_PADDING = 42
 const EMPTY_BOARD_STATE: BoardState = {
@@ -2136,7 +2136,6 @@ function AppContent(): React.ReactElement {
         sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={() => setSidebarCollapsed(c => !c)}
         activityOpen={activityOpen}
-        activityCount={activityCards.length}
         onToggleActivity={() => setActivityOpen((value) => !value)}
         agentProvider={activeWorkspaceConfig.agentProvider}
         agentUsage={agentUsage}
@@ -2236,36 +2235,6 @@ function AppContent(): React.ReactElement {
       >
         <div className="flex h-full flex-col bg-bg-secondary">
           <div className="flex-1 px-3 py-4">
-            <button
-              type="button"
-              className={`mb-3 flex w-full items-center gap-2 rounded-2xl border px-3 py-2.5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${activityOpen ? '' : 'bg-bg-secondary hover:bg-hover-bg'}`}
-              style={{
-                background: activityOpen ? 'var(--surface-raised)' : undefined,
-                borderColor: activityOpen ? 'var(--text-primary)' : 'var(--border)',
-              }}
-              onClick={() => setActivityOpen(true)}
-              title={t('activity.title')}
-              aria-label={t('activity.title')}
-              aria-pressed={activityOpen}
-            >
-              <span
-                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-text-secondary"
-                style={{ borderColor: 'var(--border-visible)' }}
-              >
-                <Activity size={11} aria-hidden="true" />
-              </span>
-              <span className={`min-w-0 flex-1 truncate text-left text-sm ${activityOpen ? 'text-text-primary' : 'text-text-secondary'}`}>
-                {t('activity.activity')}
-              </span>
-              {sessionActiveWorkspaceIds.size > 0 && (
-                <span
-                  className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full border px-1.5 font-mono text-[10px] leading-none text-text-primary"
-                  style={{ borderColor: 'var(--text-primary)' }}
-                >
-                  {sessionActiveWorkspaceIds.size > 9 ? '9+' : String(sessionActiveWorkspaceIds.size)}
-                </span>
-              )}
-            </button>
             <div className="mb-3 flex items-center justify-between px-2">
               <span className="nd-label text-text-secondary">{t('sidebar.workspaces')}</span>
               <div className="flex items-center gap-1">
@@ -2504,7 +2473,6 @@ function AppContent(): React.ReactElement {
                   cards={activityCards}
                   onOpenWorkspace={openActivityWorkspace}
                   onGoToTerminal={goToWorkspaceTerminal}
-                  onClose={() => setActivityOpen(false)}
                 />
               )}
             </div>
@@ -2513,7 +2481,6 @@ function AppContent(): React.ReactElement {
               cards={activityCards}
               onOpenWorkspace={openActivityWorkspace}
               onGoToTerminal={goToWorkspaceTerminal}
-              onClose={() => setActivityOpen(false)}
             />
           ) : (
             <div className="flex flex-1 items-center justify-center bg-bg-primary" />

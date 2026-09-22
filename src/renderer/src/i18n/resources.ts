@@ -47,18 +47,10 @@ type TranslationResources = {
   }
   activity: {
     activity: string
-    title: string
-    summary: string
-    searchPlaceholder: string
-    filterStatus: string
-    filterAll: string
     openWorkspace: string
     goToTerminal: string
     emptyTitle: string
     emptyMessage: string
-    noResultsTitle: string
-    noResultsMessage: string
-    clearFilters: string
     sessions: string
     moreSessions_one: string
     moreSessions_other: string
@@ -449,18 +441,10 @@ const en: TranslationResources = {
   },
   activity: {
     activity: 'Activity',
-    title: 'Global activity',
-    summary: '{{active}} active · {{attention}} need attention',
-    searchPlaceholder: 'Search active workspaces…',
-    filterStatus: 'Status',
-    filterAll: 'All',
     openWorkspace: 'Open workspace',
     goToTerminal: 'Go to terminal',
     emptyTitle: 'No active workspaces',
     emptyMessage: 'Open a workspace to see it here. Only workspaces visited in this session appear.',
-    noResultsTitle: 'No matching workspaces',
-    noResultsMessage: 'No active workspace matches this search or filter.',
-    clearFilters: 'Clear search and filters',
     sessions: 'Sessions',
     moreSessions_one: '+{{count}} more',
     moreSessions_other: '+{{count}} more',
@@ -851,18 +835,10 @@ const es: TranslationResources = {
   },
   activity: {
     activity: 'Actividad',
-    title: 'Actividad global',
-    summary: '{{active}} activos · {{attention}} requieren atención',
-    searchPlaceholder: 'Buscar espacios activos…',
-    filterStatus: 'Estado',
-    filterAll: 'Todos',
     openWorkspace: 'Abrir espacio de trabajo',
     goToTerminal: 'Ir a la terminal',
     emptyTitle: 'Sin espacios de trabajo activos',
     emptyMessage: 'Abre un espacio de trabajo para verlo aquí. Solo aparecen los visitados en esta sesión.',
-    noResultsTitle: 'Sin coincidencias',
-    noResultsMessage: 'Ningún espacio activo coincide con esta búsqueda o filtro.',
-    clearFilters: 'Limpiar búsqueda y filtros',
     sessions: 'Sesiones',
     moreSessions_one: '+{{count}} más',
     moreSessions_other: '+{{count}} más',

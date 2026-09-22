@@ -34,14 +34,7 @@ export function WorkspaceActivityCard({ card, onOpen, onGoToTerminal }: Workspac
 
   return (
     <article
-      className="flex flex-col gap-3 rounded-xl border bg-bg-secondary p-4"
-      style={{
-        borderColor: activity.status === 'needs-input'
-          ? 'var(--warning)'
-          : isCurrent
-            ? 'var(--accent)'
-            : 'var(--border)',
-      }}
+      className="flex flex-col gap-3 rounded-xl border border-border-subtle bg-bg-tertiary p-4"
       data-activity-card={workspace.id}
       data-activity-status={activity.status}
       data-activity-sessions={agentDetails.length}
