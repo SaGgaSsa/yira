@@ -13,6 +13,7 @@ import { getXtermTheme } from './terminalTheme'
 import type { TerminalRuntimeHandle } from './terminalRuntimeRegistry'
 
 export interface TerminalLike {
+  readonly cols: number
   readonly rows: number
   readonly textarea?: Element | null
   readonly options: {
@@ -84,8 +85,11 @@ export interface TerminalFitSchedulerLike {
     fitAddon: FitAddonLike,
     resizeTerminal: (cols: number, rows: number) => void,
     onComplete?: (result: TerminalFitResult) => void,
+    getTerminalSize?: () => { cols: number; rows: number } | null | undefined,
   ) => void
   cancelPending: () => void
+  setKnownDimensions?: (dimensions: { cols: number; rows: number }) => void
+  notifyResizeFailure?: (dimensions: { cols: number; rows: number }) => void
 }
 
 export interface TerminalRuntimeCreateOptions {
@@ -258,6 +262,11 @@ function createRuntime(
   let fitDirty = true
   let forceRefresh = false
   let pendingFocusAfterFit = false
+  let pendingVisualRefresh = false
+  let pendingGeometricPaint = false
+  let didFirstPaint = false
+  let inFlightResize: Promise<boolean> | null = null
+  let resizeGeneration = 0
   let observedHost: HTMLElement | null = null
   let processExited = false
   let disposed = false
@@ -266,7 +275,14 @@ function createRuntime(
   const listeners = new Set<() => void>()
   const fitScheduler = dependencies.createFitScheduler?.()
     ?? dependencies.fitScheduler
-    ?? createTerminalFitScheduler()
+    ?? createTerminalFitScheduler({
+      initialDimensions: { cols: created.cols, rows: created.rows },
+    })
+  try {
+    fitScheduler.setKnownDimensions?.({ cols: created.cols, rows: created.rows })
+  } catch {
+    // Seeding is best-effort; scheduler still converges via sampling.
+  }
 
   let snapshot: TerminalRuntimeSnapshot = {
     preparing: true,
@@ -364,6 +380,17 @@ function createRuntime(
     if (previous.edgeToEdge !== next.edgeToEdge) setRuntimeRootPadding(runtimeRoot, next.edgeToEdge)
   }
 
+  const hasVisualChange = (previous: TerminalRuntimeViewOptions, next: TerminalRuntimeViewOptions): boolean => (
+    previous.fontSize !== next.fontSize
+    || previous.themeId !== next.themeId
+    || previous.edgeToEdge !== next.edgeToEdge
+  )
+
+  const markVisualChangeIfHidden = (previous: TerminalRuntimeViewOptions, next: TerminalRuntimeViewOptions): void => {
+    if (!hasVisualChange(previous, next)) return
+    if (!next.visible || !currentHost || disposed) pendingVisualRefresh = true
+  }
+
   const focusIfAutoFocus = (): void => {
     if (currentHost && currentViewOptions.visible && currentViewOptions.autoFocus) focus()
   }
@@ -389,6 +416,8 @@ function createRuntime(
     if (!identity) return
 
     try {
+      let resizePromise: Promise<boolean> | null = null
+      let requestGeneration = resizeGeneration
       fitScheduler.requestFit(
         fitAddon,
         (cols, rows) => {
@@ -396,13 +425,31 @@ function createRuntime(
           if (!currentViewOptions.visible || currentHost !== host || !replayComplete) return
           if (processExited) return
 
-          try {
-            void Promise.resolve(dependencies.bridge.resize(identity, cols, rows)).catch((error: unknown) => {
-              if (isCurrentIdentity(identity) && !processExited) handleError('resize', error)
-            })
-          } catch (error) {
-            if (!processExited) handleError('resize', error)
-          }
+          resizeGeneration += 1
+          requestGeneration = resizeGeneration
+          pendingGeometricPaint = true
+          const runResize = (): Promise<boolean> => Promise.resolve()
+            .then(() => dependencies.bridge.resize(identity, cols, rows))
+            .then(
+              () => true,
+              (error: unknown) => {
+                if (isCurrentIdentity(identity) && !processExited) handleError('resize', error)
+                try {
+                  fitScheduler.notifyResizeFailure?.({ cols, rows })
+                } catch {
+                  // Invalidation is best-effort; next observer retry still converges.
+                }
+                if (!disposed && isCurrentIdentity(identity)) fitDirty = true
+                return false
+              },
+            )
+          const previousFlight = inFlightResize
+          const chained = previousFlight ? previousFlight.then(runResize, runResize) : runResize()
+          resizePromise = chained
+          inFlightResize = chained
+          void chained.then(() => {
+            if (inFlightResize === chained) inFlightResize = null
+          })
         },
         (result) => {
           if (!isCurrentIdentity(identity)) return
@@ -416,27 +463,113 @@ function createRuntime(
           if (result === 'fitted') {
             fitDirty = false
             forceRefresh = false
-            refreshTerminal()
-            if (pendingFocusAfterFit) {
-              pendingFocusAfterFit = false
-              focusIfAutoFocus()
+            const shouldFocus = pendingFocusAfterFit
+            pendingFocusAfterFit = false
+            const awaited = resizePromise
+            const awaitedGeneration = requestGeneration
+            if (!awaited) {
+              refreshTerminal()
+              didFirstPaint = true
+              pendingGeometricPaint = false
+              pendingVisualRefresh = false
+              if (shouldFocus) focusIfAutoFocus()
+              return
             }
+            void awaited.then((ok) => {
+              if (!isCurrentIdentity(identity)) return
+              if (disposed) return
+              if (!currentViewOptions.visible || currentHost !== host || !replayComplete) return
+              if (host.isConnected === false) return
+              if (awaitedGeneration !== resizeGeneration) {
+                if (shouldFocus && !disposed && isCurrentIdentity(identity)) pendingFocusAfterFit = true
+                return
+              }
+              if (!ok) {
+                if (shouldFocus && !disposed && isCurrentIdentity(identity)) pendingFocusAfterFit = true
+                return
+              }
+              refreshTerminal()
+              didFirstPaint = true
+              pendingGeometricPaint = false
+              pendingVisualRefresh = false
+              const effectiveFocus = shouldFocus || pendingFocusAfterFit
+              pendingFocusAfterFit = false
+              if (effectiveFocus) focusIfAutoFocus()
+            })
             return
           }
 
           fitDirty = false
-          if (!forceRefresh) {
-            if (pendingFocusAfterFit) {
-              pendingFocusAfterFit = false
+          const shouldFocus = pendingFocusAfterFit
+          pendingFocusAfterFit = false
+          const capturedGeneration = resizeGeneration
+          const needsRefresh = forceRefresh || pendingVisualRefresh || !didFirstPaint || pendingGeometricPaint
+          if (!needsRefresh) {
+            if (!shouldFocus) return
+            const flight = inFlightResize
+            if (!flight) {
               focusIfAutoFocus()
+              return
             }
+            void flight.then((ok) => {
+              if (!isCurrentIdentity(identity)) return
+              if (disposed) return
+              if (!currentViewOptions.visible || currentHost !== host || !replayComplete) return
+              if (host.isConnected === false) return
+              if (capturedGeneration !== resizeGeneration) {
+                if (!disposed && isCurrentIdentity(identity)) pendingFocusAfterFit = true
+                return
+              }
+              if (!ok) {
+                if (!disposed && isCurrentIdentity(identity)) pendingFocusAfterFit = true
+                return
+              }
+              focusIfAutoFocus()
+            })
             return
           }
-          forceRefresh = false
-          refreshTerminal()
-          if (pendingFocusAfterFit) {
+          const flightForRefresh = inFlightResize
+          if (!flightForRefresh) {
+            refreshTerminal()
+            didFirstPaint = true
+            forceRefresh = false
+            pendingVisualRefresh = false
+            pendingGeometricPaint = false
+            if (shouldFocus) focusIfAutoFocus()
+            return
+          }
+          void flightForRefresh.then((ok) => {
+            if (!isCurrentIdentity(identity)) return
+            if (disposed) return
+            if (!currentViewOptions.visible || currentHost !== host || !replayComplete) return
+            if (host.isConnected === false) return
+            if (capturedGeneration !== resizeGeneration) {
+              if (shouldFocus && !disposed && isCurrentIdentity(identity)) pendingFocusAfterFit = true
+              return
+            }
+            if (!ok) {
+              if (shouldFocus && !disposed && isCurrentIdentity(identity)) pendingFocusAfterFit = true
+              return
+            }
+            refreshTerminal()
+            didFirstPaint = true
+            forceRefresh = false
+            pendingVisualRefresh = false
+            pendingGeometricPaint = false
+            const effectiveFocus = shouldFocus || pendingFocusAfterFit
             pendingFocusAfterFit = false
-            focusIfAutoFocus()
+            if (effectiveFocus) focusIfAutoFocus()
+          })
+        },
+        () => {
+          try {
+            if (!Number.isFinite(terminal.cols) || !Number.isFinite(terminal.rows)) return null
+            const cols = Math.floor(terminal.cols)
+            const rows = Math.floor(terminal.rows)
+            if (cols <= 0 || rows <= 0) return null
+            return { cols, rows }
+          } catch {
+            return null
           }
         },
       )
@@ -638,14 +771,19 @@ function createRuntime(
     // Apply mutable options after the root is in the host. The pending
     // attach focus is consumed once after the fit/repaint completion, so an
     // early focus cannot reach the PTY before the viewport is stable.
+    // Same-geometry attach must not force a full repaint: fitted still
+    // repaints once, unchanged with forceRefresh false does not, unless a
+    // visual change while parked still needs one paint.
+    const visualChangedOnAttach = hasVisualChange(previous, next)
     applyChangedViewOptions(previous, next)
     connectObserver(host)
     if (!currentViewOptions.visible) {
       pendingFocusAfterFit = false
+      if (visualChangedOnAttach) pendingVisualRefresh = true
       return
     }
 
-    forceRefresh = true
+    forceRefresh = visualChangedOnAttach || pendingVisualRefresh
     retryAfterFonts()
     requestFit()
   }
@@ -656,6 +794,7 @@ function createRuntime(
     if (!host) return
 
     if (previous.visible && !next.visible) {
+      const visualChangedOnHide = hasVisualChange(previous, next)
       currentViewOptions = next
       applyChangedViewOptions(previous, next)
       fitScheduler.cancelPending()
@@ -663,17 +802,19 @@ function createRuntime(
       fitDirty = true
       forceRefresh = false
       pendingFocusAfterFit = false
+      if (visualChangedOnHide) pendingVisualRefresh = true
       fontWaitGeneration += 1
       return
     }
 
     if (!previous.visible && next.visible) {
+      const visualChangedOnShow = hasVisualChange(previous, next)
       currentViewOptions = next
       applyChangedViewOptions(previous, next)
       connectObserver(host)
       pendingFocusAfterFit = next.visible === true && next.autoFocus === true
       fitDirty = true
-      forceRefresh = true
+      forceRefresh = visualChangedOnShow || pendingVisualRefresh
       retryAfterFonts()
       requestFit()
       return
@@ -692,6 +833,7 @@ function createRuntime(
         fitDirty = true
         forceRefresh = false
         pendingFocusAfterFit = false
+        pendingVisualRefresh = true
         fitScheduler.cancelPending()
         return
       }
@@ -704,7 +846,13 @@ function createRuntime(
     }
 
     if (themeChanged) {
-      if (next.visible) refreshTerminal()
+      if (next.visible) {
+        refreshTerminal()
+        didFirstPaint = true
+        pendingVisualRefresh = false
+      } else {
+        pendingVisualRefresh = true
+      }
       if (autoFocusGained) focusIfAutoFocus()
       return
     }
@@ -718,8 +866,10 @@ function createRuntime(
     const next = mergeViewOptions(currentViewOptions, nextOptions)
     if (!host) {
       const previous = currentViewOptions
+      const visualChangedOnPark = hasVisualChange(previous, next)
       currentViewOptions = next
       applyChangedViewOptions(previous, next)
+      if (visualChangedOnPark) pendingVisualRefresh = true
       park()
       return
     }
@@ -747,6 +897,7 @@ function createRuntime(
     const previousNoHost = currentViewOptions
     currentViewOptions = next
     applyChangedViewOptions(previousNoHost, next)
+    markVisualChangeIfHidden(previousNoHost, next)
     if (!currentViewOptions.visible) fitScheduler.cancelPending()
     else requestFit()
   }
@@ -764,6 +915,10 @@ function createRuntime(
     disconnectObserver()
     forceRefresh = false
     pendingFocusAfterFit = false
+    pendingVisualRefresh = false
+    pendingGeometricPaint = false
+    inFlightResize = null
+    resizeGeneration = 0
     fitDirty = false
     replayController?.dispose()
     replayController = null

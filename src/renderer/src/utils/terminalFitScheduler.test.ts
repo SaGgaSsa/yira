@@ -77,7 +77,7 @@ if (fitResults.length !== 0) throw new Error(`first sample must not complete, go
 
 flushFrame('stable second sample fits once and resizes')
 if ((mainCounters.fitCalls as number) !== 1) throw new Error(`stable fit must call fit once, got ${mainCounters.fitCalls}`)
-if ((mainCounters.proposeCalls as number) !== 2) throw new Error(`stable fit must propose twice, got ${mainCounters.proposeCalls}`)
+if ((mainCounters.proposeCalls as number) !== 3) throw new Error(`stable fit must propose twice plus post-fit real read, got ${mainCounters.proposeCalls}`)
 if ((resizeCalls.length as number) !== 1) throw new Error(`stable fit must resize once, got ${resizeCalls.length}`)
 if (resizeCalls[0].cols !== 100 || resizeCalls[0].rows !== 30) {
   throw new Error(`unexpected resize dimensions ${resizeCalls[0].cols}x${resizeCalls[0].rows}`)
@@ -194,8 +194,8 @@ if ((oscillationCounters.fitCalls as number) !== 1) {
 if ((oscillationResizeCalls.length as number) !== 1) {
   throw new Error(`oscillation must resize exactly once, got ${oscillationResizeCalls.length}`)
 }
-if (oscillationResizeCalls[0].cols !== 120 || oscillationResizeCalls[0].rows !== 35) {
-  throw new Error(`oscillation must use the latest size, got ${oscillationResizeCalls[0].cols}x${oscillationResizeCalls[0].rows}`)
+if (oscillationResizeCalls[0].cols !== 100 || oscillationResizeCalls[0].rows !== 30) {
+  throw new Error(`oscillation must use post-fit real size 100x30, got ${oscillationResizeCalls[0].cols}x${oscillationResizeCalls[0].rows}`)
 }
 if (Number(queuedFrames.length) !== 0) {
   throw new Error(`converged oscillation must not leave a queued frame, got ${queuedFrames.length}`)
@@ -348,4 +348,162 @@ flushFrame('measurable retry stable pair must fit once')
 
 if (unmeasurableResults.join(',') !== 'unmeasurable,fitted') {
   throw new Error(`measurable retry must report fitted once, got ${unmeasurableResults.join(',')}`)
+}
+
+// Regression: seeded scheduler must start from TerminalCreateResult dims that
+// already match the PTY. Same geometry must complete as unchanged without PTY resize.
+{
+  const localQueue: Array<{ id: number; callback: () => void }> = []
+  let localId = 1000
+  const localHost = {
+    requestFrame: (callback: () => void): number => {
+      const id = localId++
+      localQueue.push({ id, callback })
+      return id
+    },
+    cancelFrame: (id: number): void => {
+      const index = localQueue.findIndex((frame) => frame.id === id)
+      if (index >= 0) localQueue.splice(index, 1)
+    },
+  }
+  const seededScheduler = createTerminalFitScheduler({ ...localHost, initialDimensions: { cols: 100, rows: 30 } })
+  const seededCounters: SampleCounters = { fitCalls: 0, proposeCalls: 0 }
+  const seededResizes: Array<{ cols: number; rows: number }> = []
+  const seededResults: TerminalFitResult[] = []
+  seededScheduler.requestFit(makeAddon(() => ({ cols: 100, rows: 30 }), seededCounters), (cols, rows) => {
+    seededResizes.push({ cols, rows })
+  }, (result) => seededResults.push(result))
+  const runLocal = (): void => {
+    const frame = localQueue.shift()
+    if (!frame) throw new Error('seeded scheduler must schedule frames')
+    frame.callback()
+  }
+  runLocal()
+  runLocal()
+  if (seededResizes.length !== 0) throw new Error(`seeded same geometry must not resize PTY, got ${seededResizes.length}`)
+  if (seededResults.join(',') !== 'unchanged') throw new Error(`seeded same geometry must complete as unchanged, got ${seededResults.join(',')}`)
+}
+
+// Regression: scheduler must use real dims after fit, not stale stable sample.
+// Propose returns A twice (stable), then B after fit (layout shifted between
+// stable sample and internal FitAddon.fit). Must resize to B once, not A.
+{
+  const localQueue: Array<{ id: number; callback: () => void }> = []
+  let localId = 2000
+  const localHost = {
+    requestFrame: (callback: () => void): number => {
+      const id = localId++
+      localQueue.push({ id, callback })
+      return id
+    },
+    cancelFrame: (id: number): void => {
+      const index = localQueue.findIndex((frame) => frame.id === id)
+      if (index >= 0) localQueue.splice(index, 1)
+    },
+  }
+  const raceScheduler = createTerminalFitScheduler(localHost)
+  const raceCounters: SampleCounters = { fitCalls: 0, proposeCalls: 0 }
+  const sizeA = { cols: 100, rows: 30 }
+  const sizeB = { cols: 80, rows: 25 }
+  const raceResizes: Array<{ cols: number; rows: number }> = []
+  const raceResults: TerminalFitResult[] = []
+  const raceAddon = makeAddon(() => {
+    if (raceCounters.proposeCalls <= 2) return sizeA
+    return sizeB
+  }, raceCounters)
+  raceScheduler.requestFit(raceAddon, (cols, rows) => {
+    raceResizes.push({ cols, rows })
+  }, (result) => raceResults.push(result))
+  const runLocal = (): void => {
+    const frame = localQueue.shift()
+    if (!frame) throw new Error('race scheduler must schedule frames')
+    frame.callback()
+  }
+  runLocal()
+  runLocal()
+  if (raceResizes.length !== 1) throw new Error(`race must resize exactly once, got ${raceResizes.length}`)
+  if (raceResizes[0].cols !== 80 || raceResizes[0].rows !== 25) {
+    throw new Error(`race must resize to post-fit real dims 80x25, got ${raceResizes[0].cols}x${raceResizes[0].rows}`)
+  }
+  if (raceResults.join(',') !== 'fitted') throw new Error(`race must complete as fitted, got ${raceResults.join(',')}`)
+}
+
+// Regression: scheduler must prefer real xterm dims after fit when provided,
+// avoiding xterm/PTY desync if geometry shifted during fit.
+{
+  const localQueue: Array<{ id: number; callback: () => void }> = []
+  let localId = 3000
+  const localHost = {
+    requestFrame: (callback: () => void): number => {
+      const id = localId++
+      localQueue.push({ id, callback })
+      return id
+    },
+    cancelFrame: (id: number): void => {
+      const index = localQueue.findIndex((frame) => frame.id === id)
+      if (index >= 0) localQueue.splice(index, 1)
+    },
+  }
+  const termScheduler = createTerminalFitScheduler(localHost)
+  const termCounters: SampleCounters = { fitCalls: 0, proposeCalls: 0 }
+  const termResizes: Array<{ cols: number; rows: number }> = []
+  const termResults: TerminalFitResult[] = []
+  const stableAddon = makeAddon(() => ({ cols: 100, rows: 30 }), termCounters)
+  termScheduler.requestFit(stableAddon, (cols, rows) => {
+    termResizes.push({ cols, rows })
+  }, (result) => termResults.push(result), () => ({ cols: 90, rows: 28 }))
+  const runLocal = (): void => {
+    const frame = localQueue.shift()
+    if (!frame) throw new Error('terminal-size scheduler must schedule frames')
+    frame.callback()
+  }
+  runLocal()
+  runLocal()
+  if (termResizes.length !== 1) throw new Error(`terminal-size must resize exactly once, got ${termResizes.length}`)
+  if (termResizes[0].cols !== 90 || termResizes[0].rows !== 28) {
+    throw new Error(`terminal-size must use real xterm dims 90x28, got ${termResizes[0].cols}x${termResizes[0].rows}`)
+  }
+  if (termResults.join(',') !== 'fitted') throw new Error(`terminal-size must complete as fitted, got ${termResults.join(',')}`)
+}
+
+// Regression: if PTY resize fails, scheduler must allow retry with same size.
+// lastDimensions is cleared on failure so same geometry resends once.
+{
+  const localQueue: Array<{ id: number; callback: () => void }> = []
+  let localId = 4000
+  const localHost = {
+    requestFrame: (callback: () => void): number => {
+      const id = localId++
+      localQueue.push({ id, callback })
+      return id
+    },
+    cancelFrame: (id: number): void => {
+      const index = localQueue.findIndex((frame) => frame.id === id)
+      if (index >= 0) localQueue.splice(index, 1)
+    },
+  }
+  const failureScheduler = createTerminalFitScheduler(localHost)
+  const failureCounters: SampleCounters = { fitCalls: 0, proposeCalls: 0 }
+  const failureResizes: Array<{ cols: number; rows: number }> = []
+  const failureResults: TerminalFitResult[] = []
+  const failureAddon = makeAddon(() => ({ cols: 100, rows: 30 }), failureCounters)
+  const runLocal = (): void => {
+    const frame = localQueue.shift()
+    if (!frame) throw new Error('failure scheduler must schedule frames')
+    frame.callback()
+  }
+  failureScheduler.requestFit(failureAddon, (cols, rows) => {
+    failureResizes.push({ cols, rows })
+  }, (result) => failureResults.push(result))
+  runLocal()
+  runLocal()
+  if (failureResizes.length !== 1) throw new Error(`failure first fit must resize once, got ${failureResizes.length}`)
+  failureScheduler.notifyResizeFailure?.({ cols: 100, rows: 30 })
+  failureScheduler.requestFit(failureAddon, (cols, rows) => {
+    failureResizes.push({ cols, rows })
+  }, (result) => failureResults.push(result))
+  runLocal()
+  runLocal()
+  if (Number(failureResizes.length) !== 2) throw new Error(`failure retry same size must resend once, got ${failureResizes.length}`)
+  if (failureResults.join(',') !== 'fitted,fitted') throw new Error(`failure retry must complete as fitted twice, got ${failureResults.join(',')}`)
 }

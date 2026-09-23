@@ -87,7 +87,8 @@ class FakeTerminal implements TerminalLike {
   readonly loadedAddons: unknown[] = []
   readonly pastedData: string[] = []
   readonly events: string[]
-  readonly rows = 24
+  cols = 80
+  rows = 24
   openedIn: HTMLElement | null = null
   focusCalls = 0
   disposeCalls = 0
@@ -99,8 +100,13 @@ class FakeTerminal implements TerminalLike {
   constructor(
     events: FakeTerminalEvents,
     private readonly openError?: Error,
+    initialDimensions?: { cols: number; rows: number },
   ) {
     this.events = events.events
+    if (initialDimensions) {
+      this.cols = initialDimensions.cols
+      this.rows = initialDimensions.rows
+    }
   }
 
   loadAddon(addon: unknown): void {
@@ -190,10 +196,21 @@ class FakeTerminal implements TerminalLike {
 
 class FakeFitAddon implements FitAddonLike {
   fitCalls = 0
+  fitMutations = 0
   dimensions: TerminalFitDimensions | undefined = { cols: 100, rows: 30 }
+  attachedTerminal: FakeTerminal | null = null
 
   fit(): void {
     this.fitCalls += 1
+    const proposed = this.dimensions
+    const terminal = this.attachedTerminal
+    if (!proposed || !terminal) return
+    if (proposed.cols <= 0 || proposed.rows <= 0) return
+    if (terminal.cols !== proposed.cols || terminal.rows !== proposed.rows) {
+      terminal.cols = proposed.cols
+      terminal.rows = proposed.rows
+      this.fitMutations += 1
+    }
   }
 
   proposeDimensions(): TerminalFitDimensions | undefined {
@@ -205,19 +222,36 @@ interface FitRequest {
   readonly fitAddon: FitAddonLike
   readonly resize: (cols: number, rows: number) => void
   readonly complete?: (result: TerminalFitResult) => void
+  readonly getTerminalSize?: () => TerminalFitDimensions | null | undefined
 }
 
 class FakeFitScheduler implements TerminalFitSchedulerLike {
   readonly requests: FitRequest[] = []
   private lastDimensions: TerminalFitDimensions | null = null
 
+  setKnownDimensions(dimensions: TerminalFitDimensions): void {
+    if (dimensions && dimensions.cols > 0 && dimensions.rows > 0) {
+      this.lastDimensions = { cols: Math.floor(dimensions.cols), rows: Math.floor(dimensions.rows) }
+    }
+  }
+
+  notifyResizeFailure(dimensions: TerminalFitDimensions): void {
+    if (!dimensions) return
+    if (this.lastDimensions
+      && this.lastDimensions.cols === Math.floor(dimensions.cols)
+      && this.lastDimensions.rows === Math.floor(dimensions.rows)) {
+      this.lastDimensions = null
+    }
+  }
+
   requestFit(
     fitAddon: FitAddonLike,
     resize: (cols: number, rows: number) => void,
     complete?: (result: TerminalFitResult) => void,
+    getTerminalSize?: () => TerminalFitDimensions | null | undefined,
   ): void {
     if (this.requests.length > 0) return
-    this.requests.push({ fitAddon, resize, complete })
+    this.requests.push({ fitAddon, resize, complete, getTerminalSize })
   }
 
   cancelPending(): void {
@@ -232,7 +266,26 @@ class FakeFitScheduler implements TerminalFitSchedulerLike {
     let result: TerminalFitResult = 'unmeasurable'
     if (dimensions && dimensions.cols > 0 && dimensions.rows > 0) {
       request.fitAddon.fit()
-      const normalized = { cols: Math.floor(dimensions.cols), rows: Math.floor(dimensions.rows) }
+      let effective: TerminalFitDimensions | null = null
+      try {
+        const terminalSize = request.getTerminalSize?.()
+        if (terminalSize && terminalSize.cols > 0 && terminalSize.rows > 0) {
+          effective = { cols: Math.floor(terminalSize.cols), rows: Math.floor(terminalSize.rows) }
+        }
+      } catch {
+        effective = null
+      }
+      if (!effective) {
+        const postFit = request.fitAddon.proposeDimensions()
+        if (postFit && postFit.cols > 0 && postFit.rows > 0) {
+          effective = { cols: Math.floor(postFit.cols), rows: Math.floor(postFit.rows) }
+        }
+      }
+      if (!effective) {
+        request.complete?.('unmeasurable')
+        return 'unmeasurable'
+      }
+      const normalized = effective
       if (this.lastDimensions
         && this.lastDimensions.cols === normalized.cols
         && this.lastDimensions.rows === normalized.rows) {
@@ -444,12 +497,14 @@ function createRuntimeHarness(overrides: {
     events.push(`terminal:create:${cols}x${rows}`)
     terminalCreations.push({ cols, rows })
     if (overrides.createTerminalError) throw overrides.createTerminalError
-    const terminal = new FakeTerminal({ events }, overrides.openError)
+    const terminal = new FakeTerminal({ events }, overrides.openError, { cols, rows })
     terminals.push(terminal)
+    for (const addon of fitAddons) addon.attachedTerminal = terminal
     return terminal
   }
   const createFitAddon = (): FitAddonLike => {
     const addon = new FakeFitAddon()
+    addon.attachedTerminal = terminals[terminals.length - 1] ?? null
     fitAddons.push(addon)
     return addon
   }
@@ -736,6 +791,12 @@ test('does not fit or resize while the runtime is hidden', async () => {
   await runtime.dispose(false)
 })
 
+async function settleFit(): Promise<void> {
+  await Promise.resolve()
+  await Promise.resolve()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+}
+
 test('fits a measurable host and refreshes every terminal row', async () => {
   const harness = createRuntimeHarness()
   const runtime = await createReadyRuntime(harness)
@@ -744,10 +805,11 @@ test('fits a measurable host and refreshes every terminal row', async () => {
   runtime.attachHost(host, viewOptions({ visible: true }))
   assert.equal(harness.schedulers[0].requests.length, 1)
   harness.flushFit()
+  await settleFit()
 
   assert.equal(harness.fitAddons[0].fitCalls, 1)
   assert.deepEqual(harness.bridge.resizeCalls.map(({ cols, rows }) => ({ cols, rows })), [{ cols: 100, rows: 30 }])
-  assert.deepEqual(harness.terminals[0].refreshCalls, [{ start: 0, end: 23 }])
+  assert.deepEqual(harness.terminals[0].refreshCalls, [{ start: 0, end: 29 }])
   await runtime.dispose(false)
 })
 
@@ -765,9 +827,10 @@ test('keeps an unmeasurable fit dirty and retries after ResizeObserver', async (
   harness.notifyResize()
   assert.equal(harness.schedulers[0].requests.length, 1)
   harness.flushFit()
+  await settleFit()
 
   assert.deepEqual(harness.bridge.resizeCalls.map(({ cols, rows }) => ({ cols, rows })), [{ cols: 110, rows: 33 }])
-  assert.deepEqual(harness.terminals[0].refreshCalls.at(-1), { start: 0, end: 23 })
+  assert.deepEqual(harness.terminals[0].refreshCalls.at(-1), { start: 0, end: 32 })
   await runtime.dispose(false)
 })
 
@@ -779,12 +842,15 @@ test('does not send PTY resize when fitted dimensions do not change', async () =
 
   runtime.attachHost(firstHost, viewOptions({ visible: true }))
   harness.flushFit()
+  await settleFit()
   runtime.attachHost(secondHost, viewOptions({ visible: true }))
   harness.flushFit()
+  await settleFit()
 
   assert.equal(harness.fitAddons[0].fitCalls, 2)
+  assert.equal(harness.fitAddons[0].fitMutations, 1)
   assert.equal(harness.bridge.resizeCalls.length, 1)
-  assert.equal(harness.terminals[0].refreshCalls.length, 2)
+  assert.equal(harness.terminals[0].refreshCalls.length, 1)
   await runtime.dispose(false)
 })
 
@@ -830,10 +896,11 @@ test('does not resize or write after the PTY exit event', async () => {
   harness.flushFit()
   harness.terminals[0].emitInput('input after exit')
   await Promise.resolve()
+  await settleFit()
 
   assert.deepEqual(harness.bridge.resizeCalls, [])
   assert.deepEqual(harness.bridge.writeCalls, [])
-  assert.deepEqual(harness.terminals[0].refreshCalls, [{ start: 0, end: 23 }])
+  assert.deepEqual(harness.terminals[0].refreshCalls, [{ start: 0, end: 29 }])
   assert.deepEqual(runtime.getSnapshot().exitEvent, { exitCode: 130, signal: 2 })
   await runtime.dispose(false)
 })
@@ -906,8 +973,10 @@ test('non-geometric updateView keeps DOM, observer, fit and theme untouched', as
 
   runtime.attachHost(host, viewOptions({ visible: true }))
   harness.flushFit()
+  await settleFit()
   harness.resolveFonts()
   await Promise.resolve()
+  await settleFit()
 
   const terminal = harness.terminals[0]
   const themeBefore = terminal.options.theme
@@ -926,6 +995,7 @@ test('non-geometric updateView keeps DOM, observer, fit and theme untouched', as
   }))
   harness.resolveFonts()
   await Promise.resolve()
+  await settleFit()
 
   assert.equal(replaceCalls, 0)
   assert.equal(harness.observers.length, observersBefore)
@@ -963,6 +1033,7 @@ test('non-geometric update during pending fit preserves the scheduled work', asy
   assert.equal(replaceCalls, 0)
 
   harness.flushFit()
+  await settleFit()
   assert.equal(harness.fitAddons[0].fitCalls, 1)
   assert.deepEqual(harness.bridge.resizeCalls.length, 1)
   await runtime.dispose(false)
@@ -997,6 +1068,7 @@ test('hide cancels pending fit and show refreshes same size without PTY resize',
   assert.equal(harness.schedulers[0].requests.length, 1)
   assert.equal(replaceCalls, 0)
   harness.flushFit()
+  await settleFit()
   assert.deepEqual(harness.bridge.resizeCalls.length, 1)
   assert.equal(harness.terminals[0].refreshCalls.length, refreshBeforeShow + 1)
   await runtime.dispose(false)
@@ -1009,6 +1081,7 @@ test('geometric fontSize and edgeToEdge changes request fit', async () => {
 
   runtime.attachHost(host, viewOptions({ visible: true, fontSize: 14, edgeToEdge: false }))
   harness.flushFit()
+  await settleFit()
   const resizeBefore = harness.bridge.resizeCalls.length
   const refreshBefore = harness.terminals[0].refreshCalls.length
 
@@ -1017,6 +1090,7 @@ test('geometric fontSize and edgeToEdge changes request fit', async () => {
   assert.equal(harness.terminals[0].options.fontSize, 16)
   assert.equal(harness.schedulers[0].requests.length, 1)
   harness.flushFit()
+  await settleFit()
   assert.equal(harness.bridge.resizeCalls.length, resizeBefore + 1)
   assert.equal(harness.terminals[0].refreshCalls.length, refreshBefore + 1)
 
@@ -1025,6 +1099,7 @@ test('geometric fontSize and edgeToEdge changes request fit', async () => {
   runtime.updateView(viewOptions({ visible: true, fontSize: 16, edgeToEdge: true }))
   assert.equal(harness.schedulers[0].requests.length, 1)
   harness.flushFit()
+  await settleFit()
   assert.equal(harness.bridge.resizeCalls.length, resizeBefore + 2)
   assert.equal(harness.terminals[0].refreshCalls.length, refreshMid + 1)
   await runtime.dispose(false)
@@ -1037,12 +1112,14 @@ test('spurious observer with unchanged dimensions does not repaint', async () =>
 
   runtime.attachHost(host, viewOptions({ visible: true }))
   harness.flushFit()
+  await settleFit()
   const refreshBefore = harness.terminals[0].refreshCalls.length
   const resizeBefore = harness.bridge.resizeCalls.length
 
   harness.notifyResize()
   assert.equal(harness.schedulers[0].requests.length, 1)
   harness.flushFit()
+  await settleFit()
   assert.deepEqual(harness.bridge.resizeCalls.length, resizeBefore)
   assert.equal(harness.terminals[0].refreshCalls.length, refreshBefore)
   await runtime.dispose(false)
@@ -1055,6 +1132,7 @@ test('theme change applies without fit and stays stable on repeat', async () => 
 
   runtime.attachHost(host, viewOptions({ visible: true, themeId: 'yira-default' }))
   harness.flushFit()
+  await settleFit()
   const fitBefore = harness.fitAddons[0].fitCalls
   const refreshBefore = harness.terminals[0].refreshCalls.length
   const themeBefore = harness.terminals[0].options.theme
@@ -1082,6 +1160,7 @@ test('parked font and theme changes apply without double replay', async () => {
 
   runtime.attachHost(firstHost, viewOptions({ visible: true, fontSize: 14, themeId: 'yira-default' }))
   harness.flushFit()
+  await settleFit()
   const themeAfterFirstAttach = harness.terminals[0].options.theme
 
   runtime.attachHost(null, viewOptions({ visible: true, fontSize: 16, themeId: 'classic-dark' }))
@@ -1095,6 +1174,7 @@ test('parked font and theme changes apply without double replay', async () => {
   assert.equal(harness.terminals[0].options.fontSize, 16)
   assert.equal(harness.terminals[0].options.theme, appliedTheme)
   harness.flushFit()
+  await settleFit()
 
   assert.equal(harness.terminals.length, 1)
   assert.deepEqual(harness.terminals[0].writes, ['initial', 'background'])
@@ -1117,8 +1197,15 @@ test('real scheduler integrates non-geometric update, hide cancel and same-size 
     },
   })
   harness.options.dependencies.createFitScheduler = (): TerminalFitSchedulerLike => realScheduler
+  // Link realistic fit addon to terminal for post-fit terminal-size reads.
+  const linkRealAddon = (): void => {
+    const terminal = harness.terminals[0] as unknown as { cols: number; rows: number } | undefined
+    const addon = harness.fitAddons[0] as unknown as { attachedTerminal: unknown } | undefined
+    if (terminal && addon) addon.attachedTerminal = terminal
+  }
   const runtime = await createTerminalRuntime(harness.options)
   harness.completeReplay()
+  linkRealAddon()
 
   const runNextFrame = (): boolean => {
     const first = pendingFrames.keys().next()
@@ -1147,6 +1234,11 @@ test('real scheduler integrates non-geometric update, hide cancel and same-size 
   await Promise.resolve()
   await Promise.resolve()
   drainFrames()
+  await settleFit()
+  // Realistic fit mutates the fake terminal to the proposed size.
+  const realTerminal = harness.terminals[0] as unknown as { cols: number; rows: number }
+  realTerminal.cols = 100
+  realTerminal.rows = 30
   assert.equal(harness.bridge.resizeCalls.length, 1)
   assert.equal(harness.terminals[0].refreshCalls.length, 1)
 
@@ -1155,6 +1247,7 @@ test('real scheduler integrates non-geometric update, hide cancel and same-size 
   runtime.updateView(viewOptions({ visible: false }))
   assert.equal(pendingFrames.size, 0)
   drainFrames()
+  await settleFit()
   assert.equal(harness.bridge.resizeCalls.length, 1)
 
   harness.fitAddons[0].dimensions = { cols: 100, rows: 30 }
@@ -1165,18 +1258,20 @@ test('real scheduler integrates non-geometric update, hide cancel and same-size 
   await Promise.resolve()
   await Promise.resolve()
   drainFrames()
+  await settleFit()
   assert.equal(harness.bridge.resizeCalls.length, 1)
-  assert.equal(harness.terminals[0].refreshCalls.length, refreshBeforeShow + 1)
+  assert.equal(harness.terminals[0].refreshCalls.length, refreshBeforeShow)
   await runtime.dispose(false)
 })
 
-test('park and reattach keep single replay and refresh unchanged without resize', async () => {
+test('park and reattach keep single replay without resize nor repaint on same size', async () => {
   const harness = createRuntimeHarness({ attachResult: { buffer: 'initial' } })
   const runtime = await createReadyRuntime(harness)
   const firstHost = harness.host()
 
   runtime.attachHost(firstHost, viewOptions({ visible: true }))
   harness.flushFit()
+  await settleFit()
   const resizeBefore = harness.bridge.resizeCalls.length
   const refreshBefore = harness.terminals[0].refreshCalls.length
 
@@ -1185,11 +1280,12 @@ test('park and reattach keep single replay and refresh unchanged without resize'
   const secondHost = harness.host()
   runtime.attachHost(secondHost, viewOptions({ visible: true }))
   harness.flushFit()
+  await settleFit()
 
   assert.equal(harness.terminals.length, 1)
   assert.deepEqual(harness.terminals[0].writes, ['initial', 'background'])
   assert.deepEqual(harness.bridge.resizeCalls.length, resizeBefore)
-  assert.equal(harness.terminals[0].refreshCalls.length, refreshBefore + 1)
+  assert.equal(harness.terminals[0].refreshCalls.length, refreshBefore)
   await runtime.dispose(false)
 })
 
@@ -1205,11 +1301,12 @@ test('defers autoFocus of a new host until after fit and refresh', async () => {
   assert.equal(harness.schedulers[0].requests.length, 1)
 
   harness.flushFit()
+  await settleFit()
 
   assert.deepEqual(harness.bridge.resizeCalls.length, 1)
   assert.equal(terminal.refreshCalls.length, 1)
   assert.equal(terminal.focusCalls, 1)
-  const firstRefreshIndex = harness.events.indexOf('terminal:refresh:0-23')
+  const firstRefreshIndex = harness.events.indexOf('terminal:refresh:0-29')
   const firstFocusIndex = harness.events.indexOf('terminal:focus')
   assert.equal(firstRefreshIndex !== -1 && firstFocusIndex !== -1 && firstRefreshIndex < firstFocusIndex, true)
 
@@ -1219,22 +1316,24 @@ test('defers autoFocus of a new host until after fit and refresh', async () => {
   assert.equal(harness.schedulers[0].requests.length, 1)
 
   harness.flushFit()
+  await settleFit()
 
   assert.deepEqual(harness.bridge.resizeCalls.length, 1)
-  assert.equal(terminal.refreshCalls.length, 2)
+  assert.equal(terminal.refreshCalls.length, 1)
   assert.equal(terminal.focusCalls, 2)
   const refreshEvents = harness.events.filter((event) => event.startsWith('terminal:refresh:'))
   const focusEvents = harness.events.filter((event) => event === 'terminal:focus')
-  assert.equal(refreshEvents.length, 2)
+  assert.equal(refreshEvents.length, 1)
   assert.equal(focusEvents.length, 2)
-  assert.equal(harness.events.lastIndexOf('terminal:refresh:0-23') < harness.events.lastIndexOf('terminal:focus'), true)
+  assert.equal(harness.events.lastIndexOf('terminal:refresh:0-29') < harness.events.lastIndexOf('terminal:focus'), true)
 
   harness.notifyResize()
   assert.equal(harness.schedulers[0].requests.length, 1)
   harness.flushFit()
+  await settleFit()
 
   assert.deepEqual(harness.bridge.resizeCalls.length, 1)
-  assert.equal(terminal.refreshCalls.length, 2)
+  assert.equal(terminal.refreshCalls.length, 1)
   assert.equal(terminal.focusCalls, 2)
   await runtime.dispose(false)
 })
@@ -1257,6 +1356,7 @@ test('keeps attach focus pending on unmeasurable without early focus', async () 
   harness.notifyResize()
   assert.equal(harness.schedulers[0].requests.length, 1)
   assert.equal(harness.flushFit(), 'fitted')
+  await settleFit()
 
   assert.deepEqual(harness.bridge.resizeCalls.map(({ cols, rows }) => ({ cols, rows })), [{ cols: 110, rows: 33 }])
   assert.equal(terminal.refreshCalls.length, 1)
@@ -1264,7 +1364,7 @@ test('keeps attach focus pending on unmeasurable without early focus', async () 
   await runtime.dispose(false)
 })
 
-test('defers focus on same-host reshow until after refresh and only once', async () => {
+test('defers focus on same-host reshow without repaint on same size and only once', async () => {
   const harness = createRuntimeHarness()
   const runtime = await createReadyRuntime(harness)
   const terminal = harness.terminals[0]
@@ -1272,6 +1372,7 @@ test('defers focus on same-host reshow until after refresh and only once', async
 
   runtime.attachHost(host, viewOptions({ visible: true, autoFocus: true }))
   harness.flushFit()
+  await settleFit()
   assert.equal(terminal.focusCalls, 1)
   const refreshAfterAttach = terminal.refreshCalls.length
 
@@ -1284,14 +1385,16 @@ test('defers focus on same-host reshow until after refresh and only once', async
   assert.equal(harness.schedulers[0].requests.length, 1)
 
   harness.flushFit()
+  await settleFit()
 
-  assert.equal(terminal.refreshCalls.length, refreshAfterAttach + 1)
+  assert.equal(terminal.refreshCalls.length, refreshAfterAttach)
   assert.equal(terminal.focusCalls, 2)
-  assert.equal(harness.events.lastIndexOf('terminal:refresh:0-23') < harness.events.lastIndexOf('terminal:focus'), true)
+  assert.equal(harness.events.lastIndexOf('terminal:refresh:0-29') < harness.events.lastIndexOf('terminal:focus'), true)
 
   harness.notifyResize()
   assert.equal(harness.schedulers[0].requests.length, 1)
   harness.flushFit()
+  await settleFit()
 
   assert.equal(terminal.focusCalls, 2)
   await runtime.dispose(false)
@@ -1305,6 +1408,7 @@ test('defers focus on geometric fontSize change until after refresh and only onc
 
   runtime.attachHost(host, viewOptions({ visible: true, autoFocus: true, fontSize: 14 }))
   harness.flushFit()
+  await settleFit()
   assert.equal(terminal.focusCalls, 1)
   const resizeAfterAttach = harness.bridge.resizeCalls.length
   const refreshAfterAttach = terminal.refreshCalls.length
@@ -1316,16 +1420,463 @@ test('defers focus on geometric fontSize change until after refresh and only onc
   assert.equal(harness.schedulers[0].requests.length, 1)
 
   harness.flushFit()
+  await settleFit()
 
   assert.equal(harness.bridge.resizeCalls.length, resizeAfterAttach + 1)
   assert.equal(terminal.refreshCalls.length, refreshAfterAttach + 1)
   assert.equal(terminal.focusCalls, 2)
-  assert.equal(harness.events.lastIndexOf('terminal:refresh:0-23') < harness.events.lastIndexOf('terminal:focus'), true)
+  assert.equal(harness.events.lastIndexOf('terminal:refresh:0-39') < harness.events.lastIndexOf('terminal:focus'), true)
 
   harness.notifyResize()
   assert.equal(harness.schedulers[0].requests.length, 1)
   harness.flushFit()
+  await settleFit()
 
   assert.equal(terminal.focusCalls, 2)
+  await runtime.dispose(false)
+})
+
+test('same-geometry reattach does not resize PTY nor repaint all rows', async () => {
+  const harness = createRuntimeHarness()
+  const runtime = await createReadyRuntime(harness)
+  const terminal = harness.terminals[0]
+  const firstHost = harness.host()
+
+  runtime.attachHost(firstHost, viewOptions({ visible: true }))
+  harness.flushFit()
+  await settleFit()
+  assert.equal(harness.bridge.resizeCalls.length, 1)
+  assert.deepEqual(terminal.refreshCalls, [{ start: 0, end: 29 }])
+
+  const secondHost = harness.host()
+  runtime.attachHost(secondHost, viewOptions({ visible: true }))
+  harness.flushFit()
+  await settleFit()
+
+  assert.equal(harness.bridge.resizeCalls.length, 1)
+  assert.equal(terminal.refreshCalls.length, 1)
+  assert.equal(harness.fitAddons[0].fitMutations, 1)
+  await runtime.dispose(false)
+})
+
+test('same-geometry reshow does not resize PTY nor repaint all rows', async () => {
+  const harness = createRuntimeHarness()
+  const runtime = await createReadyRuntime(harness)
+  const terminal = harness.terminals[0]
+  const host = harness.host()
+
+  runtime.attachHost(host, viewOptions({ visible: true }))
+  harness.flushFit()
+  await settleFit()
+  assert.equal(harness.bridge.resizeCalls.length, 1)
+  assert.equal(terminal.refreshCalls.length, 1)
+
+  runtime.updateView(viewOptions({ visible: false }))
+  runtime.updateView(viewOptions({ visible: true }))
+  harness.flushFit()
+  await settleFit()
+
+  assert.equal(harness.bridge.resizeCalls.length, 1)
+  assert.equal(terminal.refreshCalls.length, 1)
+  await runtime.dispose(false)
+})
+
+test('real geometry change resizes PTY once and repaints once', async () => {
+  const harness = createRuntimeHarness()
+  const runtime = await createReadyRuntime(harness)
+  const terminal = harness.terminals[0]
+  const firstHost = harness.host()
+
+  runtime.attachHost(firstHost, viewOptions({ visible: true }))
+  harness.flushFit()
+  await settleFit()
+  assert.equal(harness.bridge.resizeCalls.length, 1)
+  assert.equal(terminal.refreshCalls.length, 1)
+
+  harness.fitAddons[0].dimensions = { cols: 120, rows: 40 }
+  const secondHost = harness.host()
+  runtime.attachHost(secondHost, viewOptions({ visible: true }))
+  harness.flushFit()
+  await settleFit()
+
+  assert.equal(harness.bridge.resizeCalls.length, 2)
+  assert.deepEqual(harness.bridge.resizeCalls[1], { identity: harness.identity, cols: 120, rows: 40 })
+  assert.equal(terminal.refreshCalls.length, 2)
+  assert.deepEqual(terminal.refreshCalls.at(-1), { start: 0, end: 39 })
+  await runtime.dispose(false)
+})
+
+test('waits for bridge.resize before refresh and focus', async () => {
+  const harness = createRuntimeHarness()
+  const runtime = await createReadyRuntime(harness)
+  const terminal = harness.terminals[0]
+  let resolveResize!: () => void
+  const bridgeMutable = harness.bridge as unknown as { resize: BridgeHarness['resize'] }
+  bridgeMutable.resize = (identity, cols, rows) => new Promise<void>((resolve) => {
+    resolveResize = () => {
+      harness.bridge.resizeCalls.push({ identity, cols, rows })
+      resolve()
+    }
+  })
+
+  const host = harness.host()
+  runtime.attachHost(host, viewOptions({ visible: true, autoFocus: true }))
+  harness.flushFit()
+  await Promise.resolve()
+  await Promise.resolve()
+
+  assert.equal(terminal.refreshCalls.length, 0)
+  assert.equal(terminal.focusCalls, 0)
+
+  resolveResize()
+  await Promise.resolve()
+  await Promise.resolve()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+
+  assert.equal(terminal.refreshCalls.length, 1)
+  assert.equal(terminal.focusCalls, 1)
+  await runtime.dispose(false)
+})
+
+test('does not refresh or focus old host when hidden during pending resize', async () => {
+  const harness = createRuntimeHarness()
+  const runtime = await createReadyRuntime(harness)
+  const terminal = harness.terminals[0]
+  let resolveResize!: () => void
+  const bridgeMutable = harness.bridge as unknown as { resize: BridgeHarness['resize'] }
+  bridgeMutable.resize = (identity, cols, rows) => new Promise<void>((resolve) => {
+    resolveResize = () => {
+      harness.bridge.resizeCalls.push({ identity, cols, rows })
+      resolve()
+    }
+  })
+
+  const host = harness.host()
+  runtime.attachHost(host, viewOptions({ visible: true, autoFocus: true }))
+  harness.flushFit()
+  await Promise.resolve()
+
+  runtime.updateView(viewOptions({ visible: false }))
+  resolveResize()
+  await Promise.resolve()
+  await Promise.resolve()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+
+  assert.equal(terminal.refreshCalls.length, 0)
+  assert.equal(terminal.focusCalls, 0)
+  await runtime.dispose(false)
+})
+
+test('does not refresh or focus replaced host when pending resize resolves', async () => {
+  const harness = createRuntimeHarness()
+  const runtime = await createReadyRuntime(harness)
+  const terminal = harness.terminals[0]
+  const resolvers: Array<() => void> = []
+  const bridgeMutable = harness.bridge as unknown as { resize: BridgeHarness['resize'] }
+  bridgeMutable.resize = (identity, cols, rows) => new Promise<void>((resolve) => {
+    resolvers.push(() => {
+      harness.bridge.resizeCalls.push({ identity, cols, rows })
+      resolve()
+    })
+  })
+
+  const firstHost = harness.host()
+  runtime.attachHost(firstHost, viewOptions({ visible: true, autoFocus: true }))
+  harness.flushFit()
+  await Promise.resolve()
+
+  const secondHost = harness.host()
+  runtime.attachHost(secondHost, viewOptions({ visible: true }))
+  assert.equal(harness.schedulers[0].requests.length, 1)
+
+  resolvers[0]()
+  await Promise.resolve()
+  await Promise.resolve()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+
+  assert.equal(terminal.refreshCalls.length, 0)
+  assert.equal(terminal.focusCalls, 0)
+  await runtime.dispose(false)
+})
+
+test('reports bridge.resize failure without blocking runtime', async () => {
+  const harness = createRuntimeHarness()
+  const runtime = await createReadyRuntime(harness)
+  const terminal = harness.terminals[0]
+  const bridgeMutable = harness.bridge as unknown as { resize: BridgeHarness['resize'] }
+  bridgeMutable.resize = async () => {
+    throw new Error('pty resize failed')
+  }
+
+  const host = harness.host()
+  runtime.attachHost(host, viewOptions({ visible: true }))
+  harness.flushFit()
+  await settleFit()
+  await settleFit()
+
+  assert.equal(harness.events.includes('error:tile-a:resize'), true)
+  assert.equal(terminal.refreshCalls.length, 0)
+  assert.equal(terminal.focusCalls, 0)
+
+  bridgeMutable.resize = async (identity, cols, rows) => {
+    harness.bridge.resizeCalls.push({ identity, cols, rows })
+  }
+  harness.fitAddons[0].dimensions = { cols: 120, rows: 40 }
+  harness.notifyResize()
+  harness.flushFit()
+  await settleFit()
+  await settleFit()
+
+  assert.equal(harness.bridge.resizeCalls.length, 1)
+  assert.equal(terminal.refreshCalls.length, 1)
+  await runtime.dispose(false)
+})
+
+test('failed resize retries same geometry and resends PTY resize', async () => {
+  const harness = createRuntimeHarness()
+  const runtime = await createReadyRuntime(harness)
+  const terminal = harness.terminals[0]
+  const bridgeMutable = harness.bridge as unknown as { resize: BridgeHarness['resize'] }
+  let attempts = 0
+  bridgeMutable.resize = async (identity, cols, rows) => {
+    attempts += 1
+    if (attempts === 1) throw new Error('pty resize failed once')
+    harness.bridge.resizeCalls.push({ identity, cols, rows })
+  }
+
+  const host = harness.host()
+  runtime.attachHost(host, viewOptions({ visible: true, autoFocus: true }))
+  harness.flushFit()
+  await settleFit()
+  await settleFit()
+
+  assert.equal(attempts, 1)
+  assert.equal(harness.events.includes('error:tile-a:resize'), true)
+  assert.equal(terminal.refreshCalls.length, 0)
+  assert.equal(terminal.focusCalls, 0)
+
+  harness.notifyResize()
+  assert.equal(harness.schedulers[0].requests.length, 1)
+  harness.flushFit()
+  await settleFit()
+  await settleFit()
+
+  assert.equal(attempts, 2)
+  assert.equal(harness.bridge.resizeCalls.length, 1)
+  assert.deepEqual(
+    harness.bridge.resizeCalls.map(({ cols, rows }) => ({ cols, rows })),
+    [{ cols: 100, rows: 30 }],
+  )
+  assert.equal(terminal.refreshCalls.length, 1)
+  assert.equal(terminal.focusCalls, 1)
+  await runtime.dispose(false)
+})
+
+test('first visible attach same as created repaints once, next same does not', async () => {
+  const harness = createRuntimeHarness()
+  const runtime = await createReadyRuntime(harness)
+  const terminal = harness.terminals[0]
+  harness.fitAddons[0].dimensions = { cols: 80, rows: 24 }
+  harness.terminals[0].cols = 80
+  harness.terminals[0].rows = 24
+
+  const firstHost = harness.host()
+  runtime.attachHost(firstHost, viewOptions({ visible: true }))
+  harness.flushFit()
+  await settleFit()
+
+  assert.equal(harness.bridge.resizeCalls.length, 0)
+  assert.equal(terminal.refreshCalls.length, 1)
+
+  const secondHost = harness.host()
+  runtime.attachHost(secondHost, viewOptions({ visible: true }))
+  harness.flushFit()
+  await settleFit()
+
+  assert.equal(harness.bridge.resizeCalls.length, 0)
+  assert.equal(terminal.refreshCalls.length, 1)
+  await runtime.dispose(false)
+})
+
+test('visual change while parked forces repaint on reattach with same geometry', async () => {
+  const harness = createRuntimeHarness()
+  const runtime = await createReadyRuntime(harness)
+  const terminal = harness.terminals[0]
+  const firstHost = harness.host()
+
+  runtime.attachHost(firstHost, viewOptions({ visible: true, fontSize: 14, themeId: 'yira-default', edgeToEdge: false }))
+  harness.flushFit()
+  await settleFit()
+  assert.equal(terminal.refreshCalls.length, 1)
+  const resizeBefore = harness.bridge.resizeCalls.length
+
+  runtime.attachHost(null, viewOptions({ visible: true, fontSize: 16, themeId: 'classic-dark', edgeToEdge: true }))
+  assert.equal(terminal.options.fontSize, 16)
+
+  const secondHost = harness.host()
+  runtime.attachHost(secondHost, viewOptions({ visible: true, fontSize: 16, themeId: 'classic-dark', edgeToEdge: true }))
+  harness.flushFit()
+  await settleFit()
+
+  assert.equal(harness.bridge.resizeCalls.length, resizeBefore)
+  assert.equal(terminal.refreshCalls.length, 2)
+  await runtime.dispose(false)
+})
+
+test('new same-geometry host waits for previous resize ack without wrong repaint', async () => {
+  const harness = createRuntimeHarness()
+  const runtime = await createReadyRuntime(harness)
+  const terminal = harness.terminals[0]
+  const bridgeMutable = harness.bridge as unknown as { resize: BridgeHarness['resize'] }
+  let resolveFirstResize!: () => void
+  let firstResizeCalls = 0
+  bridgeMutable.resize = (identity, cols, rows) => new Promise<void>((resolve) => {
+    firstResizeCalls += 1
+    if (firstResizeCalls === 1) {
+      resolveFirstResize = () => {
+        harness.bridge.resizeCalls.push({ identity, cols, rows })
+        resolve()
+      }
+      return
+    }
+    harness.bridge.resizeCalls.push({ identity, cols, rows })
+    resolve()
+  })
+
+  const firstHost = harness.host()
+  runtime.attachHost(firstHost, viewOptions({ visible: true, autoFocus: true }))
+  harness.flushFit()
+  await Promise.resolve()
+  await Promise.resolve()
+  assert.equal(terminal.refreshCalls.length, 0)
+  assert.equal(terminal.focusCalls, 0)
+
+  const secondHost = harness.host()
+  runtime.attachHost(secondHost, viewOptions({ visible: true, autoFocus: true }))
+  harness.flushFit()
+  await Promise.resolve()
+  await Promise.resolve()
+  assert.equal(terminal.focusCalls, 0)
+  assert.equal(terminal.refreshCalls.length, 0)
+
+  resolveFirstResize()
+  await settleFit()
+  await settleFit()
+
+  assert.equal(harness.bridge.resizeCalls.length, 1)
+  assert.equal(terminal.refreshCalls.length, 1)
+  assert.equal(terminal.focusCalls, 1)
+  await runtime.dispose(false)
+})
+
+test('geometric resize pending across host replace paints new grid after ack', async () => {
+  const harness = createRuntimeHarness()
+  const runtime = await createReadyRuntime(harness)
+  const terminal = harness.terminals[0]
+  const bridgeMutable = harness.bridge as unknown as { resize: BridgeHarness['resize'] }
+  let resolvePendingResize!: () => void
+  let resizeAttempts = 0
+  bridgeMutable.resize = (identity, cols, rows) => new Promise<void>((resolve) => {
+    resizeAttempts += 1
+    if (resizeAttempts === 2) {
+      resolvePendingResize = () => {
+        harness.bridge.resizeCalls.push({ identity, cols, rows })
+        resolve()
+      }
+      return
+    }
+    harness.bridge.resizeCalls.push({ identity, cols, rows })
+    resolve()
+  })
+
+  const firstHost = harness.host()
+  runtime.attachHost(firstHost, viewOptions({ visible: true }))
+  harness.flushFit()
+  await settleFit()
+  await settleFit()
+  assert.equal(harness.bridge.resizeCalls.length, 1)
+  assert.equal(terminal.refreshCalls.length, 1)
+
+  harness.fitAddons[0].dimensions = { cols: 120, rows: 40 }
+  harness.notifyResize()
+  assert.equal(harness.schedulers[0].requests.length, 1)
+  harness.flushFit()
+  await Promise.resolve()
+  await Promise.resolve()
+  assert.equal(terminal.refreshCalls.length, 1)
+
+  const secondHost = harness.host()
+  runtime.attachHost(secondHost, viewOptions({ visible: true }))
+  harness.flushFit()
+  await Promise.resolve()
+  await Promise.resolve()
+  assert.equal(terminal.refreshCalls.length, 1)
+
+  resolvePendingResize()
+  await settleFit()
+  await settleFit()
+
+  assert.equal(harness.bridge.resizeCalls.length, 2)
+  assert.deepEqual(
+    harness.bridge.resizeCalls[1],
+    { identity: harness.identity, cols: 120, rows: 40 },
+  )
+  assert.equal(terminal.refreshCalls.length, 2)
+  assert.deepEqual(terminal.refreshCalls.at(-1), { start: 0, end: 39 })
+  await runtime.dispose(false)
+})
+
+test('successive resizes same host paint once after last ack', async () => {
+  const harness = createRuntimeHarness()
+  const runtime = await createReadyRuntime(harness)
+  const terminal = harness.terminals[0]
+  const bridgeMutable = harness.bridge as unknown as { resize: BridgeHarness['resize'] }
+  const resolvers: Array<() => void> = []
+  bridgeMutable.resize = (identity, cols, rows) => new Promise<void>((resolve) => {
+    resolvers.push(() => {
+      harness.bridge.resizeCalls.push({ identity, cols, rows })
+      resolve()
+    })
+  })
+
+  const host = harness.host()
+  runtime.attachHost(host, viewOptions({ visible: true, autoFocus: true }))
+  harness.flushFit()
+  await Promise.resolve()
+  await Promise.resolve()
+  assert.equal(resolvers.length, 1)
+  assert.equal(terminal.refreshCalls.length, 0)
+  assert.equal(terminal.focusCalls, 0)
+
+  harness.fitAddons[0].dimensions = { cols: 120, rows: 40 }
+  harness.notifyResize()
+  assert.equal(harness.schedulers[0].requests.length, 1)
+  harness.flushFit()
+  await Promise.resolve()
+  await Promise.resolve()
+  assert.equal(terminal.refreshCalls.length, 0)
+  assert.equal(terminal.focusCalls, 0)
+
+  resolvers[0]()
+  await settleFit()
+  await settleFit()
+  await Promise.resolve()
+  await Promise.resolve()
+  assert.equal(resolvers.length, 2)
+  assert.equal(terminal.refreshCalls.length, 0)
+  assert.equal(terminal.focusCalls, 0)
+
+  resolvers[1]()
+  await settleFit()
+  await settleFit()
+
+  assert.equal(harness.bridge.resizeCalls.length, 2)
+  assert.deepEqual(
+    harness.bridge.resizeCalls.map(({ cols, rows }) => ({ cols, rows })),
+    [{ cols: 100, rows: 30 }, { cols: 120, rows: 40 }],
+  )
+  assert.equal(terminal.refreshCalls.length, 1)
+  assert.deepEqual(terminal.refreshCalls.at(-1), { start: 0, end: 39 })
+  assert.equal(terminal.focusCalls, 1)
   await runtime.dispose(false)
 })

@@ -15,20 +15,31 @@ export interface TerminalFitScheduler {
     fitAddon: TerminalFitAddonLike,
     resizeTerminal: (cols: number, rows: number) => void,
     onComplete?: (result: TerminalFitResult) => void,
+    getTerminalSize?: () => TerminalFitDimensions | null | undefined,
   ) => void
   cancelPending: () => void
+  setKnownDimensions?: (dimensions: TerminalFitDimensions) => void
+  notifyResizeFailure?: (dimensions: TerminalFitDimensions) => void
 }
 
 interface TerminalFitSchedulerOptions {
   requestFrame?: (callback: () => void) => number
   cancelFrame?: (handle: number) => void
+  initialDimensions?: TerminalFitDimensions | null
+}
+
+function normalizeFitDimensions(dimensions: TerminalFitDimensions | null | undefined): TerminalFitDimensions | null {
+  if (!dimensions || !Number.isFinite(dimensions.cols) || !Number.isFinite(dimensions.rows)) return null
+  const normalized = { cols: Math.floor(dimensions.cols), rows: Math.floor(dimensions.rows) }
+  if (normalized.cols <= 0 || normalized.rows <= 0) return null
+  return normalized
 }
 
 export function createTerminalFitScheduler(options: TerminalFitSchedulerOptions = {}): TerminalFitScheduler {
   const requestFrame = options.requestFrame ?? ((callback) => window.requestAnimationFrame(callback))
   const cancelFrame = options.cancelFrame ?? ((handle) => window.cancelAnimationFrame(handle))
   let pendingFrame: number | null = null
-  let lastDimensions: TerminalFitDimensions | null = null
+  let lastDimensions: TerminalFitDimensions | null = normalizeFitDimensions(options.initialDimensions ?? null)
 
   // Bounds the read-only sampling chain during a continuous drag. Eight
   // consecutive frames cover parking/layout settling without spamming the
@@ -71,10 +82,20 @@ export function createTerminalFitScheduler(options: TerminalFitSchedulerOptions 
   }
 
   return {
+    setKnownDimensions(dimensions: TerminalFitDimensions): void {
+      const normalized = normalizeFitDimensions(dimensions)
+      if (normalized) lastDimensions = normalized
+    },
+    notifyResizeFailure(dimensions: TerminalFitDimensions): void {
+      const normalized = normalizeFitDimensions(dimensions)
+      if (!normalized) return
+      if (lastDimensions && sameDimensions(lastDimensions, normalized)) lastDimensions = null
+    },
     requestFit(
       fitAddon: TerminalFitAddonLike,
       resizeTerminal: (cols: number, rows: number) => void,
       onComplete?: (result: TerminalFitResult) => void,
+      getTerminalSize?: () => TerminalFitDimensions | null | undefined,
     ): void {
       if (pendingFrame !== null) return
 
@@ -106,19 +127,36 @@ export function createTerminalFitScheduler(options: TerminalFitSchedulerOptions 
           return
         }
 
-        if (lastDimensions && sameDimensions(lastDimensions, stable)) {
+        // Use real xterm dims after fit, not the stale stable sample. Real
+        // FitAddon.fit re-proposes internally and only mutates xterm when
+        // cols/rows differ, so geometry that shifted between the stable
+        // sample and fit must reach the PTY to avoid xterm/PTY desync.
+        let effective: TerminalFitDimensions | null = null
+        try {
+          const terminalSize = getTerminalSize?.()
+          effective = normalizeFitDimensions(terminalSize ?? null)
+        } catch {
+          effective = null
+        }
+        if (!effective) effective = proposeReadOnly(fitAddon)
+        if (!effective) {
+          complete('unmeasurable')
+          return
+        }
+
+        if (lastDimensions && sameDimensions(lastDimensions, effective)) {
           complete('unchanged')
           return
         }
 
         try {
-          resizeTerminal(stable.cols, stable.rows)
+          resizeTerminal(effective.cols, effective.rows)
         } catch {
           // Keep fit and resize failures contained inside the scheduler.
           complete('unmeasurable')
           return
         }
-        lastDimensions = stable
+        lastDimensions = effective
         complete('fitted')
       }
 
