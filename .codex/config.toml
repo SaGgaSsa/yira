@@ -1,0 +1,3 @@
+# Configuración YOLO solo para este repositorio. No modifica configuración global.
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
