@@ -12,6 +12,17 @@ import * as fileAccess from './file-access'
 
 const TWO_MIB = 2 * 1024 * 1024
 const TEN_MIB = 10 * 1024 * 1024
+const DIRECTORY_SYMLINK_TYPE = process.platform === 'win32' ? 'junction' : 'dir'
+
+function isWindowsPrivilegeError(error: unknown): boolean {
+  if (process.platform !== 'win32') return false
+  const code = (error as NodeJS.ErrnoException).code
+  return code === 'EPERM' || code === 'EACCES'
+}
+
+function matchesPathSuffix(path: string, name: string): boolean {
+  return path.endsWith(`/${name}`) || path.endsWith(`\\${name}`)
+}
 
 async function createWorkspace(): Promise<string> {
   return fs.mkdtemp(join(tmpdir(), 'yira-files-ipc-'))
@@ -94,8 +105,12 @@ test('returns matching files only and does not follow file or directory symlinks
   try {
     await writeSearchFile(rootPath, 'inside/match.ts')
     await writeSearchFile(outsidePath, 'outside/match.ts')
-    await fs.symlink(join(outsidePath, 'outside', 'match.ts'), join(rootPath, 'outside-file-match.ts'))
-    await fs.symlink(join(outsidePath, 'outside'), join(rootPath, 'outside-directory-match'))
+    try {
+      await fs.symlink(join(outsidePath, 'outside', 'match.ts'), join(rootPath, 'outside-file-match.ts'))
+    } catch (error) {
+      if (!isWindowsPrivilegeError(error)) throw error
+    }
+    await fs.symlink(join(outsidePath, 'outside'), join(rootPath, 'outside-directory-match'), DIRECTORY_SYMLINK_TYPE)
     await fs.mkdir(join(rootPath, 'real-directory-match.ts'), { recursive: true })
 
     const result = await searchFiles(rootPath, 'match')
@@ -124,10 +139,10 @@ test('does not follow a directory replaced by a symlink during traversal', async
 
     fs.lstat = (async (path: string, ...args: unknown[]) => {
       const result = await originalLstat(path, ...(args as []))
-      if (!swapped && path.endsWith('/swapped')) {
+      if (!swapped && matchesPathSuffix(path, 'swapped')) {
         swapped = true
         await fs.rename(swappedPath, originalSwappedPath)
-        await fs.symlink(outsidePath, swappedPath)
+        await fs.symlink(outsidePath, swappedPath, DIRECTORY_SYMLINK_TYPE)
       }
       return result
     }) as typeof fs.lstat
@@ -161,7 +176,7 @@ test('rejects invalid queries and roots while keeping results inside the canonic
     await assert.rejects(searchFiles(rootPath, 'file.*('), /Invalid regular expression/i)
     await assert.rejects(searchFiles(join(rootPath, 'inside.ts'), '.*'), /not a directory/i)
     await assert.rejects(searchFiles(join(rootPath, 'missing-root'), '.*'), /unavailable/i)
-    await fs.symlink(outsidePath, join(rootPath, 'external'))
+    await fs.symlink(outsidePath, join(rootPath, 'external'), DIRECTORY_SYMLINK_TYPE)
 
     const result = await searchFiles(rootPath, '.*\\.ts')
 
@@ -175,19 +190,32 @@ test('rejects invalid queries and roots while keeping results inside the canonic
 test('rejects an unreadable root directory instead of treating it as an empty result', async () => {
   const rootPath = await createWorkspace()
   const originalOpen = fs.open
+  const originalOpendir = fs.opendir
   try {
-    fs.open = (async (path: string, ...args: unknown[]) => {
-      if (path === rootPath) {
-        const error = new Error('permission denied') as NodeJS.ErrnoException
-        error.code = 'EACCES'
-        throw error
-      }
-      return originalOpen(path, ...(args as []))
-    }) as typeof fs.open
+    if (process.platform === 'win32') {
+      fs.opendir = (async (path: string, ...args: unknown[]) => {
+        if (path === rootPath) {
+          const error = new Error('permission denied') as NodeJS.ErrnoException
+          error.code = 'EACCES'
+          throw error
+        }
+        return originalOpendir(path, ...(args as []))
+      }) as typeof fs.opendir
+    } else {
+      fs.open = (async (path: string, ...args: unknown[]) => {
+        if (path === rootPath) {
+          const error = new Error('permission denied') as NodeJS.ErrnoException
+          error.code = 'EACCES'
+          throw error
+        }
+        return originalOpen(path, ...(args as []))
+      }) as typeof fs.open
+    }
 
     await assert.rejects(searchFiles(rootPath, '.*'), /permission denied/i)
   } finally {
     fs.open = originalOpen
+    fs.opendir = originalOpendir
     await removeWorkspace(rootPath)
   }
 })
@@ -195,24 +223,44 @@ test('rejects an unreadable root directory instead of treating it as an empty re
 test('tolerates inaccessible or disappearing child directories', async () => {
   const rootPath = await createWorkspace()
   const originalOpen = fs.open
+  const originalOpendir = fs.opendir
   try {
     await writeSearchFile(rootPath, 'visible.ts')
     await writeSearchFile(rootPath, 'inaccessible/hidden.ts')
     await writeSearchFile(rootPath, 'missing/hidden.ts')
-    fs.open = (async (path: string, ...args: unknown[]) => {
-      if (path.endsWith('/inaccessible') || path.endsWith('/missing')) {
-        const error = new Error(path.endsWith('/inaccessible') ? 'permission denied' : 'directory disappeared') as NodeJS.ErrnoException
-        error.code = path.endsWith('/inaccessible') ? 'EACCES' : 'ENOENT'
-        throw error
+    const childError = (path: string): NodeJS.ErrnoException | undefined => {
+      if (matchesPathSuffix(path, 'inaccessible')) {
+        const error = new Error('permission denied') as NodeJS.ErrnoException
+        error.code = 'EACCES'
+        return error
       }
-      return originalOpen(path, ...(args as []))
-    }) as typeof fs.open
+      if (matchesPathSuffix(path, 'missing')) {
+        const error = new Error('directory disappeared') as NodeJS.ErrnoException
+        error.code = 'ENOENT'
+        return error
+      }
+      return undefined
+    }
+    if (process.platform === 'win32') {
+      fs.opendir = (async (path: string, ...args: unknown[]) => {
+        const error = childError(path)
+        if (error) throw error
+        return originalOpendir(path, ...(args as []))
+      }) as typeof fs.opendir
+    } else {
+      fs.open = (async (path: string, ...args: unknown[]) => {
+        const error = childError(path)
+        if (error) throw error
+        return originalOpen(path, ...(args as []))
+      }) as typeof fs.open
+    }
 
     const result = await searchFiles(rootPath, '.*\\.ts')
 
     assert.deepEqual(result.entries, [{ name: 'visible.ts', relativePath: 'visible.ts' }])
   } finally {
     fs.open = originalOpen
+    fs.opendir = originalOpendir
     await removeWorkspace(rootPath)
   }
 })
@@ -304,10 +352,16 @@ test('rejects traversal, external symlinks, and missing files', async () => {
   const outsidePath = await createWorkspace()
   try {
     await fs.writeFile(join(outsidePath, 'outside.txt'), 'outside', 'utf8')
-    await fs.symlink(join(outsidePath, 'outside.txt'), join(rootPath, 'outside-link.txt'))
+    let hasOutsideLink = true
+    try {
+      await fs.symlink(join(outsidePath, 'outside.txt'), join(rootPath, 'outside-link.txt'))
+    } catch (error) {
+      if (!isWindowsPrivilegeError(error)) throw error
+      hasOutsideLink = false
+    }
 
     await assert.rejects(readFile(rootPath, '../outside.txt'), /traversal/i)
-    await assert.rejects(readFile(rootPath, 'outside-link.txt'), /escapes/i)
+    if (hasOutsideLink) await assert.rejects(readFile(rootPath, 'outside-link.txt'), /escapes/i)
     assert.deepEqual(await readFile(rootPath, 'missing.txt'), { status: 'missing' })
   } finally {
     await removeWorkspace(rootPath)
@@ -350,14 +404,20 @@ test('rejects unsupported, oversized, spoofed, missing, and unsafe preview image
       Buffer.alloc(TEN_MIB),
     ]))
     await fs.writeFile(join(outsidePath, 'outside.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
-    await fs.symlink(join(outsidePath, 'outside.png'), join(rootPath, 'outside-link.png'))
+    let hasOutsideLink = true
+    try {
+      await fs.symlink(join(outsidePath, 'outside.png'), join(rootPath, 'outside-link.png'))
+    } catch (error) {
+      if (!isWindowsPrivilegeError(error)) throw error
+      hasOutsideLink = false
+    }
 
     assert.equal((await readPreviewAsset(rootPath, 'vector.svg')).status, 'unsupported')
     assert.equal((await readPreviewAsset(rootPath, 'spoofed.png')).status, 'unsupported')
     assert.equal((await readPreviewAsset(rootPath, 'large.png')).status, 'unsupported')
     assert.deepEqual(await readPreviewAsset(rootPath, 'missing.png'), { status: 'missing' })
     await assert.rejects(readPreviewAsset(rootPath, '../outside.png'), /traversal/i)
-    await assert.rejects(readPreviewAsset(rootPath, 'outside-link.png'), /escapes/i)
+    if (hasOutsideLink) await assert.rejects(readPreviewAsset(rootPath, 'outside-link.png'), /escapes/i)
   } finally {
     await removeWorkspace(rootPath)
     await removeWorkspace(outsidePath)
@@ -481,13 +541,19 @@ test('returns missing statuses for stat and write requests', async () => {
   }
 })
 
-test('does not write through an external symlink', async () => {
+test('does not write through an external symlink', async (t) => {
   const rootPath = await createWorkspace()
   const outsidePath = await createWorkspace()
   try {
     const outsideFile = join(outsidePath, 'outside.txt')
     await fs.writeFile(outsideFile, 'outside', 'utf8')
-    await fs.symlink(outsideFile, join(rootPath, 'outside-link.txt'))
+    try {
+      await fs.symlink(outsideFile, join(rootPath, 'outside-link.txt'))
+    } catch (error) {
+      if (!isWindowsPrivilegeError(error)) throw error
+      t.skip('Windows file symlinks need privilege')
+      return
+    }
 
     await assert.rejects(writeFile(rootPath, 'outside-link.txt', {
       content: 'unsafe overwrite',

@@ -11,7 +11,7 @@ import {
 } from './dev-workspace.mjs'
 
 test('uses a persistent isolated data directory for default development data', () => {
-  assert.equal(getDefaultDevDataDirectory('/home/alice'), '/home/alice/.yira-dev')
+  assert.equal(getDefaultDevDataDirectory('/home/alice'), join('/home/alice', '.yira-dev'))
 })
 
 test('uses an explicitly requested development data directory without treating it as temporary', async () => {

@@ -221,8 +221,10 @@ test('writes an atomic private endpoint and reattaches parsed screen output afte
   const endpointPath = join(directory, 'endpoint.json')
   const endpoint = JSON.parse(await readFile(endpointPath, 'utf8')) as typeof handle.endpoint
   assert.deepEqual(endpoint, handle.endpoint)
-  assert.equal((await stat(directory)).mode & 0o777, 0o700)
-  assert.equal((await stat(endpointPath)).mode & 0o777, 0o600)
+  if (process.platform !== 'win32') {
+    assert.equal((await stat(directory)).mode & 0o777, 0o700)
+    assert.equal((await stat(endpointPath)).mode & 0o777, 0o600)
+  }
 
   const first = await connectClient(handle.endpoint.port)
   const created = snapshotResult(await request(

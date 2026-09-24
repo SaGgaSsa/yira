@@ -153,7 +153,13 @@ test('ignores temporary, non-json, nested, and symlink entries', async () => {
     await writePayload(nested, 'nested.json', snakeCasePayload(94, 94), NOW - 500)
 
     const outside = await writePayload(directory, 'symlink-target.txt', snakeCasePayload(95, 95), NOW - 500)
-    await symlink(outside, join(directory, 'ignored-link.json'))
+    try {
+      await symlink(outside, join(directory, 'ignored-link.json'))
+    } catch (error) {
+      if (process.platform !== 'win32') throw error
+      const code = (error as NodeJS.ErrnoException).code
+      if (code !== 'EPERM' && code !== 'EACCES') throw error
+    }
 
     assert.deepEqual(await readClaudeUsageStatusLinePayload({ directory, now: NOW }), {
       capturedAt: NOW - 180_000,

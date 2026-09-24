@@ -46,7 +46,8 @@ test('configures the Linux after-pack hook and Debian installer script', async (
 
 test('packages the unprivileged Debian update launcher with safe installer policy', async () => {
   const packageJson = await readPackageJson()
-  const launcher = await readFile(new URL('../resources/linux-deb-update-launcher.sh', import.meta.url), 'utf8')
+  const launcherRaw = await readFile(new URL('../resources/linux-deb-update-launcher.sh', import.meta.url), 'utf8')
+  const launcher = launcherRaw.replace(/\r\n/g, '\n')
 
   assert.ok(packageJson.build.extraResources.some(resource => (
     resource.from === 'resources/linux-deb-update-launcher.sh' &&
@@ -91,7 +92,9 @@ test('wraps the Linux launcher without changing the Electron binary contents', a
     assert.match(launcher, /unshare --user --map-root-user true/)
     assert.match(launcher, /Yira AppImage cannot start securely/)
     assert.match(launcher, /exec "\$HERE\/yira-bin" "\$@"/)
-    assert.ok((await stat(launcherPath)).mode & 0o111)
+    if (process.platform !== 'win32') {
+      assert.ok((await stat(launcherPath)).mode & 0o111)
+    }
   } finally {
     await rm(appOutDir, { recursive: true, force: true })
   }
@@ -116,7 +119,7 @@ test('leaves non-Linux package outputs untouched', async () => {
   }
 })
 
-test('only rejects an AppImage launch when user namespaces are unavailable', async () => {
+test('only rejects an AppImage launch when user namespaces are unavailable', { skip: process.platform === 'win32' }, async () => {
   const { afterPack } = await import(new URL('../build/linux/after-pack.cjs', import.meta.url))
   const appOutDir = await mkdtemp(join(tmpdir(), 'yira-linux-packaging-'))
   const launcherPath = join(appOutDir, 'yira')

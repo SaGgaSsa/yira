@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
 import { mkdtemp, mkdir, rm, symlink, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
-import { join } from 'path'
+import { basename, join } from 'path'
 import { promisify } from 'node:util'
 import test from 'node:test'
 import {
@@ -83,7 +83,7 @@ const outsideRoot = await mkdtemp(join(tmpdir(), 'yira-git-runner-outside-'))
 try {
   await mkdir(join(tempRoot, 'src'))
   await writeFile(join(tempRoot, 'src', 'file.ts'), '')
-  await symlink(outsideRoot, join(tempRoot, 'escape'))
+  await symlink(outsideRoot, join(tempRoot, 'escape'), process.platform === 'win32' ? 'junction' : 'dir')
 
   const resolved = await resolveGitTargetPath(tempRoot, 'src/file.ts')
   if (resolved.relativePath !== 'src/file.ts') throw new Error('safe file paths must resolve relative to the workspace root')
@@ -351,7 +351,7 @@ test('discovers Git roots at workspace depth zero, one, and two only', async () 
     const outsideRepositoryPath = join(outsidePath, 'linked-repository')
     await mkdir(outsideRepositoryPath)
     await initGitRepository(outsideRepositoryPath)
-    await symlink(outsideRepositoryPath, join(rootPath, 'linked'))
+    await symlink(outsideRepositoryPath, join(rootPath, 'linked'), process.platform === 'win32' ? 'junction' : 'dir')
 
     const repositories = await discoverGitRepositories(rootPath)
 
@@ -370,7 +370,7 @@ test('discovers Git roots at workspace depth zero, one, and two only', async () 
       'parent',
       'repository',
       'repository',
-      rootPath.split('/').at(-1),
+      basename(rootPath),
       'zeta',
     ])
     assert.equal(repositories.some(({ relativePath }) => relativePath === 'container/beta/deep'), false)
@@ -405,7 +405,7 @@ test('resolves only a configured live Git root inside the workspace', async () =
     await initGitRepository(otherPath)
     await initGitRepository(parentPath)
     await initGitRepository(outsideRepositoryPath)
-    await symlink(outsideRepositoryPath, join(rootPath, 'linked'))
+    await symlink(outsideRepositoryPath, join(rootPath, 'linked'), process.platform === 'win32' ? 'junction' : 'dir')
 
     const resolved = await resolveConfiguredGitRepository(rootPath, ['selected'], 'selected')
     assert.equal(resolved.relativePath, 'selected')

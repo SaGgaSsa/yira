@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import { buildTerminalHistorySetup } from './terminal-history'
 
 const bash = buildTerminalHistorySetup({
@@ -7,7 +8,7 @@ const bash = buildTerminalHistorySetup({
   enabled: true,
 })
 if (!bash) throw new Error('bash must receive workspace history setup')
-if (bash.env.HISTFILE !== '/tmp/yira/workspaces/ws-alpha/.yira/terminal-history/bash_history') throw new Error('bash HISTFILE must use workspace-scoped path')
+if (bash.env.HISTFILE !== join('/tmp/yira/workspaces/ws-alpha', '.yira', 'terminal-history', 'bash_history')) throw new Error('bash HISTFILE must use workspace-scoped path')
 if (bash.prependCommand) throw new Error('bash setup must not prepend commands')
 
 const zsh = buildTerminalHistorySetup({
@@ -17,7 +18,7 @@ const zsh = buildTerminalHistorySetup({
   enabled: true,
 })
 if (!zsh) throw new Error('zsh must receive workspace history setup')
-if (zsh.env.HISTFILE !== '/tmp/yira/workspaces/ws-alpha/.yira/terminal-history/zsh_history') throw new Error('zsh HISTFILE must use workspace-scoped path')
+if (zsh.env.HISTFILE !== join('/tmp/yira/workspaces/ws-alpha', '.yira', 'terminal-history', 'zsh_history')) throw new Error('zsh HISTFILE must use workspace-scoped path')
 if (!zsh.prependCommand?.includes('SAVEHIST=')) throw new Error('zsh setup must ensure history save behavior')
 
 const powershell = buildTerminalHistorySetup({

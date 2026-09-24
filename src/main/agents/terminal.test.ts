@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { resolve } from 'node:path'
 import test from 'node:test'
 
 import { AgentSessionRegistry } from './registry'
@@ -20,7 +21,7 @@ test('builds a new agent launch from the fixed provider command and workspace ro
     provider: 'claude',
     command: 'claude',
     args: ['--model', 'sonnet'],
-    cwd: '/workspace/project',
+    cwd: resolve('/workspace/project'),
     sessionId: 'tile-1',
   })
 })
@@ -37,7 +38,7 @@ test('builds a safe resume launch in the history workspace-relative cwd', () => 
     provider: 'codex',
     command: 'codex',
     args: ['--profile', 'work', 'resume', 'session-123'],
-    cwd: '/workspace/project/packages/app',
+    cwd: resolve('/workspace/project', 'packages/app'),
     sessionId: 'session-123',
   })
 })

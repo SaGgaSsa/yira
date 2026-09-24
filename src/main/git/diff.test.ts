@@ -124,26 +124,35 @@ test('uses upstream fallback and merge-base to exclude remote-only changes', asy
 test('does not count binary files, double-count renames, or follow outside symlinks', async () => {
   const { rootPath, remotePath } = await createPushedRepository('yira-diff-files')
   const outsidePath = await mkdtemp(join(tmpdir(), 'yira-diff-outside-'))
+  const isWindows = process.platform === 'win32'
+  const weirdName = isWindows ? 'weird-name.txt' : 'weird\tname.txt'
+  const newFileName = isWindows ? 'new-file.txt' : 'new\nfile.txt'
   try {
     await writeFile(join(rootPath, '.gitattributes'), '*.attrbin -diff\n')
     await writeFile(join(rootPath, 'rename-old.txt'), 'one\ntwo\nthree\n')
     await writeFile(join(rootPath, 'binary.bin'), Buffer.from([0, 1, 2, 3]))
-    await writeFile(join(rootPath, 'weird\tname.txt'), 'old\n')
+    await writeFile(join(rootPath, weirdName), 'old\n')
     await commitAll(rootPath, 'base')
     await pushMain(rootPath)
 
     await git(rootPath, ['mv', '--', 'rename-old.txt', 'rename-new.txt'])
     await writeFile(join(rootPath, 'rename-new.txt'), 'one\nchanged\nthree\n')
     await writeFile(join(rootPath, 'binary.bin'), Buffer.from([0, 4, 5, 6]))
-    await writeFile(join(rootPath, 'weird\tname.txt'), 'new\n')
+    await writeFile(join(rootPath, weirdName), 'new\n')
     await writeFile(join(rootPath, 'binary-new.bin'), Buffer.from([7, 8, 0, 9]))
     await writeFile(join(rootPath, 'literal.attrbin'), 'text\none\n')
     await writeFile(join(outsidePath, 'outside.txt'), Array.from({ length: 20 }, (_, index) => `outside ${index}`).join('\n'))
-    await symlink(join(outsidePath, 'outside.txt'), join(rootPath, 'outside-link'))
-    await writeFile(join(rootPath, 'new\nfile.txt'), 'a\nb\n')
+    let hasOutsideLink = true
+    try {
+      await symlink(join(outsidePath, 'outside.txt'), join(rootPath, 'outside-link'))
+    } catch (error) {
+      if (!isWindows || ((error as NodeJS.ErrnoException).code !== 'EPERM' && (error as NodeJS.ErrnoException).code !== 'EACCES')) throw error
+      hasOutsideLink = false
+    }
+    await writeFile(join(rootPath, newFileName), 'a\nb\n')
 
     assert.deepEqual(await getGitDiffSummary(rootPath), {
-      additions: 5,
+      additions: hasOutsideLink ? 5 : 4,
       deletions: 2,
       available: true,
     })

@@ -5,6 +5,7 @@ import { createServer, type AddressInfo, type Socket } from 'node:net'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import test from 'node:test'
 
 import {
@@ -170,8 +171,10 @@ test('reuses a responsive endpoint and secures its files', async (t) => {
   t.after(() => client.disconnect())
 
   assert.deepEqual(await client.request('ping', undefined), { version: 1, pid: process.pid })
-  assert.equal((await stat(directory)).mode & 0o777, 0o700)
-  assert.equal((await stat(endpointPath)).mode & 0o777, 0o600)
+  if (process.platform !== 'win32') {
+    assert.equal((await stat(directory)).mode & 0o777, 0o700)
+    assert.equal((await stat(endpointPath)).mode & 0o777, 0o600)
+  }
 })
 
 test('does not launch a duplicate when an endpoint PID is alive but does not respond', async (t) => {
@@ -237,7 +240,7 @@ test('coordinates concurrent startup calls in one process', async (t) => {
   assert.equal(firstClient, secondClient)
 })
 
-test('uses an independent AppImage launch and keeps the direct launch path', async (t) => {
+test('uses an independent AppImage launch and keeps the direct launch path', { skip: process.platform === 'win32' }, async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'yira-terminal-daemon-'))
   const appImagePath = join(directory, 'fake-appimage')
   const directEntryPath = join(directory, 'direct-entry.mjs')
@@ -350,7 +353,7 @@ function runWorker(
   const require = createRequire(import.meta.url)
   const loaderPath = join(dirname(require.resolve('tsx/cli')), 'loader.mjs')
   const child = spawn(process.execPath, [
-    '--import', loaderPath, workerPath, directory, daemonPath, clientModulePath,
+    '--import', pathToFileURL(loaderPath).href, workerPath, directory, daemonPath, clientModulePath,
   ], {
     cwd: resolve(process.cwd()),
     env: { ...process.env },
@@ -370,7 +373,7 @@ test('coordinates startup across two client processes', async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'yira-terminal-daemon-'))
   const daemonPath = join(directory, 'daemon.mjs')
   const workerPath = join(directory, 'worker.mjs')
-  const clientModulePath = join(resolve(process.cwd()), 'src/main/terminalDaemonClient.ts')
+  const clientModulePath = pathToFileURL(join(resolve(process.cwd()), 'src/main/terminalDaemonClient.ts')).href
   t.after(async () => {
     const markerPath = join(directory, 'spawns.log')
     const markers = await readFile(markerPath, 'utf8').catch(() => '')
