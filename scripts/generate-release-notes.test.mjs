@@ -65,7 +65,7 @@ async function writesCategorizedPublicNotes() {
     assert.doesNotMatch(notes, /release: v0\.1\.1/)
     assert.doesNotMatch(notes, /merge: release notes branch/)
     assert.doesNotMatch(notes, /\b[0-9a-f]{7,40}\b/)
-    assert.doesNotMatch(notes, /github\.com\/SaGgaSsa\/yira/)
+    assert.doesNotMatch(notes, /github\.com\/SaGgaSsa\/yira(?!-releases)/)
   })
 }
 
@@ -84,9 +84,30 @@ async function writesMaintenanceFallbackWhenOnlyInternalCommitsExist() {
     assert.match(notes, /^## v0\.1\.1/m)
     assert.match(notes, /Maintenance release with internal updates and packaging work\./)
     assert.doesNotMatch(notes, /\b[0-9a-f]{7,40}\b/)
-    assert.doesNotMatch(notes, /github\.com\/SaGgaSsa\/yira/)
+    assert.doesNotMatch(notes, /github\.com\/SaGgaSsa\/yira(?!-releases)/)
+  })
+}
+
+async function linksVersionedLegalAssetsAndPublicIssues() {
+  await withRepo(async (cwd) => {
+    execFileSync('node', ['-e', "require('node:fs').writeFileSync('app.txt', 'initial\\n')"], { cwd })
+    commit(cwd, 'feat: initial setup')
+    git(cwd, ['tag', 'v0.2.0'])
+
+    execFileSync('node', ['-e', "require('node:fs').appendFileSync('app.txt', 'feature\\n')"], { cwd })
+    commit(cwd, 'feat: add public change')
+    git(cwd, ['tag', 'v0.2.1'])
+
+    const notes = runGenerator(cwd, 'v0.2.1')
+
+    assert.match(notes, /^## v0\.2\.1/m)
+    assert.match(notes, /github\.com\/SaGgaSsa\/yira-releases\/releases\/download\/v0\.2\.1\/PRIVACY\.md/)
+    assert.match(notes, /github\.com\/SaGgaSsa\/yira-releases\/releases\/download\/v0\.2\.1\/TERMS\.md/)
+    assert.match(notes, /github\.com\/SaGgaSsa\/yira-releases\/issues/)
+    assert.doesNotMatch(notes, /github\.com\/SaGgaSsa\/yira(?!-releases)/)
   })
 }
 
 await writesCategorizedPublicNotes()
 await writesMaintenanceFallbackWhenOnlyInternalCommitsExist()
+await linksVersionedLegalAssetsAndPublicIssues()

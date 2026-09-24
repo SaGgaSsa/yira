@@ -30,6 +30,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Run tests
+        run: npm test
+
       - name: Validate TypeScript
         run: npx tsc --noEmit
 
@@ -58,6 +61,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Run tests
+        run: npm test
 
       - name: Validate TypeScript
         run: npx tsc --noEmit
@@ -91,6 +97,9 @@ jobs:
 
       - name: Generate release notes
         run: node scripts/generate-release-notes.mjs "${GITHUB_REF_NAME}" > release-notes.md
+
+      - name: Upload legal documents
+        run: gh release upload "${GITHUB_REF_NAME}" docs/legal/PRIVACY.md docs/legal/TERMS.md --clobber --repo "${RELEASE_REPOSITORY}"
 
       - name: Publish draft as latest
         shell: bash

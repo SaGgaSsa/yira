@@ -75,6 +75,12 @@ function sentenceCase(text) {
   return text.charAt(0).toUpperCase() + text.slice(1)
 }
 
+function renderLegalFooter(currentTag) {
+  const base = `https://github.com/SaGgaSsa/yira-releases/releases/download/${currentTag}`
+  const issues = 'https://github.com/SaGgaSsa/yira-releases/issues'
+  return ['', '---', '', `Legal: [Privacy](${base}/PRIVACY.md) | [Terms](${base}/TERMS.md)`, '', `Report issues: ${issues}`, '']
+}
+
 function buildSections(subjects) {
   const sections = new Map(CATEGORY_ORDER.map(([category]) => [category, []]))
 
@@ -106,6 +112,8 @@ function renderMarkdown(currentTag, sections) {
   if (!hasPublicChanges) {
     lines.push('Maintenance release with internal updates and packaging work.', '')
   }
+
+  lines.push(...renderLegalFooter(currentTag))
 
   return `${lines.join('\n').trimEnd()}\n`
 }
