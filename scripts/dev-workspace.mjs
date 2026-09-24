@@ -207,11 +207,14 @@ export async function seedDevDataDirectory(dataDirectory) {
 async function runDevServer() {
   const workspace = await createDevDataDirectory(process.env)
   const seeded = await seedDevDataDirectory(workspace.dataDirectory)
-  const command = process.platform === 'win32' ? 'electron-vite.cmd' : 'electron-vite'
+  // Windows .cmd shims need a shell with Node 22.
+  const isWindows = process.platform === 'win32'
+  const command = isWindows ? 'electron-vite.cmd' : 'electron-vite'
   const child = spawn(command, ['dev'], {
     cwd: resolve(dirname(fileURLToPath(import.meta.url)), '..'),
     env: { ...process.env, YIRA_HOME: workspace.dataDirectory },
     stdio: 'inherit',
+    shell: isWindows,
   })
   const stopChild = (signal) => {
     if (!child.killed) child.kill(signal)
