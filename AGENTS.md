@@ -12,18 +12,6 @@ This project uses strict TypeScript and ES modules. Follow the existing style: 2
 ## Testing Guidelines
 Run `npx tsc --noEmit` locally before every push or release; it is the required strict TypeScript check. Run `npm test` when the affected feature has automated coverage, then run the relevant build or Linux packaging validation in proportion to the change. Limit verification to code review and checks that run through the console without a graphical interface. Do not require manual UI verification, screenshots, or screen recordings. If a behavior cannot be verified with these checks, report the limitation without blocking completion or asking the user to perform visual tests. Place new tests beside the feature as `*.test.ts` or `*.test.tsx`.
 
-## Investigación, implementación y delegación a OpenCode
-Esta regla solo aplica al coordinador Codex. OpenCode no delega de nuevo. OpenCode ejecuta el paquete directamente.
-El coordinador Codex prepara cada tarea. El coordinador supervisa los procesos CLI. El coordinador revisa los resultados.
-Ejecuta investigaciones e implementaciones con OpenCode mediante `opencode run`. Usa el modelo exacto `opencode/muse-spark-1.3-contributor-free`. Usa `--agent build`. Usa `--format json`. No uses Luna. No uses `spawn_agent`.
-Si falta CLI, credenciales, modelo o servicio, informa el bloqueo. No cambies de modelo automáticamente.
-Usa un worktree aislado por cada tarea Git. Entrega un paquete completo en cada tarea. Incluye objetivo y criterios. Incluye archivos propios e interfaces. Incluye restricciones y base/estado Git. Incluye comandos de verificación. Incluye límites de Git/PR.
-Solo paraleliza archivos independientes. Ejecuta tareas dependientes en serie. Revisa el diff completo antes de integrar. Revisa el alcance de archivos antes de integrar.
-Exige entrega con resumen, archivos cambiados y comprobaciones. Revisa la entrega antes de aceptar. Revisa la salida de verificaciones antes de aceptar.
-No permitas push sin autorización explícita posterior. No permitas PR sin autorización explícita posterior.
-Mantén correcciones en la misma sesión OpenCode mediante `--session ID`. No uses `--auto`. No uses `--share`.
-Mantén verificaciones por consola. Consulta los comandos en `docs/opencode-delegation.md`.
-
 ## Commit & Pull Request Guidelines
 No top-level Git history is available in this workspace, so use concise Conventional Commit-style messages such as `feat: add workspace switcher` or `fix: persist terminal layout`. PRs should include a short summary, the user-visible impact, console verification commands and results, and any verification limitations.
 
