@@ -59,3 +59,25 @@ test('seeds persistent development data once with three example workspaces', asy
     await rm(dataDirectory, { recursive: true, force: true })
   }
 })
+
+test('seeds terminal tiles with the platform default shell', async () => {
+  const cases = [
+    { platform: 'win32', expected: 'powershell' },
+    { platform: 'linux', expected: 'bash' },
+  ]
+
+  for (const { platform, expected } of cases) {
+    const dataDirectory = await mkdtemp(join(tmpdir(), 'yira-dev-shell-'))
+    try {
+      await seedDevDataDirectory(dataDirectory, platform)
+
+      const canvas = JSON.parse(await readFile(join(dataDirectory, 'workspaces', 'dev-development', '.yira', 'canvas-state.json'), 'utf8'))
+      const grid = JSON.parse(await readFile(join(dataDirectory, 'workspaces', 'dev-quick-tasks', '.yira', 'grid-state.json'), 'utf8'))
+
+      assert.equal(canvas.tiles.find((tile) => tile.id === 'dev-terminal').shellProfileId, expected)
+      assert.equal(grid.tiles.find((tile) => tile.id === 'quick-terminal').shellProfileId, expected)
+    } finally {
+      await rm(dataDirectory, { recursive: true, force: true })
+    }
+  }
+})

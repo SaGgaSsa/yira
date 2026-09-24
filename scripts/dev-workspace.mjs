@@ -178,7 +178,24 @@ async function fileExists(path) {
   }
 }
 
-export async function seedDevDataDirectory(dataDirectory) {
+export function getDevTerminalShellProfileId(platform = process.platform) {
+  return platform === 'win32' ? 'powershell' : 'bash'
+}
+
+function withDevTerminalShell(state, shellProfileId) {
+  if (!Array.isArray(state.tiles)) return state
+  return {
+    ...state,
+    tiles: state.tiles.map((tile) => (
+      tile.type === 'terminal' && !tile.shellProfileId
+        ? { ...tile, shellProfileId }
+        : tile
+    )),
+  }
+}
+
+export async function seedDevDataDirectory(dataDirectory, platform = process.platform) {
+  const shellProfileId = getDevTerminalShellProfileId(platform)
   const configPath = join(dataDirectory, 'config.json')
   if (await fileExists(configPath)) return false
 
@@ -193,7 +210,7 @@ export async function seedDevDataDirectory(dataDirectory) {
   await Promise.all(DEV_WORKSPACE_SEEDS.map(async ({ id, stateFilename, state }) => {
     const stateDirectory = join(workspacesDirectory, id, '.yira')
     await mkdir(stateDirectory, { recursive: true })
-    await writeFile(join(stateDirectory, stateFilename), JSON.stringify(state, null, 2))
+    await writeFile(join(stateDirectory, stateFilename), JSON.stringify(withDevTerminalShell(state, shellProfileId), null, 2))
   }))
   await writeFile(configPath, JSON.stringify({
     workspaces,
