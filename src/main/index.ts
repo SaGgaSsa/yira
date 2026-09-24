@@ -32,6 +32,12 @@ const REACT_DEVTOOLS_HINT = 'Download the React DevTools'
 const appIconPath = is.dev ? join(__dirname, '../../resources/icon.png') : join(process.resourcesPath, 'icon.png')
 const WINDOW_STATE_PATH = join(YIRA_HOME, 'window-state.json')
 const supportsTitleBarOverlay = process.platform === 'win32' || process.platform === 'linux'
+if (process.env.YIRA_HOME?.trim()) {
+  const electronDataDir = join(YIRA_HOME, 'electron-data')
+  app.setPath('userData', electronDataDir)
+  app.setPath('sessionData', join(electronDataDir, 'session-data'))
+  app.setPath('cache', join(electronDataDir, 'cache'))
+}
 const titleBarOverlay = {
   color: '#111111',
   symbolColor: '#ffffff',
