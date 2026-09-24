@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { delimiter, join } from 'node:path'
 import test from 'node:test'
 
 import type {
@@ -8,6 +11,7 @@ import type {
 
 import {
   AgentUsageService,
+  createCodexAppServerClient,
   type CodexAppServerClient,
   normalizeCodexRateLimits,
 } from './agentUsage'
@@ -370,4 +374,42 @@ test('refreshes Codex on start, at the 60-second interval, and on update notific
 
   await service.stop()
   assert.equal(client.closed, true)
+})
+
+test('starts the production Codex app-server through a Windows codex.cmd shim', { skip: process.platform !== 'win32' }, async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'yira-codex-shim-'))
+  try {
+    await writeFile(join(directory, 'codex-shim.js'), [
+      `const readline = require('node:readline')`,
+      `if (!process.argv.includes('app-server') || !process.argv.includes('--stdio')) process.exit(1)`,
+      `const reader = readline.createInterface({ input: process.stdin })`,
+      `reader.on('line', (line) => {`,
+      `  let message = null`,
+      `  try { message = JSON.parse(line) } catch { return }`,
+      `  if (typeof message.id !== 'number') return`,
+      `  if (message.method === 'initialize') {`,
+      `    process.stdout.write(JSON.stringify({ id: message.id, result: {} }) + '\\n')`,
+      `    return`,
+      `  }`,
+      `  if (message.method === 'account/rateLimits/read') {`,
+      `    process.stdout.write(JSON.stringify({ id: message.id, result: { rateLimits: { primary: { usedPercent: 25, windowDurationMins: 300, resetsAt: ${FIRST_RESET} }, secondary: { usedPercent: 60, windowDurationMins: 10080, resetsAt: ${SECOND_RESET} } } } }) + '\\n')`,
+      `  }`,
+      `})`,
+      ``,
+    ].join('\n'))
+    await writeFile(join(directory, 'codex.cmd'), '@echo off\r\nnode "%~dp0codex-shim.js" %*\r\n')
+
+    const client = await createCodexAppServerClient({
+      env: { ...process.env, PATH: `${directory}${delimiter}${process.env.PATH ?? ''}` },
+    })
+    try {
+      const snapshot = normalizeCodexRateLimits(await client.request('account/rateLimits/read'))
+      assert.equal(snapshot.status, 'available')
+      assert.deepEqual(snapshot.windows.map((window) => window.kind), ['fiveHour', 'weekly'])
+    } finally {
+      await client.close()
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
 })

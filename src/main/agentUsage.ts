@@ -413,6 +413,16 @@ class StdioCodexAppServerClient implements CodexAppServerClient {
   }
 }
 
+const DEFAULT_CODEX_COMMAND = 'codex'
+
+const DEFAULT_CODEX_ARGS: readonly string[] = ['app-server', '--stdio']
+
+function isDefaultCodexInvocation(command: string, args: readonly string[]): boolean {
+  return command === DEFAULT_CODEX_COMMAND
+    && args.length === DEFAULT_CODEX_ARGS.length
+    && args.every((arg, index) => arg === DEFAULT_CODEX_ARGS[index])
+}
+
 export interface CodexAppServerClientOptions {
   command?: string
   args?: string[]
@@ -425,12 +435,19 @@ export interface CodexAppServerClientOptions {
 export async function createCodexAppServerClient(
   options: CodexAppServerClientOptions = {},
 ): Promise<CodexAppServerClient> {
+  const command = options.command ?? DEFAULT_CODEX_COMMAND
+  const args = options.args ?? [...DEFAULT_CODEX_ARGS]
+  // Windows npm installs expose codex.cmd, which spawn resolves only through
+  // a shell. Fixed literals are safe to run through cmd.exe. Custom commands
+  // or args stay shell-free to avoid shell injection.
+  const useShell = isDefaultCodexInvocation(command, args) && process.platform === 'win32'
   let child: ChildProcessWithoutNullStreams
   try {
-    child = spawn(options.command ?? 'codex', options.args ?? ['app-server', '--stdio'], {
+    child = spawn(command, args, {
       cwd: options.cwd,
       env: options.env ?? process.env,
       stdio: ['pipe', 'pipe', 'pipe'],
+      ...(useShell ? { shell: true, windowsHide: true } : {}),
     })
   } catch {
     throw new Error('Unable to start Codex app-server')
