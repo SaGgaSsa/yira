@@ -3,12 +3,10 @@ import test from 'node:test'
 import type { AgentActiveSession, AgentSessionStatus, WorkspaceMetadata } from '@shared/types'
 import {
   buildWorkspaceActivityCards,
-  getWorkspaceActivityRank,
   getWorkspaceAgentDetails,
   hasWorkspaceActivityAttention,
   resolveActivationFocusTarget,
   resolveWorkspaceAttentionTileId,
-  sortWorkspaceActivityCards,
   type WorkspaceActivityCardData,
 } from './workspaceActivity'
 
@@ -73,7 +71,7 @@ test('replicates the sidebar grey/white criterion: only workspaces visited this 
     activeWorkspaceId: 'visited',
   })
 
-  assert.deepEqual(cards.map((entry) => entry.workspace.id), ['idle-visited', 'visited'])
+  assert.deepEqual(cards.map((entry) => entry.workspace.id), ['visited', 'idle-visited'])
   assert.equal(cards.some((entry) => entry.workspace.id === 'saved'), false)
 })
 
@@ -120,24 +118,59 @@ test('resolves working, needs-input and exited statuses without duplicating agen
   assert.equal(cards[0].isCurrent, true)
 })
 
-test('orders attention first, then working, then the rest with a stable tiebreak', () => {
-  const attention = card('attention', ['needs-input'], 'Zulu')
-  const working = card('working', ['working'], 'Alpha')
-  const unread = card('unread', [], 'Unread', 2)
-  const done = card('done', ['done'])
-  const idleB = card('idle-b', [], 'Beta')
-  const idleA = card('idle-a', [], 'Alpha')
+test('keeps the sidebar order even when activity states and counters differ', () => {
+  const workspaces = [
+    workspace('busy', { name: 'Busy', lastSelectedAt: 40 }),
+    workspace('pinned-idle', { name: 'Pinned idle', pinned: true, lastSelectedAt: 10 }),
+    workspace('pinned-blocked', { name: 'Pinned blocked', pinned: true, lastSelectedAt: 20 }),
+    workspace('unread-old', { name: 'Unread old', lastSelectedAt: 5 }),
+    workspace('no-stamp', { name: 'No stamp' }),
+  ]
 
-  assert.equal(unread.activity.status, 'unread')
+  const cards = buildWorkspaceActivityCards({
+    workspaces,
+    sessionActiveIds: new Set(workspaces.map((entry) => entry.id)),
+    sessions: [
+      session('busy', 't1', 'working'),
+      session('pinned-blocked', 't1', 'needs-input'),
+      session('unread-old', 't1', 'done'),
+    ],
+    attentionCounts: { 'unread-old': 3 },
+    terminalCounts: { busy: 2, 'unread-old': 1 },
+    activeWorkspaceId: 'busy',
+  })
 
   assert.deepEqual(
-    sortWorkspaceActivityCards([idleB, done, unread, idleA, working, attention]).map((entry) => entry.workspace.id),
-    ['attention', 'working', 'unread', 'done', 'idle-a', 'idle-b'],
+    cards.map((entry) => entry.workspace.id),
+    ['pinned-blocked', 'pinned-idle', 'busy', 'unread-old', 'no-stamp'],
   )
   assert.deepEqual(
-    [getWorkspaceActivityRank('needs-input'), getWorkspaceActivityRank('working'), getWorkspaceActivityRank('unread'), getWorkspaceActivityRank('done'), getWorkspaceActivityRank('idle')],
-    [0, 1, 2, 3, 4],
+    cards.map((entry) => entry.activity.status),
+    ['needs-input', 'idle', 'working', 'unread', 'idle'],
   )
+
+  const busy = cards.find((entry) => entry.workspace.id === 'busy')
+  assert.equal(busy?.terminalCount, 2)
+  assert.equal(busy?.isCurrent, true)
+  assert.equal(cards.find((entry) => entry.workspace.id === 'unread-old')?.attentionCount, 3)
+})
+
+test('updates the activity order when a workspace is selected', () => {
+  const buildCards = (firstSelectedAt: number) => buildWorkspaceActivityCards({
+    workspaces: [
+      workspace('a', { name: 'A', lastSelectedAt: firstSelectedAt }),
+      workspace('b', { name: 'B', lastSelectedAt: 30 }),
+      workspace('c', { name: 'C', lastSelectedAt: 20 }),
+    ],
+    sessionActiveIds: new Set(['a', 'b', 'c']),
+    sessions: [session('b', 't1', 'working')],
+    attentionCounts: {},
+    terminalCounts: {},
+    activeWorkspaceId: 'a',
+  })
+
+  assert.deepEqual(buildCards(10).map((entry) => entry.workspace.id), ['b', 'c', 'a'])
+  assert.deepEqual(buildCards(40).map((entry) => entry.workspace.id), ['a', 'b', 'c'])
 })
 
 test('resolves the attention tile from real sessions before tile counters', () => {

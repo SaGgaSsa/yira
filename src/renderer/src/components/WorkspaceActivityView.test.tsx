@@ -81,7 +81,7 @@ test('shows an empty state when no workspace is active this session', () => {
   assert.match(markup, /Only workspaces visited in this session appear/)
 })
 
-test('orders attention first without inventing data', () => {
+test('keeps the sidebar order without inventing data', () => {
   const cards = buildWorkspaceActivityCards({
     workspaces: [workspace('idle'), workspace('busy'), workspace('blocked')],
     sessionActiveIds: new Set(['idle', 'busy', 'blocked']),
@@ -91,7 +91,11 @@ test('orders attention first without inventing data', () => {
     activeWorkspaceId: null,
   })
 
-  assert.deepEqual(cards.map((card) => card.workspace.id), ['blocked', 'busy', 'idle'])
+  assert.deepEqual(cards.map((card) => card.workspace.id), ['idle', 'busy', 'blocked'])
+  assert.deepEqual(
+    cards.map((card) => card.activity.status),
+    ['idle', 'working', 'needs-input'],
+  )
 })
 
 test('omits the terminal button when no real attention target exists', () => {

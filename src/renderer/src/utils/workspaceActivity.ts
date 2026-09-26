@@ -1,5 +1,6 @@
 import type { AgentActiveSession, AgentProvider, AgentSessionStatus, WorkspaceMetadata } from '@shared/types'
 import { summarizeTerminalActivity, type TerminalActivitySummary } from './terminalActivity'
+import { getWorkspaceSidebarOrder } from './workspaceOrdering'
 
 export interface WorkspaceAgentDetail {
   provider: AgentProvider
@@ -21,17 +22,6 @@ export interface WorkspaceActivityCardData {
   isCurrent: boolean
   /** Tile that requires attention, resolved from real sessions/attention only. Null when unknown. */
   attentionTileId: string | null
-}
-
-/** Priority order for activity cards: attention first, then working, then the rest. */
-export function getWorkspaceActivityRank(status: TerminalActivitySummary['status']): number {
-  switch (status) {
-    case 'needs-input': return 0
-    case 'working': return 1
-    case 'unread': return 2
-    case 'done': return 3
-    case 'idle': return 4
-  }
 }
 
 function getAgentStatusRank(status: AgentSessionStatus): number {
@@ -149,6 +139,7 @@ export interface BuildWorkspaceActivityCardsOptions {
   activeWorkspaceAttentionByTile?: Readonly<Record<string, number>>
 }
 
+/** Cards for workspaces visited this session, kept in the same order as the left sidebar. */
 export function buildWorkspaceActivityCards({
   workspaces,
   sessionActiveIds,
@@ -160,7 +151,7 @@ export function buildWorkspaceActivityCards({
 }: BuildWorkspaceActivityCardsOptions): WorkspaceActivityCardData[] {
   const cards: WorkspaceActivityCardData[] = []
 
-  for (const workspace of workspaces) {
+  for (const workspace of getWorkspaceSidebarOrder(workspaces)) {
     if (!sessionActiveIds.has(workspace.id)) continue
     const attentionCount = attentionCounts[workspace.id] ?? 0
     const activity = summarizeTerminalActivity(sessions, workspace.id, attentionCount)
@@ -180,19 +171,7 @@ export function buildWorkspaceActivityCards({
     })
   }
 
-  return sortWorkspaceActivityCards(cards)
-}
-
-export function sortWorkspaceActivityCards(cards: readonly WorkspaceActivityCardData[]): WorkspaceActivityCardData[] {
-  return cards.slice().sort((a, b) => {
-    const rank = getWorkspaceActivityRank(a.activity.status) - getWorkspaceActivityRank(b.activity.status)
-    if (rank !== 0) return rank
-    if (b.attentionCount !== a.attentionCount) return b.attentionCount - a.attentionCount
-    if (b.activity.working !== a.activity.working) return b.activity.working - a.activity.working
-    const name = a.workspace.name.localeCompare(b.workspace.name)
-    if (name !== 0) return name
-    return a.workspace.id.localeCompare(b.workspace.id)
-  })
+  return cards
 }
 
 /** Cards in this list need attention: intervention requested or unreviewed output. */
