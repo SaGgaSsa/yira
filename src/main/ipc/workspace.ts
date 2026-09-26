@@ -88,24 +88,30 @@ function nextSelectionTimestamp(workspaces: Workspace[]): number {
 }
 
 async function readConfig(): Promise<Config> {
+  let raw: string | null = null
   try {
-    const raw = await fs.readFile(CONFIG_PATH, 'utf8')
-    const parsed = JSON.parse(raw)
-    const workspaces = Array.isArray(parsed.workspaces)
-      ? parsed.workspaces.map(normalizeWorkspace)
-      : []
-    const activeWorkspaceId = workspaces.some((workspace: Workspace) => workspace.id === parsed.activeWorkspaceId)
-      ? parsed.activeWorkspaceId
-      : workspaces[0]?.id ?? ''
+    raw = await fs.readFile(CONFIG_PATH, 'utf8')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+  }
 
-    return {
-      ...parsed,
-      workspaces,
-      activeWorkspaceId,
-      settings: { ...DEFAULT_SETTINGS, ...(parsed.settings ?? {}) },
-    }
-  } catch {
+  if (raw === null) {
     return { workspaces: [], activeWorkspaceId: '', settings: { ...DEFAULT_SETTINGS } }
+  }
+
+  const parsed = JSON.parse(raw)
+  const workspaces = Array.isArray(parsed.workspaces)
+    ? parsed.workspaces.map(normalizeWorkspace)
+    : []
+  const activeWorkspaceId = workspaces.some((workspace: Workspace) => workspace.id === parsed.activeWorkspaceId)
+    ? parsed.activeWorkspaceId
+    : workspaces[0]?.id ?? ''
+
+  return {
+    ...parsed,
+    workspaces,
+    activeWorkspaceId,
+    settings: { ...DEFAULT_SETTINGS, ...(parsed.settings ?? {}) },
   }
 }
 

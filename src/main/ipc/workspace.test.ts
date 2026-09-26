@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import test from 'node:test'
-import { access, mkdtemp, readFile, rm } from 'node:fs/promises'
+import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { AgentProvider, Workspace } from '@shared/types'
@@ -327,4 +327,58 @@ test('preserves management state when beforeDelete fails', async () => {
 
   assert.equal((await ipcMain.invoke('workspace:list') as Workspace[]).some((workspace) => workspace.id === preserved.id), true)
   await access(preserved.path)
+})
+
+async function readStoredConfig(): Promise<string | null> {
+  try {
+    return await readFile(join(ipcConfigRoot, 'config.json'), 'utf8')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+    throw error
+  }
+}
+
+async function restoreStoredConfig(previous: string | null): Promise<void> {
+  const configPath = join(ipcConfigRoot, 'config.json')
+  if (previous === null) await rm(configPath, { force: true })
+  else await writeFile(configPath, previous, 'utf8')
+}
+
+test('keeps an unparsable config byte for byte instead of rewriting it', async () => {
+  const configPath = join(ipcConfigRoot, 'config.json')
+  const corrupt = '{"workspaces":[{"id":"broken"'
+  const previous = await readStoredConfig()
+  await writeFile(configPath, corrupt, 'utf8')
+
+  try {
+    await assert.rejects(workspaceModule.initWorkspaces())
+    assert.deepEqual(await readFile(configPath), Buffer.from(corrupt, 'utf8'))
+
+    await assert.rejects(ipcMain.invoke('workspace:list'))
+    assert.deepEqual(await readFile(configPath), Buffer.from(corrupt, 'utf8'))
+
+    await assert.rejects(ipcMain.invoke('workspace:create', { name: 'Must not persist' }))
+    assert.deepEqual(await readFile(configPath), Buffer.from(corrupt, 'utf8'))
+  } finally {
+    await restoreStoredConfig(previous)
+  }
+})
+
+test('creates an empty config file on first run', async () => {
+  const configPath = join(ipcConfigRoot, 'config.json')
+  const previous = await readStoredConfig()
+  await rm(configPath, { force: true })
+
+  try {
+    await workspaceModule.initWorkspaces()
+
+    const created = JSON.parse(await readFile(configPath, 'utf8')) as {
+      workspaces: unknown[]
+      activeWorkspaceId: string
+    }
+    assert.deepEqual(created.workspaces, [])
+    assert.equal(created.activeWorkspaceId, '')
+  } finally {
+    await restoreStoredConfig(previous)
+  }
 })
