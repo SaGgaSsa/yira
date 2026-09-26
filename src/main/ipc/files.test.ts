@@ -192,9 +192,10 @@ test('rejects an unreadable root directory instead of treating it as an empty re
   const originalOpen = fs.open
   const originalOpendir = fs.opendir
   try {
+    const canonicalRootPath = await fs.realpath(rootPath)
     if (process.platform === 'win32') {
       fs.opendir = (async (path: string, ...args: unknown[]) => {
-        if (path === rootPath) {
+        if (path === canonicalRootPath) {
           const error = new Error('permission denied') as NodeJS.ErrnoException
           error.code = 'EACCES'
           throw error
@@ -203,7 +204,7 @@ test('rejects an unreadable root directory instead of treating it as an empty re
       }) as typeof fs.opendir
     } else {
       fs.open = (async (path: string, ...args: unknown[]) => {
-        if (path === rootPath) {
+        if (path === canonicalRootPath) {
           const error = new Error('permission denied') as NodeJS.ErrnoException
           error.code = 'EACCES'
           throw error

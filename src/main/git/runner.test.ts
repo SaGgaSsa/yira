@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
-import { mkdtemp, mkdir, rm, symlink, writeFile } from 'fs/promises'
+import { mkdtemp, mkdir, realpath, rm, symlink, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { basename, join } from 'path'
 import { promisify } from 'node:util'
@@ -86,6 +86,7 @@ try {
   await symlink(outsideRoot, join(tempRoot, 'escape'), process.platform === 'win32' ? 'junction' : 'dir')
 
   const resolved = await resolveGitTargetPath(tempRoot, 'src/file.ts')
+  const canonicalRoot = resolved.rootPath
   if (resolved.relativePath !== 'src/file.ts') throw new Error('safe file paths must resolve relative to the workspace root')
 
   const deleted = await resolveGitTargetPath(tempRoot, 'src/deleted.ts')
@@ -108,20 +109,20 @@ try {
     return { stdout: '', stderr: '' }
   }
   await stageGitFile(tempRoot, 'src/file.ts', executor)
-  if (calls.length !== 1 || calls[0].command !== 'git' || calls[0].args.join('|') !== ['-C', tempRoot, 'add', '--', 'src/file.ts'].join('|')) {
+  if (calls.length !== 1 || calls[0].command !== 'git' || calls[0].args.join('|') !== ['-C', canonicalRoot, 'add', '--', 'src/file.ts'].join('|')) {
     throw new Error('stage must invoke git with fixed arguments and a path separator')
   }
   await unstageGitFile(tempRoot, 'src/file.ts', executor)
-  if (!calls[1] || calls[1].args.join('|') !== ['-C', tempRoot, 'restore', '--staged', '--', 'src/file.ts'].join('|')) {
+  if (!calls[1] || calls[1].args.join('|') !== ['-C', canonicalRoot, 'restore', '--staged', '--', 'src/file.ts'].join('|')) {
     throw new Error('unstage must invoke git with fixed arguments and a path separator')
   }
   await stageGitFiles(tempRoot, ['src/file.ts', 'src/deleted.ts'], executor)
-  if (!calls[2] || calls[2].args.join('|') !== ['-C', tempRoot, 'add', '--', 'src/file.ts', 'src/deleted.ts'].join('|')) {
+  if (!calls[2] || calls[2].args.join('|') !== ['-C', canonicalRoot, 'add', '--', 'src/file.ts', 'src/deleted.ts'].join('|')) {
     throw new Error('renames must stage both original and destination paths in one fixed Git invocation')
   }
 
   await commitGitChanges(tempRoot, '  Ship source control  ', executor)
-  if (!calls[3] || calls[3].args.join('|') !== ['-C', tempRoot, 'commit', '-m', 'Ship source control'].join('|')) {
+  if (!calls[3] || calls[3].args.join('|') !== ['-C', canonicalRoot, 'commit', '-m', 'Ship source control'].join('|')) {
     throw new Error('commit must invoke git with a trimmed message and fixed arguments')
   }
   for (const message of ['', '   ', 'a'.repeat(10001)]) {
@@ -141,9 +142,9 @@ try {
   }
   await syncGitRepository(tempRoot, syncExecutor)
   if (syncCalls.join('\n') !== [
-    ['-C', tempRoot, 'rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'].join('|'),
-    ['-C', tempRoot, 'pull', '--ff-only'].join('|'),
-    ['-C', tempRoot, 'push'].join('|'),
+    ['-C', canonicalRoot, 'rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'].join('|'),
+    ['-C', canonicalRoot, 'pull', '--ff-only'].join('|'),
+    ['-C', canonicalRoot, 'push'].join('|'),
   ].join('\n')) {
     throw new Error('sync must require upstream, pull fast-forward-only, then push')
   }
@@ -409,7 +410,7 @@ test('resolves only a configured live Git root inside the workspace', async () =
 
     const resolved = await resolveConfiguredGitRepository(rootPath, ['selected'], 'selected')
     assert.equal(resolved.relativePath, 'selected')
-    assert.equal(resolved.absolutePath, selectedPath)
+    assert.equal(resolved.absolutePath, await realpath(selectedPath))
     assert.equal(resolved.repository.name, 'selected')
 
     const rejectedInputs: unknown[] = [
