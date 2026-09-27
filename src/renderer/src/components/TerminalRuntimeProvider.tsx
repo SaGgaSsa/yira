@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
@@ -36,12 +36,21 @@ export interface TerminalRuntimeCreateRequest {
 export interface TerminalRuntimeProviderProps {
   children: React.ReactNode
   registry?: TerminalRuntimeRegistry<TerminalRuntime>
+  /** Optional test seam: recency window for recent terminal output. */
+  recentOutputWindowMs?: number
+  /** Optional test seam: prune interval for recent terminal output. */
+  recentOutputPruneIntervalMs?: number
 }
+
+const RECENT_OUTPUT_WINDOW_MS = 30_000
+const RECENT_OUTPUT_PRUNE_INTERVAL_MS = 1_000
 
 interface TerminalRuntimeContextValue {
   registry: TerminalRuntimeRegistry<TerminalRuntime>
   createRuntime: (request: TerminalRuntimeCreateRequest) => Promise<TerminalRuntime>
   workspaceAttentionCounts: WorkspaceAttentionCounts
+  /** Terminals with PTY output inside the recency window, keyed by workspace. */
+  recentOutputCounts: Record<string, number>
   updateWorkspaceAttentionCount: (workspaceId: string | null | undefined, count: number) => void
   incrementWorkspaceAttentionCount: (workspaceId: string | null | undefined) => void
   clearWorkspaceAttentionCount: (workspaceId: string | null | undefined) => void
@@ -68,7 +77,21 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-export function TerminalRuntimeProvider({ children, registry: injectedRegistry }: TerminalRuntimeProviderProps): React.ReactElement {
+function countRecentOutputByWorkspace(entries: Iterable<{ workspaceId: string }>): Record<string, number> {
+  const counts: Record<string, number> = {}
+  for (const entry of entries) {
+    if (!entry.workspaceId) continue
+    counts[entry.workspaceId] = (counts[entry.workspaceId] ?? 0) + 1
+  }
+  return counts
+}
+
+export function TerminalRuntimeProvider({
+  children,
+  registry: injectedRegistry,
+  recentOutputWindowMs = RECENT_OUTPUT_WINDOW_MS,
+  recentOutputPruneIntervalMs = RECENT_OUTPUT_PRUNE_INTERVAL_MS,
+}: TerminalRuntimeProviderProps): React.ReactElement {
   const registryRef = useRef<TerminalRuntimeRegistry<TerminalRuntime> | null>(null)
   if (!registryRef.current) {
     registryRef.current = injectedRegistry ?? new TerminalRuntimeRegistry<TerminalRuntime>()
@@ -77,6 +100,8 @@ export function TerminalRuntimeProvider({ children, registry: injectedRegistry }
   const parkingRootRef = useRef<HTMLDivElement | null>(null)
   const hoveredLinkTargetsRef = useRef(new Map<string, TerminalLinkTarget>())
   const [workspaceAttentionCounts, setWorkspaceAttentionCounts] = useState<WorkspaceAttentionCounts>({})
+  const recentOutputRef = useRef(new Map<string, { workspaceId: string; at: number }>())
+  const [recentOutputCounts, setRecentOutputCounts] = useState<Record<string, number>>({})
 
   useLayoutEffect(() => {
     registry.setParkingRoot(parkingRootRef.current)
@@ -105,6 +130,47 @@ export function TerminalRuntimeProvider({ children, registry: injectedRegistry }
   const clearAllWorkspaceAttention = useCallback((): void => {
     setWorkspaceAttentionCounts({})
   }, [])
+
+  // Recent output is independent of focus, mute and attention settings.
+  // The first chunk of a target updates React counts; later chunks only
+  // renew the timestamp in the ref so fragments never re-render the tree.
+  const handleTerminalOutput = useCallback((outputTarget: TerminalSessionTarget): void => {
+    const key = terminalRuntimeKey(outputTarget)
+    const recent = recentOutputRef.current
+    const existing = recent.get(key)
+    if (existing) {
+      existing.at = Date.now()
+      return
+    }
+    recent.set(key, { workspaceId: outputTarget.workspaceId, at: Date.now() })
+    setRecentOutputCounts(countRecentOutputByWorkspace(recent.values()))
+  }, [])
+
+  const pruneRecentOutput = useCallback((): void => {
+    const recent = recentOutputRef.current
+    if (recent.size === 0) return
+
+    const now = Date.now()
+    const liveKeys = new Set(registry.listTargets().map(terminalRuntimeKey))
+    let changed = false
+    for (const [key, entry] of recent) {
+      if (now - entry.at >= recentOutputWindowMs || !liveKeys.has(key)) {
+        recent.delete(key)
+        changed = true
+      }
+    }
+    if (changed) setRecentOutputCounts(countRecentOutputByWorkspace(recent.values()))
+  }, [recentOutputWindowMs, registry])
+
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      pruneRecentOutput()
+    }, recentOutputPruneIntervalMs)
+    return () => {
+      clearInterval(intervalId)
+      recentOutputRef.current.clear()
+    }
+  }, [pruneRecentOutput, recentOutputPruneIntervalMs])
 
   const getHoveredLinkTarget = useCallback((target: TerminalSessionTarget): TerminalLinkTarget | undefined => (
     hoveredLinkTargetsRef.current.get(terminalRuntimeKey(target))
@@ -240,6 +306,7 @@ export function TerminalRuntimeProvider({ children, registry: injectedRegistry }
             state.clearTerminalAttention(activityTarget.tileId)
           }
         },
+        onOutput: handleTerminalOutput,
         onTitle: (titleTarget, title) => {
           const state = useCanvasStore.getState()
           if (state.activeWorkspaceId !== titleTarget.workspaceId) return
@@ -255,12 +322,13 @@ export function TerminalRuntimeProvider({ children, registry: injectedRegistry }
         },
       },
     })
-  }, [incrementWorkspaceAttention, registry])
+  }, [handleTerminalOutput, incrementWorkspaceAttention, registry])
 
   const contextValue = useMemo<TerminalRuntimeContextValue>(() => ({
     registry,
     createRuntime,
     workspaceAttentionCounts,
+    recentOutputCounts,
     updateWorkspaceAttentionCount: updateWorkspaceAttention,
     incrementWorkspaceAttentionCount: incrementWorkspaceAttention,
     clearWorkspaceAttentionCount: clearWorkspaceAttention,
@@ -274,6 +342,7 @@ export function TerminalRuntimeProvider({ children, registry: injectedRegistry }
     getHoveredLinkTarget,
     incrementWorkspaceAttention,
     pruneWorkspaceAttention,
+    recentOutputCounts,
     registry,
     updateWorkspaceAttention,
     workspaceAttentionCounts,

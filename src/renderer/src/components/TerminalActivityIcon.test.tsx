@@ -12,14 +12,22 @@ test('renders every state with an accessible description and no fabricated progr
     'needs-input': 'Requiere intervención',
     working: 'Trabajando',
     unread: 'Actividad sin revisar',
+    output: 'Salida reciente de terminal',
     done: 'Actividad finalizada',
     idle: 'Sin actividad detectada',
   }
   for (const [status, label] of Object.entries(labels)) {
-    const activity: TerminalActivitySummary = { status: status as TerminalActivityStatus, working: 2, needsInput: 1, done: 3, unread: 4 }
+    const activity: TerminalActivitySummary = {
+      status: status as TerminalActivityStatus,
+      working: 2,
+      needsInput: 1,
+      done: 3,
+      unread: 4,
+      recentOutput: 5,
+    }
     const markup = renderToStaticMarkup(<TerminalActivityIcon activity={activity} />)
     assert.ok(markup.includes(`data-terminal-activity="${status}"`))
-    assert.ok(markup.includes(`aria-label="${label}. 2 trabajando; 1 requieren intervención; 3 finalizados; 4 eventos de salida sin revisar"`))
+    assert.ok(markup.includes(`aria-label="${label}. 2 trabajando; 1 requieren intervención; 3 finalizados; 4 eventos de salida sin revisar; 5 terminales con salida reciente"`))
     assert.match(markup, /role="img"/)
     assert.doesNotMatch(markup, /%/)
     assert.equal(markup.includes('motion-safe:animate-spin'), status === 'working')

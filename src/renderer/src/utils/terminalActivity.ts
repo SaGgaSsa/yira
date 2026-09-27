@@ -1,6 +1,6 @@
 import type { AgentActiveSession } from '@shared/types'
 
-export type TerminalActivityStatus = 'needs-input' | 'working' | 'unread' | 'done' | 'idle'
+export type TerminalActivityStatus = 'needs-input' | 'working' | 'unread' | 'output' | 'done' | 'idle'
 
 export interface TerminalActivitySummary {
   status: TerminalActivityStatus
@@ -8,6 +8,8 @@ export interface TerminalActivitySummary {
   needsInput: number
   done: number
   unread: number
+  /** Terminals with PTY output inside the recent window. Never added to working or unread. */
+  recentOutput: number
 }
 
 /** Status is based on all sessions in the scope, regardless of focus or view. */
@@ -16,10 +18,12 @@ export function summarizeTerminalActivity(
   workspaceId: string,
   unreadCount = 0,
   tileId?: string,
+  recentOutputCount = 0,
 ): TerminalActivitySummary {
   const summary: TerminalActivitySummary = {
     status: 'idle', working: 0, needsInput: 0, done: 0,
     unread: Number.isFinite(unreadCount) ? Math.max(0, Math.floor(unreadCount)) : 0,
+    recentOutput: Number.isFinite(recentOutputCount) ? Math.max(0, Math.floor(recentOutputCount)) : 0,
   }
   for (const session of sessions) {
     if (session.workspaceId !== workspaceId || (tileId !== undefined && session.tileId !== tileId)) continue
@@ -30,6 +34,7 @@ export function summarizeTerminalActivity(
   summary.status = summary.needsInput > 0 ? 'needs-input'
     : summary.working > 0 ? 'working'
       : summary.unread > 0 ? 'unread'
-        : summary.done > 0 ? 'done' : 'idle'
+        : summary.recentOutput > 0 ? 'output'
+          : summary.done > 0 ? 'done' : 'idle'
   return summary
 }

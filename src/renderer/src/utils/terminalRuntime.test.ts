@@ -523,6 +523,7 @@ function createRuntimeHarness(overrides: {
     whenFontsReady: () => new Promise<void>((resolve) => fontResolvers.push(resolve)),
     onActivity: (activityTarget) => events.push(`activity:${activityTarget.workspaceId}:${activityTarget.tileId}`),
     onClearActivity: (clearTarget) => events.push(`clear:${clearTarget.workspaceId}:${clearTarget.tileId}`),
+    onOutput: (outputTarget) => events.push(`output:${outputTarget.workspaceId}:${outputTarget.tileId}`),
     onTitle: (titleTarget, title) => events.push(`title:${titleTarget.tileId}:${title}`),
     reportError: (errorTarget, operation) => events.push(`error:${errorTarget.tileId}:${operation}`),
     createFitScheduler: () => {
@@ -1879,4 +1880,45 @@ test('successive resizes same host paint once after last ack', async () => {
   assert.deepEqual(terminal.refreshCalls.at(-1), { start: 0, end: 39 })
   assert.equal(terminal.focusCalls, 1)
   await runtime.dispose(false)
+})
+
+test('onOutput reports every PTY chunk before focus and mute checks', async () => {
+  const harness = createRuntimeHarness()
+  const runtime = await createReadyRuntime(harness)
+  const outputEvents = () => harness.events.filter((event) => event === 'output:workspace-a:tile-a')
+
+  harness.bridge.emitData('chunk-1')
+  harness.bridge.emitData('chunk-2')
+  assert.equal(outputEvents().length, 2)
+  assert.equal(harness.events.includes('activity:workspace-a:tile-a'), true)
+
+  runtime.updateView(viewOptions({ visible: true, notificationsMuted: true }))
+  harness.bridge.emitData('muted-chunk')
+  assert.equal(outputEvents().length, 3)
+  assert.equal(harness.events.filter((event) => event === 'activity:workspace-a:tile-a').length, 2)
+  assert.equal(harness.events.includes('clear:workspace-a:tile-a'), false)
+  await runtime.dispose(false)
+})
+
+test('onOutput reports output while the focused terminal suppresses activity', async () => {
+  const harness = createRuntimeHarness()
+  const runtime = await createReadyRuntime(harness)
+  const terminal = harness.terminals[0]
+  const globalRef = globalThis as { document?: unknown }
+  const previousDocument = globalRef.document
+  globalRef.document = {
+    hasFocus: () => true,
+    activeElement: terminal.textarea,
+  }
+
+  try {
+    harness.bridge.emitData('focused-chunk')
+    assert.equal(harness.events.includes('output:workspace-a:tile-a'), true)
+    assert.equal(harness.events.includes('clear:workspace-a:tile-a'), true)
+    assert.equal(harness.events.includes('activity:workspace-a:tile-a'), false)
+  } finally {
+    if (previousDocument === undefined) delete globalRef.document
+    else globalRef.document = previousDocument
+    await runtime.dispose(false)
+  }
 })

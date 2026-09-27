@@ -20,6 +20,7 @@ function getStatusColor(status: TerminalActivityStatus): string {
     case 'working': return 'var(--accent)'
     case 'done': return 'var(--success)'
     case 'unread': return 'var(--text-primary)'
+    case 'output': return 'var(--text-display)'
     case 'idle': return 'var(--text-secondary)'
   }
 }

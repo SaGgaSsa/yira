@@ -63,6 +63,7 @@ type TranslationResources = {
     'needs-input': string
     working: string
     unread: string
+    output: string
     done: string
     idle: string
     exited: string
@@ -457,10 +458,11 @@ const en: TranslationResources = {
     'needs-input': 'Needs input',
     working: 'Working',
     unread: 'Unreviewed activity',
+    output: 'Recent terminal output',
     done: 'Completed activity',
     idle: 'No detected activity',
     exited: 'Exited',
-    summary: '{{working}} working; {{needsInput}} need input; {{done}} completed; {{unread}} unreviewed output events',
+    summary: '{{working}} working; {{needsInput}} need input; {{done}} completed; {{unread}} unreviewed output events; {{recentOutput}} terminals with recent output',
   },
   agents: {
     title: 'Agents',
@@ -851,10 +853,11 @@ const es: TranslationResources = {
     'needs-input': 'Requiere intervención',
     working: 'Trabajando',
     unread: 'Actividad sin revisar',
+    output: 'Salida reciente de terminal',
     done: 'Actividad finalizada',
     idle: 'Sin actividad detectada',
     exited: 'Finalizada',
-    summary: '{{working}} trabajando; {{needsInput}} requieren intervención; {{done}} finalizados; {{unread}} eventos de salida sin revisar',
+    summary: '{{working}} trabajando; {{needsInput}} requieren intervención; {{done}} finalizados; {{unread}} eventos de salida sin revisar; {{recentOutput}} terminales con salida reciente',
   },
   agents: {
     title: 'Agentes',

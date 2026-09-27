@@ -137,6 +137,8 @@ export interface BuildWorkspaceActivityCardsOptions {
   activeWorkspaceId: string | null
   /** Tile-level unread counts, only known for the active workspace. */
   activeWorkspaceAttentionByTile?: Readonly<Record<string, number>>
+  /** Terminals with PTY output inside the recent window, keyed by workspace. */
+  recentOutputCounts?: Readonly<Record<string, number>>
 }
 
 /** Cards for workspaces visited this session, kept in the same order as the left sidebar. */
@@ -148,13 +150,20 @@ export function buildWorkspaceActivityCards({
   terminalCounts,
   activeWorkspaceId,
   activeWorkspaceAttentionByTile,
+  recentOutputCounts = {},
 }: BuildWorkspaceActivityCardsOptions): WorkspaceActivityCardData[] {
   const cards: WorkspaceActivityCardData[] = []
 
   for (const workspace of getWorkspaceSidebarOrder(workspaces)) {
     if (!sessionActiveIds.has(workspace.id)) continue
     const attentionCount = attentionCounts[workspace.id] ?? 0
-    const activity = summarizeTerminalActivity(sessions, workspace.id, attentionCount)
+    const activity = summarizeTerminalActivity(
+      sessions,
+      workspace.id,
+      attentionCount,
+      undefined,
+      recentOutputCounts[workspace.id] ?? 0,
+    )
     cards.push({
       workspace,
       activity,

@@ -153,6 +153,40 @@ test('caps session rows at three with an overflow indicator', () => {
   assert.match(markup, /\+2 more/)
 })
 
+test('renders recent terminal output for a common terminal without agent sessions', () => {
+  const cards = buildWorkspaceActivityCards({
+    workspaces: [workspace('common', 'Common')],
+    sessionActiveIds: new Set(['common']),
+    sessions: [],
+    attentionCounts: {},
+    terminalCounts: { common: 3 },
+    activeWorkspaceId: null,
+    recentOutputCounts: { common: 2 },
+  })
+
+  const markup = renderView(
+    <WorkspaceActivityView
+      cards={cards}
+      onOpenWorkspace={() => undefined}
+      onGoToTerminal={() => undefined}
+    />,
+  )
+
+  assert.equal(cards[0].activity.status, 'output')
+  assert.equal(cards[0].activity.recentOutput, 2)
+  assert.equal(cards[0].activeAgents, 0)
+  assert.match(markup, /data-activity-card="common"/)
+  assert.match(markup, /data-activity-status="output"/)
+  assert.match(markup, /Recent terminal output<\/span>/)
+  assert.match(markup, /0 active agents/)
+  assert.match(
+    markup,
+    /aria-label="Recent terminal output\. 0 working; 0 need input; 0 completed; 0 unreviewed output events; 2 terminals with recent output"/,
+  )
+  assert.doesNotMatch(markup, /Sessions/)
+  assert.doesNotMatch(markup, /Go to terminal/)
+})
+
 test('keeps the Spanish empty copy with accents', () => {
   assert.equal(resources.es.translation.activity.emptyTitle, 'Sin espacios de trabajo activos')
   assert.equal(resources.es.translation.activity.openWorkspace, 'Abrir espacio de trabajo')

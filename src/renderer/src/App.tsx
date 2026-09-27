@@ -282,6 +282,7 @@ function AppContent(): React.ReactElement {
   const {
     registry,
     workspaceAttentionCounts,
+    recentOutputCounts,
     updateWorkspaceAttentionCount,
     clearWorkspaceAttentionCount,
     pruneWorkspaceAttentionCounts,
@@ -991,6 +992,7 @@ function AppContent(): React.ReactElement {
     terminalCounts: workspaceTerminalCounts,
     activeWorkspaceId,
     activeWorkspaceAttentionByTile,
+    recentOutputCounts,
   }), [
     workspaceMetadata,
     sessionActiveWorkspaceIds,
@@ -999,6 +1001,7 @@ function AppContent(): React.ReactElement {
     workspaceTerminalCounts,
     activeWorkspaceId,
     activeWorkspaceAttentionByTile,
+    recentOutputCounts,
   ])
 
   useEffect(() => {

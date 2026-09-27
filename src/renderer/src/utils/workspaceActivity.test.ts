@@ -297,3 +297,64 @@ test('rejects stale post-activation navigation targets', () => {
     tileId: 't1',
   }), null)
 })
+
+test('recent output counts surface as output without adding agents or terminals', () => {
+  const [common] = buildWorkspaceActivityCards({
+    workspaces: [workspace('common')],
+    sessionActiveIds: new Set(['common']),
+    sessions: [],
+    attentionCounts: {},
+    terminalCounts: { common: 1 },
+    activeWorkspaceId: null,
+    recentOutputCounts: { common: 1 },
+  })
+  assert.equal(common.activity.status, 'output')
+  assert.equal(common.activity.recentOutput, 1)
+  assert.equal(common.activity.working, 0)
+  assert.equal(common.activity.unread, 0)
+  assert.equal(common.activeAgents, 0)
+  assert.equal(common.terminalCount, 1)
+  assert.equal(hasWorkspaceActivityAttention(common), false)
+
+  const [withoutOption] = buildWorkspaceActivityCards({
+    workspaces: [workspace('common')],
+    sessionActiveIds: new Set(['common']),
+    sessions: [],
+    attentionCounts: {},
+    terminalCounts: {},
+    activeWorkspaceId: null,
+  })
+  assert.equal(withoutOption.activity.recentOutput, 0)
+  assert.equal(withoutOption.activity.status, 'idle')
+})
+
+test('recent output ranks under real work and unread while keeping their counters', () => {
+  const [working] = buildWorkspaceActivityCards({
+    workspaces: [workspace('working-ws')],
+    sessionActiveIds: new Set(['working-ws']),
+    sessions: [session('working-ws', 't1', 'working')],
+    attentionCounts: {},
+    terminalCounts: {},
+    activeWorkspaceId: null,
+    recentOutputCounts: { 'working-ws': 5 },
+  })
+  assert.equal(working.activity.status, 'working')
+  assert.equal(working.activity.working, 1)
+  assert.equal(working.activity.recentOutput, 5)
+  assert.equal(working.activeAgents, 1)
+
+  const [unreadCard] = buildWorkspaceActivityCards({
+    workspaces: [workspace('unread-ws')],
+    sessionActiveIds: new Set(['unread-ws']),
+    sessions: [session('unread-ws', 't1', 'done')],
+    attentionCounts: { 'unread-ws': 2 },
+    terminalCounts: {},
+    activeWorkspaceId: null,
+    recentOutputCounts: { 'unread-ws': 3 },
+  })
+  assert.equal(unreadCard.activity.status, 'unread')
+  assert.equal(unreadCard.activity.unread, 2)
+  assert.equal(unreadCard.activity.recentOutput, 3)
+  assert.equal(unreadCard.activity.done, 1)
+  assert.equal(hasWorkspaceActivityAttention(unreadCard), true)
+})

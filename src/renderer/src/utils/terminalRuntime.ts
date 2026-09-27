@@ -72,6 +72,12 @@ export interface TerminalRuntimeDependencies {
   whenFontsReady: () => Promise<void>
   onActivity: (target: TerminalSessionTarget) => void
   onClearActivity: (target: TerminalSessionTarget) => void
+  /**
+   * Reports every successful PTY output chunk. Invoked before the focus and
+   * mute checks, so muted, focused and attention-disabled terminals still
+   * report recent output. No output text is stored here.
+   */
+  onOutput?: (target: TerminalSessionTarget) => void
   onTitle: (target: TerminalSessionTarget, title: string | null) => void
   reportError: (target: TerminalSessionTarget, operation: string, error: unknown) => void
   /** Optional test seam. The runtime uses the application scheduler by default. */
@@ -229,6 +235,7 @@ function normalizeFactoryInput(
       whenFontsReady: candidate.whenFontsReady,
       onActivity: candidate.onActivity,
       onClearActivity: candidate.onClearActivity,
+      onOutput: candidate.onOutput,
       onTitle: candidate.onTitle,
       reportError: candidate.reportError,
       createFitScheduler: candidate.createFitScheduler,
@@ -342,6 +349,12 @@ function createRuntime(
     } catch (error) {
       handleError('write', error)
       return
+    }
+
+    try {
+      dependencies.onOutput?.(target)
+    } catch (error) {
+      handleError('output', error)
     }
 
     if (currentViewOptions.notificationsMuted) return

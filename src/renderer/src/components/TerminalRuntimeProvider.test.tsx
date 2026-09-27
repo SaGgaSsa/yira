@@ -246,10 +246,14 @@ function flushReact(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 20))
 }
 
-function renderProvider(registry: InstanceType<typeof TerminalRuntimeRegistry<any>>, probe: () => React.ReactElement): { root: AnyRecord; container: AnyRecord } {
+function renderProvider(
+  registry: InstanceType<typeof TerminalRuntimeRegistry<any>>,
+  probe: () => React.ReactElement,
+  outputWindowOverrides?: { recentOutputWindowMs?: number; recentOutputPruneIntervalMs?: number },
+): { root: AnyRecord; container: AnyRecord } {
   const container = document.createElement('div') as AnyRecord
   const root = ReactDOM.createRoot(container as HTMLElement)
-  root.render(React.createElement(TerminalRuntimeProvider, { registry, children: probe() }))
+  root.render(React.createElement(TerminalRuntimeProvider, { registry, children: probe(), ...outputWindowOverrides }))
   return { root, container }
 }
 
@@ -545,4 +549,243 @@ test('hidden activity increments only the target workspace without mutating the 
   assert.equal(useCanvasStore.getState().terminalAttention[target.tileId], undefined)
   root.unmount()
   await flushReact()
+})
+
+function createOutputCapturingBridge(): { bridge: AnyRecord; emitOutput: (data: string) => void } {
+  let onDataCallback: ((data: string) => void) | undefined
+  const bridge = {
+    create: async (requestedTarget: TerminalSessionTarget) => ({
+      cols: 80,
+      rows: 24,
+      buffer: '',
+      identity: { ...requestedTarget, generation: 1 },
+    }),
+    attach: async (identity: TerminalSessionIdentity) => ({ cols: 80, rows: 24, buffer: '', identity }),
+    write: async () => {},
+    resize: async () => {},
+    detach: async () => {},
+    destroy: async () => {},
+    acknowledgeAgentAlert: async () => {},
+    onData: (_sessionIdentity: TerminalSessionIdentity, callback: (data: string) => void) => {
+      onDataCallback = callback
+      return () => {
+        if (onDataCallback === callback) onDataCallback = undefined
+      }
+    },
+    onExit: () => () => {},
+    onAgentAlert: () => () => {},
+  }
+  return {
+    bridge,
+    emitOutput: (data: string) => {
+      assert.ok(onDataCallback, 'bridge.onData must be registered before emitting output')
+      onDataCallback!(data)
+    },
+  }
+}
+
+test('muted common terminal output adds one recent count without raising attention', async () => {
+  const registry = new TerminalRuntimeRegistry<any>()
+  const { bridge, emitOutput } = createOutputCapturingBridge()
+  const previousElectron = (globalThis as AnyRecord).window.electron
+  ;(globalThis as AnyRecord).window.electron = {
+    terminal: bridge,
+    shell: { openExternal: async () => {} },
+    clipboard: { writeText: async () => {} },
+  }
+  useCanvasStore.getState().setWorkspace('workspace-active', 'Active')
+
+  let currentContext: AnyRecord | null = null
+  const Probe = (): React.ReactElement => {
+    currentContext = useTerminalRuntimeContext() as AnyRecord
+    return React.createElement('span')
+  }
+  let root: AnyRecord | undefined
+  try {
+    root = renderProvider(registry, () => React.createElement(Probe)).root
+    await flushReact()
+
+    await registry.acquire(target, () => currentContext!.createRuntime({
+      target,
+      createOptions,
+      viewOptions: { ...viewOptions, notificationsMuted: true },
+    }))
+    assert.deepEqual(currentContext!.recentOutputCounts, {})
+
+    emitOutput('chunk-1')
+    emitOutput('chunk-2')
+    await flushReact()
+
+    assert.deepEqual(currentContext!.recentOutputCounts, { 'workspace-hidden': 1 })
+    assert.deepEqual(currentContext!.workspaceAttentionCounts, {})
+    assert.equal(useCanvasStore.getState().terminalAttention[target.tileId], undefined)
+    assert.equal(useCanvasStore.getState().terminalAttentionGraceUntil[target.tileId], undefined)
+  } finally {
+    try {
+      root?.unmount()
+      if (root) await flushReact()
+    } finally {
+      ;(globalThis as AnyRecord).window.electron = previousElectron
+    }
+  }
+})
+
+test('terminal output still counts when terminal attention is disabled', async () => {
+  const registry = new TerminalRuntimeRegistry<any>()
+  const attentionOffTarget: TerminalSessionTarget = {
+    workspaceId: 'workspace-attention-off',
+    tileId: 'tile-attention-off',
+  }
+  const { bridge, emitOutput } = createOutputCapturingBridge()
+  const previousElectron = (globalThis as AnyRecord).window.electron
+  ;(globalThis as AnyRecord).window.electron = {
+    terminal: bridge,
+    shell: { openExternal: async () => {} },
+    clipboard: { writeText: async () => {} },
+  }
+  useCanvasStore.getState().setWorkspace('workspace-active', 'Active')
+
+  const settingsStore = loadWithJiti<AnyRecord>('../store/settingsStore.ts')
+  assert.equal(
+    typeof settingsStore.useSettingsStore?.setState,
+    'function',
+    'settings store must expose the zustand setState action',
+  )
+  const previousAttentionEnabled = settingsStore.useSettingsStore.getState().terminal.attentionEnabled
+  settingsStore.useSettingsStore.setState({
+    terminal: { ...settingsStore.useSettingsStore.getState().terminal, attentionEnabled: false },
+  })
+
+  let currentContext: AnyRecord | null = null
+  const Probe = (): React.ReactElement => {
+    currentContext = useTerminalRuntimeContext() as AnyRecord
+    return React.createElement('span')
+  }
+  let root: AnyRecord | undefined
+  try {
+    root = renderProvider(registry, () => React.createElement(Probe)).root
+    await flushReact()
+
+    await registry.acquire(attentionOffTarget, () => currentContext!.createRuntime({
+      target: attentionOffTarget,
+      createOptions,
+      viewOptions,
+    }))
+    emitOutput('chunk-attention-off')
+    await flushReact()
+
+    assert.deepEqual(currentContext!.recentOutputCounts, { 'workspace-attention-off': 1 })
+    assert.deepEqual(currentContext!.workspaceAttentionCounts, {})
+    assert.equal(useCanvasStore.getState().terminalAttention[attentionOffTarget.tileId], undefined)
+  } finally {
+    try {
+      root?.unmount()
+      if (root) await flushReact()
+    } finally {
+      try {
+        settingsStore.useSettingsStore.setState({
+          terminal: {
+            ...settingsStore.useSettingsStore.getState().terminal,
+            attentionEnabled: previousAttentionEnabled,
+          },
+        })
+      } finally {
+        ;(globalThis as AnyRecord).window.electron = previousElectron
+      }
+    }
+  }
+})
+
+test('recent output counts expire after the window without waiting 30 seconds', async () => {
+  const registry = new TerminalRuntimeRegistry<any>()
+  const { bridge, emitOutput } = createOutputCapturingBridge()
+  const previousElectron = (globalThis as AnyRecord).window.electron
+  ;(globalThis as AnyRecord).window.electron = {
+    terminal: bridge,
+    shell: { openExternal: async () => {} },
+    clipboard: { writeText: async () => {} },
+  }
+  useCanvasStore.getState().setWorkspace('workspace-active', 'Active')
+
+  let currentContext: AnyRecord | null = null
+  const Probe = (): React.ReactElement => {
+    currentContext = useTerminalRuntimeContext() as AnyRecord
+    return React.createElement('span')
+  }
+  let root: AnyRecord | undefined
+  try {
+    root = renderProvider(registry, () => React.createElement(Probe), {
+      recentOutputWindowMs: 120,
+      recentOutputPruneIntervalMs: 15,
+    }).root
+    await flushReact()
+
+    await registry.acquire(target, () => currentContext!.createRuntime({
+      target,
+      createOptions,
+      viewOptions: { ...viewOptions, notificationsMuted: true },
+    }))
+    emitOutput('chunk-expiring')
+    await flushReact()
+    assert.deepEqual(currentContext!.recentOutputCounts, { 'workspace-hidden': 1 })
+
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    await flushReact()
+    assert.deepEqual(currentContext!.recentOutputCounts, {})
+    assert.deepEqual(currentContext!.workspaceAttentionCounts, {})
+  } finally {
+    try {
+      root?.unmount()
+      if (root) await flushReact()
+    } finally {
+      ;(globalThis as AnyRecord).window.electron = previousElectron
+    }
+  }
+})
+
+test('destroyed runtimes are pruned from recent output counts immediately', async () => {
+  const registry = new TerminalRuntimeRegistry<any>()
+  const { bridge, emitOutput } = createOutputCapturingBridge()
+  const previousElectron = (globalThis as AnyRecord).window.electron
+  ;(globalThis as AnyRecord).window.electron = {
+    terminal: bridge,
+    shell: { openExternal: async () => {} },
+    clipboard: { writeText: async () => {} },
+  }
+  useCanvasStore.getState().setWorkspace('workspace-active', 'Active')
+
+  let currentContext: AnyRecord | null = null
+  const Probe = (): React.ReactElement => {
+    currentContext = useTerminalRuntimeContext() as AnyRecord
+    return React.createElement('span')
+  }
+  let root: AnyRecord | undefined
+  try {
+    root = renderProvider(registry, () => React.createElement(Probe), {
+      recentOutputWindowMs: 60_000,
+      recentOutputPruneIntervalMs: 15,
+    }).root
+    await flushReact()
+
+    await registry.acquire(target, () => currentContext!.createRuntime({
+      target,
+      createOptions,
+      viewOptions: { ...viewOptions, notificationsMuted: true },
+    }))
+    emitOutput('chunk-live')
+    await flushReact()
+    assert.deepEqual(currentContext!.recentOutputCounts, { 'workspace-hidden': 1 })
+
+    await registry.destroy(target)
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    await flushReact()
+    assert.deepEqual(currentContext!.recentOutputCounts, {})
+  } finally {
+    try {
+      root?.unmount()
+      if (root) await flushReact()
+    } finally {
+      ;(globalThis as AnyRecord).window.electron = previousElectron
+    }
+  }
 })
