@@ -51,13 +51,11 @@ type TranslationResources = {
     goToTerminal: string
     emptyTitle: string
     emptyMessage: string
-    sessions: string
-    moreSessions_one: string
-    moreSessions_other: string
     terminals_one: string
     terminals_other: string
-    agents_one: string
-    agents_other: string
+    statusActive: string
+    statusUnread: string
+    statusIdle: string
   }
   terminalActivity: {
     'needs-input': string
@@ -446,19 +444,17 @@ const en: TranslationResources = {
     goToTerminal: 'Go to terminal',
     emptyTitle: 'No active workspaces',
     emptyMessage: 'Open a workspace to see it here. Only workspaces visited in this session appear.',
-    sessions: 'Sessions',
-    moreSessions_one: '+{{count}} more',
-    moreSessions_other: '+{{count}} more',
     terminals_one: '{{count}} terminal',
     terminals_other: '{{count}} terminals',
-    agents_one: '{{count}} active agent',
-    agents_other: '{{count}} active agents',
+    statusActive: 'Terminals active',
+    statusUnread: 'Unreviewed output',
+    statusIdle: 'No activity',
   },
   terminalActivity: {
     'needs-input': 'Needs input',
     working: 'Working',
     unread: 'Unreviewed activity',
-    output: 'Recent terminal output',
+    output: 'Terminals active',
     done: 'Completed activity',
     idle: 'No detected activity',
     exited: 'Exited',
@@ -841,19 +837,17 @@ const es: TranslationResources = {
     goToTerminal: 'Ir a la terminal',
     emptyTitle: 'Sin espacios de trabajo activos',
     emptyMessage: 'Abre un espacio de trabajo para verlo aquí. Solo aparecen los visitados en esta sesión.',
-    sessions: 'Sesiones',
-    moreSessions_one: '+{{count}} más',
-    moreSessions_other: '+{{count}} más',
     terminals_one: '{{count}} terminal',
     terminals_other: '{{count}} terminales',
-    agents_one: '{{count}} agente activo',
-    agents_other: '{{count}} agentes activos',
+    statusActive: 'Terminales activas',
+    statusUnread: 'Salida sin revisar',
+    statusIdle: 'Sin actividad',
   },
   terminalActivity: {
     'needs-input': 'Requiere intervención',
     working: 'Trabajando',
     unread: 'Actividad sin revisar',
-    output: 'Salida reciente de terminal',
+    output: 'Terminales activas',
     done: 'Actividad finalizada',
     idle: 'Sin actividad detectada',
     exited: 'Finalizada',

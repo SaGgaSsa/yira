@@ -13,6 +13,7 @@ export interface WorkspaceListItemProps {
   active?: boolean
   sessionActive?: boolean
   attentionCount?: number
+  recentOutputCount?: number
   onClick: () => void
   onConfigure: () => void
   onFocus: () => void
@@ -26,6 +27,7 @@ export function WorkspaceListItem({
   active = false,
   sessionActive = false,
   attentionCount = 0,
+  recentOutputCount = 0,
   onClick,
   onConfigure,
   onFocus,
@@ -35,7 +37,7 @@ export function WorkspaceListItem({
 }: WorkspaceListItemProps): React.ReactElement {
   const { t } = useTranslation()
   const { sessions } = useAgentSessionSnapshot()
-  const activity = summarizeTerminalActivity(sessions, workspace.id, attentionCount)
+  const activity = summarizeTerminalActivity(sessions, workspace.id, attentionCount, undefined, recentOutputCount)
   const hasWorkspaceGitDiff = canReadWorkspaceGitDiff(
     workspace.config.rootFolderPath,
   )

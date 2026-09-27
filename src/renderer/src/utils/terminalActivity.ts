@@ -8,7 +8,7 @@ export interface TerminalActivitySummary {
   needsInput: number
   done: number
   unread: number
-  /** Terminals with PTY output inside the recent window. Never added to working or unread. */
+  /** Terminals with PTY output inside the recent window. Ranked above unread. */
   recentOutput: number
 }
 
@@ -33,8 +33,8 @@ export function summarizeTerminalActivity(
   }
   summary.status = summary.needsInput > 0 ? 'needs-input'
     : summary.working > 0 ? 'working'
-      : summary.unread > 0 ? 'unread'
-        : summary.recentOutput > 0 ? 'output'
+      : summary.recentOutput > 0 ? 'output'
+        : summary.unread > 0 ? 'unread'
           : summary.done > 0 ? 'done' : 'idle'
   return summary
 }

@@ -20,7 +20,6 @@ import { WorkspaceDialog, type WorkspaceDialogRequest, type WorkspaceDialogValue
 import { WorkspaceManagementDialog } from './components/WorkspaceManagementDialog'
 import { WorkspaceListItem } from './components/WorkspaceListItem'
 import { WorkspaceActivityView } from './components/WorkspaceActivityView'
-import { useAgentSessionSnapshot } from './hooks/useAgentSessionSnapshot'
 import { useWorkspaceTerminalCounts } from './hooks/useWorkspaceTerminalCounts'
 import { buildWorkspaceActivityCards, resolveActivationFocusTarget } from './utils/workspaceActivity'
 import { TileEditorDialog, type TileEditorRequest, type TileEditorValue } from './components/TileEditorDialog'
@@ -970,7 +969,6 @@ function AppContent(): React.ReactElement {
     return sumTerminalAttentionCounts(terminalAttention)
   }, [terminalAttention, terminalAttentionEnabled])
 
-  const { sessions: agentSessions } = useAgentSessionSnapshot()
   const liveWorkspaceTerminalCounts = useWorkspaceTerminalCounts(registry)
   const workspaceTerminalCounts = useMemo(() => {
     if (!activeWorkspaceId) return liveWorkspaceTerminalCounts
@@ -987,7 +985,6 @@ function AppContent(): React.ReactElement {
   const activityCards = useMemo(() => buildWorkspaceActivityCards({
     workspaces: workspaceMetadata,
     sessionActiveIds: sessionActiveWorkspaceIds,
-    sessions: agentSessions,
     attentionCounts: workspaceAttentionCounts,
     terminalCounts: workspaceTerminalCounts,
     activeWorkspaceId,
@@ -996,7 +993,6 @@ function AppContent(): React.ReactElement {
   }), [
     workspaceMetadata,
     sessionActiveWorkspaceIds,
-    agentSessions,
     workspaceAttentionCounts,
     workspaceTerminalCounts,
     activeWorkspaceId,
@@ -2276,6 +2272,7 @@ function AppContent(): React.ReactElement {
                     active={workspace.id === activeWorkspaceId}
                     sessionActive={sessionActiveWorkspaceIds.has(workspace.id)}
                     attentionCount={workspaceAttentionCounts[workspace.id] ?? 0}
+                    recentOutputCount={recentOutputCounts[workspace.id] ?? 0}
                     className="w-full transition-colors"
                     onClick={() => {
                       setActivityOpen(false)

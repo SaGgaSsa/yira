@@ -12,7 +12,7 @@ test('renders every state with an accessible description and no fabricated progr
     'needs-input': 'Requiere intervención',
     working: 'Trabajando',
     unread: 'Actividad sin revisar',
-    output: 'Salida reciente de terminal',
+    output: 'Terminales activas',
     done: 'Actividad finalizada',
     idle: 'Sin actividad detectada',
   }
@@ -30,6 +30,6 @@ test('renders every state with an accessible description and no fabricated progr
     assert.ok(markup.includes(`aria-label="${label}. 2 trabajando; 1 requieren intervención; 3 finalizados; 4 eventos de salida sin revisar; 5 terminales con salida reciente"`))
     assert.match(markup, /role="img"/)
     assert.doesNotMatch(markup, /%/)
-    assert.equal(markup.includes('motion-safe:animate-spin'), status === 'working')
+    assert.equal(markup.includes('motion-safe:animate-spin'), status === 'working' || status === 'output')
   }
 })

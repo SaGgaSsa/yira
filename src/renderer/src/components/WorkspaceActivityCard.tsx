@@ -1,12 +1,9 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
+import { CircleDot, LoaderCircle, Terminal } from 'lucide-react'
 import { canReadWorkspaceGitDiff } from '@/hooks/useWorkspaceGitDiff'
-import type { TerminalActivityStatus } from '@/utils/terminalActivity'
-import { TerminalActivityIcon } from './TerminalActivityIcon'
 import { WorkspaceGitDiff } from './WorkspaceGitDiff'
-import type { WorkspaceActivityCardData } from '@/utils/workspaceActivity'
-
-export const MAX_ACTIVITY_SESSION_ROWS = 3
+import type { WorkspaceActivityCardData, WorkspaceActivityStatus } from '@/utils/workspaceActivity'
 
 export interface WorkspaceActivityCardProps {
   card: WorkspaceActivityCardData
@@ -14,31 +11,34 @@ export interface WorkspaceActivityCardProps {
   onGoToTerminal: (() => void) | null
 }
 
-function getStatusColor(status: TerminalActivityStatus): string {
+function getStatusColor(status: WorkspaceActivityStatus): string {
   switch (status) {
-    case 'needs-input': return 'var(--warning)'
-    case 'working': return 'var(--accent)'
-    case 'done': return 'var(--success)'
+    case 'active': return 'var(--accent)'
     case 'unread': return 'var(--text-primary)'
-    case 'output': return 'var(--text-display)'
     case 'idle': return 'var(--text-secondary)'
+  }
+}
+
+function getStatusLabelKey(status: WorkspaceActivityStatus): string {
+  switch (status) {
+    case 'active': return 'activity.statusActive'
+    case 'unread': return 'activity.statusUnread'
+    case 'idle': return 'activity.statusIdle'
   }
 }
 
 export function WorkspaceActivityCard({ card, onOpen, onGoToTerminal }: WorkspaceActivityCardProps): React.ReactElement {
   const { t } = useTranslation()
-  const { workspace, activity, terminalCount, activeAgents, agentDetails, isCurrent } = card
+  const { workspace, status, terminalCount, isCurrent } = card
   const hasWorkspaceGitDiff = canReadWorkspaceGitDiff(workspace.config.rootFolderPath)
-  const statusColor = getStatusColor(activity.status)
-  const visibleSessions = agentDetails.slice(0, MAX_ACTIVITY_SESSION_ROWS)
-  const hiddenSessionCount = agentDetails.length - visibleSessions.length
+  const statusColor = getStatusColor(status)
+  const StatusIcon = status === 'active' ? LoaderCircle : status === 'unread' ? CircleDot : Terminal
 
   return (
     <article
       className="flex flex-col gap-3 rounded-xl border border-border-subtle bg-bg-tertiary p-4"
       data-activity-card={workspace.id}
-      data-activity-status={activity.status}
-      data-activity-sessions={agentDetails.length}
+      data-activity-status={status}
       aria-current={isCurrent ? 'true' : undefined}
     >
       <div className="flex min-w-0 items-center gap-2">
@@ -59,37 +59,18 @@ export function WorkspaceActivityCard({ card, onOpen, onGoToTerminal }: Workspac
           className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs"
           style={{ borderColor: statusColor, color: statusColor }}
         >
-          <TerminalActivityIcon activity={activity} size={12} />
-          {t(`terminalActivity.${activity.status}`)}
+          <StatusIcon
+            size={12}
+            aria-hidden="true"
+            className={status === 'active' ? 'motion-safe:animate-spin' : undefined}
+          />
+          {t(getStatusLabelKey(status))}
         </span>
       </div>
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-text-secondary">
         <span>{t('activity.terminals', { count: terminalCount })}</span>
-        <span>{t('activity.agents', { count: activeAgents })}</span>
       </div>
-
-      {agentDetails.length > 0 && (
-        <div className="flex flex-col gap-1">
-          <div className="nd-label text-text-secondary">{t('activity.sessions')}</div>
-          <ul className="flex flex-col gap-1">
-            {visibleSessions.map((detail) => (
-              <li
-                key={`${detail.provider}/${detail.sessionId}`}
-                className="flex min-w-0 items-center justify-between gap-2 text-xs text-text-secondary"
-              >
-                <span className="truncate text-text-primary">{t(`workspace.${detail.provider}`)}</span>
-                <span className="shrink-0">{t(`terminalActivity.${detail.status}`)}</span>
-              </li>
-            ))}
-          </ul>
-          {hiddenSessionCount > 0 && (
-            <div className="text-xs text-text-secondary">
-              {t('activity.moreSessions', { count: hiddenSessionCount })}
-            </div>
-          )}
-        </div>
-      )}
 
       <div className="mt-auto flex flex-wrap items-center gap-2">
         <button

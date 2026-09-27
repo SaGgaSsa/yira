@@ -1,62 +1,17 @@
-import type { AgentActiveSession, AgentProvider, AgentSessionStatus, WorkspaceMetadata } from '@shared/types'
-import { summarizeTerminalActivity, type TerminalActivitySummary } from './terminalActivity'
+import type { WorkspaceMetadata } from '@shared/types'
 import { getWorkspaceSidebarOrder } from './workspaceOrdering'
 
-export interface WorkspaceAgentDetail {
-  provider: AgentProvider
-  sessionId: string
-  status: AgentSessionStatus
-  tileId: string
-}
+export type WorkspaceActivityStatus = 'active' | 'unread' | 'idle'
 
 export interface WorkspaceActivityCardData {
   workspace: WorkspaceMetadata
-  activity: TerminalActivitySummary
-  /** Live agent sessions with status working or needs-input (unique sessionId). */
-  activeAgents: number
-  /** Real agent sessions in this workspace, ordered by status priority. */
-  agentDetails: WorkspaceAgentDetail[]
+  status: WorkspaceActivityStatus
   /** Real terminal count supplied by the caller (tiles for the active workspace, live runtimes otherwise). */
   terminalCount: number
   attentionCount: number
   isCurrent: boolean
-  /** Tile that requires attention, resolved from real sessions/attention only. Null when unknown. */
+  /** Tile that requires attention, resolved from tile counters only. Null when unknown. */
   attentionTileId: string | null
-}
-
-function getAgentStatusRank(status: AgentSessionStatus): number {
-  switch (status) {
-    case 'needs-input': return 0
-    case 'working': return 1
-    case 'done': return 2
-    case 'exited': return 3
-  }
-}
-
-/** Real agent sessions for a workspace, ordered by status priority with a stable order. */
-export function getWorkspaceAgentDetails(
-  sessions: readonly AgentActiveSession[],
-  workspaceId: string,
-): WorkspaceAgentDetail[] {
-  const seen = new Set<string>()
-  return sessions
-    .map((session, index) => ({ session, index }))
-    .filter(({ session }) => {
-      if (session.workspaceId !== workspaceId) return false
-      const identity = `${session.provider}/${session.sessionId}`
-      if (seen.has(identity)) return false
-      seen.add(identity)
-      return true
-    })
-    .sort((a, b) => (
-      getAgentStatusRank(a.session.status) - getAgentStatusRank(b.session.status) || a.index - b.index
-    ))
-    .map(({ session }) => ({
-      provider: session.provider,
-      sessionId: session.sessionId,
-      status: session.status,
-      tileId: session.tileId,
-    }))
 }
 
 export interface ActivationFocusTargetOptions {
@@ -82,36 +37,14 @@ export function resolveActivationFocusTarget({
   return tile ? tile.id : null
 }
 
-function countUniqueActiveAgents(sessions: readonly AgentActiveSession[], workspaceId: string): number {
-  const seen = new Set<string>()
-  for (const session of sessions) {
-    if (session.workspaceId !== workspaceId) continue
-    if (session.status !== 'working' && session.status !== 'needs-input') continue
-    seen.add(`${session.sessionId}`)
-  }
-  return seen.size
-}
-
 /**
- * Resolve the tile that requires attention using real data only.
- * Prefers an agent session needing input, then a working session,
- * then the tile with the highest unread output count. Returns null
- * when no real target exists (for example background-workspace output
- * counters without a tile breakdown).
+ * Resolve the tile that requires attention using tile counters only.
+ * Returns the tile with the highest unread output count above zero,
+ * or null when no real target exists.
  */
 export function resolveWorkspaceAttentionTileId(
-  sessions: readonly AgentActiveSession[],
-  workspaceId: string,
   attentionByTile?: Readonly<Record<string, number>>,
 ): string | null {
-  let workingTileId: string | null = null
-  for (const session of sessions) {
-    if (session.workspaceId !== workspaceId || !session.tileId) continue
-    if (session.status === 'needs-input') return session.tileId
-    if (workingTileId === null && session.status === 'working') workingTileId = session.tileId
-  }
-  if (workingTileId !== null) return workingTileId
-
   if (!attentionByTile) return null
   let bestTileId: string | null = null
   let bestCount = 0
@@ -131,7 +64,6 @@ export interface BuildWorkspaceActivityCardsOptions {
    * (clicked) during this Yira session. Only these workspaces get cards.
    */
   sessionActiveIds: ReadonlySet<string>
-  sessions: readonly AgentActiveSession[]
   attentionCounts: Readonly<Record<string, number>>
   terminalCounts: Readonly<Record<string, number>>
   activeWorkspaceId: string | null
@@ -145,7 +77,6 @@ export interface BuildWorkspaceActivityCardsOptions {
 export function buildWorkspaceActivityCards({
   workspaces,
   sessionActiveIds,
-  sessions,
   attentionCounts,
   terminalCounts,
   activeWorkspaceId,
@@ -157,24 +88,15 @@ export function buildWorkspaceActivityCards({
   for (const workspace of getWorkspaceSidebarOrder(workspaces)) {
     if (!sessionActiveIds.has(workspace.id)) continue
     const attentionCount = attentionCounts[workspace.id] ?? 0
-    const activity = summarizeTerminalActivity(
-      sessions,
-      workspace.id,
-      attentionCount,
-      undefined,
-      recentOutputCounts[workspace.id] ?? 0,
-    )
+    const recentOutput = recentOutputCounts[workspace.id] ?? 0
+    const status: WorkspaceActivityStatus = recentOutput > 0 ? 'active' : attentionCount > 0 ? 'unread' : 'idle'
     cards.push({
       workspace,
-      activity,
-      activeAgents: countUniqueActiveAgents(sessions, workspace.id),
-      agentDetails: getWorkspaceAgentDetails(sessions, workspace.id),
+      status,
       terminalCount: terminalCounts[workspace.id] ?? 0,
       attentionCount,
       isCurrent: workspace.id === activeWorkspaceId,
       attentionTileId: resolveWorkspaceAttentionTileId(
-        sessions,
-        workspace.id,
         workspace.id === activeWorkspaceId ? activeWorkspaceAttentionByTile : undefined,
       ),
     })
@@ -183,7 +105,7 @@ export function buildWorkspaceActivityCards({
   return cards
 }
 
-/** Cards in this list need attention: intervention requested or unreviewed output. */
+/** Cards in this list need attention: unreviewed output. */
 export function hasWorkspaceActivityAttention(card: WorkspaceActivityCardData): boolean {
-  return card.activity.needsInput > 0 || card.activity.unread > 0
+  return card.status === 'unread'
 }

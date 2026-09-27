@@ -1922,3 +1922,25 @@ test('onOutput reports output while the focused terminal suppresses activity', a
     await runtime.dispose(false)
   }
 })
+
+test('onOutput filters input echo and resize redraws inside the grace window', async () => {
+  const harness = createRuntimeHarness()
+  let currentTime = 1_000
+  harness.options.dependencies.now = () => currentTime
+  const runtime = await createReadyRuntime(harness)
+  const outputEvents = () => harness.events.filter((event) => event === 'output:workspace-a:tile-a')
+
+  harness.bridge.emitData('first-without-input')
+  assert.equal(outputEvents().length, 1)
+
+  harness.terminals[0].emitInput('typed-command')
+  currentTime += 100
+  harness.bridge.emitData('echo-chunk')
+  assert.equal(outputEvents().length, 1)
+  assert.deepEqual(harness.terminals[0].writes.slice(-1), ['echo-chunk'])
+
+  currentTime += 300
+  harness.bridge.emitData('real-output')
+  assert.equal(outputEvents().length, 2)
+  await runtime.dispose(false)
+})

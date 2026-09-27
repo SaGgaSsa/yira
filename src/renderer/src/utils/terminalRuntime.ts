@@ -73,7 +73,10 @@ export interface TerminalRuntimeDependencies {
   onActivity: (target: TerminalSessionTarget) => void
   onClearActivity: (target: TerminalSessionTarget) => void
   /**
-   * Reports every successful PTY output chunk. Invoked before the focus and
+   * Reports PTY output chunks that survive the input/resize grace filter.
+   * Chunks arriving within OUTPUT_ACTIVITY_INPUT_GRACE_MS after user input
+   * or a resize (echo, redraws) still reach xterm and activity counters,
+   * but do not report recent output. Invoked before the focus and
    * mute checks, so muted, focused and attention-disabled terminals still
    * report recent output. No output text is stored here.
    */
@@ -84,6 +87,8 @@ export interface TerminalRuntimeDependencies {
   createFitScheduler?: () => TerminalFitSchedulerLike
   /** Optional direct scheduler injection for hosts that own the scheduler. */
   fitScheduler?: TerminalFitSchedulerLike
+  /** Optional test seam for the output activity grace filter. Defaults to Date.now. */
+  now?: () => number
 }
 
 export interface TerminalFitSchedulerLike {
@@ -139,6 +144,9 @@ export interface TerminalRuntime extends TerminalRuntimeHandle {
 }
 
 type DisposableLike = { dispose: () => void } | (() => void) | void
+
+/** Grace window after user input or resize where PTY echo/redraws do not count as recent output. */
+export const OUTPUT_ACTIVITY_INPUT_GRACE_MS = 300
 
 const DEFAULT_VIEW_OPTIONS: TerminalRuntimeViewOptions = {
   visible: false,
@@ -240,6 +248,7 @@ function normalizeFactoryInput(
       reportError: candidate.reportError,
       createFitScheduler: candidate.createFitScheduler,
       fitScheduler: candidate.fitScheduler,
+      now: candidate.now,
     } as TerminalRuntimeDependencies)
 
   return {
@@ -300,6 +309,9 @@ function createRuntime(
   }
 
   const dataDisposers: DisposableLike[] = []
+  const now = dependencies.now ?? Date.now
+  let lastInputAt = Number.NEGATIVE_INFINITY
+  let lastResizeAt = Number.NEGATIVE_INFINITY
 
   const notify = (): void => {
     for (const listener of [...listeners]) {
@@ -331,6 +343,7 @@ function createRuntime(
   const writeInput = (identity: TerminalSessionIdentity, data: string): void => {
     if (!isCurrentIdentity(identity) || processExited) return
 
+    lastInputAt = now()
     try {
       void Promise.resolve(dependencies.bridge.write(identity, data)).catch((error: unknown) => {
         if (!isCurrentIdentity(identity)) return
@@ -351,10 +364,12 @@ function createRuntime(
       return
     }
 
-    try {
-      dependencies.onOutput?.(target)
-    } catch (error) {
-      handleError('output', error)
+    if (now() - Math.max(lastInputAt, lastResizeAt) >= OUTPUT_ACTIVITY_INPUT_GRACE_MS) {
+      try {
+        dependencies.onOutput?.(target)
+      } catch (error) {
+        handleError('output', error)
+      }
     }
 
     if (currentViewOptions.notificationsMuted) return
@@ -441,6 +456,7 @@ function createRuntime(
           resizeGeneration += 1
           requestGeneration = resizeGeneration
           pendingGeometricPaint = true
+          lastResizeAt = now()
           const runResize = (): Promise<boolean> => Promise.resolve()
             .then(() => dependencies.bridge.resize(identity, cols, rows))
             .then(

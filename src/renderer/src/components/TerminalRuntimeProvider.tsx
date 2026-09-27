@@ -42,7 +42,7 @@ export interface TerminalRuntimeProviderProps {
   recentOutputPruneIntervalMs?: number
 }
 
-const RECENT_OUTPUT_WINDOW_MS = 30_000
+const RECENT_OUTPUT_WINDOW_MS = 5_000
 const RECENT_OUTPUT_PRUNE_INTERVAL_MS = 1_000
 
 interface TerminalRuntimeContextValue {

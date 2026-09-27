@@ -59,11 +59,12 @@ test('a common terminal with recent output and no agent session reports output',
   assert.equal(summary.recentOutput, 2)
 })
 
-test('recent output ranks below unread and never overrides work or intervention', () => {
+test('recent output ranks above unread and done but below work and intervention', () => {
   assert.equal(summarizeTerminalActivity([], 'a', 0, undefined, 1).status, 'output')
-  assert.equal(summarizeTerminalActivity([], 'a', 1, undefined, 1).status, 'unread')
+  assert.equal(summarizeTerminalActivity([], 'a', 1, undefined, 1).status, 'output')
   assert.equal(summarizeTerminalActivity([session('1', 'working')], 'a', 0, undefined, 1).status, 'working')
   assert.equal(summarizeTerminalActivity([session('1', 'needs-input')], 'a', 0, undefined, 1).status, 'needs-input')
   assert.equal(summarizeTerminalActivity([session('1', 'done')], 'a', 0, undefined, 1).status, 'output')
+  assert.equal(summarizeTerminalActivity([session('1', 'done')], 'a', 1, undefined, 0).status, 'unread')
   assert.equal(summarizeTerminalActivity([session('1', 'done')], 'a', 0, undefined, 0).status, 'done')
 })

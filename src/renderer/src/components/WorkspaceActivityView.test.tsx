@@ -3,7 +3,7 @@ import test from 'node:test'
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { I18nextProvider } from 'react-i18next'
-import type { AgentActiveSession, WorkspaceMetadata } from '@shared/types'
+import type { WorkspaceMetadata } from '@shared/types'
 import { i18n, initializeI18n } from '@/i18n'
 import { resources } from '@/i18n/resources'
 import { buildWorkspaceActivityCards } from '@/utils/workspaceActivity'
@@ -27,10 +27,6 @@ function workspace(id: string, name = id): WorkspaceMetadata {
   }
 }
 
-function agentSession(workspaceId: string, tileId: string, status: AgentActiveSession['status']): AgentActiveSession {
-  return { sessionId: `${workspaceId}/${tileId}/${status}`, tileId, workspaceId, status, provider: 'codex', startedAt: '', lastActivityAt: '' }
-}
-
 function renderView(markup: React.ReactElement): string {
   return renderToStaticMarkup(<I18nextProvider i18n={i18n}>{markup}</I18nextProvider>)
 }
@@ -39,10 +35,10 @@ test('renders one card per workspace visited this session and excludes the rest'
   const cards = buildWorkspaceActivityCards({
     workspaces: [workspace('visited'), workspace('saved', 'Saved')],
     sessionActiveIds: new Set(['visited']),
-    sessions: [agentSession('visited', 't1', 'working')],
     attentionCounts: {},
     terminalCounts: { visited: 2 },
     activeWorkspaceId: 'visited',
+    recentOutputCounts: { visited: 1 },
   })
 
   const markup = renderView(
@@ -57,14 +53,13 @@ test('renders one card per workspace visited this session and excludes the rest'
   assert.match(markup, /data-activity-card="visited"/)
   assert.doesNotMatch(markup, /data-activity-card="saved"/)
   assert.match(markup, /2 terminals/)
-  assert.match(markup, /1 active agent/)
-  assert.match(markup, /Working/)
-  assert.match(markup, /data-activity-sessions="1"/)
-  assert.match(markup, /Sessions/)
-  assert.match(markup, /Codex/)
+  assert.match(markup, /Terminals active/)
+  assert.match(markup, /data-activity-status="active"/)
+  assert.match(markup, /animate-spin/)
   assert.match(markup, /Open workspace/)
-  assert.match(markup, /Go to terminal/)
   assert.match(markup, /aria-current="true"/)
+  assert.doesNotMatch(markup, /agent/i)
+  assert.doesNotMatch(markup, /Sessions/)
 })
 
 test('shows an empty state when no workspace is active this session', () => {
@@ -85,16 +80,16 @@ test('keeps the sidebar order without inventing data', () => {
   const cards = buildWorkspaceActivityCards({
     workspaces: [workspace('idle'), workspace('busy'), workspace('blocked')],
     sessionActiveIds: new Set(['idle', 'busy', 'blocked']),
-    sessions: [agentSession('busy', 't1', 'working'), agentSession('blocked', 't9', 'needs-input')],
-    attentionCounts: {},
+    attentionCounts: { blocked: 1 },
     terminalCounts: {},
     activeWorkspaceId: null,
+    recentOutputCounts: { busy: 2 },
   })
 
   assert.deepEqual(cards.map((card) => card.workspace.id), ['idle', 'busy', 'blocked'])
   assert.deepEqual(
-    cards.map((card) => card.activity.status),
-    ['idle', 'working', 'needs-input'],
+    cards.map((card) => card.status),
+    ['idle', 'active', 'unread'],
   )
 })
 
@@ -102,7 +97,6 @@ test('omits the terminal button when no real attention target exists', () => {
   const cards = buildWorkspaceActivityCards({
     workspaces: [workspace('idle')],
     sessionActiveIds: new Set(['idle']),
-    sessions: [],
     attentionCounts: {},
     terminalCounts: {},
     activeWorkspaceId: null,
@@ -119,45 +113,14 @@ test('omits the terminal button when no real attention target exists', () => {
   assert.match(markup, /Open workspace/)
   assert.doesNotMatch(markup, /Go to terminal/)
   assert.doesNotMatch(markup, /Sessions/)
-  assert.match(markup, /No detected activity/)
+  assert.doesNotMatch(markup, /agent/i)
+  assert.match(markup, /No activity/)
 })
 
-test('caps session rows at three with an overflow indicator', () => {
-  const cards = buildWorkspaceActivityCards({
-    workspaces: [workspace('busy')],
-    sessionActiveIds: new Set(['busy']),
-    sessions: [
-      agentSession('busy', 't1', 'needs-input'),
-      agentSession('busy', 't2', 'working'),
-      agentSession('busy', 't3', 'working'),
-      agentSession('busy', 't4', 'done'),
-      agentSession('busy', 't5', 'exited'),
-    ],
-    attentionCounts: {},
-    terminalCounts: {},
-    activeWorkspaceId: null,
-  })
-
-  const markup = renderView(
-    <WorkspaceActivityView
-      cards={cards}
-      onOpenWorkspace={() => undefined}
-      onGoToTerminal={() => undefined}
-    />,
-  )
-
-  assert.match(markup, /data-activity-sessions="5"/)
-  assert.match(markup, /Needs input/)
-  assert.match(markup, /Working/)
-  assert.doesNotMatch(markup, /Exited/)
-  assert.match(markup, /\+2 more/)
-})
-
-test('renders recent terminal output for a common terminal without agent sessions', () => {
+test('renders recent terminal output with an animated status', () => {
   const cards = buildWorkspaceActivityCards({
     workspaces: [workspace('common', 'Common')],
     sessionActiveIds: new Set(['common']),
-    sessions: [],
     attentionCounts: {},
     terminalCounts: { common: 3 },
     activeWorkspaceId: null,
@@ -172,18 +135,13 @@ test('renders recent terminal output for a common terminal without agent session
     />,
   )
 
-  assert.equal(cards[0].activity.status, 'output')
-  assert.equal(cards[0].activity.recentOutput, 2)
-  assert.equal(cards[0].activeAgents, 0)
+  assert.equal(cards[0].status, 'active')
   assert.match(markup, /data-activity-card="common"/)
-  assert.match(markup, /data-activity-status="output"/)
-  assert.match(markup, /Recent terminal output<\/span>/)
-  assert.match(markup, /0 active agents/)
-  assert.match(
-    markup,
-    /aria-label="Recent terminal output\. 0 working; 0 need input; 0 completed; 0 unreviewed output events; 2 terminals with recent output"/,
-  )
+  assert.match(markup, /data-activity-status="active"/)
+  assert.match(markup, /Terminals active/)
+  assert.match(markup, /animate-spin/)
   assert.doesNotMatch(markup, /Sessions/)
+  assert.doesNotMatch(markup, /agent/i)
   assert.doesNotMatch(markup, /Go to terminal/)
 })
 
