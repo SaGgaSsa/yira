@@ -46,42 +46,56 @@ function isAvailableResult(result: WorkspaceGitDiffResult | null): result is Wor
   return result?.available === true
 }
 
+export interface WorkspaceGitDiffIndicatorProps {
+  result: WorkspaceGitDiffResult | null
+}
+
+export function WorkspaceGitDiffIndicator({
+  result,
+}: WorkspaceGitDiffIndicatorProps): React.ReactElement | null {
+  const { t } = useTranslation()
+  if (result?.repositoryCount === 0) return null
+  if (!isAvailableResult(result)) return null
+
+  const additions = normalizeCount(result.additions)
+  const deletions = normalizeCount(result.deletions)
+  if (additions === 0 && deletions === 0) return null
+
+  const tooltip = t('workspace.gitDiffTooltip', {
+    additions: formatWorkspaceGitDiffExactCount(additions),
+    deletions: formatWorkspaceGitDiffExactCount(deletions),
+  })
+
+  return (
+    <span
+      className="inline-flex max-w-[6rem] shrink-0 items-center gap-1 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[10px] leading-none text-text-secondary"
+      title={tooltip}
+      aria-label={tooltip}
+      data-workspace-git-diff="true"
+      data-available="true"
+    >
+      {additions > 0 && (
+        <span style={{ color: 'var(--success)' }}>+{formatWorkspaceGitDiffCount(additions)}</span>
+      )}
+      {deletions > 0 && (
+        <span style={{ color: 'var(--danger)' }}>−{formatWorkspaceGitDiffCount(deletions)}</span>
+      )}
+    </span>
+  )
+}
+
 export function WorkspaceGitDiff({
   workspaceId,
   rootFolderPath,
   sourceControlRepositoryPaths,
 }: WorkspaceGitDiffProps): React.ReactElement | null {
-  const { t } = useTranslation()
   const configured = canReadWorkspaceGitDiff(rootFolderPath)
   const result = useWorkspaceGitDiff({
     workspaceId,
     rootFolderPath,
     sourceControlRepositoryPaths,
   })
-  if (!configured || result?.repositoryCount === 0) return null
+  if (!configured) return null
 
-  const available = isAvailableResult(result)
-  const tooltip = available
-    ? t('workspace.gitDiffTooltip', {
-        additions: formatWorkspaceGitDiffExactCount(result.additions),
-        deletions: formatWorkspaceGitDiffExactCount(result.deletions),
-      })
-    : t('workspace.gitDiffUnavailable')
-
-  return (
-    <span
-      className={`inline-flex max-w-[6rem] shrink-0 items-center gap-1 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[10px] leading-none ${available ? 'text-text-secondary' : 'text-text-muted'}`}
-      title={tooltip}
-      aria-label={tooltip}
-      data-workspace-git-diff="true"
-      data-available={available}
-    >
-      {available ? (
-        <>
-          <span style={{ color: 'var(--success)' }}>+{formatWorkspaceGitDiffCount(result.additions)}</span>
-          <span style={{ color: 'var(--danger)' }}>−{formatWorkspaceGitDiffCount(result.deletions)}</span>
-        </>
-      ) : '—'}
-    </span>
-  )
+  return <WorkspaceGitDiffIndicator result={result} />
 }
