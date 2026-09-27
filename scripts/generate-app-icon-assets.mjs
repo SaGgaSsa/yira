@@ -6,10 +6,9 @@ const outDir = 'resources'
 const icoSizes = [16, 32, 48, 64, 128, 256]
 
 const colors = {
-  bg: [16, 20, 24, 255],
-  fg: [244, 247, 248, 255],
-  blue: [93, 168, 255, 255],
-  amber: [255, 178, 63, 255],
+  bg: [13, 13, 13, 255],
+  fg: [237, 237, 237, 255],
+  cyan: [34, 211, 238, 255],
 }
 
 function createCanvas(size) {
@@ -84,57 +83,32 @@ function capsule(x1, y1, x2, y2, width) {
   }
 }
 
-function polygon(points) {
-  return (px, py) => {
-    let inside = false
-    for (let i = 0, j = points.length - 1; i < points.length; j = i, i += 1) {
-      const [xi, yi] = points[i]
-      const [xj, yj] = points[j]
-      const intersects = yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi
-      if (intersects) inside = !inside
-    }
-    return inside
-  }
-}
-
 function union(...predicates) {
   return (px, py) => predicates.some((predicate) => predicate(px, py))
+}
+
+function strokeRect(canvas, x, y, width, height, radius, stroke) {
+  const half = stroke / 2
+  drawShape(canvas, roundedRect(x - half, y - half, width + stroke, height + stroke, radius + half), colors.fg)
+  drawShape(canvas, roundedRect(x + half, y + half, width - stroke, height - stroke, radius - half), colors.bg)
+}
+
+function strokeCircle(canvas, cx, cy, radius, stroke) {
+  drawShape(canvas, circle(cx, cy, radius + stroke / 2), colors.fg)
+  drawShape(canvas, circle(cx, cy, radius - stroke / 2), colors.bg)
 }
 
 function renderIcon(size) {
   const canvas = createCanvas(size)
 
   drawShape(canvas, roundedRect(0, 0, 512, 512, 112), colors.bg)
-  drawShape(canvas, circle(278, 122, 36), colors.fg)
-  drawShape(
-    canvas,
-    union(
-      polygon([
-        [244, 178],
-        [288, 178],
-        [324, 202],
-        [356, 272],
-        [323, 310],
-        [285, 310],
-        [228, 408],
-        [210, 419],
-        [191, 408],
-        [191, 386],
-        [234, 310],
-        [203, 310],
-        [181, 300],
-        [179, 276],
-        [218, 196],
-      ]),
-      capsule(305, 199, 348, 241, 42),
-      capsule(329, 241, 371, 241, 42),
-    ),
-    colors.fg,
-  )
-  drawShape(canvas, roundedRect(306, 222, 112, 76, 14), colors.blue)
-  drawShape(canvas, roundedRect(326, 242, 72, 28, 6), colors.bg)
-  drawShape(canvas, capsule(160, 418, 236, 418, 18), colors.amber)
-  drawShape(canvas, capsule(330, 418, 410, 418, 18), colors.amber)
+  strokeRect(canvas, 108, 108, 176, 296, 26, 22)
+  strokeRect(canvas, 316, 108, 88, 130, 22, 22)
+  strokeRect(canvas, 316, 274, 88, 130, 22, 22)
+  drawShape(canvas, union(capsule(150, 214, 186, 246, 22), capsule(186, 246, 150, 278, 22)), colors.fg)
+  drawShape(canvas, roundedRect(198, 264, 46, 22, 4), colors.cyan)
+  drawShape(canvas, union(capsule(342, 158, 378, 158, 14), capsule(342, 188, 366, 188, 14)), colors.fg)
+  strokeCircle(canvas, 360, 339, 21, 14)
 
   return canvas.data
 }
