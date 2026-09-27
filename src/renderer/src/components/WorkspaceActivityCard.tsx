@@ -13,7 +13,7 @@ export interface WorkspaceActivityCardProps {
 
 function getStatusColor(status: WorkspaceActivityStatus): string {
   switch (status) {
-    case 'active': return 'var(--accent)'
+    case 'active': return 'var(--activity)'
     case 'unread': return 'var(--text-primary)'
     case 'idle': return 'var(--text-secondary)'
   }

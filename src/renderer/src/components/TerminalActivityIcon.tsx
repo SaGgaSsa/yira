@@ -8,9 +8,9 @@ import { useCanvasStore } from '@/store/canvasStore'
 
 const ACTIVITY_STYLES = {
   'needs-input': { Icon: CircleHelp, className: 'text-warning' },
-  working: { Icon: LoaderCircle, className: 'text-accent motion-safe:animate-spin' },
+  working: { Icon: LoaderCircle, className: 'text-activity motion-safe:animate-spin' },
   unread: { Icon: CircleDot, className: 'text-text-display' },
-  output: { Icon: LoaderCircle, className: 'text-accent motion-safe:animate-spin' },
+  output: { Icon: LoaderCircle, className: 'text-activity motion-safe:animate-spin' },
   done: { Icon: CircleCheck, className: 'text-success' },
   idle: { Icon: Terminal, className: 'text-text-disabled' },
 } as const

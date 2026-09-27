@@ -40,6 +40,7 @@
   --success: #4a9e5c;
   --warning: #d4a843;
   --interactive: #5b9bf6;
+  --activity: #22d3ee;
   --bg-primary: var(--black);
   --bg-secondary: var(--surface);
   --bg-tertiary: var(--surface-raised);
@@ -111,6 +112,7 @@
   --text-primary: #1a1a1a;
   --text-display: #000000;
   --interactive: #007aff;
+  --activity: #0891b2;
   --bg-primary: var(--black);
   --bg-secondary: var(--surface);
   --bg-tertiary: var(--surface-raised);

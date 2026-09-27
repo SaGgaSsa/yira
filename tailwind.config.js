@@ -24,6 +24,7 @@ export default {
           DEFAULT: 'var(--accent)',
           subtle: 'var(--accent-subtle)',
         },
+        activity: 'var(--activity)',
         statusbar: {
           bg: 'var(--statusbar-bg)',
           text: 'var(--statusbar-text)',
