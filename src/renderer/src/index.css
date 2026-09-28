@@ -222,6 +222,13 @@ textarea {
   overflow-x: hidden !important;
 }
 
+/* xterm's stylesheet paints the viewport black; let the tile surface show through. */
+html.window-material .xterm,
+html.window-material .xterm .xterm-viewport,
+html.window-material .xterm .xterm-screen {
+  background-color: transparent !important;
+}
+
 .yira-note-editor {
   min-height: 100%;
   background: transparent;
