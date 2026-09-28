@@ -6,7 +6,7 @@
 
 **Titular indicado por el proyecto:** SaGgaSsa
 
-**Contacto público:** [issues de `SaGgaSsa/yira-releases`](https://github.com/SaGgaSsa/yira-releases/issues)
+**Contacto público:** [issues de `SaGgaSsa/yira`](https://github.com/SaGgaSsa/yira/issues)
 
 ## Resultado y decisiones
 

@@ -33,7 +33,7 @@ interface SettingsPanelProps {
   initialSection?: SettingsSectionId
 }
 
-const SUPPORT_REPOSITORY_URL = 'https://github.com/SaGgaSsa/yira-releases'
+const SUPPORT_REPOSITORY_URL = 'https://github.com/SaGgaSsa/yira'
 
 const SETTINGS_SECTIONS: Array<{
   id: SettingsSectionId

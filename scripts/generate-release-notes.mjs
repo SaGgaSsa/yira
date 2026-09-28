@@ -77,7 +77,7 @@ function sentenceCase(text) {
 
 function renderLegalFooter(currentTag) {
   const base = `https://github.com/SaGgaSsa/yira-releases/releases/download/${currentTag}`
-  const issues = 'https://github.com/SaGgaSsa/yira-releases/issues'
+  const issues = 'https://github.com/SaGgaSsa/yira/issues'
   return ['', '---', '', `Legal: [Privacy](${base}/PRIVACY.md) | [Terms](${base}/TERMS.md)`, '', `Report issues: ${issues}`, '']
 }
 
