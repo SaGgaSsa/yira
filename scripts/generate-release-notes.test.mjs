@@ -65,7 +65,7 @@ async function writesCategorizedPublicNotes() {
     assert.doesNotMatch(notes, /release: v0\.1\.1/)
     assert.doesNotMatch(notes, /merge: release notes branch/)
     assert.doesNotMatch(notes, /\b[0-9a-f]{7,40}\b/)
-    assert.doesNotMatch(notes, /github\.com\/SaGgaSsa\/yira\/(?!issues)/)
+    assert.doesNotMatch(notes, /github\.com\/SaGgaSsa\/yira\/(?!issues\s|releases\/download\/v)/)
   })
 }
 
@@ -84,7 +84,7 @@ async function writesMaintenanceFallbackWhenOnlyInternalCommitsExist() {
     assert.match(notes, /^## v0\.1\.1/m)
     assert.match(notes, /Maintenance release with internal updates and packaging work\./)
     assert.doesNotMatch(notes, /\b[0-9a-f]{7,40}\b/)
-    assert.doesNotMatch(notes, /github\.com\/SaGgaSsa\/yira\/(?!issues)/)
+    assert.doesNotMatch(notes, /github\.com\/SaGgaSsa\/yira\/(?!issues\s|releases\/download\/v)/)
   })
 }
 
@@ -101,10 +101,10 @@ async function linksVersionedLegalAssetsAndPublicIssues() {
     const notes = runGenerator(cwd, 'v0.2.1')
 
     assert.match(notes, /^## v0\.2\.1/m)
-    assert.match(notes, /github\.com\/SaGgaSsa\/yira-releases\/releases\/download\/v0\.2\.1\/PRIVACY\.md/)
-    assert.match(notes, /github\.com\/SaGgaSsa\/yira-releases\/releases\/download\/v0\.2\.1\/TERMS\.md/)
+    assert.match(notes, /github\.com\/SaGgaSsa\/yira\/releases\/download\/v0\.2\.1\/PRIVACY\.md/)
+    assert.match(notes, /github\.com\/SaGgaSsa\/yira\/releases\/download\/v0\.2\.1\/TERMS\.md/)
     assert.match(notes, /github\.com\/SaGgaSsa\/yira\/issues/)
-    assert.doesNotMatch(notes, /github\.com\/SaGgaSsa\/yira\/(?!issues)/)
+    assert.doesNotMatch(notes, /github\.com\/SaGgaSsa\/yira\/(?!issues\s|releases\/download\/v)/)
   })
 }
 

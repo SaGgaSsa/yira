@@ -124,6 +124,12 @@
       {
         "provider": "github",
         "owner": "SaGgaSsa",
+        "repo": "yira",
+        "releaseType": "release"
+      },
+      {
+        "provider": "github",
+        "owner": "SaGgaSsa",
         "repo": "yira-releases",
         "releaseType": "release"
       }
