@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, ipcMain, Menu, clipboard, dialog } from 'electron'
+import { app, BrowserWindow, shell, ipcMain, Menu, clipboard, ClipboardItem, dialog } from 'electron'
 import { join } from 'path'
 import { existsSync } from 'fs'
 import { is } from '@electron-toolkit/utils'
@@ -246,16 +246,18 @@ app.whenReady().then(async () => {
   })
 
   ipcMain.handle('clipboard:readText', () => clipboard.readText())
-  ipcMain.handle('clipboard:writeText', (_event, text: string) => {
-    clipboard.writeText(text)
+  ipcMain.handle('clipboard:writeText', async (_event, text: string) => {
+    await clipboard.writeText(text)
   })
-  ipcMain.handle('clipboard:writeRich', (_event, data: unknown) => {
+  ipcMain.handle('clipboard:writeRich', async (_event, data: unknown) => {
     const payload = data && typeof data === 'object' ? data as { text?: unknown; html?: unknown } : {}
     const text = typeof payload.text === 'string' ? payload.text : ''
     const html = typeof payload.html === 'string' ? payload.html : ''
 
     if (!text.trim() && !html.trim()) return
-    clipboard.write({ text, html })
+    const entries: Record<string, string> = { 'text/plain': text }
+    if (html) entries['text/html'] = html
+    await clipboard.write([new ClipboardItem(entries)])
   })
 
   // Suppress Electron's native menu bar so Alt cannot reveal it on Windows.
