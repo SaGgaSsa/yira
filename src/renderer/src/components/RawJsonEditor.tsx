@@ -74,7 +74,7 @@ export function RawJsonEditor({ open, workspaceId, workspaceType, state, onClose
             )}
           </div>
           <button
-            className="inline-flex items-center gap-2 rounded-full border border-text-display bg-text-display px-5 py-3 text-sm text-bg-primary transition-colors hover:opacity-90"
+            className="inline-flex items-center gap-2 rounded-full border border-text-display bg-text-display px-5 py-3 text-sm text-text-inverse transition-colors hover:opacity-90"
             onClick={() => {
               try {
                 const parsed = JSON.parse(value)

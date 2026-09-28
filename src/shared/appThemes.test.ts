@@ -54,8 +54,8 @@ test('translucent tokens add alpha to surfaces and retain borders and text', () 
   assert.equal(dark['--text-primary'], getAppThemeTokens('default')['--text-primary'])
 
   const light = getTranslucentThemeTokens(getAppThemeTokens('default', true), true)
-  assert.equal(light['--surface'], 'rgba(255, 255, 255, 0.72)')
-  assert.equal(light['--black'], 'rgba(245, 245, 245, 0.12)')
+  assert.equal(light['--surface'], 'rgba(255, 255, 255, 0.48)')
+  assert.equal(light['--black'], 'rgba(245, 245, 245, 0.06)')
 })
 
 test('legacy and invalid settings use Default while retaining terminal overrides', () => {

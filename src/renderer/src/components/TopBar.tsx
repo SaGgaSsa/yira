@@ -52,7 +52,7 @@ function SegmentedButton({
     <button
       className={`relative inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
         active
-          ? 'bg-text-primary text-bg-primary'
+          ? 'bg-text-primary text-text-inverse'
           : 'text-text-secondary hover:bg-hover-bg hover:text-text-primary'
       } disabled:cursor-not-allowed disabled:opacity-40`}
       onClick={onClick}
@@ -118,7 +118,7 @@ export function TopBar({
             <button
               className={`relative inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
                 activityOpen
-                  ? 'bg-text-primary text-bg-primary'
+                  ? 'bg-text-primary text-text-inverse'
                   : 'text-text-secondary hover:bg-hover-bg hover:text-text-primary'
               }`}
               onClick={onToggleActivity}

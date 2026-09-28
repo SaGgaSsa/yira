@@ -321,11 +321,7 @@ export function TerminalTileWrapper({
   const tileFontSizePx = useSettingsStore((s) => s.tileFontSizePx)
   const windowBackgroundMaterial = useSettingsStore((s) => s.windowBackgroundMaterial)
   const lightAppearance = useLightAppearance()
-  const terminalThemeId = useSettingsStore((s) => resolveTerminalThemeId(
-    s.terminal.themeId,
-    s.themeId,
-    lightAppearance && windowBackgroundMaterial !== 'none',
-  ))
+  const terminalThemeId = useSettingsStore((s) => resolveTerminalThemeId(s.terminal.themeId, s.themeId, lightAppearance))
   const [runtime, setRuntime] = useState<TerminalRuntime | null>(null)
   const [acquirePending, setAcquirePending] = useState(true)
   const [acquireError, setAcquireError] = useState<string | null>(null)

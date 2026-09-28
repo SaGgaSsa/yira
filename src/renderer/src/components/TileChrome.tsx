@@ -292,7 +292,7 @@ export function TileChrome({
             <button
               className={`flex h-6 w-6 items-center justify-center rounded-full transition-colors shrink-0 ${
                 isInteractionLocked
-                  ? 'bg-text-primary text-bg-primary'
+                  ? 'bg-text-primary text-text-inverse'
                   : 'text-text-secondary hover:bg-hover-bg hover:text-text-display'
               }`}
               onClick={(e) => {

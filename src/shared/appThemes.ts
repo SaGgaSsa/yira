@@ -6,6 +6,7 @@ export type AppThemeId = 'default' | ColorPresetId
 
 const DEFAULT_DARK = {
   '--black': '#000000',
+  '--text-inverse': '#000000',
   '--surface': '#111111',
   '--surface-raised': '#1a1a1a',
   '--surface-panel': '#151515',
@@ -46,6 +47,7 @@ const DEFAULT_DARK = {
 const DEFAULT_LIGHT: typeof DEFAULT_DARK = {
   ...DEFAULT_DARK,
   '--black': '#f5f5f5',
+  '--text-inverse': '#f5f5f5',
   '--surface': '#ffffff',
   '--surface-raised': '#f0f0f0',
   '--surface-panel': '#fafafa',
@@ -80,16 +82,16 @@ function hexToRgba(value: string, alpha: number): string | null {
 
 export function getTranslucentThemeTokens(tokens: AppThemeTokens, light = false): AppThemeTokens {
   const alphaByToken: Record<string, number> = {
-    '--black': light ? 0.12 : 0.08,
-    '--surface': light ? 0.72 : 0.56,
-    '--surface-raised': light ? 0.76 : 0.62,
-    '--surface-panel': light ? 0.74 : 0.58,
-    '--surface-accent': light ? 0.76 : 0.62,
-    '--statusbar-bg': light ? 0.72 : 0.56,
-    '--bg-primary': light ? 0.12 : 0.08,
-    '--bg-secondary': light ? 0.72 : 0.56,
-    '--bg-tertiary': light ? 0.76 : 0.62,
-    '--bg-elevated': light ? 0.74 : 0.58,
+    '--black': light ? 0.06 : 0.08,
+    '--surface': light ? 0.48 : 0.56,
+    '--surface-raised': light ? 0.58 : 0.62,
+    '--surface-panel': light ? 0.52 : 0.58,
+    '--surface-accent': light ? 0.58 : 0.62,
+    '--statusbar-bg': light ? 0.48 : 0.56,
+    '--bg-primary': light ? 0.06 : 0.08,
+    '--bg-secondary': light ? 0.48 : 0.56,
+    '--bg-tertiary': light ? 0.58 : 0.62,
+    '--bg-elevated': light ? 0.52 : 0.58,
   }
   const result: Record<keyof AppThemeTokens, string> = { ...tokens }
   for (const [token, alpha] of Object.entries(alphaByToken)) {
@@ -111,6 +113,7 @@ function createTokens(background: string, surface: string, raised: string, borde
   return {
     ...DEFAULT_DARK,
     '--black': background,
+    '--text-inverse': background,
     '--surface': surface,
     '--surface-raised': raised,
     '--surface-panel': surface,

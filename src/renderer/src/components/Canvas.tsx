@@ -805,7 +805,7 @@ export function Canvas({
                   <button
                     className={`flex h-5 w-5 items-center justify-center rounded-full border transition-colors ${
                       group.locked
-                        ? 'border-transparent bg-text-primary text-bg-primary'
+                        ? 'border-transparent bg-text-primary text-text-inverse'
                         : 'border-border-visible text-text-secondary hover:bg-hover-bg hover:text-text-display'
                     }`}
                     onMouseDown={(event) => event.stopPropagation()}

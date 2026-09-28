@@ -17,6 +17,7 @@ export default {
           muted: 'var(--text-muted)',
           disabled: 'var(--text-disabled)',
           display: 'var(--text-display)',
+          inverse: 'var(--text-inverse)',
         },
         border: {
           DEFAULT: 'var(--border-color)',

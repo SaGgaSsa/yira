@@ -26,6 +26,6 @@ for (const id of ['dracula', 'nord', 'tokyo-night', 'catppuccin-mocha', 'gruvbox
 }
 if (resolveTerminalThemeId('yira-default', 'default') !== 'yira-default') throw new Error('returning to Default must restore the original palette')
 
-if (resolveTerminalThemeId('yira-default', 'default', true) !== 'light') throw new Error('default terminals must follow a light material surface')
+if (resolveTerminalThemeId('yira-default', 'default', true) !== 'light') throw new Error('default terminals must follow light mode')
 if (resolveTerminalThemeId('yira-default', 'nord', true) !== 'nord') throw new Error('presets keep their own palette on a light surface')
 if (resolveTerminalThemeId('high-contrast', 'default', true) !== 'high-contrast') throw new Error('explicit overrides must be preserved on a light surface')

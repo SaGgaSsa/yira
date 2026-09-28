@@ -26,8 +26,7 @@ export function getTerminalContainerBackground(themeId: unknown, translucent = f
 }
 
 // Default terminals follow the application palette; explicit overrides stay intact.
-// `followLight` lets default terminals switch to the light palette, used when a
-// window material makes the terminal share the light application surface.
+// `followLight` switches default terminals to the light palette in light mode.
 export function resolveTerminalThemeId(terminalThemeId: unknown, appThemeId: unknown, followLight = false) {
   const terminalId = normalizeTerminalThemeId(terminalThemeId)
   const appId = normalizeAppThemeId(appThemeId)
