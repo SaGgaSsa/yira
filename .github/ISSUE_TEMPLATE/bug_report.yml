@@ -1,0 +1,73 @@
+name: Bug report
+description: Report a problem in Yira.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: input
+    id: yira-version
+    attributes:
+      label: Yira version
+      description: Enter the version shown by Yira.
+      placeholder: 0.1.82
+    validations:
+      required: true
+  - type: input
+    id: operating-system
+    attributes:
+      label: Operating system and version
+      placeholder: Windows 11 23H2 or Ubuntu 24.04
+    validations:
+      required: true
+  - type: dropdown
+    id: installation-format
+    attributes:
+      label: Installation format
+      options:
+        - Windows NSIS installer
+        - Linux AppImage
+        - Linux .deb
+        - Built from source
+    validations:
+      required: true
+  - type: input
+    id: shell
+    attributes:
+      label: Shell
+      description: Include the shell and version when the issue involves a terminal.
+      placeholder: PowerShell 7.5, bash 5.2, or Not applicable
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction-steps
+    attributes:
+      label: Steps to reproduce
+      description: List the actions that cause the problem.
+      placeholder: |
+        1. Open a workspace.
+        2. Create a tile.
+        3. Observe the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected behavior
+      placeholder: Describe what you expected to happen.
+    validations:
+      required: true
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: Actual behavior
+      placeholder: Describe what happened.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Paste relevant logs from the shell. Remove secrets and personal data.
+      render: shell
+    validations:
+      required: false

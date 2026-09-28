@@ -1,0 +1,38 @@
+name: Feature request
+description: Suggest a change to Yira.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What problem should this change solve?
+      placeholder: Describe the task or limitation you encountered.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: Describe the change you want.
+      placeholder: Explain how the feature should work.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: Describe any alternatives you considered.
+      placeholder: What other approaches could solve the problem?
+    validations:
+      required: false
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Add examples or other information that can help us understand the request.
+      placeholder: Add relevant details.
+    validations:
+      required: false
