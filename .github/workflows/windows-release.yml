@@ -12,7 +12,7 @@ jobs:
     permissions:
       contents: write
     env:
-      GH_TOKEN: ${{ secrets.YIRA_RELEASES_TOKEN }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     steps:
@@ -45,7 +45,7 @@ jobs:
     permissions:
       contents: write
     env:
-      GH_TOKEN: ${{ secrets.YIRA_RELEASES_TOKEN }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     steps:
       - name: Checkout repository
@@ -81,10 +81,8 @@ jobs:
     permissions:
       contents: write
     env:
-      GH_TOKEN: ${{ secrets.YIRA_RELEASES_TOKEN }}
-      # First entry is the primary repository. yira-releases only receives copies
-      # so installs from 0.1.82 or older can update to a build that uses yira.
-      RELEASE_REPOSITORIES: SaGgaSsa/yira SaGgaSsa/yira-releases
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      RELEASE_REPOSITORY: ${{ github.repository }}
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     steps:
       - name: Checkout repository
@@ -100,26 +98,25 @@ jobs:
       - name: Generate release notes
         run: node scripts/generate-release-notes.mjs "${GITHUB_REF_NAME}" > release-notes.md
 
-      - name: Upload legal documents and publish as latest
+      - name: Upload legal documents
+        run: gh release upload "${GITHUB_REF_NAME}" docs/legal/PRIVACY.md docs/legal/TERMS.md --clobber --repo "${RELEASE_REPOSITORY}"
+
+      - name: Publish draft as latest
         shell: bash
         run: |
-          for repository in ${RELEASE_REPOSITORIES}; do
-            gh release upload "${GITHUB_REF_NAME}" docs/legal/PRIVACY.md docs/legal/TERMS.md --clobber --repo "${repository}"
+          release_id="$(
+            gh api "repos/${RELEASE_REPOSITORY}/releases" --paginate \
+              --jq ".[] | select(.tag_name == \"${GITHUB_REF_NAME}\") | .id" \
+              | head -n 1
+          )"
 
-            release_id="$(
-              gh api "repos/${repository}/releases" --paginate \
-                --jq ".[] | select(.tag_name == \"${GITHUB_REF_NAME}\") | .id" \
-                | head -n 1
-            )"
+          if [ -z "$release_id" ]; then
+            echo "Release for ${GITHUB_REF_NAME} not found"
+            exit 1
+          fi
 
-            if [ -z "$release_id" ]; then
-              echo "Release for ${GITHUB_REF_NAME} not found in ${repository}"
-              exit 1
-            fi
-
-            gh api --method PATCH "repos/${repository}/releases/${release_id}" \
-              -F draft=false \
-              -F prerelease=false \
-              -F make_latest=true \
-              -F body=@release-notes.md
-          done
+          gh api --method PATCH "repos/${RELEASE_REPOSITORY}/releases/${release_id}" \
+            -F draft=false \
+            -F prerelease=false \
+            -F make_latest=true \
+            -F body=@release-notes.md
