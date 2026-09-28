@@ -29,6 +29,8 @@ export function buildTerminalHistorySetup(input: TerminalHistorySetupInput): Ter
       env: {
         HISTFILE: join(historyDir, 'bash_history'),
       },
+      // The leading space keeps the setup line out of history when HISTCONTROL ignores spaces.
+      prependCommand: ' shopt -s histappend; PROMPT_COMMAND="history -a${PROMPT_COMMAND:+; $PROMPT_COMMAND}"',
     }
   }
 

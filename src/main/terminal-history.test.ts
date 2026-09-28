@@ -9,7 +9,8 @@ const bash = buildTerminalHistorySetup({
 })
 if (!bash) throw new Error('bash must receive workspace history setup')
 if (bash.env.HISTFILE !== join('/tmp/yira/workspaces/ws-alpha', '.yira', 'terminal-history', 'bash_history')) throw new Error('bash HISTFILE must use workspace-scoped path')
-if (bash.prependCommand) throw new Error('bash setup must not prepend commands')
+if (!bash.prependCommand?.includes('history -a')) throw new Error('bash setup must save history after each command')
+if (!bash.prependCommand.includes('shopt -s histappend')) throw new Error('bash setup must append to the history file')
 
 const zsh = buildTerminalHistorySetup({
   shellProfileId: 'zsh',
