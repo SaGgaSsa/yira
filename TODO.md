@@ -1,3 +1,0 @@
-- timer
-- notificaciones
-- files
