@@ -35,7 +35,7 @@ test('configures the Linux after-pack hook and Debian installer script', async (
   assert.equal(packageJson.build.deb.afterInstall, 'build/linux/deb-after-install.sh')
   assert.equal(packageJson.build.linux.icon, 'resources/icon.png')
   assert.deepEqual(packageJson.build.linux.desktop, {
-    StartupWMClass: 'Yira',
+    entry: { StartupWMClass: 'Yira' },
   })
   assert.deepEqual(packageJson.build.appImage.executableArgs, ['--no-first-run'])
 

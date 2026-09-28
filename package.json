@@ -142,7 +142,9 @@
     "linux": {
       "icon": "resources/icon.png",
       "desktop": {
-        "StartupWMClass": "Yira"
+        "entry": {
+          "StartupWMClass": "Yira"
+        }
       },
       "target": [
         {
