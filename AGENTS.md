@@ -1,23 +1,32 @@
-# Repository Guidelines
+# Contribution Guide
 
-## Project Structure & Module Organization
-`src/main/` contains the Electron main process, IPC handlers, shell profile detection, and filesystem-backed workspace logic. `src/preload/` exposes the safe bridge used by the renderer. `src/renderer/` holds the Vite React app; most UI code lives under `src/renderer/src/` with `components/`, `hooks/`, and `store/` subfolders. Shared TypeScript contracts live in `src/shared/types.ts`. Build resources such as the Windows icon belong in `resources/`. Generated output goes to `dist-electron/` and packaged installers go to `release/`; do not edit generated files directly.
+## Project structure
 
-## Build, Test, and Development Commands
-Codex runs through SSH without access to a graphical interface. Do not run `npm run dev` or `npm run preview` for visual verification. Do not attempt to set up a graphical session or browser for visual tests. On Linux, `npm run build` and `npm run dist:linux` are allowed when the affected release flow needs them. Do not run `npm run dist:win`; produce Windows installers in Windows CI.
+- `src/main/` contains the Electron main process, IPC handlers, shell profile detection, and filesystem-backed workspace logic.
+- `src/preload/` exposes the safe bridge used by the renderer.
+- `src/renderer/` contains the Vite React application. Most UI code is under `src/renderer/src/`, with `components/`, `hooks/`, and `store/` subfolders.
+- `src/shared/types.ts` contains contracts shared across processes.
+- `src/mcp/` contains the Board MCP server.
+- `resources/` contains build resources such as the Windows icon.
+- `docs/CONTEXT.md` is the domain glossary.
+- `dist-electron/` and `dist/` are generated output. `release/` contains packaged installers. Do not edit generated files directly.
 
-## Coding Style & Naming Conventions
-This project uses strict TypeScript and ES modules. Follow the existing style: 2-space indentation, semicolon-free statements, single quotes, and trailing commas where TypeScript emits them naturally. Use `PascalCase` for React components, `camelCase` for hooks, store actions, and utility functions, and keep IPC channels grouped by feature under `src/main/ipc/`. Prefer typed imports from `@shared/*` for contracts reused across processes. Tailwind classes should reference the CSS variable-based theme tokens already defined in `tailwind.config.js`.
+## Development and verification
 
-## Testing Guidelines
-Run `npx tsc --noEmit` locally before every push or release; it is the required strict TypeScript check. Run `npm test` when the affected feature has automated coverage, then run the relevant build or Linux packaging validation in proportion to the change. Limit verification to code review and checks that run through the console without a graphical interface. Do not require manual UI verification, screenshots, or screen recordings. If a behavior cannot be verified with these checks, report the limitation without blocking completion or asking the user to perform visual tests. Place new tests beside the feature as `*.test.ts` or `*.test.tsx`.
+Use the scripts in `package.json` for development, builds, tests, and packaging. Automated checks run through the console. Run `npx tsc --noEmit` before every push or release. Run `npm test` when the changed feature has automated coverage. Run the relevant build or Linux packaging validation for the change. Do not run `npm run dist:win` locally. Produce Windows installers in Windows CI.
 
-## Commit & Pull Request Guidelines
-No top-level Git history is available in this workspace, so use concise Conventional Commit-style messages such as `feat: add workspace switcher` or `fix: persist terminal layout`. PRs should include a short summary, the user-visible impact, console verification commands and results, and any verification limitations.
+Pull requests must report the verification commands and results. Report any verification limits.
 
-Release patch notes are generated from commit subjects between tags. Commits that should appear publicly should use clear `feat:`, `fix:`, `perf:`, or `refactor:` subjects. Keep private implementation details, private links, SHAs, and file paths out of commit subjects when they should not appear in public release notes.
+## Code style
 
-## Security & Configuration Tips
-Keep Node access in the renderer disabled and route privileged work through preload and IPC only. Do not commit local workspace data, generated bundles, or machine-specific shell settings.
+Use strict TypeScript and ES modules. Follow the existing style: 2-space indentation, semicolon-free statements, single quotes, and trailing commas where TypeScript emits them naturally. Use `PascalCase` for React components. Use `camelCase` for hooks, store actions, and utility functions. Group IPC channels by feature under `src/main/ipc/`. Prefer typed imports from `@shared/*` for contracts reused across processes. Use the CSS variable-based theme tokens in Tailwind classes.
 
-Usa español técnico simplificado estilo ASD-STE100: instrucciones directas, frases cortas, una acción por frase, términos consistentes y lenguaje literal; evita ambigüedad, redundancia y variaciones innecesarias de vocabulario.
+## Commits and release notes
+
+Use concise Conventional Commit messages, such as `feat: add workspace switcher` or `fix: persist terminal layout`. Release notes are generated from commit subjects between tags. Use clear `feat:`, `fix:`, `perf:`, or `refactor:` subjects for public changes. Keep private implementation details, private links, SHAs, and file paths out of commit subjects when they should not appear in public release notes.
+
+Pull requests should include a short summary, user-visible impact, console verification commands and results, and verification limits.
+
+## Security
+
+Keep Node access disabled in the renderer. Route privileged work through preload and IPC. Do not commit local workspace data, generated bundles, or machine-specific shell settings.

@@ -4,7 +4,6 @@ dist-electron/
 release/
 .vite/
 *.log
-.codex/*
-!.codex/config.toml
+.codex/
 .superpowers/
 .worktrees/
