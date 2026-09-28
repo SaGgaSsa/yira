@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
-import { access, mkdir, writeFile } from 'node:fs/promises'
-import { homedir } from 'node:os'
+import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { homedir, tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -159,7 +159,12 @@ export function getDefaultDevDataDirectory(homeDirectory = homedir()) {
   return join(homeDirectory, DEV_DATA_DIRECTORY_NAME)
 }
 
-export async function createDevDataDirectory(env) {
+export async function createDevDataDirectory(env, { temporary = false } = {}) {
+  // Test runs get a throwaway profile so they never touch ~/.yira or ~/.yira-dev.
+  if (temporary) {
+    const dataDirectory = await mkdtemp(join(tmpdir(), 'yira-test-profile-'))
+    return { dataDirectory, temporary: true }
+  }
   const configuredDirectory = env.YIRA_DEV_DATA_DIR?.trim()
   const dataDirectory = configuredDirectory
     ? resolve(configuredDirectory)
@@ -222,7 +227,7 @@ export async function seedDevDataDirectory(dataDirectory, platform = process.pla
 }
 
 async function runDevServer() {
-  const workspace = await createDevDataDirectory(process.env)
+  const workspace = await createDevDataDirectory(process.env, { temporary: process.argv.includes('--temp') })
   const seeded = await seedDevDataDirectory(workspace.dataDirectory)
   // Windows .cmd shims need a shell with Node 22.
   const isWindows = process.platform === 'win32'
@@ -244,11 +249,14 @@ async function runDevServer() {
     throw error
   })
 
-  child.once('close', (code) => {
+  child.once('close', async (code) => {
     process.exitCode = code ?? 1
+    if (workspace.temporary && !process.env.YIRA_KEEP_TEST_PROFILE) {
+      await rm(workspace.dataDirectory, { recursive: true, force: true, maxRetries: 5 }).catch(() => undefined)
+    }
   })
 
-  console.log(`[dev] Using isolated data directory: ${workspace.dataDirectory}`)
+  console.log(`[dev] Using ${workspace.temporary ? 'temporary test' : 'isolated'} data directory: ${workspace.dataDirectory}`)
   if (seeded) console.log('[dev] Created example workspaces for the development profile.')
 }
 

@@ -29,6 +29,18 @@ test('uses an explicitly requested development data directory without treating i
   }
 })
 
+test('creates a fresh temporary test profile outside the user and dev profiles', async () => {
+  const { dataDirectory, temporary } = await createDevDataDirectory({ YIRA_DEV_DATA_DIR: '/ignored' }, { temporary: true })
+
+  try {
+    assert.equal(temporary, true)
+    assert.ok(dataDirectory.startsWith(join(tmpdir(), 'yira-test-profile-')))
+    assert.ok((await stat(dataDirectory)).isDirectory())
+  } finally {
+    await rm(dataDirectory, { recursive: true, force: true })
+  }
+})
+
 test('seeds persistent development data once with three example workspaces', async () => {
   const dataDirectory = await mkdtemp(join(tmpdir(), 'yira-dev-seed-'))
   const configPath = join(dataDirectory, 'config.json')

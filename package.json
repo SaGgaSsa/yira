@@ -20,6 +20,7 @@
   "scripts": {
     "test": "node scripts/run-tests.mjs",
     "dev": "node ./scripts/dev-workspace.mjs",
+    "dev:test": "node ./scripts/dev-workspace.mjs --temp",
     "build:main": "node ./scripts/electron-vite-build.mjs main",
     "build:preload": "node ./scripts/electron-vite-build.mjs preload",
     "build:renderer": "node ./scripts/electron-vite-build.mjs renderer",
