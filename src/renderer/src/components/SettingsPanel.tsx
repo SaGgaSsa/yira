@@ -324,23 +324,29 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
               </button>
             ))}
           </div>
-          <label className="mt-5 block rounded-[20px] border border-border-visible bg-bg-secondary px-4 py-4">
-            <span className="nd-label text-text-display">{t('settings.windowBackgroundEffect')}</span>
-            <select
-              className="mt-3 w-full rounded-xl border border-border-visible bg-bg-tertiary px-3 py-2 text-text-display disabled:cursor-not-allowed disabled:opacity-50"
-              value={draft.windowBackgroundMaterial}
-              disabled={!backgroundMaterialSupported}
-              onChange={(event) => setDraft((current) => ({
-                ...current,
-                windowBackgroundMaterial: event.target.value as UserSettings['windowBackgroundMaterial'],
-              }))}
-            >
-              <option value="none">{t('settings.windowBackgroundNone')}</option>
-              <option value="mica">{t('settings.windowBackgroundMica')}</option>
-              <option value="acrylic">{t('settings.windowBackgroundAcrylic')}</option>
-            </select>
-            {!backgroundMaterialSupported && <p className="mt-2 text-sm text-text-secondary">{t('settings.requiresWindows11')}</p>}
-          </label>
+          <div className="mt-5 rounded-[20px] border border-border-visible bg-bg-secondary px-4 py-4">
+            <div className="nd-label text-text-display">{t('settings.windowBackgroundEffect')}</div>
+            {!backgroundMaterialSupported && <p className="mt-1 text-sm text-text-secondary">{t('settings.requiresWindows11')}</p>}
+            <div className="mt-4 grid grid-cols-3 gap-3">
+              {([
+                { value: 'none' as const, label: t('settings.windowBackgroundNone') },
+                { value: 'mica' as const, label: t('settings.windowBackgroundMica') },
+                { value: 'acrylic' as const, label: t('settings.windowBackgroundAcrylic') },
+              ]).map(({ value, label }) => (
+                <button
+                  key={value}
+                  className={`rounded-full border px-4 py-3 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                    draft.windowBackgroundMaterial === value ? 'border-text-display bg-bg-tertiary text-text-display' : 'border-border text-text-secondary'
+                  }`}
+                  disabled={!backgroundMaterialSupported}
+                  aria-pressed={draft.windowBackgroundMaterial === value}
+                  onClick={() => setDraft((current) => ({ ...current, windowBackgroundMaterial: value }))}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="mt-5 rounded-[20px] border border-border-visible bg-bg-secondary px-4 py-4">
             <div className="nd-label text-text-display">{t('settings.language')}</div>
             <p className="mt-1 text-sm text-text-secondary">{t('settings.languageDescription')}</p>
