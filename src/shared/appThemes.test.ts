@@ -31,6 +31,21 @@ test('the catalog contains Default and five complete shared palettes', () => {
   }
 })
 
+test('every app theme defines the CSS variables referenced by Tailwind colors', () => {
+  const config = readFileSync(new URL('../../tailwind.config.js', import.meta.url), 'utf8')
+  const colors = config.slice(config.indexOf('colors: {'), config.indexOf('fontFamily:'))
+  const variables = [...colors.matchAll(/var\((--[\w-]+)\)/g)].map(([, variable]) => variable)
+  const themes = [
+    getAppThemeTokens('default'),
+    getAppThemeTokens('default', true),
+    ...APP_THEMES.filter(({ id }) => id !== 'default').map(({ tokens }) => tokens),
+  ]
+
+  for (const tokens of themes) {
+    for (const variable of variables) assert.ok(variable in tokens, `${variable} is missing`)
+  }
+})
+
 test('translucent tokens add alpha to surfaces and retain borders and text', () => {
   const dark = getTranslucentThemeTokens(getAppThemeTokens('default'))
   assert.equal(dark['--black'], 'rgba(0, 0, 0, 0.08)')

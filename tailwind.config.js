@@ -7,24 +7,30 @@ export default {
       colors: {
         bg: {
           primary: 'var(--bg-primary)',
-          secondary: 'var(--bg-secondary)',
-          tertiary: 'var(--bg-tertiary)',
+          secondary: 'color-mix(in srgb, var(--bg-secondary) calc(<alpha-value> * 100%), transparent)',
+          tertiary: 'color-mix(in srgb, var(--bg-tertiary) calc(<alpha-value> * 100%), transparent)',
           elevated: 'var(--bg-elevated)',
         },
         text: {
           primary: 'var(--text-primary)',
           secondary: 'var(--text-secondary)',
           muted: 'var(--text-muted)',
+          disabled: 'var(--text-disabled)',
+          display: 'var(--text-display)',
         },
         border: {
           DEFAULT: 'var(--border-color)',
           subtle: 'var(--border-subtle)',
+          visible: 'var(--border-visible)',
         },
         accent: {
           DEFAULT: 'var(--accent)',
           subtle: 'var(--accent-subtle)',
         },
         activity: 'var(--activity)',
+        success: 'var(--success)',
+        warning: 'var(--warning)',
+        interactive: 'var(--interactive)',
         statusbar: {
           bg: 'var(--statusbar-bg)',
           text: 'var(--statusbar-text)',
@@ -36,7 +42,7 @@ export default {
           bg: 'var(--active-bg)',
         },
         danger: {
-          DEFAULT: 'var(--danger)',
+          DEFAULT: 'color-mix(in srgb, var(--danger) calc(<alpha-value> * 100%), transparent)',
           hover: 'var(--danger-hover)',
         },
         shadow: 'var(--shadow)',
