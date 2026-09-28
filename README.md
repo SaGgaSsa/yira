@@ -5,7 +5,7 @@ A terminal-centered workspace for devtools, notes, browser context, files, and w
 ![Yira screenshot](./docs/assets/yira.png)
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
-[![Latest release](https://img.shields.io/github/v/release/SaGgaSsa/yira-releases)](https://github.com/SaGgaSsa/yira-releases/releases/latest)
+[![Latest release](https://img.shields.io/github/v/release/SaGgaSsa/yira)](https://github.com/SaGgaSsa/yira/releases/latest)
 ![Platforms: Windows and Linux](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux-informational)
 
 ## What is Yira
@@ -23,7 +23,12 @@ Yira is a desktop app that keeps the model small: a workspace owns the flow, til
 
 ## Download
 
-Download Yira from the [project website](https://yira-site.vercel.app) or open the [latest release](https://github.com/SaGgaSsa/yira-releases/releases/latest).
+Download the latest build from [GitHub Releases](https://github.com/SaGgaSsa/yira/releases/latest):
+
+- **Windows:** `Yira-Setup-<version>-x64.exe`
+- **Linux:** `Yira-<version>-amd64.deb` (recommended) or `Yira-<version>-x86_64.AppImage`
+
+Installed builds update automatically from GitHub Releases.
 
 ## Installation
 

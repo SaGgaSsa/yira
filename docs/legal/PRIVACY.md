@@ -18,7 +18,7 @@ Update diagnostics are local log records. They are enabled by default for new or
 
 ## Network connections
 
-Installed, packaged builds check for updates after startup. The updater uses GitHub Releases for `SaGgaSsa/yira-releases`, downloads available update assets automatically, and can install them when Yira quits. Yira does not send update diagnostics to SaGgaSsa. Update diagnostics are stored in local log files. GitHub receives the requests needed to provide release metadata and files and may process IP address, device information, and request time under its own policies. See [GitHub's General Privacy Statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement).
+Installed, packaged builds check for updates after startup. The updater uses GitHub Releases for `SaGgaSsa/yira` (versions up to 0.1.82 use `SaGgaSsa/yira-releases`), downloads available update assets automatically, and can install them when Yira quits. Yira does not send update diagnostics to SaGgaSsa. Update diagnostics are stored in local log files. GitHub receives the requests needed to provide release metadata and files and may process IP address, device information, and request time under its own policies. See [GitHub's General Privacy Statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement).
 
 If a workspace is configured for Codex, Yira starts the local Codex app server and asks it for provider rate-limit data about once per minute. The Codex app server may contact the provider. The provider controls its network activity and data processing. Claude usage data is read from local provider state when available.
 
