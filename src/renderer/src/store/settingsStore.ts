@@ -37,6 +37,7 @@ export function createUserSettingsDraft(settings: UserSettings): UserSettings {
     language: settings.language,
     themeId: settings.themeId,
     appearance: settings.appearance,
+    windowBackgroundMaterial: settings.windowBackgroundMaterial,
     interfaceFontSizePx: settings.interfaceFontSizePx,
     tileFontSizePx: settings.tileFontSizePx,
     showGrid: settings.showGrid,
@@ -62,6 +63,7 @@ function scheduleSave() {
       language: state.language,
       themeId: state.themeId,
       appearance: state.appearance,
+      windowBackgroundMaterial: state.windowBackgroundMaterial,
       interfaceFontSizePx: state.interfaceFontSizePx,
       tileFontSizePx: state.tileFontSizePx,
       showGrid: state.showGrid,
@@ -199,6 +201,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     })
     await i18n.changeLanguage(normalized.language)
     void window.electron.terminal.setAgentAlertsEnabled(normalized.terminal.agentAlertsEnabled)
+    void window.electron.window.setBackgroundMaterial(normalized.windowBackgroundMaterial)
   },
 
   loadSettings: async () => {
@@ -210,6 +213,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           language: normalized.language,
           themeId: normalized.themeId,
           appearance: normalized.appearance,
+          windowBackgroundMaterial: normalized.windowBackgroundMaterial,
           interfaceFontSizePx: normalized.interfaceFontSizePx,
           tileFontSizePx: normalized.tileFontSizePx,
           showGrid: normalized.showGrid,
@@ -240,6 +244,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           loaded: true,
         })
         void window.electron.terminal.setAgentAlertsEnabled(normalized.terminal.agentAlertsEnabled)
+        void window.electron.window.setBackgroundMaterial(normalized.windowBackgroundMaterial)
       } else {
         set({ loaded: true })
       }
@@ -255,6 +260,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       language: state.language,
       themeId: state.themeId,
       appearance: state.appearance,
+      windowBackgroundMaterial: state.windowBackgroundMaterial,
       interfaceFontSizePx: state.interfaceFontSizePx,
       tileFontSizePx: state.tileFontSizePx,
       showGrid: state.showGrid,

@@ -8,6 +8,7 @@ import type { UserSettings } from '@shared/types'
 import { normalizeUserSettings } from '@shared/userSettings'
 import { resolveSupportedLanguage } from '@shared/language'
 import { installClaudeHookConfiguration, installCodexHookConfiguration, uninstallClaudeHookConfiguration, uninstallCodexHookConfiguration, type AgentHookProvider } from '../agentHookConfiguration'
+import { supportsBackgroundMaterial } from '../windowMaterial'
 
 const SETTINGS_PATH = join(YIRA_HOME, 'settings.json')
 
@@ -59,7 +60,8 @@ export async function loadStoredUserSettings(): Promise<UserSettings | null> {
       parsed.language !== normalized.language ||
       parsed.themeId !== normalized.themeId ||
       typeof parsed?.terminal?.agentAlertsEnabled !== 'boolean' ||
-      parsed?.terminal?.themeId !== normalized.terminal.themeId
+      parsed?.terminal?.themeId !== normalized.terminal.themeId ||
+      parsed.windowBackgroundMaterial !== normalized.windowBackgroundMaterial
     ) {
       await fs.writeFile(SETTINGS_PATH, JSON.stringify(normalized, null, 2))
     }
@@ -78,7 +80,9 @@ export async function loadStoredUserSettings(): Promise<UserSettings | null> {
 
 export function registerSettingsIPC(): void {
   ipcMain.handle('settings:load', async (): Promise<UserSettings | null> => {
-    return loadStoredUserSettings()
+    const settings = await loadStoredUserSettings()
+    if (!settings || supportsBackgroundMaterial()) return settings
+    return { ...settings, windowBackgroundMaterial: 'none' }
   })
 
   ipcMain.handle('settings:save', async (_, settings: UserSettings): Promise<void> => {

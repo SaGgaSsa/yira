@@ -55,6 +55,7 @@ export interface TerminalRuntimeViewOptions {
   autoFocus: boolean
   fontSize: number
   themeId: TerminalThemeId
+  translucent?: boolean
   notificationsMuted: boolean
   workspaceRootPath: string
   onFocus: () => void
@@ -193,7 +194,7 @@ function applyTerminalOptions(
   options: TerminalRuntimeViewOptions,
 ): void {
   terminal.options.fontSize = options.fontSize
-  terminal.options.theme = getXtermTheme(options.themeId)
+  terminal.options.theme = getXtermTheme(options.themeId, options.translucent === true)
   setRuntimeRootPadding(runtimeRoot, options.edgeToEdge)
 }
 
@@ -404,13 +405,16 @@ function createRuntime(
 
   const applyChangedViewOptions = (previous: TerminalRuntimeViewOptions, next: TerminalRuntimeViewOptions): void => {
     if (previous.fontSize !== next.fontSize) terminal.options.fontSize = next.fontSize
-    if (previous.themeId !== next.themeId) terminal.options.theme = getXtermTheme(next.themeId)
+    if (previous.themeId !== next.themeId || previous.translucent !== next.translucent) {
+      terminal.options.theme = getXtermTheme(next.themeId, next.translucent === true)
+    }
     if (previous.edgeToEdge !== next.edgeToEdge) setRuntimeRootPadding(runtimeRoot, next.edgeToEdge)
   }
 
   const hasVisualChange = (previous: TerminalRuntimeViewOptions, next: TerminalRuntimeViewOptions): boolean => (
     previous.fontSize !== next.fontSize
     || previous.themeId !== next.themeId
+    || previous.translucent !== next.translucent
     || previous.edgeToEdge !== next.edgeToEdge
   )
 
@@ -851,7 +855,7 @@ function createRuntime(
 
     const fontChanged = previous.fontSize !== next.fontSize
     const edgeChanged = previous.edgeToEdge !== next.edgeToEdge
-    const themeChanged = previous.themeId !== next.themeId
+    const themeChanged = previous.themeId !== next.themeId || previous.translucent !== next.translucent
     const autoFocusGained = next.autoFocus && !previous.autoFocus
     currentViewOptions = next
     applyChangedViewOptions(previous, next)

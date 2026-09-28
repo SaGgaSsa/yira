@@ -1,11 +1,14 @@
-import { getAppThemeTokens, normalizeAppThemeId } from '@shared/appThemes'
-import { BrowserWindow, ipcMain } from 'electron'
+import { getAppThemeTokens, normalizeAppThemeId, type AppThemeId } from '@shared/appThemes'
+import { BrowserWindow, ipcMain, nativeTheme } from 'electron'
 import type { WindowClosePreparationResponse } from '@shared/types'
 import {
   WindowBridgeRequestBroker,
   type RendererRequestTarget,
   type WindowPreparationPhase,
 } from '../windowBridgeRequestBroker'
+import { getWindowBackgroundMaterial, setWindowBackgroundMaterial, supportsBackgroundMaterial } from '../windowMaterial'
+
+type TitleBarTheme = 'dark' | 'light' | AppThemeId
 
 const FALLBACK_WINDOW_TITLE = 'Yira'
 const TITLE_BAR_OVERLAY_COLORS = {
@@ -50,6 +53,21 @@ export function registerWindowIPC(getMainWindow: () => BrowserWindow | null): Wi
     nativeWindow.setTitle(normalizeWindowTitle(title))
   })
 
+  let titleBarTheme: TitleBarTheme = 'dark'
+  const applyTitleBarTheme = (nativeWindow: BrowserWindow) => {
+    const material = getWindowBackgroundMaterial()
+    nativeTheme.themeSource = material === 'none' ? 'system' : titleBarTheme === 'light' ? 'light' : 'dark'
+    const tokens = getAppThemeTokens(titleBarTheme)
+    const colors = titleBarTheme === 'dark' || titleBarTheme === 'light'
+      ? TITLE_BAR_OVERLAY_COLORS[titleBarTheme]
+      : { color: tokens['--surface'], symbolColor: tokens['--text-display'] }
+    nativeWindow.setTitleBarOverlay({
+      ...colors,
+      ...(material !== 'none' ? { color: '#00000000' } : {}),
+      height: 36,
+    })
+  }
+
   ipcMain.handle('window:setTitleBarOverlayTheme', (event, theme: unknown): void => {
     if (theme !== 'dark' && theme !== 'light' && theme !== 'default' && normalizeAppThemeId(theme) === 'default') return
     if (process.platform !== 'win32' && process.platform !== 'linux') return
@@ -58,14 +76,17 @@ export function registerWindowIPC(getMainWindow: () => BrowserWindow | null): Wi
     if (!nativeWindow || nativeWindow.isDestroyed()) return
     if (nativeWindow !== getMainWindow()) return
 
-    const tokens = getAppThemeTokens(theme)
-    const colors = theme === 'dark' || theme === 'light'
-      ? TITLE_BAR_OVERLAY_COLORS[theme]
-      : { color: tokens['--surface'], symbolColor: tokens['--text-display'] }
-    nativeWindow.setTitleBarOverlay({
-      ...colors,
-      height: 36,
-    })
+    titleBarTheme = theme as TitleBarTheme
+    applyTitleBarTheme(nativeWindow)
+  })
+
+  ipcMain.handle('window:getBackgroundMaterialSupport', (): boolean => supportsBackgroundMaterial())
+  ipcMain.handle('window:setBackgroundMaterial', (_event, material: unknown): void => {
+    if (material !== 'none' && material !== 'mica' && material !== 'acrylic') return
+    if (material === getWindowBackgroundMaterial()) return
+    setWindowBackgroundMaterial(material)
+    const mainWindow = getMainWindow()
+    if (mainWindow && !mainWindow.isDestroyed() && process.platform === 'win32') applyTitleBarTheme(mainWindow)
   })
 
   ipcMain.on('window:closePreparationResponse', (event, response: unknown) => {

@@ -112,6 +112,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [supportLinkFailed, setSupportLinkFailed] = useState(false)
+  const [backgroundMaterialSupported, setBackgroundMaterialSupported] = useState(false)
   const [legalDocument, setLegalDocument] = useState<LegalDocumentId | null>(null)
   const privacyDocumentButtonRef = useRef<HTMLButtonElement | null>(null)
   const termsDocumentButtonRef = useRef<HTMLButtonElement | null>(null)
@@ -200,6 +201,9 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
     setSupportLinkFailed(false)
     setLegalDocument(null)
     restoreLegalDocumentFocusRef.current = null
+    void window.electron.window.getBackgroundMaterialSupport()
+      .then(setBackgroundMaterialSupported)
+      .catch(() => setBackgroundMaterialSupported(false))
   }, [initialSection, open])
 
   useEffect(() => {
@@ -320,6 +324,23 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
               </button>
             ))}
           </div>
+          <label className="mt-5 block rounded-[20px] border border-border-visible bg-bg-secondary px-4 py-4">
+            <span className="nd-label text-text-display">{t('settings.windowBackgroundEffect')}</span>
+            <select
+              className="mt-3 w-full rounded-xl border border-border-visible bg-bg-tertiary px-3 py-2 text-text-display disabled:cursor-not-allowed disabled:opacity-50"
+              value={draft.windowBackgroundMaterial}
+              disabled={!backgroundMaterialSupported}
+              onChange={(event) => setDraft((current) => ({
+                ...current,
+                windowBackgroundMaterial: event.target.value as UserSettings['windowBackgroundMaterial'],
+              }))}
+            >
+              <option value="none">{t('settings.windowBackgroundNone')}</option>
+              <option value="mica">{t('settings.windowBackgroundMica')}</option>
+              <option value="acrylic">{t('settings.windowBackgroundAcrylic')}</option>
+            </select>
+            {!backgroundMaterialSupported && <p className="mt-2 text-sm text-text-secondary">{t('settings.requiresWindows11')}</p>}
+          </label>
           <div className="mt-5 rounded-[20px] border border-border-visible bg-bg-secondary px-4 py-4">
             <div className="nd-label text-text-display">{t('settings.language')}</div>
             <p className="mt-1 text-sm text-text-secondary">{t('settings.languageDescription')}</p>

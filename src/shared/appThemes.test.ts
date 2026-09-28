@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { APP_THEMES, COLOR_PRESETS, getAppThemeTokens, normalizeAppThemeId } from './appThemes'
+import { APP_THEMES, COLOR_PRESETS, getAppThemeTokens, getTranslucentThemeTokens, normalizeAppThemeId } from './appThemes'
 import { getTerminalTheme } from './terminalThemes'
 import { normalizeUserSettings } from './userSettings'
 
@@ -29,6 +29,18 @@ test('the catalog contains Default and five complete shared palettes', () => {
     assert.equal(Object.keys(terminal).length, 21)
     for (const color of Object.values(terminal)) assert.match(color, /^#[\da-f]{6}([\da-f]{2})?$/i)
   }
+})
+
+test('translucent tokens add alpha to surfaces and retain borders and text', () => {
+  const dark = getTranslucentThemeTokens(getAppThemeTokens('default'))
+  assert.equal(dark['--black'], 'rgba(0, 0, 0, 0.08)')
+  assert.equal(dark['--surface'], 'rgba(17, 17, 17, 0.56)')
+  assert.equal(dark['--border'], getAppThemeTokens('default')['--border'])
+  assert.equal(dark['--text-primary'], getAppThemeTokens('default')['--text-primary'])
+
+  const light = getTranslucentThemeTokens(getAppThemeTokens('default', true), true)
+  assert.equal(light['--surface'], 'rgba(255, 255, 255, 0.72)')
+  assert.equal(light['--black'], 'rgba(245, 245, 245, 0.12)')
 })
 
 test('legacy and invalid settings use Default while retaining terminal overrides', () => {

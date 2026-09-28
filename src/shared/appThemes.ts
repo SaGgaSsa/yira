@@ -66,6 +66,37 @@ const DEFAULT_LIGHT: typeof DEFAULT_DARK = {
 
 export type AppThemeTokens = typeof DEFAULT_DARK
 
+function hexToRgba(value: string, alpha: number): string | null {
+  const match = /^#([\da-f]{6})$/i.exec(value)
+  if (!match) return null
+  const hex = match[1]
+  const red = Number.parseInt(hex.slice(0, 2), 16)
+  const green = Number.parseInt(hex.slice(2, 4), 16)
+  const blue = Number.parseInt(hex.slice(4, 6), 16)
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`
+}
+
+export function getTranslucentThemeTokens(tokens: AppThemeTokens, light = false): AppThemeTokens {
+  const alphaByToken: Record<string, number> = {
+    '--black': light ? 0.12 : 0.08,
+    '--surface': light ? 0.72 : 0.56,
+    '--surface-raised': light ? 0.76 : 0.62,
+    '--surface-panel': light ? 0.74 : 0.58,
+    '--surface-accent': light ? 0.76 : 0.62,
+    '--statusbar-bg': light ? 0.72 : 0.56,
+    '--bg-primary': light ? 0.12 : 0.08,
+    '--bg-secondary': light ? 0.72 : 0.56,
+    '--bg-tertiary': light ? 0.76 : 0.62,
+    '--bg-elevated': light ? 0.74 : 0.58,
+  }
+  const result: Record<keyof AppThemeTokens, string> = { ...tokens }
+  for (const [token, alpha] of Object.entries(alphaByToken)) {
+    const color = tokens[token as keyof AppThemeTokens]
+    if (!color.startsWith('var(')) result[token as keyof AppThemeTokens] = hexToRgba(color, alpha) ?? color
+  }
+  return result as AppThemeTokens
+}
+
 interface ColorPreset {
   id: ColorPresetId
   label: string

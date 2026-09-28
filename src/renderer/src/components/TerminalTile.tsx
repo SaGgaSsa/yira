@@ -318,6 +318,7 @@ export function TerminalTileWrapper({
   const attentionEnabledRef = useRef(attentionEnabled)
   const tileFontSizePx = useSettingsStore((s) => s.tileFontSizePx)
   const terminalThemeId = useSettingsStore((s) => resolveTerminalThemeId(s.terminal.themeId, s.themeId))
+  const windowBackgroundMaterial = useSettingsStore((s) => s.windowBackgroundMaterial)
   const [runtime, setRuntime] = useState<TerminalRuntime | null>(null)
   const [acquirePending, setAcquirePending] = useState(true)
   const [acquireError, setAcquireError] = useState<string | null>(null)
@@ -375,6 +376,7 @@ export function TerminalTileWrapper({
     autoFocus,
     fontSize: tileFontSizePx,
     themeId: terminalThemeId,
+    translucent: windowBackgroundMaterial !== 'none',
     notificationsMuted: tile.notificationsMuted === true,
     workspaceRootPath,
     onFocus: runtimeOnFocus,
@@ -390,6 +392,7 @@ export function TerminalTileWrapper({
     hasOpenFileTile,
     terminalThemeId,
     tile.notificationsMuted,
+    windowBackgroundMaterial,
     tileFontSizePx,
     workspaceRootPath,
   ])
@@ -699,7 +702,7 @@ export function TerminalTileWrapper({
         ref={containerRef}
         className="h-full w-full"
         data-terminal-title={snapshot.title ?? undefined}
-        style={{ background: getTerminalContainerBackground(terminalThemeId), overflow: 'hidden' }}
+        style={{ background: getTerminalContainerBackground(terminalThemeId, windowBackgroundMaterial !== 'none'), overflow: 'hidden' }}
         onMouseDown={focusTerminal}
         onContextMenu={(event) => {
           event.preventDefault()

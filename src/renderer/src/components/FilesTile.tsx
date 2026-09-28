@@ -34,54 +34,54 @@ interface FilesTileProps {
 }
 
 function defineYiraThemes(monaco: Monaco): void {
+  const define = (
+    name: string,
+    base: 'vs-dark' | 'vs',
+    rules: Parameters<Monaco['editor']['defineTheme']>[1]['rules'],
+    colors: Record<string, string>,
+  ) => {
+    monaco.editor.defineTheme(name, { base, inherit: true, rules, colors })
+    const translucentColors = Object.fromEntries(Object.entries(colors).map(([key, value]) => {
+      const hex = /^#([\da-f]{6})$/i.exec(value)
+      return [key, hex && ['editor.background', 'editorGutter.background', 'minimap.background', 'editorWidget.background'].includes(key)
+        ? `#${hex[1]}99`
+        : value]
+    }))
+    monaco.editor.defineTheme(`${name}-material`, { base, inherit: true, rules, colors: translucentColors })
+  }
   for (const preset of Object.values(COLOR_PRESETS)) {
-    monaco.editor.defineTheme(`yira-${preset.id}`, {
-      base: 'vs-dark',
-      inherit: true,
-      rules: [
-        { token: 'comment', foreground: preset.tokens['--text-disabled'].slice(1) },
-        { token: 'string', foreground: preset.terminal.green.slice(1) },
-        { token: 'keyword', foreground: preset.terminal.magenta.slice(1) },
-        { token: 'number', foreground: preset.terminal.yellow.slice(1) },
-      ],
-      colors: {
-        'editor.background': preset.tokens['--surface'],
-        'editor.foreground': preset.tokens['--text-primary'],
-        'editorLineNumber.foreground': preset.tokens['--text-disabled'],
-        'editorLineNumber.activeForeground': preset.tokens['--text-display'],
-        'editor.selectionBackground': preset.terminal.selectionBackground,
-        'editor.inactiveSelectionBackground': preset.tokens['--surface-raised'],
-        'editorCursor.foreground': preset.terminal.cursor,
-        'editorWidget.background': preset.tokens['--surface-raised'],
-        'editorWidget.border': preset.tokens['--border-visible'],
-      },
+    define(`yira-${preset.id}`, 'vs-dark', [
+      { token: 'comment', foreground: preset.tokens['--text-disabled'].slice(1) },
+      { token: 'string', foreground: preset.terminal.green.slice(1) },
+      { token: 'keyword', foreground: preset.terminal.magenta.slice(1) },
+      { token: 'number', foreground: preset.terminal.yellow.slice(1) },
+    ], {
+      'editor.background': preset.tokens['--surface'],
+      'editor.foreground': preset.tokens['--text-primary'],
+      'editorLineNumber.foreground': preset.tokens['--text-disabled'],
+      'editorLineNumber.activeForeground': preset.tokens['--text-display'],
+      'editor.selectionBackground': preset.terminal.selectionBackground,
+      'editor.inactiveSelectionBackground': preset.tokens['--surface-raised'],
+      'editorCursor.foreground': preset.terminal.cursor,
+      'editorWidget.background': preset.tokens['--surface-raised'],
+      'editorWidget.border': preset.tokens['--border-visible'],
     })
   }
-  monaco.editor.defineTheme('yira-dark', {
-    base: 'vs-dark',
-    inherit: true,
-    rules: [],
-    colors: {
-      'editor.background': '#111111',
-      'editor.foreground': '#e8e8e8',
-      'editorLineNumber.foreground': '#666666',
-      'editorLineNumber.activeForeground': '#ffffff',
-      'editor.selectionBackground': '#333333',
-      'editor.inactiveSelectionBackground': '#252525',
-    },
+  define('yira-dark', 'vs-dark', [], {
+    'editor.background': '#111111',
+    'editor.foreground': '#e8e8e8',
+    'editorLineNumber.foreground': '#666666',
+    'editorLineNumber.activeForeground': '#ffffff',
+    'editor.selectionBackground': '#333333',
+    'editor.inactiveSelectionBackground': '#252525',
   })
-  monaco.editor.defineTheme('yira-light', {
-    base: 'vs',
-    inherit: true,
-    rules: [],
-    colors: {
-      'editor.background': '#ffffff',
-      'editor.foreground': '#1a1a1a',
-      'editorLineNumber.foreground': '#999999',
-      'editorLineNumber.activeForeground': '#000000',
-      'editor.selectionBackground': '#d6d6d6',
-      'editor.inactiveSelectionBackground': '#ececec',
-    },
+  define('yira-light', 'vs', [], {
+    'editor.background': '#ffffff',
+    'editor.foreground': '#1a1a1a',
+    'editorLineNumber.foreground': '#999999',
+    'editorLineNumber.activeForeground': '#000000',
+    'editor.selectionBackground': '#d6d6d6',
+    'editor.inactiveSelectionBackground': '#ececec',
   })
 }
 
@@ -110,6 +110,7 @@ function TextFileTile({ tile, rootPath, isFocused, isVisible, onUpdate, onOpenFi
   const { t } = useTranslation()
   const themeId = useSettingsStore((state) => state.themeId)
   const appearance = useSettingsStore((state) => state.appearance)
+  const windowBackgroundMaterial = useSettingsStore((state) => state.windowBackgroundMaterial)
   const tileFontSizePx = useSettingsStore((state) => state.tileFontSizePx)
   const filePath = tile.filePath?.trim() ?? ''
   const [state, setState] = useState<FileEditorState>(() => createFileEditorState(tile))
@@ -403,7 +404,7 @@ function TextFileTile({ tile, rootPath, isFocused, isVisible, onUpdate, onOpenFi
               language={fileLanguage(filePath)}
               value={state.draft}
               beforeMount={defineYiraThemes}
-              theme={themeId === 'default' ? (lightTheme ? 'yira-light' : 'yira-dark') : `yira-${themeId}`}
+              theme={`${themeId === 'default' ? (lightTheme ? 'yira-light' : 'yira-dark') : `yira-${themeId}`}${windowBackgroundMaterial === 'none' ? '' : '-material'}`}
               onChange={(value) => {
                 const current = stateRef.current
                 if (current.status !== 'ready') return

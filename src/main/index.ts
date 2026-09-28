@@ -11,7 +11,7 @@ import {
   shutdownTerminalSessions,
   destroyWorkspaceTerminalSessions,
 } from './ipc/terminal'
-import { registerSettingsIPC } from './ipc/settings'
+import { loadStoredUserSettings, registerSettingsIPC } from './ipc/settings'
 import { registerNotesIPC } from './ipc/notes'
 import { registerBoardsIPC } from './ipc/boards'
 import { registerFilesIPC } from './ipc/files'
@@ -27,6 +27,7 @@ import { APP_ID, APP_NAME, DEV_APP_NAME, YIRA_HOME } from './paths'
 import { registerUpdateIPC, scheduleStartupUpdateCheck } from './updater'
 import { loadWindowState, saveWindowState } from './windowState'
 import { coordinateWindowClose, type CloseFailureDecision } from './windowCloseCoordinator'
+import { getWindowMaterialOptions, setWindowBackgroundMaterial } from './windowMaterial'
 
 const appDisplayName = is.dev ? DEV_APP_NAME : APP_NAME
 const REACT_DEVTOOLS_HINT = 'Download the React DevTools'
@@ -116,6 +117,9 @@ app.on('before-quit', (event) => {
 
 async function createWindow(): Promise<BrowserWindow> {
   const windowState = await loadWindowState(WINDOW_STATE_PATH)
+  const storedSettings = await loadStoredUserSettings()
+  setWindowBackgroundMaterial(storedSettings?.windowBackgroundMaterial ?? 'none')
+  const materialOptions = getWindowMaterialOptions()
 
   // electron-vite outputs .mjs for preload; try .mjs first, fallback to .js
   const preloadPath = join(__dirname, '../preload/index.mjs')
@@ -129,12 +133,12 @@ async function createWindow(): Promise<BrowserWindow> {
     minWidth: 800,
     minHeight: 500,
     show: false,
-    backgroundColor: '#15171a',
+    ...materialOptions,
     icon: appIconPath,
     ...(supportsTitleBarOverlay
       ? {
           titleBarStyle: 'hidden' as const,
-          titleBarOverlay,
+          titleBarOverlay: materialOptions.backgroundMaterial ? { ...titleBarOverlay, color: '#00000000' } : titleBarOverlay,
         }
       : {}),
     webPreferences: {

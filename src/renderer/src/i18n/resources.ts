@@ -127,6 +127,11 @@ type TranslationResources = {
     configure: string
     uninstall: string
     appThemeDescription: string
+    windowBackgroundEffect: string
+    windowBackgroundNone: string
+    windowBackgroundMica: string
+    windowBackgroundAcrylic: string
+    requiresWindows11: string
     defaultAppearanceDescription: string
     followAppTheme: string
     appearance: string
@@ -545,6 +550,11 @@ const en: TranslationResources = {
     configure: 'Configure',
     uninstall: 'Uninstall',
     appThemeDescription: 'Applies to the interface and terminals that follow the application theme.',
+    windowBackgroundEffect: 'Window background effect',
+    windowBackgroundNone: 'None',
+    windowBackgroundMica: 'Mica',
+    windowBackgroundAcrylic: 'Acrylic',
+    requiresWindows11: 'Requires Windows 11',
     defaultAppearanceDescription: 'Light, dark, and system modes apply to Default. The other presets use their own dark palette.',
     followAppTheme: 'Default · Follow application',
     appearance: 'Appearance',
@@ -963,6 +973,11 @@ const es: TranslationResources = {
     configure: 'Configurar',
     uninstall: 'Desinstalar',
     appThemeDescription: 'Se aplica a la interfaz y a las terminales que siguen el tema de la aplicación.',
+    windowBackgroundEffect: 'Efecto de fondo de ventana',
+    windowBackgroundNone: 'Ninguno',
+    windowBackgroundMica: 'Mica',
+    windowBackgroundAcrylic: 'Acrylic',
+    requiresWindows11: 'Requiere Windows 11',
     defaultAppearanceDescription: 'Los modos claro, oscuro y del sistema se aplican a Default. Los otros temas usan su propia paleta oscura.',
     followAppTheme: 'Default · Seguir aplicación',
     appearance: 'Apariencia',

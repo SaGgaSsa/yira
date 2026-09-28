@@ -3,12 +3,24 @@ import { normalizeTerminalThemeId } from '@shared/terminalThemes'
 
 import { getTerminalTheme } from '@shared/terminalThemes'
 
-export function getXtermTheme(themeId: unknown) {
-  return { ...getTerminalTheme(themeId).colors }
+const TRANSLUCENT_TERMINAL_ALPHA = 0.56
+
+function translucentBackground(background: string): string {
+  const match = /^#([\da-f]{6})$/i.exec(background)
+  if (!match) return background
+  const hex = match[1]
+  return `rgba(${Number.parseInt(hex.slice(0, 2), 16)}, ${Number.parseInt(hex.slice(2, 4), 16)}, ${Number.parseInt(hex.slice(4, 6), 16)}, ${TRANSLUCENT_TERMINAL_ALPHA})`
 }
 
-export function getTerminalContainerBackground(themeId: unknown): string {
-  return getTerminalTheme(themeId).colors.background
+export function getXtermTheme(themeId: unknown, translucent = false) {
+  const colors = { ...getTerminalTheme(themeId).colors }
+  if (translucent) colors.background = translucentBackground(colors.background)
+  return colors
+}
+
+export function getTerminalContainerBackground(themeId: unknown, translucent = false): string {
+  const background = getTerminalTheme(themeId).colors.background
+  return translucent ? translucentBackground(background) : background
 }
 
 // Default terminals follow the application palette; explicit overrides stay intact.

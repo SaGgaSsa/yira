@@ -206,12 +206,13 @@ export function TerminalRuntimeProvider({
           const terminal = new Terminal({
             cols,
             rows,
-            theme: getXtermTheme(viewOptions.themeId),
+            theme: getXtermTheme(viewOptions.themeId, viewOptions.translucent === true),
             fontFamily: '"IBM Plex Mono", "JetBrains Mono", "Consolas", monospace',
             fontSize: viewOptions.fontSize,
             lineHeight: 1.15,
             cursorBlink: true,
             allowProposedApi: true,
+            allowTransparency: true,
             scrollback: 5000,
           })
 

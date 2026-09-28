@@ -8,6 +8,15 @@ if (defaults.language !== 'en') throw new Error('language must default to Englis
 if (defaults.terminal.attentionEnabled !== true) throw new Error('terminal attention must default on')
 if (defaults.terminal.agentAlertsEnabled !== true) throw new Error('agent alerts must default on')
 if (defaults.terminal.themeId !== DEFAULT_TERMINAL_THEME_ID) throw new Error('terminal theme must default to Yira default')
+if (defaults.windowBackgroundMaterial !== 'none') throw new Error('window background material must default to none')
+for (const material of ['mica', 'acrylic'] as const) {
+  if (normalizeUserSettings({ windowBackgroundMaterial: material }).windowBackgroundMaterial !== material) {
+    throw new Error(`${material} window background material must be preserved`)
+  }
+}
+if (normalizeUserSettings({ windowBackgroundMaterial: 'invalid' as never }).windowBackgroundMaterial !== 'none') {
+  throw new Error('invalid window background material must normalize to none')
+}
 if (defaults.notifications.attentionDelayEnabled !== true) throw new Error('native attention delay must default on')
 
 const diagnosticsDefault = normalizeUserSettings({} as unknown as Partial<UserSettings>)

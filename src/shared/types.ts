@@ -370,6 +370,7 @@ export interface Config {
 // ─── App Settings ──────────────────────────────────────────────────────────
 
 export type AppearanceMode = 'dark' | 'light' | 'system'
+export type WindowBackgroundMaterial = 'none' | 'mica' | 'acrylic'
 export type ConfigurableTileCreationType = 'note' | 'browser' | 'timer'
 
 export type TileCreationAvailability = Record<ConfigurableTileCreationType, boolean>
@@ -378,6 +379,7 @@ export interface UserSettings {
   language: 'en' | 'es'
   themeId: AppThemeId
   appearance: AppearanceMode
+  windowBackgroundMaterial: WindowBackgroundMaterial
   interfaceFontSizePx: number
   tileFontSizePx: number
   showGrid: boolean
@@ -408,6 +410,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   language: 'en',
   themeId: 'default',
   appearance: 'dark',
+  windowBackgroundMaterial: 'none',
   interfaceFontSizePx: 16,
   tileFontSizePx: 16,
   showGrid: true,

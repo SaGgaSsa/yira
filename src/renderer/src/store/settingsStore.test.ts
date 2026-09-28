@@ -35,6 +35,7 @@ test('applySettings persists the complete draft before replacing the active sett
 
   let finishSave: (() => void) | undefined
   let savedSettings: UserSettings | undefined
+  const appliedMaterials: string[] = []
   const saveFinished = new Promise<void>((resolve) => {
     finishSave = resolve
   })
@@ -52,6 +53,9 @@ test('applySettings persists the complete draft before replacing the active sett
         },
         terminal: {
           setAgentAlertsEnabled: async () => undefined,
+        },
+        window: {
+          setBackgroundMaterial: async (material: string) => { appliedMaterials.push(material) },
         },
       },
     },
@@ -105,9 +109,9 @@ test('applySettings persists the complete draft before replacing the active sett
       ...draft,
       browser: { homeUrl: 'https://example.com' },
     })
-
     finishSave?.()
     await applying
+    assert.deepEqual(appliedMaterials, ['none'])
 
     const state = useSettingsStore.getState()
     assert.equal(state.themeId, 'nord')

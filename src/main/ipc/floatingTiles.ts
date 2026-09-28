@@ -4,6 +4,7 @@ import { existsSync } from 'fs'
 import { is } from '@electron-toolkit/utils'
 import type { WindowBounds } from '../../shared/types'
 import { normalizeFloatingNavigationRequest } from '../../shared/floatingNavigation'
+import { getWindowMaterialOptions } from '../windowMaterial'
 
 interface FloatingTileOpenInput {
   workspaceId: string
@@ -118,7 +119,7 @@ export function registerFloatingTilesIPC(
       minWidth: MIN_WIDTH,
       minHeight: MIN_HEIGHT,
       show: false,
-      backgroundColor: '#15171a',
+      ...getWindowMaterialOptions(),
       webPreferences: {
         preload: getPreloadPath(),
         sandbox: false,
