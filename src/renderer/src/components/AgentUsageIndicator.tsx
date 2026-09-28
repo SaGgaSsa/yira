@@ -35,7 +35,7 @@ const thresholdStyles: Record<UsageThreshold, ThresholdStyle> = {
 const ringRadius = 8
 const ringCircumference = 2 * Math.PI * ringRadius
 
-const providerDetails: Record<AgentProvider, {
+export const agentProviderDetails: Record<AgentProvider, {
   label: string
   logoPath: string
 }> = {
@@ -43,12 +43,12 @@ const providerDetails: Record<AgentProvider, {
   claude: { label: 'Claude', logoPath: '/agent-provider-logos/anthropic.svg' },
 }
 
-function clampPercent(value: number): number | null {
+export function clampUsagePercent(value: number): number | null {
   if (typeof value !== 'number' || !Number.isFinite(value)) return null
   return Math.round(Math.max(0, Math.min(100, value)))
 }
 
-function thresholdFor(percent: number | null): UsageThreshold {
+export function getUsageThreshold(percent: number | null): UsageThreshold {
   if (percent === null) return 'unavailable'
   if (percent >= 90) return 'critical'
   if (percent >= 70) return 'warning'
@@ -110,8 +110,8 @@ function UsageWindow({
   providerLabel: string
   window: AgentUsageWindow
 }): React.ReactElement {
-  const percent = clampPercent(window.usedPercent)
-  const threshold = thresholdFor(percent)
+  const percent = clampUsagePercent(window.usedPercent)
+  const threshold = getUsageThreshold(percent)
   const style = thresholdStyles[threshold]
   const label = windowLabel(window.kind)
   const resetText = formatUsageResetAt(window.resetsAt, window.kind)
@@ -184,7 +184,7 @@ export function AgentUsageIndicator({
   provider,
   snapshot,
 }: AgentUsageIndicatorProps): React.ReactElement {
-  const details = providerDetails[provider]
+  const details = agentProviderDetails[provider]
   const resolvedStatus = snapshot?.status ?? 'unavailable'
   const available = resolvedStatus === 'available'
   const windows = available && snapshot

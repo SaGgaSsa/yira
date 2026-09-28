@@ -57,6 +57,9 @@ interface RawWindowState {
 interface RawRateLimitsState {
   primary?: RawWindowState
   secondary?: RawWindowState
+  planType?: string
+  credits?: { hasCredits: boolean; unlimited: boolean; balance?: string }
+  limitReached?: string | null
 }
 
 interface PendingRequest {
@@ -113,6 +116,8 @@ function parseRawWindow(value: unknown): RawWindowState | null {
     'windowDurationMinutes',
     'window_duration_mins',
     'window_duration_minutes',
+    'windowMinutes',
+    'window_minutes',
     'durationMins',
     'durationMinutes',
   ] as const
@@ -149,11 +154,13 @@ function rateLimitRecords(value: unknown): RecordValue[] {
   if (!root) return []
 
   const byLimitId = root.rateLimitsByLimitId
+    ?? root.rate_limits_by_limit_id
   if (isRecord(byLimitId)) {
     const codex = byLimitId.codex
     if (isRecord(codex)) return [codex]
   }
   if (isRecord(root.rateLimits)) return [root.rateLimits]
+  if (isRecord(root.rate_limits)) return [root.rate_limits]
   if (isRecord(root.primary) || isRecord(root.secondary)) return [root]
   return []
 }
@@ -175,16 +182,33 @@ function hasRawStateFields(state: RawRateLimitsState): boolean {
   return Boolean(
     (state.primary && hasRawFields(state.primary))
     || (state.secondary && hasRawFields(state.secondary)),
-  )
+  ) || state.planType !== undefined || state.credits !== undefined || state.limitReached !== undefined
 }
 
 function extractRawState(value: unknown): RawRateLimitsState {
   const state: RawRateLimitsState = {}
-  for (const record of rateLimitRecords(value)) {
+  const root = unwrapResult(value)
+  const records = rateLimitRecords(value)
+  for (const record of records) {
     const primary = parseRawWindow(record.primary)
     const secondary = parseRawWindow(record.secondary)
     if (primary && hasRawFields(primary)) state.primary = primary
     if (secondary && hasRawFields(secondary)) state.secondary = secondary
+
+    const planType = safeShortString(firstField(record, ['planType', 'plan_type']))
+    const hasLimitReached = ['rateLimitReachedType', 'rate_limit_reached_type'].some((name) => Object.prototype.hasOwnProperty.call(record, name))
+    const limitReached = safeShortString(firstField(record, ['rateLimitReachedType', 'rate_limit_reached_type']))
+    const creditsValue = firstField(record, ['credits'])
+    if (planType) state.planType = planType
+    if (hasLimitReached) state.limitReached = limitReached ?? null
+    if (isRecord(creditsValue)) {
+      const balance = safeShortString(creditsValue.balance)
+      state.credits = {
+        hasCredits: creditsValue.hasCredits === true || creditsValue.has_credits === true,
+        unlimited: creditsValue.unlimited === true,
+        ...(balance ? { balance } : {}),
+      }
+    }
 
     for (const name of ['windows', 'limits'] as const) {
       const entries = record[name]
@@ -197,11 +221,34 @@ function extractRawState(value: unknown): RawRateLimitsState {
       }
     }
   }
+  if (root) {
+    state.planType ??= safeShortString(firstField(root, ['planType', 'plan_type']))
+    if (state.limitReached === undefined && ['rateLimitReachedType', 'rate_limit_reached_type'].some((name) => Object.prototype.hasOwnProperty.call(root, name))) {
+      state.limitReached = safeShortString(firstField(root, ['rateLimitReachedType', 'rate_limit_reached_type'])) ?? null
+    }
+    if (!state.credits && isRecord(root.credits)) {
+      const balance = safeShortString(root.credits.balance)
+      state.credits = {
+        hasCredits: root.credits.hasCredits === true || root.credits.has_credits === true,
+        unlimited: root.credits.unlimited === true,
+        ...(balance ? { balance } : {}),
+      }
+    }
+  }
   return state
+}
+
+function safeShortString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length <= 40 && !/[\u0000-\u001f\u007f]/.test(value)
+    ? value
+    : undefined
 }
 
 function mergeRawState(base: RawRateLimitsState, update: RawRateLimitsState): RawRateLimitsState {
   return {
+    ...(update.planType === undefined ? (base.planType === undefined ? {} : { planType: base.planType }) : { planType: update.planType }),
+    ...(update.credits === undefined ? (base.credits === undefined ? {} : { credits: base.credits }) : { credits: update.credits }),
+    ...(update.limitReached === undefined ? (base.limitReached === undefined ? {} : { limitReached: base.limitReached }) : { limitReached: update.limitReached }),
     primary: update.primary && hasRawFields(update.primary)
       ? mergeWindow(base.primary, update.primary)
       : base.primary,
@@ -232,6 +279,9 @@ function cloneProviderSnapshot(snapshot: AgentUsageProviderSnapshot): AgentUsage
   return {
     provider: snapshot.provider,
     windows: snapshot.windows.map((window) => ({ ...window })),
+    ...(snapshot.planType === undefined ? {} : { planType: snapshot.planType }),
+    ...(snapshot.credits === undefined ? {} : { credits: { ...snapshot.credits } }),
+    ...(snapshot.limitReached === undefined ? {} : { limitReached: snapshot.limitReached }),
     ...(snapshot.updatedAt ? { updatedAt: snapshot.updatedAt } : {}),
     status: snapshot.status,
   }
@@ -274,6 +324,9 @@ function stateToSnapshot(state: RawRateLimitsState, now: () => number): AgentUsa
   return {
     provider: 'codex',
     windows: uniqueWindows,
+    ...(state.planType === undefined ? {} : { planType: state.planType }),
+    ...(state.credits === undefined ? {} : { credits: { ...state.credits } }),
+    ...(state.limitReached === undefined ? {} : { limitReached: state.limitReached }),
     ...(uniqueWindows.length > 0 ? { updatedAt: snapshotTimestamp(now) } : {}),
     status: uniqueWindows.length > 0 ? 'available' : 'unavailable',
   }

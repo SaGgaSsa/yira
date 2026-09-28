@@ -4,11 +4,14 @@ import { CircleDot, LoaderCircle, Terminal } from 'lucide-react'
 import { canReadWorkspaceGitDiff } from '@/hooks/useWorkspaceGitDiff'
 import { WorkspaceGitDiff } from './WorkspaceGitDiff'
 import type { WorkspaceActivityCardData, WorkspaceActivityStatus } from '@/utils/workspaceActivity'
+import { agentProviderDetails } from './AgentUsageIndicator'
+import { formatCompactTokens } from '@/utils/agentUsagePanel'
 
 export interface WorkspaceActivityCardProps {
   card: WorkspaceActivityCardData
   onOpen: () => void
   onGoToTerminal: (() => void) | null
+  tokensToday?: number
 }
 
 function getStatusColor(status: WorkspaceActivityStatus): string {
@@ -27,7 +30,7 @@ function getStatusLabelKey(status: WorkspaceActivityStatus): string {
   }
 }
 
-export function WorkspaceActivityCard({ card, onOpen, onGoToTerminal }: WorkspaceActivityCardProps): React.ReactElement {
+export function WorkspaceActivityCard({ card, onOpen, onGoToTerminal, tokensToday }: WorkspaceActivityCardProps): React.ReactElement {
   const { t } = useTranslation()
   const { workspace, status, terminalCount, isCurrent } = card
   const hasWorkspaceGitDiff = canReadWorkspaceGitDiff(workspace.config.rootFolderPath)
@@ -67,6 +70,12 @@ export function WorkspaceActivityCard({ card, onOpen, onGoToTerminal }: Workspac
           {t(getStatusLabelKey(status))}
         </span>
       </div>
+
+      {workspace.config.agentProvider && <div className="flex items-center gap-1.5 text-xs text-text-secondary" data-agent-provider-chip={workspace.config.agentProvider}>
+        <img className="size-3.5 object-contain" src={agentProviderDetails[workspace.config.agentProvider].logoPath} alt="" aria-hidden="true" />
+        <span>{agentProviderDetails[workspace.config.agentProvider].label}</span>
+        {tokensToday !== undefined && <span className="ml-auto">{formatCompactTokens(tokensToday)} {t('activity.tokensToday')}</span>}
+      </div>}
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-text-secondary">
         <span>{t('activity.terminals', { count: terminalCount })}</span>

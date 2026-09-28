@@ -2471,6 +2471,8 @@ function AppContent(): React.ReactElement {
               {activityOpen && (
                 <WorkspaceActivityView
                   cards={activityCards}
+                  agentUsage={agentUsage}
+                  workspaces={workspaceMetadata}
                   onOpenWorkspace={openActivityWorkspace}
                   onGoToTerminal={goToWorkspaceTerminal}
                 />
@@ -2479,6 +2481,8 @@ function AppContent(): React.ReactElement {
           ) : activityOpen ? (
             <WorkspaceActivityView
               cards={activityCards}
+              agentUsage={agentUsage}
+              workspaces={workspaceMetadata}
               onOpenWorkspace={openActivityWorkspace}
               onGoToTerminal={goToWorkspaceTerminal}
             />

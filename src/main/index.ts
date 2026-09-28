@@ -2,7 +2,7 @@ import { app, BrowserWindow, shell, ipcMain, Menu, clipboard, ClipboardItem, dia
 import { join } from 'path'
 import { existsSync } from 'fs'
 import { is } from '@electron-toolkit/utils'
-import { getConfiguredAgentProviders, initWorkspaces, registerWorkspaceIPC } from './ipc/workspace'
+import { getConfiguredAgentProviders, getWorkspaceRootFolders, initWorkspaces, registerWorkspaceIPC } from './ipc/workspace'
 import { registerCanvasIPC } from './ipc/canvas'
 import {
   registerTerminalIPC,
@@ -21,6 +21,7 @@ import { registerWindowIPC, type WindowClosePreparationBridge } from './ipc/wind
 import { registerFloatingTilesIPC } from './ipc/floatingTiles'
 import { registerAgentsIPC } from './ipc/agents'
 import { AgentUsageService } from './agentUsage'
+import { AgentUsageDetailsService } from './agentUsageDetails'
 import { readClaudeUsageStatusLinePayload } from './claudeUsageStatusLinePayload'
 import { APP_ID, APP_NAME, DEV_APP_NAME, YIRA_HOME } from './paths'
 import { registerUpdateIPC, scheduleStartupUpdateCheck } from './updater'
@@ -218,6 +219,10 @@ app.whenReady().then(async () => {
       },
     },
   })
+  const agentUsageDetailsService = new AgentUsageDetailsService({
+    getWorkspaces: getWorkspaceRootFolders,
+    getConfiguredProviders: getConfiguredAgentProviders,
+  })
   void agentUsageService.start().catch(() => undefined)
 
   // Detect available shells
@@ -225,7 +230,7 @@ app.whenReady().then(async () => {
 
   // Register all IPC handlers
   registerWorkspaceIPC({ beforeDelete: destroyWorkspaceTerminalSessions })
-  registerAgentsIPC({ usageService: agentUsageService })
+  registerAgentsIPC({ usageService: agentUsageService, usageDetailsService: agentUsageDetailsService })
   registerCanvasIPC()
   registerTerminalIPC()
   void hydrateTerminalSessions().catch((error) => {

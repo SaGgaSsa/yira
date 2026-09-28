@@ -37,9 +37,12 @@ test('registers a sanitized global usage bridge without reset or credit controls
 
   assert.match(text, /agents:usage:snapshot/)
   assert.match(text, /agents:usage:changed/)
+  assert.match(text, /agents:usage:details/)
   assert.match(preload, /usageSnapshot/)
+  assert.match(preload, /usageDetails/)
   assert.match(preload, /onUsageChanged/)
   assert.match(declaration, /usageSnapshot/)
+  assert.match(declaration, /usageDetails/)
   assert.match(declaration, /onUsageChanged/)
   assert.doesNotMatch(preload, /rateLimitResetCredit|sendAddCreditsNudgeEmail/)
   assert.doesNotMatch(declaration, /rateLimitResetCredit|sendAddCreditsNudgeEmail/)
@@ -67,7 +70,7 @@ test('declares the agent bridge and registers it from main', async () => {
   assert.match(preload, /AgentSessionHistoryResult/)
   assert.match(preload, /subscribeSessions:[\s\S]*Promise<string \| false>/)
   assert.match(preload, /unsubscribeSessions: \(token: string\)/)
-  assert.match(main, /registerAgentsIPC\(\{ usageService: agentUsageService \}\)/)
+  assert.match(main, /registerAgentsIPC\(\{ usageService: agentUsageService, usageDetailsService: agentUsageDetailsService \}\)/)
 })
 
 type IpcHandler = (event: { sender: FakeWebContents }, ...args: unknown[]) => unknown

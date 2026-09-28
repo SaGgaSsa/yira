@@ -43,6 +43,7 @@ import type {
   AgentSessionHistoryQuery,
   AgentSessionHistoryResult,
   AgentUsageSnapshot,
+  AgentUsageDetailsSnapshot,
   NoteBlocks,
   MarkdownViewMode,
   NoteKind,
@@ -84,6 +85,7 @@ interface ElectronWorld {
     unsubscribeSessions: (token: string) => Promise<boolean>
     onSessionsChanged: (callback: (snapshot: AgentActiveSessionSnapshot) => void) => () => void
     usageSnapshot: () => Promise<AgentUsageSnapshot | null>
+    usageDetails: () => Promise<AgentUsageDetailsSnapshot | null>
     onUsageChanged: (callback: (snapshot: AgentUsageSnapshot) => void) => () => void
     history: (query?: AgentSessionHistoryQuery) => Promise<AgentSessionHistoryResult>
     queryHistory: (query?: AgentSessionHistoryQuery) => Promise<AgentSessionHistoryResult>

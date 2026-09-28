@@ -164,6 +164,13 @@ export async function getConfiguredAgentProviders(): Promise<AgentProvider[]> {
   return config.workspaces.flatMap((workspace) => workspace.config.agentProvider ? [workspace.config.agentProvider] : [])
 }
 
+export async function getWorkspaceRootFolders(): Promise<Array<{ id: string; rootFolderPath: string }>> {
+  const config = await readConfig()
+  return config.workspaces.flatMap((workspace) => workspace.config.rootFolderPath
+    ? [{ id: workspace.id, rootFolderPath: workspace.config.rootFolderPath }]
+    : [])
+}
+
 export async function initWorkspaces(): Promise<void> {
   await configMutationQueue.run(async () => {
     await ensureDir(YIRA_HOME)

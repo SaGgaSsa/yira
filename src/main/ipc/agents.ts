@@ -5,8 +5,10 @@ import type {
   AgentSessionHistoryResult,
   AgentActiveSessionSnapshot,
   AgentUsageSnapshot,
+  AgentUsageDetailsSnapshot,
 } from '@shared/types'
 import type { AgentUsageService } from '../agentUsage'
+import type { AgentUsageDetailsService } from '../agentUsageDetails'
 import { agentSessionRegistry, type AgentSessionRegistry } from '../agents/registry'
 import { readAgentSessionHistory } from '../agents/history'
 import { getAgentProviderAvailability } from '../agents/providers'
@@ -36,6 +38,7 @@ export interface AgentIPCOptions {
     limit?: number
   }) => Promise<AgentSessionHistoryResult>
   usageService?: Pick<AgentUsageService, 'getSnapshot' | 'refresh' | 'subscribe'>
+  usageDetailsService?: Pick<AgentUsageDetailsService, 'getSnapshot'>
 }
 
 const subscriptions = new Map<number, AgentSubscription>()
@@ -104,11 +107,19 @@ export function registerAgentsIPC(options: AgentIPCOptions = {}): void {
   const registry = options.registry ?? agentSessionRegistry
   const availability = options.availability ?? (() => getAgentProviderAvailability())
   const usageService = options.usageService
+  const usageDetailsService = options.usageDetailsService
 
   ipcMain.handle('agents:availability', async (): Promise<AgentProviderAvailabilitySnapshot> => availability())
   ipcMain.handle('agents:usage:snapshot', async (): Promise<AgentUsageSnapshot | null> => {
     await usageService?.refresh()
     return usageService?.getSnapshot() ?? null
+  })
+  ipcMain.handle('agents:usage:details', async (): Promise<AgentUsageDetailsSnapshot | null> => {
+    try {
+      return usageDetailsService ? await usageDetailsService.getSnapshot() : null
+    } catch {
+      return null
+    }
   })
   usageService?.subscribe(broadcastUsageSnapshot)
 

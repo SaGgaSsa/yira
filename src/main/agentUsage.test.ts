@@ -95,6 +95,26 @@ test('normalizes Codex five-hour and weekly rate-limit windows into the safe con
   })
 })
 
+test('preserves sanitized Codex account metadata from camelCase and snake_case limits', () => {
+  const snake = normalizeCodexRateLimits({ rate_limits: {
+    primary: { used_percent: 10, window_minutes: 300, resets_at: FIRST_RESET },
+    secondary: { used_percent: 20, window_minutes: 10_080, resets_at: SECOND_RESET },
+    plan_type: 'plus', credits: { has_credits: false, unlimited: false, balance: '0' }, rate_limit_reached_type: null,
+  } })
+  const camel = normalizeCodexRateLimits({ rateLimits: {
+    primary: { usedPercent: 10, windowMinutes: 300, resetsAt: FIRST_RESET },
+    secondary: { usedPercent: 20, windowMinutes: 10_080, resetsAt: SECOND_RESET },
+    planType: 'pro', credits: { hasCredits: true, unlimited: true, balance: '25' }, rateLimitReachedType: 'weekly',
+  } })
+
+  assert.equal(snake.planType, 'plus')
+  assert.deepEqual(snake.credits, { hasCredits: false, unlimited: false, balance: '0' })
+  assert.equal(snake.limitReached, null)
+  assert.equal(camel.planType, 'pro')
+  assert.deepEqual(camel.credits, { hasCredits: true, unlimited: true, balance: '25' })
+  assert.equal(camel.limitReached, 'weekly')
+})
+
 test('returns an available incomplete snapshot when one Codex window is missing', () => {
   const snapshot = normalizeCodexRateLimits({
     result: {

@@ -56,6 +56,31 @@ type TranslationResources = {
     statusActive: string
     statusUnread: string
     statusIdle: string
+    agents: string
+    windowFiveHour: string
+    windowWeekly: string
+    tokensToday: string
+    sessionsToday: string
+    topModel: string
+    credits: string
+    limitReached: string
+    recentSessions: string
+    noUsageData: string
+    noTodayData: string
+    noData: string
+    projection: string
+    beforeReset: string
+    atReset: string
+    hourlyTokens: string
+    linesAdded: string
+    linesRemoved: string
+    showDetails: string
+    hideDetails: string
+    noCredits: string
+    unlimitedCredits: string
+    no: string
+    context: string
+    token: { cacheRead: string; cacheWrite: string; input: string; output: string; cached: string; reasoning: string }
   }
   terminalActivity: {
     'needs-input': string
@@ -449,6 +474,31 @@ const en: TranslationResources = {
     statusActive: 'Terminals active',
     statusUnread: 'Unreviewed output',
     statusIdle: 'No activity',
+    agents: 'Agents',
+    windowFiveHour: '5 h window',
+    windowWeekly: 'Weekly',
+    tokensToday: 'Tokens today',
+    sessionsToday: 'Sessions today',
+    topModel: 'Top model',
+    credits: 'Credits',
+    limitReached: 'Limit reached',
+    recentSessions: 'Recent sessions',
+    noUsageData: 'Usage data unavailable',
+    noTodayData: 'No data for today',
+    noData: 'No data',
+    projection: 'Projection',
+    beforeReset: 'before reset',
+    atReset: 'at reset',
+    hourlyTokens: 'Tokens by hour',
+    linesAdded: 'Lines added',
+    linesRemoved: 'Lines removed',
+    showDetails: 'Show details',
+    hideDetails: 'Hide details',
+    noCredits: 'None',
+    unlimitedCredits: 'Unlimited',
+    no: 'No',
+    context: 'Context',
+    token: { cacheRead: 'Cache read', cacheWrite: 'Cache write', input: 'Input', output: 'Output', cached: 'Cached', reasoning: 'Reasoning' },
   },
   terminalActivity: {
     'needs-input': 'Needs input',
@@ -842,6 +892,31 @@ const es: TranslationResources = {
     statusActive: 'Terminales activas',
     statusUnread: 'Salida sin revisar',
     statusIdle: 'Sin actividad',
+    agents: 'Agentes',
+    windowFiveHour: 'Ventana 5 h',
+    windowWeekly: 'Semanal',
+    tokensToday: 'Tokens hoy',
+    sessionsToday: 'Sesiones hoy',
+    topModel: 'Modelo más usado',
+    credits: 'Créditos',
+    limitReached: 'Límite alcanzado',
+    recentSessions: 'Sesiones recientes',
+    noUsageData: 'Sin datos de usage',
+    noTodayData: 'Sin datos de hoy',
+    noData: 'Sin datos',
+    projection: 'Proyección',
+    beforeReset: 'antes del reset',
+    atReset: 'al reset',
+    hourlyTokens: 'Tokens por hora',
+    linesAdded: 'Líneas añadidas',
+    linesRemoved: 'Líneas eliminadas',
+    showDetails: 'Mostrar detalle',
+    hideDetails: 'Ocultar detalle',
+    noCredits: 'Sin créditos',
+    unlimitedCredits: 'Ilimitados',
+    no: 'No',
+    context: 'Contexto',
+    token: { cacheRead: 'Lectura de caché', cacheWrite: 'Escritura de caché', input: 'Entrada', output: 'Salida', cached: 'En caché', reasoning: 'Razonamiento' },
   },
   terminalActivity: {
     'needs-input': 'Requiere intervención',

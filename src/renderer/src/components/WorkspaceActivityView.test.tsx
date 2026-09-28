@@ -11,7 +11,7 @@ import { WorkspaceActivityView } from './WorkspaceActivityView'
 
 await initializeI18n('en')
 
-function workspace(id: string, name = id): WorkspaceMetadata {
+function workspace(id: string, name = id, agentProvider?: 'claude' | 'codex'): WorkspaceMetadata {
   return {
     id,
     name,
@@ -23,6 +23,7 @@ function workspace(id: string, name = id): WorkspaceMetadata {
       workspacePanelOpen: false,
       sourceControlViewMode: 'list',
       agentProviders: { claude: { enabled: false, args: [] }, codex: { enabled: false, args: [] } },
+      agentProvider,
     },
   }
 }
@@ -149,4 +150,14 @@ test('keeps the Spanish empty copy with accents', () => {
   assert.equal(resources.es.translation.activity.emptyTitle, 'Sin espacios de trabajo activos')
   assert.equal(resources.es.translation.activity.openWorkspace, 'Abrir espacio de trabajo')
   assert.equal(resources.en.translation.activity.emptyTitle, 'No active workspaces')
+})
+
+test('shows only the provider configured on an available workspace', () => {
+  const configured = workspace('configured', 'Configured', 'codex')
+  const cards = buildWorkspaceActivityCards({
+    workspaces: [configured], sessionActiveIds: new Set(['configured']), attentionCounts: {}, terminalCounts: {}, activeWorkspaceId: null,
+  })
+  const markup = renderView(<WorkspaceActivityView cards={cards} workspaces={[configured]} onOpenWorkspace={() => undefined} onGoToTerminal={() => undefined} />)
+  assert.match(markup, /data-agent-panel-provider="codex"/)
+  assert.doesNotMatch(markup, /data-agent-panel-provider="claude"/)
 })

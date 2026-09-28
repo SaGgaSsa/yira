@@ -141,8 +141,55 @@ export interface AgentUsageWindow {
 export interface AgentUsageProviderSnapshot {
   provider: AgentProvider
   windows: AgentUsageWindow[]
+  planType?: string
+  credits?: {
+    hasCredits: boolean
+    unlimited: boolean
+    balance?: string
+  }
+  limitReached?: string | null
   updatedAt?: string
   status: 'available' | 'unavailable'
+}
+
+export interface AgentTokenBreakdown {
+  input: number
+  cacheRead: number
+  cacheWrite: number
+  output: number
+  reasoning: number
+}
+
+export interface AgentUsageRecentSession {
+  provider: AgentProvider
+  sessionId: string
+  workspaceId?: string
+  model?: string
+  lastActivityAt: string
+  contextTokens?: number
+  contextWindow?: number
+  contextWindowApprox?: boolean
+}
+
+export interface AgentUsageProviderDetails {
+  provider: AgentProvider
+  day: string
+  tokens: AgentTokenBreakdown
+  hourly: number[]
+  sessionCount: number
+  topModel?: {
+    name: string
+    share: number
+  }
+  tokensByWorkspace: Record<string, number>
+  linesAdded?: number
+  linesRemoved?: number
+}
+
+export interface AgentUsageDetailsSnapshot {
+  updatedAt: string
+  providers: Partial<Record<AgentProvider, AgentUsageProviderDetails>>
+  recentSessions: AgentUsageRecentSession[]
 }
 
 /** Global usage state always includes a safe entry for each supported provider. */
