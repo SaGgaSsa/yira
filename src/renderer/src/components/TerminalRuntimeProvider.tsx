@@ -15,7 +15,13 @@ import {
   type WorkspaceAttentionCounts,
 } from '@/utils/workspaceAttention'
 import { createTerminalMarkdownLinkProvider } from '@/utils/terminalMarkdownLinks'
-import { getTerminalContextSelectionSnapshot, isTerminalCopyShortcut, decodeOsc52ClipboardPayload } from '@/utils/terminalClipboard'
+import {
+  getTerminalContextSelectionSnapshot,
+  isTerminalCopyShortcut,
+  isTerminalPasteShortcut,
+  decodeOsc52ClipboardPayload,
+  readTerminalPasteData,
+} from '@/utils/terminalClipboard'
 import { shouldOpenTerminalLink } from '@/utils/terminalLinkActivation'
 import { getXtermTheme } from '@/utils/terminalTheme'
 import {
@@ -256,6 +262,21 @@ export function TerminalRuntimeProvider({
           }
 
           terminal.attachCustomKeyEventHandler((event) => {
+            if (isTerminalPasteShortcut(event)) {
+              if (event.type !== 'keydown') return false
+              // Replace the browser paste so image-only clipboards reach terminal agents.
+              event.preventDefault()
+              void readTerminalPasteData(window.electron.clipboard, {
+                allowImage: createOptions.connection !== 'remote-ssh',
+              })
+                .then((data) => {
+                  if (data) terminal.paste(data)
+                })
+                .catch((error: unknown) => {
+                  console.error('[TerminalRuntime] paste failed:', getErrorMessage(error))
+                })
+              return false
+            }
             if (!isTerminalCopyShortcut(event)) return true
             const selection = getTerminalContextSelectionSnapshot(terminal)
             if (!selection) return true

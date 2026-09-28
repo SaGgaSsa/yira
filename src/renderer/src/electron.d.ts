@@ -162,6 +162,7 @@ interface ElectronWorld {
   }
   clipboard: {
     readText: () => Promise<string>
+    saveImageToTempFile: () => Promise<string | null>
     writeText: (text: string) => Promise<void>
     writeRich: (data: { text: string; html: string }) => Promise<void>
   }

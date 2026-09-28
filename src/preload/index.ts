@@ -189,6 +189,7 @@ contextBridge.exposeInMainWorld('electron', {
 
   clipboard: {
     readText: () => ipcRenderer.invoke('clipboard:readText'),
+    saveImageToTempFile: () => ipcRenderer.invoke('clipboard:saveImageToTempFile'),
     writeText: (text: string) => ipcRenderer.invoke('clipboard:writeText', text),
     writeRich: (data: { text: string; html: string }) => ipcRenderer.invoke('clipboard:writeRich', data),
   },

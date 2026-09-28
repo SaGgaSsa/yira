@@ -2,6 +2,8 @@ import {
   decodeOsc52ClipboardPayload,
   getTerminalContextSelectionSnapshot,
   isTerminalCopyShortcut,
+  isTerminalPasteShortcut,
+  readTerminalPasteData,
 } from './terminalClipboard'
 
 const decoded = decodeOsc52ClipboardPayload('c;SGVsbG8gdGVybWluYWw=')
@@ -53,3 +55,29 @@ if (isTerminalCopyShortcut({ key: 'c', ctrlKey: true, shiftKey: false, altKey: f
 if (isTerminalCopyShortcut({ key: 'c', ctrlKey: true, shiftKey: true, altKey: true, metaKey: false })) {
   throw new Error('Ctrl+Alt+Shift+C must not be treated as terminal copy')
 }
+
+if (!isTerminalPasteShortcut({ key: 'v', ctrlKey: true, shiftKey: false, altKey: false, metaKey: false })) {
+  throw new Error('Ctrl+V must paste into the terminal')
+}
+
+if (isTerminalPasteShortcut({ key: 'v', ctrlKey: true, shiftKey: false, altKey: true, metaKey: false })) {
+  throw new Error('Ctrl+Alt+V must reach the terminal program')
+}
+
+const imageClipboard = { readText: async () => '', saveImageToTempFile: async () => '/tmp/clipboard.png' }
+const textClipboard = { readText: async () => 'hello', saveImageToTempFile: async () => '/tmp/clipboard.png' }
+
+void (async () => {
+  if (await readTerminalPasteData(textClipboard, { allowImage: true }) !== 'hello') {
+    throw new Error('clipboard text must take precedence over images')
+  }
+  if (await readTerminalPasteData(imageClipboard, { allowImage: true }) !== '/tmp/clipboard.png') {
+    throw new Error('an image-only clipboard must paste the saved image path')
+  }
+  if (await readTerminalPasteData(imageClipboard, { allowImage: false }) !== '') {
+    throw new Error('images must not paste into remote terminals')
+  }
+})().catch((error: unknown) => {
+  console.error(error)
+  process.exitCode = 1
+})

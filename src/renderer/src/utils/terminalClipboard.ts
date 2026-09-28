@@ -59,3 +59,28 @@ export function isTerminalCopyShortcut(event: TerminalKeyboardShortcutEvent): bo
     event.key.toLowerCase() === 'c'
   )
 }
+
+export function isTerminalPasteShortcut(event: TerminalKeyboardShortcutEvent): boolean {
+  return (
+    event.ctrlKey &&
+    !event.altKey &&
+    !event.metaKey &&
+    event.key.toLowerCase() === 'v'
+  )
+}
+
+interface TerminalClipboardSource {
+  readText: () => Promise<string>
+  saveImageToTempFile: () => Promise<string | null>
+}
+
+// Text is pasted as-is; an image is saved to a temp file and pasted as its path,
+// which Claude Code and Codex attach as an image.
+export async function readTerminalPasteData(
+  clipboard: TerminalClipboardSource,
+  options: { allowImage: boolean },
+): Promise<string> {
+  const text = await clipboard.readText()
+  if (text || !options.allowImage) return text
+  return (await clipboard.saveImageToTempFile()) ?? ''
+}

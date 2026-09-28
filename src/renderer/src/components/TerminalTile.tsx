@@ -10,6 +10,7 @@ import { isTerminalInputAttended } from '@/utils/terminalAttention'
 import { buildTerminalStartupCommand } from '@/utils/terminalLaunch'
 import { getTerminalContainerBackground } from '@/utils/terminalTheme'
 import { buildTerminalContextMenuItems } from '@/utils/terminalContextMenu'
+import { readTerminalPasteData } from '@/utils/terminalClipboard'
 import type { TerminalLinkTarget } from '@/utils/terminalContextMenu'
 import { ContextMenu, type MenuItem } from './ContextMenu'
 import {
@@ -483,11 +484,11 @@ export function TerminalTileWrapper({
   const pasteClipboard = useCallback(async () => {
     const currentRuntime = activeRuntimeRef.current
     if (!currentRuntime) return
-    const text = await window.electron.clipboard.readText()
+    const text = await readTerminalPasteData(window.electron.clipboard, { allowImage: !isRemoteSsh })
     if (!text) return
     currentRuntime.focus()
     currentRuntime.paste(text)
-  }, [])
+  }, [isRemoteSsh])
 
   const reconnectRemoteTerminal = useCallback(async () => {
     const currentRuntime = activeRuntimeRef.current

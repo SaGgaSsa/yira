@@ -1,6 +1,7 @@
 import { app, BrowserWindow, shell, ipcMain, Menu, clipboard, ClipboardItem, dialog } from 'electron'
 import { join } from 'path'
 import { existsSync } from 'fs'
+import { mkdir, writeFile } from 'fs/promises'
 import { is } from '@electron-toolkit/utils'
 import { getConfiguredAgentProviders, getWorkspaceRootFolders, initWorkspaces, registerWorkspaceIPC } from './ipc/workspace'
 import { registerCanvasIPC } from './ipc/canvas'
@@ -255,6 +256,17 @@ app.whenReady().then(async () => {
   })
 
   ipcMain.handle('clipboard:readText', () => clipboard.readText())
+  // Terminal agents such as Claude Code and Codex attach images pasted as file paths.
+  ipcMain.handle('clipboard:saveImageToTempFile', async () => {
+    const item = (await clipboard.read()).find((entry) => entry.types.includes('image/png'))
+    if (!item) return null
+    const image = await item.getType('image/png') as Blob
+    const directory = join(app.getPath('temp'), 'yira-clipboard')
+    await mkdir(directory, { recursive: true })
+    const filePath = join(directory, `clipboard-${Date.now()}.png`)
+    await writeFile(filePath, Buffer.from(await image.arrayBuffer()))
+    return filePath
+  })
   ipcMain.handle('clipboard:writeText', async (_event, text: string) => {
     await clipboard.writeText(text)
   })
