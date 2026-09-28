@@ -154,6 +154,29 @@ export function createAgentTerminalExitGate(onExit: () => void): AgentTerminalEx
   }
 }
 
+const ESC = '\u001b'
+const BEL = '\u0007'
+// Sequences the terminal emulator sends by itself: focus in/out, cursor and
+// status reports, device attributes, mode and window reports, SGR mouse
+// reports, and OSC/DCS replies. None of them is text the user typed.
+const TERMINAL_PROTOCOL_REPLY = new RegExp(
+  `^(?:${ESC}\\[[IO]` +
+  `|${ESC}\\[\\d+(?:;\\d+)*[Rnt]` +
+  `|${ESC}\\[[?>=][\\d;]*[cnu]` +
+  `|${ESC}\\[\\??[\\d;]*\\$y` +
+  `|${ESC}\\[<\\d+;\\d+;\\d+[Mm]` +
+  `|${ESC}\\][^${BEL}${ESC}]*(?:${BEL}|${ESC}\\\\)` +
+  `|${ESC}P[^${ESC}]*${ESC}\\\\)+$`,
+)
+
+/**
+ * True when terminal input contains only emulator replies. Such input must
+ * not mark an agent as working: focusing a tile sends a focus-in report.
+ */
+export function isTerminalProtocolReply(data: string): boolean {
+  return TERMINAL_PROTOCOL_REPLY.test(data)
+}
+
 /**
  * Adapt PTY lifecycle signals to the shared runtime registry. Focus clears
  * semantic attention only; it deliberately never changes the session status.
@@ -172,7 +195,7 @@ export function createAgentTerminalLifecycle({
 
   return {
     onAlert: (alert: unknown) => registry.reportAgentAlert(alert, normalizedWorkspaceId),
-    onInput: (data: string) => data.length > 0 && registry.recordActivity(normalizedWorkspaceId, normalizedTileId),
+    onInput: (data: string) => data.length > 0 && !isTerminalProtocolReply(data) && registry.recordActivity(normalizedWorkspaceId, normalizedTileId),
     onFocus: () => registry.alerts.clearOnFocus(normalizedTileId),
     onExit: () => {
       if (exited) return false

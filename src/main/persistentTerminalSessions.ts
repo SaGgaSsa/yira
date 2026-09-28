@@ -15,6 +15,7 @@ import {
 } from '@shared/terminalSessionIdentity'
 import type { TerminalCreateResult } from '@shared/types'
 import { agentSessionRegistry, type AgentSessionRegistry } from './agents/registry'
+import { isTerminalProtocolReply } from './agents/terminal'
 
 /** The small transport surface used by the integration and by its tests. */
 export interface PersistentTerminalTransport {
@@ -363,7 +364,7 @@ export class PersistentTerminalSessions {
   async write(identity: TerminalSessionIdentity, data: string): Promise<void> {
     const client = await this.ensureClient()
     await client.request('write', { identity, data })
-    if (data) {
+    if (data && !isTerminalProtocolReply(data)) {
       this.registry.recordActivity(identity.workspaceId, identity.tileId)
       this.broadcastAlert(identity, null)
     }

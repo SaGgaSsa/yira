@@ -7,6 +7,7 @@ import {
   buildAgentTerminalLaunch,
   createAgentTerminalExitGate,
   createAgentTerminalLifecycle,
+  isTerminalProtocolReply,
 } from './terminal'
 
 test('builds a new agent launch from the fixed provider command and workspace root', () => {
@@ -89,6 +90,8 @@ test('maps agent alerts, input, and PTY exit into runtime lifecycle without mark
   assert.equal(registry.get('workspace-1', 'tile-4')?.status, 'done')
   assert.equal(lifecycle.onFocus(), true)
   assert.equal(registry.get('workspace-1', 'tile-4')?.status, 'done')
+  assert.equal(lifecycle.onInput('\u001b[I'), false)
+  assert.equal(registry.get('workspace-1', 'tile-4')?.status, 'done')
   assert.equal(lifecycle.onInput('yes\r'), true)
   assert.equal(registry.get('workspace-1', 'tile-4')?.status, 'working')
   assert.equal(lifecycle.onExit(), true)
@@ -143,4 +146,27 @@ test('normalizes padded workspace and tile IDs before lifecycle registry calls',
   assert.equal(registry.get('workspace-1', 'tile-6')?.status, 'needs-input')
   assert.equal(lifecycle.onInput('yes\r'), true)
   assert.equal(registry.get('workspace-1', 'tile-6')?.status, 'working')
+})
+
+test('recognizes terminal protocol replies but not typed input', () => {
+  const replies = [
+    '\u001b[I',
+    '\u001b[O',
+    '\u001b[24;80R',
+    '\u001b[0n',
+    '\u001b[?62;22c',
+    '\u001b[>0;276;0c',
+    '\u001b[?1u',
+    '\u001b[?2004;1$y',
+    '\u001b[8;24;80t',
+    '\u001b[<0;10;5M',
+    '\u001b]11;rgb:0000/0000/0000\u0007',
+    '\u001b]10;rgb:ffff/ffff/ffff\u001b\\',
+    '\u001bP1$r0m\u001b\\',
+    '\u001b[O\u001b[I',
+  ]
+  for (const reply of replies) assert.equal(isTerminalProtocolReply(reply), true, JSON.stringify(reply))
+
+  const typed = ['a', 'yes\r', '\r', '\u001b', '\u001b[A', '\u001b[1;5C', '\u001b[200~text\u001b[201~', '\u001b[Ix', '\u0003']
+  for (const input of typed) assert.equal(isTerminalProtocolReply(input), false, JSON.stringify(input))
 })

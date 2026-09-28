@@ -261,6 +261,25 @@ test('empty input does not restore working status or clear an agent alert', asyn
   assert.equal(registry.alerts.has(identity.tileId), true)
 })
 
+test('terminal protocol replies do not restore working status or clear an agent alert', async () => {
+  const transport = new FakeTransport()
+  const registry = new AgentSessionRegistry({ now: () => 1_700_000_000_000 })
+  const agent = { provider: 'codex' as const, sessionId: 'resume-3', startedAt: '2024-01-01T00:00:00.000Z' }
+  transport.setHandler('attach', () => snapshot({ agent }))
+  transport.setHandler('write', () => null)
+  const sessions = createSessions(transport, { registry })
+  await sessions.attach(target)
+  registry.reportAgentAlert({ provider: 'codex', event: 'completed', tileId: identity.tileId }, identity.workspaceId)
+  await sessions.write(identity, '\u001b[I')
+  await sessions.write(identity, '\u001b[12;40R\u001b[O')
+
+  assert.equal(registry.get(identity.workspaceId, identity.tileId)?.status, 'done')
+  assert.equal(registry.alerts.has(identity.tileId), true)
+
+  await sessions.write(identity, 'next\r')
+  assert.equal(registry.get(identity.workspaceId, identity.tileId)?.status, 'working')
+})
+
 test('workspace deletion waits for an in-flight create and blocks a later create', async () => {
   const transport = new FakeTransport()
   transport.setHandler('attach', () => null)
