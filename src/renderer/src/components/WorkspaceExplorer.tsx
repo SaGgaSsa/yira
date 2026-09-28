@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronDown, ChevronRight, File, Folder, RefreshCw, Search, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, ExternalLink, File, Folder, RefreshCw, Search, X } from 'lucide-react'
 import type { FileEntry } from '@shared/types'
 import {
   createExplorerNode,
@@ -240,6 +240,17 @@ export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile }: Work
         ) : (
           <>
             <span className="nd-label min-w-0 flex-1 truncate">{rootName}</span>
+            <button
+              type="button"
+              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-text-secondary hover:bg-hover-bg hover:text-text-display"
+              onClick={() => {
+                void window.electron.files.openFolder(rootPath).catch(() => {})
+              }}
+              title="Open folder"
+              aria-label="Open folder"
+            >
+              <ExternalLink size={15} />
+            </button>
             <button
               type="button"
               className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-text-secondary hover:bg-hover-bg hover:text-text-display"
