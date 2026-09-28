@@ -7,3 +7,9 @@ release/
 .codex/
 .superpowers/
 .worktrees/
+
+# Internal working docs (kept locally)
+docs/superpowers/
+docs/brand-concepts/
+docs/*-plan.md
+docs/workspace-terminal-activity.md
