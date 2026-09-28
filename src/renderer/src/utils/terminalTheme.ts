@@ -26,8 +26,12 @@ export function getTerminalContainerBackground(themeId: unknown, translucent = f
 }
 
 // Default terminals follow the application palette; explicit overrides stay intact.
-export function resolveTerminalThemeId(terminalThemeId: unknown, appThemeId: unknown) {
+// `followLight` lets default terminals switch to the light palette, used when a
+// window material makes the terminal share the light application surface.
+export function resolveTerminalThemeId(terminalThemeId: unknown, appThemeId: unknown, followLight = false) {
   const terminalId = normalizeTerminalThemeId(terminalThemeId)
   const appId = normalizeAppThemeId(appThemeId)
-  return terminalId === 'yira-default' && appId !== 'default' ? appId : terminalId
+  if (terminalId !== 'yira-default') return terminalId
+  if (appId !== 'default') return appId
+  return followLight ? 'light' : terminalId
 }
