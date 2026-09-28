@@ -12,11 +12,11 @@ if (getXtermTheme('unknown').background !== '#111111') {
   throw new Error('invalid terminal theme ids must resolve to the default xterm theme')
 }
 
-if (getXtermTheme('unknown', true).background !== 'rgba(17, 17, 17, 0.56)') {
-  throw new Error('translucent xterm theme must retain its palette with an alpha background')
+if (getXtermTheme('unknown', true).background !== 'rgba(17, 17, 17, 0)') {
+  throw new Error('translucent xterm theme must keep its palette RGB with a transparent background')
 }
-if (getTerminalContainerBackground('light', true) !== 'rgba(247, 247, 242, 0.56)') {
-  throw new Error('translucent terminal container must retain its palette with an alpha background')
+if (getTerminalContainerBackground('light', true) !== 'var(--bg-secondary)') {
+  throw new Error('translucent terminal container must use the shared surface token')
 }
 
 // Switching the global palette changes default terminals without changing explicit overrides.
