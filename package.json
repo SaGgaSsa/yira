@@ -3,10 +3,14 @@
   "version": "0.1.82",
   "private": true,
   "productName": "Yira",
-  "description": "Infinite canvas terminal workspace",
+  "description": "A terminal-centered desktop workspace with terminal, note, browser, and file tiles, Canvas, Grid, Focus, and Split views, and a Board.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/SaGgaSsa/yira.git"
+  },
+  "homepage": "https://yira-site.vercel.app",
+  "bugs": {
+    "url": "https://github.com/SaGgaSsa/yira/issues"
   },
   "type": "module",
   "main": "dist-electron/main/index.js",
@@ -27,9 +31,23 @@
     "preview": "electron-vite preview",
     "postinstall": "electron-rebuild -f -w node-pty"
   },
-  "keywords": [],
+  "keywords": [
+    "terminal",
+    "workspace",
+    "electron",
+    "canvas",
+    "tiles",
+    "board",
+    "developer-tools",
+    "desktop",
+    "notes",
+    "browser",
+    "file-manager",
+    "grid",
+    "split-view"
+  ],
   "author": "SaGgaSsa",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "devDependencies": {
     "@electron-toolkit/tsconfig": "^2.0.0",
     "@electron-toolkit/utils": "^4.0.0",
