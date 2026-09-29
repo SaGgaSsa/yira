@@ -396,11 +396,7 @@ export async function commitGitChanges(
   await runGitAtRoot(rootPath, ['commit', '-m', validateCommitMessage(message)], executor)
 }
 
-export async function syncGitRepository(
-  rootPathInput: string,
-  executor: GitCommandExecutor = execGitCommand,
-): Promise<void> {
-  const rootPath = await resolveGitRootPath(rootPathInput)
+async function requireGitUpstream(rootPath: string, executor: GitCommandExecutor): Promise<void> {
   let upstream: GitCommandResult
   try {
     upstream = await runGitAtRoot(rootPath, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'], executor)
@@ -409,6 +405,40 @@ export async function syncGitRepository(
     throw new Error('Current branch has no upstream configured')
   }
   if (!upstream.stdout.trim()) throw new Error('Current branch has no upstream configured')
+}
+
+export async function fetchGitRepository(
+  rootPathInput: string,
+  executor: GitCommandExecutor = execGitCommand,
+): Promise<void> {
+  const rootPath = await resolveGitRootPath(rootPathInput)
+  await runGitAtRoot(rootPath, ['fetch', '--prune'], executor)
+}
+
+export async function pullGitRepository(
+  rootPathInput: string,
+  executor: GitCommandExecutor = execGitCommand,
+): Promise<void> {
+  const rootPath = await resolveGitRootPath(rootPathInput)
+  await requireGitUpstream(rootPath, executor)
+  await runGitAtRoot(rootPath, ['pull', '--ff-only'], executor)
+}
+
+export async function pushGitRepository(
+  rootPathInput: string,
+  executor: GitCommandExecutor = execGitCommand,
+): Promise<void> {
+  const rootPath = await resolveGitRootPath(rootPathInput)
+  await requireGitUpstream(rootPath, executor)
+  await runGitAtRoot(rootPath, ['push'], executor)
+}
+
+export async function syncGitRepository(
+  rootPathInput: string,
+  executor: GitCommandExecutor = execGitCommand,
+): Promise<void> {
+  const rootPath = await resolveGitRootPath(rootPathInput)
+  await requireGitUpstream(rootPath, executor)
   await runGitAtRoot(rootPath, ['pull', '--ff-only'], executor)
   await runGitAtRoot(rootPath, ['push'], executor)
 }

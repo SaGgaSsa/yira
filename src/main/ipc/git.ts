@@ -2,7 +2,7 @@ import { ipcMain } from 'electron'
 import type { GitCommitHistoryResult, GitRepository, GitStatusResult, WorkspaceGitDiffResult } from '@shared/types'
 import { getGitDiffSummary } from '../git/diff'
 import { discoverGitRepositories, resolveConfiguredGitRepository } from '../git/repositories'
-import { commitGitChanges, getGitCommitHistory, getGitStatus, stageGitFiles, syncGitRepository, unstageGitFiles } from '../git/runner'
+import { commitGitChanges, fetchGitRepository, getGitCommitHistory, getGitStatus, pullGitRepository, pushGitRepository, stageGitFiles, syncGitRepository, unstageGitFiles } from '../git/runner'
 import { getWorkspaceGitConfigById } from './workspace'
 
 interface WorkspaceGitConfig {
@@ -38,6 +38,9 @@ export interface GitIPCDependencies {
   stageGitFiles: typeof stageGitFiles
   unstageGitFiles: typeof unstageGitFiles
   commitGitChanges: typeof commitGitChanges
+  fetchGitRepository: typeof fetchGitRepository
+  pullGitRepository: typeof pullGitRepository
+  pushGitRepository: typeof pushGitRepository
   syncGitRepository: typeof syncGitRepository
 }
 
@@ -142,6 +145,15 @@ export function createGitIPCHandlers(dependencies: GitIPCDependencies): Record<s
     'git:sync': async (_event: unknown, workspaceId: string, repositoryPath: string) => {
       await dependencies.syncGitRepository(await resolveRepository(workspaceId, repositoryPath))
     },
+    'git:fetch': async (_event: unknown, workspaceId: string, repositoryPath: string) => {
+      await dependencies.fetchGitRepository(await resolveRepository(workspaceId, repositoryPath))
+    },
+    'git:pull': async (_event: unknown, workspaceId: string, repositoryPath: string) => {
+      await dependencies.pullGitRepository(await resolveRepository(workspaceId, repositoryPath))
+    },
+    'git:push': async (_event: unknown, workspaceId: string, repositoryPath: string) => {
+      await dependencies.pushGitRepository(await resolveRepository(workspaceId, repositoryPath))
+    },
   }
 }
 
@@ -155,6 +167,9 @@ const defaultGitIPCDependencies: GitIPCDependencies = {
   stageGitFiles,
   unstageGitFiles,
   commitGitChanges,
+  fetchGitRepository,
+  pullGitRepository,
+  pushGitRepository,
   syncGitRepository,
 }
 

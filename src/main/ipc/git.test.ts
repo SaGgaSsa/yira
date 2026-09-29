@@ -77,6 +77,9 @@ test('registers and invokes discovery through the Git IPC boundary', async () =>
     stageGitFiles: async () => undefined,
     unstageGitFiles: async () => undefined,
     commitGitChanges: async () => undefined,
+    fetchGitRepository: async () => undefined,
+    pullGitRepository: async () => undefined,
+    pushGitRepository: async () => undefined,
     syncGitRepository: async () => undefined,
   })
 
@@ -112,6 +115,9 @@ test('sums configured repository diffs and discards the total when one repositor
     stageGitFiles: async () => undefined,
     unstageGitFiles: async () => undefined,
     commitGitChanges: async () => undefined,
+    fetchGitRepository: async () => undefined,
+    pullGitRepository: async () => undefined,
+    pushGitRepository: async () => undefined,
     syncGitRepository: async () => undefined,
   })
 
@@ -139,6 +145,9 @@ test('sums configured repository diffs and discards the total when one repositor
     stageGitFiles: async () => undefined,
     unstageGitFiles: async () => undefined,
     commitGitChanges: async () => undefined,
+    fetchGitRepository: async () => undefined,
+    pullGitRepository: async () => undefined,
+    pushGitRepository: async () => undefined,
     syncGitRepository: async () => undefined,
   })
   assert.deepEqual(await unavailableHandlers['git:workspaceDiff']({}, 'workspace-a'), {
@@ -165,6 +174,9 @@ test('returns an unavailable workspace diff for invalid or empty workspace confi
     stageGitFiles: async () => undefined,
     unstageGitFiles: async () => undefined,
     commitGitChanges: async () => undefined,
+    fetchGitRepository: async () => undefined,
+    pullGitRepository: async () => undefined,
+    pushGitRepository: async () => undefined,
     syncGitRepository: async () => undefined,
   })
 
@@ -208,6 +220,9 @@ test('resolves the configured repository before status, history, and mutations',
     stageGitFiles: async (rootPath, paths) => { runnerCalls.push(`stage:${rootPath}:${paths.join(',')}`) },
     unstageGitFiles: async (rootPath, paths) => { runnerCalls.push(`unstage:${rootPath}:${paths.join(',')}`) },
     commitGitChanges: async (rootPath, message) => { runnerCalls.push(`commit:${rootPath}:${message}`) },
+    fetchGitRepository: async (rootPath) => { runnerCalls.push(`fetch:${rootPath}`) },
+    pullGitRepository: async (rootPath) => { runnerCalls.push(`pull:${rootPath}`) },
+    pushGitRepository: async (rootPath) => { runnerCalls.push(`push:${rootPath}`) },
     syncGitRepository: async (rootPath) => { runnerCalls.push(`sync:${rootPath}`) },
   })
   for (const [channel, handler] of Object.entries(handlers)) ipcMain.handle(channel, handler)
@@ -218,8 +233,14 @@ test('resolves the configured repository before status, history, and mutations',
   await ipcMain.invoke('git:unstage', 'workspace-a', 'packages/web', 'src/index.ts', 'src/old.ts')
   await ipcMain.invoke('git:commit', 'workspace-a', 'packages/web', 'save changes')
   await ipcMain.invoke('git:sync', 'workspace-a', 'packages/web')
+  await ipcMain.invoke('git:fetch', 'workspace-a', 'packages/web')
+  await ipcMain.invoke('git:pull', 'workspace-a', 'packages/web')
+  await ipcMain.invoke('git:push', 'workspace-a', 'packages/web')
 
   assert.deepEqual(resolveCalls, [
+    { rootPath: '/workspace', configuredPaths: ['packages/web'], requestedPath: 'packages/web' },
+    { rootPath: '/workspace', configuredPaths: ['packages/web'], requestedPath: 'packages/web' },
+    { rootPath: '/workspace', configuredPaths: ['packages/web'], requestedPath: 'packages/web' },
     { rootPath: '/workspace', configuredPaths: ['packages/web'], requestedPath: 'packages/web' },
     { rootPath: '/workspace', configuredPaths: ['packages/web'], requestedPath: 'packages/web' },
     { rootPath: '/workspace', configuredPaths: ['packages/web'], requestedPath: 'packages/web' },
@@ -234,6 +255,9 @@ test('resolves the configured repository before status, history, and mutations',
     'unstage:/workspace/packages/web:src/index.ts,src/old.ts',
     'commit:/workspace/packages/web:save changes',
     'sync:/workspace/packages/web',
+    'fetch:/workspace/packages/web',
+    'pull:/workspace/packages/web',
+    'push:/workspace/packages/web',
   ])
 })
 
@@ -254,6 +278,9 @@ test('rejects an unconfigured or escaping repository before mutation runner exec
     stageGitFiles: async () => { runnerCalled = true },
     unstageGitFiles: async () => { runnerCalled = true },
     commitGitChanges: async () => { runnerCalled = true },
+    fetchGitRepository: async () => undefined,
+    pullGitRepository: async () => undefined,
+    pushGitRepository: async () => undefined,
     syncGitRepository: async () => { runnerCalled = true },
   })
   for (const [channel, handler] of Object.entries(handlers)) ipcMain.handle(channel, handler)
@@ -282,6 +309,9 @@ test('keeps safe fallback results when repository resolution fails', async () =>
     stageGitFiles: async () => undefined,
     unstageGitFiles: async () => undefined,
     commitGitChanges: async () => undefined,
+    fetchGitRepository: async () => undefined,
+    pullGitRepository: async () => undefined,
+    pushGitRepository: async () => undefined,
     syncGitRepository: async () => undefined,
   })
   for (const [channel, handler] of Object.entries(handlers)) ipcMain.handle(channel, handler)
@@ -321,6 +351,9 @@ test('registers discovery by root path for unsaved workspace roots', async () =>
     stageGitFiles: async () => undefined,
     unstageGitFiles: async () => undefined,
     commitGitChanges: async () => undefined,
+    fetchGitRepository: async () => undefined,
+    pullGitRepository: async () => undefined,
+    pushGitRepository: async () => undefined,
     syncGitRepository: async () => undefined,
   })
 
@@ -361,6 +394,9 @@ test('automatically sums shallow repositories, preserves selected deep repositor
     stageGitFiles: async () => undefined,
     unstageGitFiles: async () => undefined,
     commitGitChanges: async () => undefined,
+    fetchGitRepository: async () => undefined,
+    pullGitRepository: async () => undefined,
+    pushGitRepository: async () => undefined,
     syncGitRepository: async () => undefined,
   })
 
@@ -414,6 +450,9 @@ test('calculates a real multimodule workspace diff without a root repository or 
       stageGitFiles: async () => undefined,
       unstageGitFiles: async () => undefined,
       commitGitChanges: async () => undefined,
+      fetchGitRepository: async () => undefined,
+      pullGitRepository: async () => undefined,
+      pushGitRepository: async () => undefined,
       syncGitRepository: async () => undefined,
     })
 

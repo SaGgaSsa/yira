@@ -160,7 +160,7 @@ let currentContainer: AnyRecord | null = null
 function findCommitsButton(container: AnyRecord): AnyRecord {
   const buttons = container.getElementsByTagName('button')
   for (let index = 0; index < buttons.length; index += 1) {
-    if (buttons[index].getAttribute('aria-controls') === 'source-control-commits') return buttons[index]
+    if (buttons[index].getAttribute('aria-controls')?.startsWith('source-control-commits')) return buttons[index]
   }
   assert.fail('source control must render the commits accordion button')
 }
@@ -212,7 +212,7 @@ test('keeps healthy Git status visible when history loading fails', async () => 
   try {
     await waitFor(() => statusCalls === 1 && historyCalls === 1 && serializedMarkup(container).includes('Changes (1)'))
     const healthyMarkup = serializedMarkup(container)
-    assert.match(healthyMarkup, />origin\/main</)
+    assert.match(healthyMarkup, />origin\/main · ↑0 ↓0</)
     assert.match(healthyMarkup, /Changes \(1\)/)
     assert.match(healthyMarkup, />README\.md</)
     assert.doesNotMatch(healthyMarkup, /No se pudo cargar el historial/)

@@ -11,10 +11,7 @@ import type {
 import { AgentPanel } from './AgentPanel'
 import { WorkspaceExplorer } from './WorkspaceExplorer'
 import { WorkspaceSourceControl } from './WorkspaceSourceControl'
-
-const PANEL_MIN = 300
-const PANEL_MAX = 560
-const PANEL_DEFAULT = 344
+import { useSidePanelWidth } from '@/hooks/useSidePanelWidth'
 
 type WorkspacePanelTab = 'explorer' | 'agents' | 'source-control'
 
@@ -53,7 +50,7 @@ export function WorkspacePanel({
   onFocusTile,
   onOpenWorkspaceSettings,
 }: WorkspacePanelProps): React.ReactElement {
-  const [width, setWidth] = useState(PANEL_DEFAULT)
+  const [width, setWidth] = useSidePanelWidth()
   const [resizing, setResizing] = useState(false)
   const [tab, setTab] = useState<WorkspacePanelTab>('explorer')
   const resizeStartRef = useRef<{ x: number; width: number } | null>(null)
@@ -70,7 +67,7 @@ export function WorkspacePanel({
     const handleMove = (event: MouseEvent) => {
       const start = resizeStartRef.current
       if (!start) return
-      setWidth(Math.max(PANEL_MIN, Math.min(PANEL_MAX, start.width - (event.clientX - start.x))))
+      setWidth(start.width - (event.clientX - start.x))
     }
     const handleUp = () => {
       resizeStartRef.current = null
@@ -90,7 +87,7 @@ export function WorkspacePanel({
   }, [resizing])
 
   return (
-    <aside className="relative flex min-h-0 shrink-0 flex-col border-l border-border bg-bg-secondary" style={{ width, minWidth: PANEL_MIN }}>
+    <aside className="relative box-border flex min-h-0 shrink-0 flex-col border-l border-border bg-bg-secondary" style={{ width, minWidth: 300 }}>
       <div className="absolute bottom-0 left-0 top-0 z-10 w-2 cursor-col-resize" onMouseDown={handleResizeStart}>
         <div className="absolute bottom-8 left-0 top-8 w-px bg-border-visible" />
       </div>
@@ -127,6 +124,7 @@ export function WorkspacePanel({
         )}
         {tab === 'source-control' && (
           <WorkspaceSourceControl
+            key={workspaceId}
             workspaceId={workspaceId}
             sourceControlRepositoryPaths={sourceControlRepositoryPaths}
             sourceControlViewMode={sourceControlViewMode}

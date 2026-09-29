@@ -13,3 +13,6 @@ const markup = renderToStaticMarkup(
 if (!markup.includes('Search workspace files')) {
   throw new Error('workspace explorer must render an accessible file search button')
 }
+if (!markup.includes('Empty folder') || markup.includes('<li')) {
+  throw new Error('workspace explorer must show root contents directly without a root directory node')
+}

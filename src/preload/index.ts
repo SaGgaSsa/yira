@@ -128,6 +128,9 @@ contextBridge.exposeInMainWorld('electron', {
     stage: (workspaceId: string, repositoryPath: string, relativePath: string, originalPath?: string) => ipcRenderer.invoke('git:stage', workspaceId, repositoryPath, relativePath, originalPath),
     unstage: (workspaceId: string, repositoryPath: string, relativePath: string, originalPath?: string) => ipcRenderer.invoke('git:unstage', workspaceId, repositoryPath, relativePath, originalPath),
     commit: (workspaceId: string, repositoryPath: string, message: string) => ipcRenderer.invoke('git:commit', workspaceId, repositoryPath, message),
+    fetch: (workspaceId: string, repositoryPath: string) => ipcRenderer.invoke('git:fetch', workspaceId, repositoryPath),
+    pull: (workspaceId: string, repositoryPath: string) => ipcRenderer.invoke('git:pull', workspaceId, repositoryPath),
+    push: (workspaceId: string, repositoryPath: string) => ipcRenderer.invoke('git:push', workspaceId, repositoryPath),
     sync: (workspaceId: string, repositoryPath: string) => ipcRenderer.invoke('git:sync', workspaceId, repositoryPath),
   },
 

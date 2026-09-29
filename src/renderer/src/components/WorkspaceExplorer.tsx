@@ -292,18 +292,30 @@ export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile }: Work
               </ul>
             )}
           </>
-        ) : (
+        ) : root.status === 'loading' ? (
+          <div className="px-4 py-3 text-sm text-text-disabled">Loading…</div>
+        ) : root.status === 'error' ? (
+          <div className="flex items-center gap-2 px-4 py-3 text-sm text-red-300">
+            <span className="min-w-0 flex-1">{root.error ?? 'Unable to load directory'}</span>
+            <button className="inline-flex h-7 items-center gap-1 rounded px-2 hover:bg-hover-bg" onClick={() => handleRetry(root)} title="Retry">
+              <RefreshCw size={13} /> Retry
+            </button>
+          </div>
+        ) : root.children?.length ? (
           <ul>
-            <ExplorerTreeNode
-              node={root}
-              depth={0}
-              onToggleDirectory={handleToggleDirectory}
-              onOpenFile={handleOpenFile}
-              onRetry={handleRetry}
-              activeFilePath={activeFilePath}
-            />
+            {root.children.map((child) => (
+              <ExplorerTreeNode
+                key={child.relativePath}
+                node={child}
+                depth={0}
+                onToggleDirectory={handleToggleDirectory}
+                onOpenFile={handleOpenFile}
+                onRetry={handleRetry}
+                activeFilePath={activeFilePath}
+              />
+            ))}
           </ul>
-        )}
+        ) : <div className="px-4 py-3 text-sm text-text-disabled">Empty folder</div>}
       </div>
       {openError && <div className="shrink-0 border-t border-border px-3 py-2 text-xs text-red-300">{openError}</div>}
     </div>
