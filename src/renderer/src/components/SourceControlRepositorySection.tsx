@@ -98,7 +98,7 @@ function FileChangeRow({ change, staged, depth, displayPath, disabled, onToggle,
         onClick={(event) => { event.stopPropagation(); onToggle(change, staged) }}
         disabled={disabled}
         title={staged ? t('sourceControl.unstageFile') : t('sourceControl.stageFile')}
-        aria-label={staged ? `${t('sourceControl.unstageFile')}: ${change.path}` : `${t('sourceControl.stageFile')}: ${change.path}`}
+        aria-label={staged ? t('sourceControl.unstagePath', { path: change.path }) : t('sourceControl.stagePath', { path: change.path })}
       >
         {staged ? <SquareMinus size={15} /> : <SquarePlus size={15} />}
       </button>

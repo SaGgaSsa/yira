@@ -355,6 +355,8 @@ type TranslationResources = {
     retryOperation: string
     stageFile: string
     unstageFile: string
+    stagePath: string
+    unstagePath: string
     loadStatusError: string
     loadHistoryErrorFallback: string
     onlyChanged: string
@@ -1023,6 +1025,8 @@ const en: TranslationResources = {
     retryOperation: 'Retry operation',
     stageFile: 'Stage file',
     unstageFile: 'Unstage file',
+    stagePath: 'Stage {{path}}',
+    unstagePath: 'Unstage {{path}}',
     loadStatusError: 'Unable to load source control status',
     loadHistoryErrorFallback: 'Unable to load commit history',
     onlyChanged: 'Only changed',
@@ -1691,6 +1695,8 @@ const es: TranslationResources = {
     retryOperation: 'Reintentar operación',
     stageFile: 'Preparar archivo',
     unstageFile: 'Quitar archivo de los preparados',
+    stagePath: 'Preparar {{path}}',
+    unstagePath: 'Quitar {{path}} de los preparados',
     loadStatusError: 'No se pudo cargar el estado del control de código fuente',
     loadHistoryErrorFallback: 'No se pudo cargar el historial de commits',
     onlyChanged: 'Solo con cambios',
