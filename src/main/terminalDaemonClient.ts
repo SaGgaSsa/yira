@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from 'node:child_process'
+import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import { createConnection, type Socket } from 'node:net'
@@ -759,6 +759,85 @@ async function startDaemon(
     options.directory,
     `daemon did not publish a responsive endpoint.json within ${options.startupTimeoutMs ?? TERMINAL_DAEMON_STARTUP_TIMEOUT_MS} ms.${suffix}`,
   )
+}
+
+export interface StopTerminalDaemonOptions {
+  directory: string
+  timeoutMs?: number
+  killProcessTree?: (pid: number) => Promise<void>
+}
+
+function killProcessTree(pid: number): Promise<void> {
+  if (process.platform !== 'win32') {
+    process.kill(pid, 'SIGTERM')
+    return Promise.resolve()
+  }
+  // The daemon owns the PTY shells and console hosts. All of them must exit
+  // before the installer can replace files in the installation directory.
+  return new Promise((resolveKill, reject) => {
+    execFile('taskkill', ['/PID', String(pid), '/T', '/F'], { windowsHide: true }, (error) => {
+      if (error && isProcessAlive(pid)) reject(error)
+      else resolveKill()
+    })
+  })
+}
+
+/**
+ * Stop the daemon and every PTY it owns. Sessions are lost. The updater uses
+ * it because a live daemon keeps the application executable in use.
+ */
+export async function stopTerminalDaemon(options: StopTerminalDaemonOptions): Promise<boolean> {
+  const endpointPath = join(resolve(options.directory), TERMINAL_DAEMON_ENDPOINT_FILE)
+  let endpoint: TerminalDaemonEndpoint | null
+  try {
+    endpoint = await readEndpoint(endpointPath)
+  } catch {
+    return false
+  }
+  if (!endpoint || endpoint.pid === process.pid || !isProcessAlive(endpoint.pid)) return false
+
+  const timeoutMs = normalizeTimeout(options.timeoutMs, TERMINAL_DAEMON_REQUEST_TIMEOUT_MS)
+  const deadline = Date.now() + timeoutMs
+  // Graceful first, so shells close their PTYs. Older daemons reject the method.
+  const gracefulDeadline = Date.now() + Math.floor(timeoutMs / 2)
+  if (await requestDaemonShutdown(endpoint, gracefulDeadline)
+    && await waitForProcessExit(endpoint.pid, gracefulDeadline)) {
+    await removeEndpoint(endpointPath)
+    return true
+  }
+
+  await (options.killProcessTree ?? killProcessTree)(endpoint.pid)
+  if (!await waitForProcessExit(endpoint.pid, deadline)) {
+    throw new Error(`Terminal daemon PID ${endpoint.pid} did not exit`)
+  }
+  await removeEndpoint(endpointPath)
+  return true
+}
+
+async function requestDaemonShutdown(endpoint: TerminalDaemonEndpoint, deadline: number): Promise<boolean> {
+  const timeoutMs = remainingTime(deadline)
+  if (timeoutMs === 0) return false
+  let client: TerminalDaemonClient | undefined
+  try {
+    client = await TerminalDaemonClient.connect(endpoint, {
+      connectTimeoutMs: Math.min(TERMINAL_DAEMON_CONNECT_TIMEOUT_MS, timeoutMs),
+      requestTimeoutMs: timeoutMs,
+    })
+    await client.request('shutdown', undefined)
+    return true
+  } catch {
+    return false
+  } finally {
+    client?.disconnect()
+  }
+}
+
+async function waitForProcessExit(pid: number, deadline: number): Promise<boolean> {
+  while (isProcessAlive(pid)) {
+    if (remainingTime(deadline) === 0) return false
+    await delay(Math.min(TERMINAL_DAEMON_POLL_INTERVAL_MS, remainingTime(deadline)))
+  }
+  return true
 }
 
 const startupPromises = new Map<string, Promise<TerminalDaemonClient>>()

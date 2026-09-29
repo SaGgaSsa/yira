@@ -18,7 +18,8 @@ test('routes terminal creation through the persistent daemon and uses daemon ide
 
   assert.match(text, /PersistentTerminalSessions/)
   assert.match(text, /connectTerminalDaemon\(options\)/)
-  assert.match(text, /directory:\s*join\(YIRA_HOME, 'terminal-runtime'\)/)
+  assert.match(text, /TERMINAL_DAEMON_DIRECTORY = join\(YIRA_HOME, 'terminal-runtime'\)/)
+  assert.match(text, /directory:\s*TERMINAL_DAEMON_DIRECTORY/)
   assert.match(text, /executable:\s*process\.execPath/)
   assert.match(text, /entryPath:\s*join\(__dirname, 'terminalDaemon\.js'\)/)
   assert.match(text, /process\.platform !== 'linux'/)

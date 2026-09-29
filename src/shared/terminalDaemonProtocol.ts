@@ -63,6 +63,8 @@ export interface TerminalDaemonMethods {
   destroy: { params: TerminalSessionIdentity; result: null }
   destroyCurrent: { params: TerminalSessionTarget; result: null }
   destroyWorkspace: { params: { workspaceId: string }; result: null }
+  /** Close every session and exit the daemon process. */
+  shutdown: { params: undefined; result: null }
 }
 
 export type TerminalDaemonMethod = keyof TerminalDaemonMethods

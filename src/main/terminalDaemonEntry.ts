@@ -40,6 +40,10 @@ export async function runTerminalDaemonEntry(
           process.exitCode = 0
         })
       },
+      // Native PTY handles can keep the event loop alive after close.
+      onShutdown: () => {
+        void stop().finally(() => process.exit(0))
+      },
     })
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error))
