@@ -12,7 +12,7 @@ export function resolveSidebarCollapsedAfterWorkspaceViewChange(
   viewMode: ViewMode,
   shouldKeepSidebarOpen: boolean,
 ): boolean {
-  if (previousWorkspaceId !== activeWorkspaceId) return false
+  if (previousWorkspaceId !== activeWorkspaceId) return shouldKeepSidebarOpen ? false : currentCollapsed
   if (viewMode === 'fullview') return !shouldKeepSidebarOpen
   return currentCollapsed
 }
