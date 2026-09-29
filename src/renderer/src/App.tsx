@@ -1191,9 +1191,12 @@ function AppContent(): React.ReactElement {
       width: size.width,
       height: size.height,
       zIndex: initialState.nextZIndex,
-      label: deriveFileTileTitle(path),
+      label: options.diff
+        ? `${deriveFileTileTitle(path)} (${t(options.diff.staged ? 'files.diffStaged' : 'files.diffWorkingTree')})`
+        : deriveFileTileTitle(path),
       filePath: path,
       filePreview: true,
+      ...(options.diff ? { fileDiff: options.diff } : {}),
       ...(options.markdownView ? { fileMarkdownView: options.markdownView } : {}),
     }
 
@@ -1213,7 +1216,7 @@ function AppContent(): React.ReactElement {
       ) ? current : null
     }
     let readResult: Awaited<ReturnType<typeof window.electron.files.read>> | null = null
-    if (!isImageFilePath(path)) {
+    if (!options.diff && !isImageFilePath(path)) {
       try {
         readResult = await window.electron.files.read(workspaceRootPath, path)
       } catch (error) {
@@ -1249,7 +1252,7 @@ function AppContent(): React.ReactElement {
     }
     state.addTile(plan.tile)
     makeOpenedFileVisible(plan.tile.id)
-  }, [makeOpenedFileVisible, workspaceRootPath])
+  }, [makeOpenedFileVisible, t, workspaceRootPath])
 
   useEffect(() => window.electron.floating.onNavigationRequested(({ workspaceId, kind, target, fileMarkdownView }) => {
     if (workspaceId !== useCanvasStore.getState().activeWorkspaceId) return
@@ -2456,6 +2459,12 @@ function AppContent(): React.ReactElement {
                   onWorkspaceUpdated={handleWorkspaceConfigUpdated}
                   activeFilePath={activeFilePath}
                   onOpenFile={openFileTile}
+                  onOpenDiff={(repositoryPath, change, staged) => {
+                    const path = repositoryPath === '.' ? change.path : `${repositoryPath}/${change.path}`
+                    void openFileTile(path, { diff: { repositoryPath, path: change.path, originalPath: change.originalPath, staged } }).catch((error: unknown) => {
+                      console.error('[App] Failed to open Git diff tile:', error)
+                    })
+                  }}
                   agentProvider={activeWorkspaceConfig.agentProvider}
                   agentProviders={activeWorkspaceConfig.agentProviders}
                   availableProfiles={availableProfiles}

@@ -6,6 +6,7 @@ import { NoteTile } from './NoteTile'
 import { BrowserTile } from './BrowserTile'
 import { TimerTile } from './TimerTile'
 import { FilesTile } from './FilesTile'
+import { GitDiffTile } from './GitDiffTile'
 
 export const TILE_META = {
   terminal: { label: 'Terminal', icon: Terminal },
@@ -63,6 +64,7 @@ export function TileContent({ tile, workspaceId, workspaceConfig, isFocused, edg
   }
 
   if (tile.type === 'files') {
+    if (tile.fileDiff) return <GitDiffTile tile={tile} workspaceId={workspaceId} isVisible={isVisible} onOpenFile={onOpenFileTile} />
     return (
       <FilesTile
         tile={tile}

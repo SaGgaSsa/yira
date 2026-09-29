@@ -383,6 +383,15 @@ type TranslationResources = {
     markdownPreview: string
     imageUnavailable: string
     saved: string
+    diffSideBySide: string
+    diffInline: string
+    openDiffFile: string
+    diffLoading: string
+    diffBinary: string
+    diffTooLarge: string
+    diffNoChanges: string
+    diffStaged: string
+    diffWorkingTree: string
     dirty: string
     conflict: string
     missing: string
@@ -824,6 +833,15 @@ const en: TranslationResources = {
     markdownPreview: 'View rendered Markdown',
     imageUnavailable: 'Image unavailable',
     saved: 'Saved',
+    diffSideBySide: 'Side by side',
+    diffInline: 'Inline',
+    openDiffFile: 'Open file',
+    diffLoading: 'Loading diff…',
+    diffBinary: 'Binary files cannot be shown as text.',
+    diffTooLarge: 'This file is too large to display.',
+    diffNoChanges: 'No differences.',
+    diffStaged: 'Staged',
+    diffWorkingTree: 'Working Tree',
     dirty: 'Unsaved changes',
     conflict: 'Conflict',
     missing: 'This file no longer exists.',
@@ -1265,6 +1283,15 @@ const es: TranslationResources = {
     markdownPreview: 'Ver Markdown renderizado',
     imageUnavailable: 'Imagen no disponible',
     saved: 'Guardado',
+    diffSideBySide: 'Lado a lado',
+    diffInline: 'En línea',
+    openDiffFile: 'Abrir archivo',
+    diffLoading: 'Cargando diff…',
+    diffBinary: 'No se pueden mostrar archivos binarios como texto.',
+    diffTooLarge: 'Este archivo es demasiado grande para mostrarlo.',
+    diffNoChanges: 'No hay diferencias.',
+    diffStaged: 'Preparado',
+    diffWorkingTree: 'Árbol de trabajo',
     dirty: 'Cambios sin guardar',
     conflict: 'Conflicto',
     missing: 'Este archivo ya no existe.',

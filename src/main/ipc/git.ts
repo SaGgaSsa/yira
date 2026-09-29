@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
-import type { GitCommitHistoryResult, GitRepository, GitStatusResult, WorkspaceGitDiffResult } from '@shared/types'
-import { getGitDiffSummary } from '../git/diff'
+import type { GitCommitHistoryResult, GitFileDiffContent, GitRepository, GitStatusResult, WorkspaceGitDiffResult } from '@shared/types'
+import { getGitDiffSummary, getGitFileDiffContent } from '../git/diff'
 import { discoverGitRepositories, resolveConfiguredGitRepository } from '../git/repositories'
 import { commitGitChanges, fetchGitRepository, getGitCommitHistory, getGitStatus, pullGitRepository, pushGitRepository, stageGitFiles, syncGitRepository, unstageGitFiles } from '../git/runner'
 import { getWorkspaceGitConfigById } from './workspace'
@@ -35,6 +35,7 @@ export interface GitIPCDependencies {
   getGitStatus: typeof getGitStatus
   getGitCommitHistory: typeof getGitCommitHistory
   getGitDiffSummary: typeof getGitDiffSummary
+  getGitFileDiffContent?: typeof getGitFileDiffContent
   stageGitFiles: typeof stageGitFiles
   unstageGitFiles: typeof unstageGitFiles
   commitGitChanges: typeof commitGitChanges
@@ -133,6 +134,17 @@ export function createGitIPCHandlers(dependencies: GitIPCDependencies): Record<s
         return unavailable
       }
     },
+    'git:fileDiff': async (_event: unknown, workspaceId: string, repositoryPath: string, relativePath: string, staged: boolean, originalPath?: string): Promise<GitFileDiffContent> => {
+      try {
+        return await (dependencies.getGitFileDiffContent ?? getGitFileDiffContent)(await resolveRepository(workspaceId, repositoryPath), {
+          path: relativePath,
+          originalPath,
+          staged,
+        })
+      } catch (error) {
+        return { original: '', modified: '', error: safeGitError(error) }
+      }
+    },
     'git:stage': async (_event: unknown, workspaceId: string, repositoryPath: string, relativePath: string, originalPath?: string) => {
       await dependencies.stageGitFiles(await resolveRepository(workspaceId, repositoryPath), mutationPaths(relativePath, originalPath))
     },
@@ -164,6 +176,7 @@ const defaultGitIPCDependencies: GitIPCDependencies = {
   getGitStatus,
   getGitCommitHistory,
   getGitDiffSummary,
+  getGitFileDiffContent,
   stageGitFiles,
   unstageGitFiles,
   commitGitChanges,

@@ -39,6 +39,7 @@ import type {
   FloatingNavigationEvent,
   FloatingNavigationRequest,
   GitCommitHistoryResult,
+  GitFileDiffContent,
   GitRepository,
   GitStatusResult,
   WorkspaceGitDiffResult,
@@ -134,6 +135,7 @@ interface ElectronWorld {
     status: (workspaceId: string, repositoryPath: string) => Promise<GitStatusResult>
     history: (workspaceId: string, repositoryPath: string) => Promise<GitCommitHistoryResult>
     workspaceDiff: (workspaceId: string) => Promise<WorkspaceGitDiffResult>
+    fileDiff: (workspaceId: string, repositoryPath: string, relativePath: string, staged: boolean, originalPath?: string) => Promise<GitFileDiffContent>
     stage: (workspaceId: string, repositoryPath: string, relativePath: string, originalPath?: string) => Promise<void>
     unstage: (workspaceId: string, repositoryPath: string, relativePath: string, originalPath?: string) => Promise<void>
     commit: (workspaceId: string, repositoryPath: string, message: string) => Promise<void>

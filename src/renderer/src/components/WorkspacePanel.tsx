@@ -7,6 +7,8 @@ import type {
   TerminalAgentMetadata,
   TileState,
   Workspace,
+  FileTileOpenOptions,
+  GitFileChange,
 } from '@shared/types'
 import { AgentPanel } from './AgentPanel'
 import { WorkspaceExplorer } from './WorkspaceExplorer'
@@ -22,7 +24,8 @@ interface WorkspacePanelProps {
   sourceControlViewMode: SourceControlViewMode
   onWorkspaceUpdated: (workspace: Workspace) => void
   activeFilePath: string | null
-  onOpenFile: (relativePath: string) => Promise<void>
+  onOpenFile: (relativePath: string, options?: FileTileOpenOptions) => Promise<void>
+  onOpenDiff: (repositoryPath: string, change: GitFileChange, staged: boolean) => void
   agentProvider?: AgentProvider
   agentProviders: AgentProvidersConfig
   availableProfiles: Array<{ id: ShellProfileId; label: string; available: boolean }>
@@ -41,6 +44,7 @@ export function WorkspacePanel({
   onWorkspaceUpdated,
   activeFilePath,
   onOpenFile,
+  onOpenDiff,
   agentProvider,
   agentProviders,
   availableProfiles,
@@ -130,6 +134,7 @@ export function WorkspacePanel({
             sourceControlViewMode={sourceControlViewMode}
             onWorkspaceUpdated={onWorkspaceUpdated}
             onOpenWorkspaceSettings={onOpenWorkspaceSettings}
+            onOpenDiff={onOpenDiff}
           />
         )}
       </div>

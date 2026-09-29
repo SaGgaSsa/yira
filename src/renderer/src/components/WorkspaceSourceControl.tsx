@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { GitBranch, List, ListFilter, RefreshCw, TreePine } from 'lucide-react'
-import type { GitCommitHistoryResult, GitRepository, GitStatusResult, SourceControlViewMode, Workspace } from '@shared/types'
+import type { GitCommitHistoryResult, GitFileChange, GitRepository, GitStatusResult, SourceControlViewMode, Workspace } from '@shared/types'
 import { useTranslation } from 'react-i18next'
 import { SourceControlRepositorySection, type RepositoryAction } from './SourceControlRepositorySection'
 
@@ -10,6 +10,7 @@ interface WorkspaceSourceControlProps {
   sourceControlViewMode: SourceControlViewMode
   onWorkspaceUpdated: (workspace: Workspace) => void
   onOpenWorkspaceSettings: (initialTab?: 'sourceControl') => void
+  onOpenDiff: (repositoryPath: string, change: GitFileChange, staged: boolean) => void
 }
 
 function errorMessage(error: unknown): string {
@@ -47,6 +48,7 @@ export function WorkspaceSourceControl({
   sourceControlViewMode,
   onWorkspaceUpdated,
   onOpenWorkspaceSettings,
+  onOpenDiff,
 }: WorkspaceSourceControlProps): React.ReactElement {
   const { t } = useTranslation()
   const [repositories, setRepositories] = useState<GitRepository[]>([])
@@ -398,6 +400,7 @@ export function WorkspaceSourceControl({
               onRetryAction={() => {
                 if (retryAction) void handleRepositoryAction(repositoryPath, retryAction)
               }}
+              onOpenDiff={(change, staged) => onOpenDiff(repositoryPath, change, staged)}
             />
           )
         })}

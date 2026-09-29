@@ -49,6 +49,7 @@ export interface SourceControlRepositorySectionProps {
   onAction: (action: RepositoryAction) => void
   onRetryStatus: () => void
   onRetryAction: () => void
+  onOpenDiff: (change: GitFileChange, staged: boolean) => void
 }
 
 function statusLabel(status: GitFileChange['status']): string {
@@ -64,17 +65,22 @@ function statusLabel(status: GitFileChange['status']): string {
   }[status]
 }
 
-function FileChangeRow({ change, staged, depth, displayPath, disabled, onToggle }: {
+function FileChangeRow({ change, staged, depth, displayPath, disabled, onToggle, onOpenDiff }: {
   change: GitFileChange
   staged: boolean
   depth: number
   displayPath: boolean
   disabled: boolean
   onToggle: (change: GitFileChange, staged: boolean) => void
+  onOpenDiff: (change: GitFileChange, staged: boolean) => void
 }): React.ReactElement {
   return (
     <div
-      className="flex min-w-0 items-center gap-2 py-1.5 pr-3 text-sm text-text-secondary"
+      className="flex min-w-0 cursor-pointer items-center gap-2 py-1.5 pr-3 text-sm text-text-secondary hover:bg-hover-bg"
+      role="button"
+      tabIndex={0}
+      onClick={() => onOpenDiff(change, staged)}
+      onKeyDown={(event) => { if ((event.key === 'Enter' || event.key === ' ') && !(event.target as HTMLElement).closest('button')) { event.preventDefault(); onOpenDiff(change, staged) } }}
       style={{ paddingLeft: `${12 + depth * 16}px` }}
       title={change.originalPath ? `${change.path} (renamed from ${change.originalPath})` : change.path}
     >
@@ -86,7 +92,7 @@ function FileChangeRow({ change, staged, depth, displayPath, disabled, onToggle 
       <button
         type="button"
         className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-text-secondary hover:bg-hover-bg hover:text-text-display disabled:opacity-50"
-        onClick={() => onToggle(change, staged)}
+        onClick={(event) => { event.stopPropagation(); onToggle(change, staged) }}
         disabled={disabled}
         title={staged ? 'Unstage file' : 'Stage file'}
         aria-label={staged ? `Unstage ${change.path}` : `Stage ${change.path}`}
@@ -97,15 +103,16 @@ function FileChangeRow({ change, staged, depth, displayPath, disabled, onToggle 
   )
 }
 
-function TreeChangeRow({ node, staged, depth, disabled, onToggle }: {
+function TreeChangeRow({ node, staged, depth, disabled, onToggle, onOpenDiff }: {
   node: SourceControlTreeNode<GitFileChange>
   staged: boolean
   depth: number
   disabled: boolean
   onToggle: (change: GitFileChange, staged: boolean) => void
+  onOpenDiff: (change: GitFileChange, staged: boolean) => void
 }): React.ReactElement {
   if (node.entry) {
-    return <FileChangeRow change={node.entry} staged={staged} depth={depth} displayPath={false} disabled={disabled} onToggle={onToggle} />
+    return <FileChangeRow change={node.entry} staged={staged} depth={depth} displayPath={false} disabled={disabled} onToggle={onToggle} onOpenDiff={onOpenDiff} />
   }
 
   return (
@@ -116,19 +123,20 @@ function TreeChangeRow({ node, staged, depth, disabled, onToggle }: {
         <span className="min-w-0 truncate">{node.name}</span>
       </div>
       {node.children?.map((child) => (
-        <TreeChangeRow key={child.path} node={child} staged={staged} depth={depth + 1} disabled={disabled} onToggle={onToggle} />
+        <TreeChangeRow key={child.path} node={child} staged={staged} depth={depth + 1} disabled={disabled} onToggle={onToggle} onOpenDiff={onOpenDiff} />
       ))}
     </>
   )
 }
 
-function ChangeSection({ title, changes, staged, viewMode, disabled, onToggle }: {
+function ChangeSection({ title, changes, staged, viewMode, disabled, onToggle, onOpenDiff }: {
   title: string
   changes: GitFileChange[]
   staged: boolean
   viewMode: SourceControlViewMode
   disabled: boolean
   onToggle: (change: GitFileChange, staged: boolean) => void
+  onOpenDiff: (change: GitFileChange, staged: boolean) => void
 }): React.ReactElement {
   return (
     <section className="border-b border-border py-2 last:border-b-0">
@@ -138,13 +146,13 @@ function ChangeSection({ title, changes, staged, viewMode, disabled, onToggle }:
       ) : viewMode === 'tree' ? (
         <div>
           {buildSourceControlTree(changes).map((node) => (
-            <TreeChangeRow key={node.path} node={node} staged={staged} depth={0} disabled={disabled} onToggle={onToggle} />
+            <TreeChangeRow key={node.path} node={node} staged={staged} depth={0} disabled={disabled} onToggle={onToggle} onOpenDiff={onOpenDiff} />
           ))}
         </div>
       ) : (
         <div>
           {changes.map((change) => (
-            <FileChangeRow key={change.path} change={change} staged={staged} depth={0} displayPath disabled={disabled} onToggle={onToggle} />
+            <FileChangeRow key={change.path} change={change} staged={staged} depth={0} displayPath disabled={disabled} onToggle={onToggle} onOpenDiff={onOpenDiff} />
           ))}
         </div>
       )}
@@ -322,6 +330,7 @@ export function SourceControlRepositorySection({
   onAction,
   onRetryStatus,
   onRetryAction,
+  onOpenDiff,
 }: SourceControlRepositorySectionProps): React.ReactElement {
   const changeCount = (repositoryStatus?.staged.length ?? 0) + (repositoryStatus?.unstaged.length ?? 0)
   const isRepository = repositoryStatus?.isRepository === true
@@ -412,6 +421,7 @@ export function SourceControlRepositorySection({
                 viewMode={viewMode}
                 disabled={Boolean(pendingAction)}
                 onToggle={(change, staged) => onAction({ type: 'toggle', change, staged })}
+                onOpenDiff={onOpenDiff}
               />
               <ChangeSection
                 title="Changes"
@@ -420,6 +430,7 @@ export function SourceControlRepositorySection({
                 viewMode={viewMode}
                 disabled={Boolean(pendingAction)}
                 onToggle={(change, staged) => onAction({ type: 'toggle', change, staged })}
+                onOpenDiff={onOpenDiff}
               />
               <div className="border-t border-border p-3">
                 <label htmlFor={commitMessageId} className="sr-only">Commit message</label>
