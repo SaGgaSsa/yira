@@ -31,6 +31,7 @@ import { isWindowsUpdateInstallPending, registerUpdateIPC, scheduleStartupUpdate
 import { loadWindowState, saveWindowState } from './windowState'
 import { coordinateWindowClose, type CloseFailureDecision } from './windowCloseCoordinator'
 import { getWindowMaterialOptions, setWindowBackgroundMaterial } from './windowMaterial'
+import { mainText } from './i18n'
 
 const appDisplayName = is.dev ? DEV_APP_NAME : APP_NAME
 const REACT_DEVTOOLS_HINT = 'Download the React DevTools'
@@ -58,14 +59,14 @@ async function promptClosePreparationFailure(phase: 'flush' | 'persist' | 'termi
   const detail = error instanceof Error ? error.message : String(error)
   const options = {
     type: 'warning' as const,
-    title: 'Unsaved file drafts',
+    title: mainText('unsavedFileDrafts'),
     message: phase === 'flush'
-      ? 'Yira could not collect every open file draft.'
+      ? mainText('collectDraftsFailed')
       : phase === 'persist'
-        ? 'Yira could not save the current workspace.'
-        : 'Yira could not close every terminal session.',
+        ? mainText('saveWorkspaceFailed')
+        : mainText('closeTerminalsFailed'),
     detail,
-    buttons: ['Retry', 'Close without saving', 'Cancel'],
+    buttons: [mainText('retry'), mainText('closeWithoutSaving'), mainText('cancel')],
     defaultId: 0,
     cancelId: 2,
     noLink: true,
@@ -95,24 +96,14 @@ async function confirmUpdateInstall(): Promise<boolean> {
   const count = countRunningTerminalSessions()
   if (count === 0) return true
 
-  const spanish = (await loadStoredUserSettings())?.language === 'es'
-  const options = spanish
-    ? {
-        title: 'Instalar actualización',
-        message: count === 1
-          ? 'Hay 1 terminal abierta. Se va a cerrar al instalar la actualización.'
-          : `Hay ${count} terminales abiertas. Se van a cerrar al instalar la actualización.`,
-        detail: 'Los procesos que corren en ellas, incluidos los agentes, se detienen. Podés instalar la actualización más tarde.',
-        buttons: ['Instalar y reiniciar', 'Más tarde'],
-      }
-    : {
-        title: 'Install update',
-        message: count === 1
-          ? '1 terminal is open. It will be closed to install the update.'
-          : `${count} terminals are open. They will be closed to install the update.`,
-        detail: 'Processes running in them, including agents, will stop. You can install the update later.',
-        buttons: ['Install and restart', 'Later'],
-      }
+  const options = {
+    title: mainText('installUpdateTitle'),
+    message: count === 1
+      ? mainText('installUpdateOneTerminal')
+      : mainText('installUpdateManyTerminals', { count }),
+    detail: mainText('installUpdateDetail'),
+    buttons: [mainText('installUpdate'), mainText('later')],
+  }
   const messageOptions = { ...options, type: 'warning' as const, defaultId: 0, cancelId: 1, noLink: true }
   const result = mainWindow && !mainWindow.isDestroyed()
     ? await dialog.showMessageBox(mainWindow, messageOptions)

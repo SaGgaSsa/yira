@@ -191,6 +191,7 @@ const mockedModules: Record<string, Record<string, unknown>> = {
       terminal: { icon: testIcon, label: 'Terminal' },
       timer: { icon: testIcon, label: 'Timer' },
     },
+    getTileTypeLabel: (type: string) => type,
     TileContent: (props: Record<string, unknown>) => {
       const config = props.workspaceConfig as object
       let lifecycle = tileContentLifecycles.get(config)
@@ -218,6 +219,7 @@ const mockedModules: Record<string, Record<string, unknown>> = {
 for (const [filename, exports] of Object.entries(mockedModules)) {
   require.cache[filename] = { exports, filename, id: filename, loaded: true } as NodeModule
 }
+await loadWithJiti<typeof import('../i18n')>('../i18n/index.ts').initializeI18n()
 const { GridView } = loadWithJiti<typeof import('./GridView')>('./GridView.tsx')
 
 const tile = {

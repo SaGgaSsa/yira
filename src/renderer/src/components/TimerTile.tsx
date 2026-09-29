@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Play, RotateCcw, Square, TimerReset } from 'lucide-react'
 import type { TileState, TimerStatus } from '@shared/types'
 import { useSettingsStore } from '@/store/settingsStore'
@@ -68,6 +69,7 @@ function buildDurationMs(hours: number, minutes: number, seconds: number): numbe
 }
 
 export function TimerTile({ tile, isFocused, onUpdate }: TimerTileProps): React.ReactElement {
+  const { t } = useTranslation()
   const [now, setNow] = useState(() => Date.now())
   const [customTime, setCustomTime] = useState(() => splitMs(getDurationMs(tile)))
   const completionHandledRef = useRef<string | null>(null)
@@ -268,7 +270,7 @@ export function TimerTile({ tile, isFocused, onUpdate }: TimerTileProps): React.
           max={23}
           value={customTime.hours}
           onChange={(event) => setPart('hours', Number(event.target.value))}
-          title="Hours"
+          title={t('ui.hours')}
         />
         <input
           className="min-w-0 rounded-full border border-border-visible bg-bg-tertiary px-3 py-2 text-center font-mono text-sm text-text-display outline-none"
@@ -277,7 +279,7 @@ export function TimerTile({ tile, isFocused, onUpdate }: TimerTileProps): React.
           max={59}
           value={customTime.minutes}
           onChange={(event) => setPart('minutes', Number(event.target.value))}
-          title="Minutes"
+          title={t('timer.minutes')}
         />
         <input
           className="min-w-0 rounded-full border border-border-visible bg-bg-tertiary px-3 py-2 text-center font-mono text-sm text-text-display outline-none"
@@ -286,13 +288,13 @@ export function TimerTile({ tile, isFocused, onUpdate }: TimerTileProps): React.
           max={59}
           value={customTime.seconds}
           onChange={(event) => setPart('seconds', Number(event.target.value))}
-          title="Seconds"
+          title={t('ui.seconds')}
         />
         <button
           className="rounded-full border border-border-visible px-3 py-2 text-xs text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display disabled:cursor-not-allowed disabled:opacity-50"
           onClick={() => loadDuration(customDurationMs)}
           disabled={customDurationMs <= 0}
-          title="Load duration"
+          title={t('ui.loadDuration')}
         >
           Load
         </button>
@@ -303,7 +305,7 @@ export function TimerTile({ tile, isFocused, onUpdate }: TimerTileProps): React.
           className="flex items-center justify-center gap-2 rounded-full border border-text-display px-3 py-2 text-sm text-text-display transition-colors hover:bg-hover-bg disabled:cursor-not-allowed disabled:opacity-50"
           onClick={startTimer}
           disabled={status === 'running'}
-          title="Start timer"
+          title={t('ui.startTimer')}
         >
           <Play size={14} />
           Start
@@ -312,7 +314,7 @@ export function TimerTile({ tile, isFocused, onUpdate }: TimerTileProps): React.
           className="flex items-center justify-center gap-2 rounded-full border border-border-visible px-3 py-2 text-sm text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display disabled:cursor-not-allowed disabled:opacity-50"
           onClick={stopTimer}
           disabled={status !== 'running'}
-          title="Stop timer"
+          title={t('ui.stopTimer')}
         >
           <Square size={13} />
           Stop
@@ -320,7 +322,7 @@ export function TimerTile({ tile, isFocused, onUpdate }: TimerTileProps): React.
         <button
           className="flex items-center justify-center gap-2 rounded-full border border-border-visible px-3 py-2 text-sm text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
           onClick={resetTimer}
-          title="Reset timer"
+          title={t('ui.resetTimer')}
         >
           <RotateCcw size={14} />
           Reset

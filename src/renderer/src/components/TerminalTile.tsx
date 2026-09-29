@@ -662,6 +662,7 @@ export function TerminalTileWrapper({
   }, [activeRuntime, snapshot.title, tile.id, workspaceId])
 
   const menuItems: MenuItem[] = buildTerminalContextMenuItems({
+    translate: (key) => t(key),
     selectedText: menuPosition?.selectionText ?? '',
     notificationsMuted: tile.notificationsMuted === true,
     linkTarget: menuPosition?.linkTarget,

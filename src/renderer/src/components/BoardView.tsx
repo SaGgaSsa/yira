@@ -33,6 +33,7 @@ function TaskCard({
   onApproveReviewTask,
   onRejectReviewTask,
 }: TaskCardProps): React.ReactElement {
+  const { t } = useTranslation()
   const [title, setTitle] = useState(task.title)
   const [body, setBody] = useState(task.task)
   const [note, setNote] = useState('')
@@ -64,9 +65,9 @@ function TaskCard({
 
       {(task.type || task.context || task.relatedTaskIds?.length) && (
         <div className="mt-3 rounded-lg border border-border bg-bg-tertiary px-3 py-2 text-xs leading-5 text-text-secondary">
-          {task.type && <div><span className="nd-caption">TYPE</span> {task.type}</div>}
-          {task.context && <div><span className="nd-caption">CONTEXT</span> {task.context}</div>}
-          {task.relatedTaskIds?.length ? <div><span className="nd-caption">RELATED</span> {task.relatedTaskIds.join(', ')}</div> : null}
+          {task.type && <div><span className="nd-caption">{t('ui.boardType')}</span> {task.type}</div>}
+          {task.context && <div><span className="nd-caption">{t('ui.boardContext')}</span> {task.context}</div>}
+          {task.relatedTaskIds?.length ? <div><span className="nd-caption">{t('ui.boardRelated')}</span> {task.relatedTaskIds.join(', ')}</div> : null}
         </div>
       )}
 
@@ -74,7 +75,7 @@ function TaskCard({
         <div className="mt-3 space-y-2">
           {task.notes.slice(-3).map((entry) => (
             <div key={entry.id} className="rounded-lg border border-border bg-bg-tertiary px-3 py-2 text-xs leading-5 text-text-secondary">
-              <div className="nd-caption mb-1 text-text-disabled">{entry.actor.toUpperCase()} NOTE</div>
+              <div className="nd-caption mb-1 text-text-disabled">{entry.actor.toUpperCase()} {t('ui.noteSuffix')}</div>
               {entry.body}
             </div>
           ))}
@@ -86,7 +87,7 @@ function TaskCard({
           className="min-w-0 flex-1 rounded-full border border-border bg-bg-tertiary px-3 py-2 text-xs text-text-primary outline-none"
           value={note}
           onChange={(event) => setNote(event.target.value)}
-          placeholder="Add note"
+          placeholder={t('ui.addNote')}
         />
         <button
           className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border-visible text-text-secondary hover:text-text-display disabled:opacity-40"
@@ -97,7 +98,7 @@ function TaskCard({
             onAddNote(task.id, value)
             setNote('')
           }}
-          title="Add note"
+          title={t('ui.addNote')}
         >
           <MessageSquarePlus size={14} />
         </button>
@@ -109,7 +110,7 @@ function TaskCard({
             <button
               className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border-visible text-text-secondary transition-colors hover:text-danger"
               onClick={() => onDeleteBacklogTask(task)}
-              title="Delete backlog task"
+              title={t('ui.deleteBacklogTask')}
             >
               <Trash2 size={14} />
             </button>
@@ -119,14 +120,14 @@ function TaskCard({
               <button
                 className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border-visible text-text-secondary transition-colors hover:text-success"
                 onClick={() => onApproveReviewTask(task)}
-                title="Approve"
+                title={t('board.approve')}
               >
                 <Check size={14} />
               </button>
               <button
                 className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border-visible text-text-secondary transition-colors hover:text-warning"
                 onClick={() => onRejectReviewTask(task)}
-                title="Reject"
+                title={t('board.reject')}
               >
                 <Undo2 size={14} />
               </button>
@@ -154,19 +155,26 @@ export function BoardView({
   const columns = useMemo(() => getVisibleBoardColumns(board), [board])
   const history = useMemo(() => getBoardHistory(board, historySearch), [board, historySearch])
   const mcpCommand = `npx -y yira-board-mcp --yira-home ~/.yira --workspace-id ${workspaceId}`
+  const columnLabels = {
+    backlog: t('ui.boardBacklog'),
+    ready: t('ui.boardReady'),
+    in_progress: t('ui.boardInProgress'),
+    review: t('ui.boardReview'),
+    done: t('ui.boardDone'),
+  }
 
   return (
     <main className="flex h-full min-h-0 flex-col bg-bg-secondary">
       <div className="flex shrink-0 items-center justify-between border-b border-border px-6 py-4">
         <div className="min-w-0">
-          <div className="nd-label text-text-secondary">Board View</div>
-          <h1 className="mt-1 text-xl text-text-display">Workspace Board</h1>
+          <div className="nd-label text-text-secondary">{t('board.boardView')}</div>
+          <h1 className="mt-1 text-xl text-text-display">{t('board.workspaceBoard')}</h1>
         </div>
         <div className="flex items-center gap-2">
           <button
             className="inline-flex h-10 items-center gap-2 rounded-full border border-text-display px-4 text-sm text-text-display transition-colors hover:bg-hover-bg"
             onClick={() => void window.electron.clipboard.writeText(mcpCommand)}
-            title="Copy MCP config command"
+            title={t('ui.copyMcpConfig')}
           >
             <Copy size={14} />
             <span className="nd-label">MCP</span>
@@ -176,7 +184,7 @@ export function BoardView({
             onClick={onCreateTask}
           >
             <ClipboardList size={14} />
-            <span className="nd-label">New Task</span>
+            <span className="nd-label">{t('ui.newTask')}</span>
           </button>
           <button
             className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-text-display text-text-display transition-colors hover:bg-hover-bg"
@@ -198,8 +206,8 @@ export function BoardView({
               <section key={column.id} className="flex min-h-[360px] min-w-0 flex-col rounded-lg border border-border bg-bg-tertiary">
                 <div className="flex items-center justify-between border-b border-border px-4 py-3">
                   <div>
-                    <div className="nd-label text-text-secondary">{column.label}</div>
-                    <div className="mt-1 text-sm text-text-display">{tasks.length} tasks</div>
+                    <div className="nd-label text-text-secondary">{columnLabels[column.id]}</div>
+                      <div className="mt-1 text-sm text-text-display">{t('ui.taskCount', { count: tasks.length })}</div>
                   </div>
                 </div>
                 <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
@@ -223,8 +231,8 @@ export function BoardView({
         <section className="mt-5 rounded-lg border border-border bg-bg-tertiary">
           <div className="flex items-center justify-between gap-4 border-b border-border px-4 py-3">
             <div>
-              <div className="nd-label text-text-secondary">History</div>
-              <div className="mt-1 text-sm text-text-display">{history.length} closed tasks</div>
+              <div className="nd-label text-text-secondary">{t('board.history')}</div>
+              <div className="mt-1 text-sm text-text-display">{t('ui.closedTasks', { count: history.length })}</div>
             </div>
             <label className="flex h-10 w-[320px] items-center gap-2 rounded-full border border-border-visible bg-bg-primary px-3">
               <Search size={14} className="text-text-secondary" />
@@ -232,7 +240,7 @@ export function BoardView({
                 className="min-w-0 flex-1 bg-transparent text-sm text-text-primary outline-none"
                 value={historySearch}
                 onChange={(event) => setHistorySearch(event.target.value)}
-                placeholder="Search history"
+                placeholder={t('ui.searchHistory')}
               />
             </label>
           </div>
@@ -244,7 +252,7 @@ export function BoardView({
                   <div className="truncate text-text-display">{task.title}</div>
                   <div className="mt-1 truncate text-text-secondary">{task.task}</div>
                 </div>
-                <div className="truncate text-text-secondary">{task.type ?? 'Task'}</div>
+                <div className="truncate text-text-secondary">{task.type ?? t('ui.taskFallback')}</div>
               </div>
             ))}
           </div>

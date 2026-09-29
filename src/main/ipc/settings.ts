@@ -9,6 +9,7 @@ import { normalizeUserSettings } from '@shared/userSettings'
 import { resolveSupportedLanguage } from '@shared/language'
 import { installClaudeHookConfiguration, installCodexHookConfiguration, uninstallClaudeHookConfiguration, uninstallCodexHookConfiguration, type AgentHookProvider } from '../agentHookConfiguration'
 import { getClaudeStatusLineState, installClaudeStatusLine, uninstallClaudeStatusLine } from '../claudeStatusLineConfiguration'
+import { setMainLanguage } from '../i18n'
 
 const SETTINGS_PATH = join(YIRA_HOME, 'settings.json')
 
@@ -107,6 +108,7 @@ export async function loadStoredUserSettings(): Promise<UserSettings | null> {
       ...parsed,
       language: hasLanguage ? parsed.language : resolveSupportedLanguage(app.getLocale()),
     })
+    setMainLanguage(normalized.language)
 
     if (
       Object.prototype.hasOwnProperty.call(parsed, 'fontSize') ||
@@ -131,6 +133,7 @@ export async function loadStoredUserSettings(): Promise<UserSettings | null> {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       const defaults = normalizeUserSettings({ language: resolveSupportedLanguage(app.getLocale()) })
+      setMainLanguage(defaults.language)
       await fs.mkdir(YIRA_HOME, { recursive: true })
       await fs.writeFile(SETTINGS_PATH, JSON.stringify(defaults, null, 2))
       return defaults
@@ -147,6 +150,7 @@ export function registerSettingsIPC(): void {
 
   ipcMain.handle('settings:save', async (_, settings: UserSettings): Promise<void> => {
     const normalized = normalizeUserSettings(settings)
+    setMainLanguage(normalized.language)
 
     await fs.mkdir(YIRA_HOME, { recursive: true })
     await fs.writeFile(SETTINGS_PATH, JSON.stringify(normalized, null, 2))

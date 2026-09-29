@@ -189,7 +189,7 @@ export function TopBar({
                 <button
                   className="inline-flex h-7 items-center rounded-md px-1.5 font-mono text-xs text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
                   onClick={onZoomToggle}
-                  title="Toggle zoom 100%"
+                  title={t('ui.toggleZoom')}
                 >
                   {zoomPercent}%
                 </button>

@@ -5,7 +5,16 @@ const sectionSource = readFileSync(new URL('./SourceControlRepositorySection.tsx
 const workspacePanelSource = readFileSync(new URL('./WorkspacePanel.tsx', import.meta.url), 'utf8')
 const appSource = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8')
 
-for (const requiredLabel of ['Staged Changes', 'Changes', 'Only changed', 'Refresh all', 'Fetch', 'Pull', 'Push', 'Sync']) {
+for (const requiredLabel of [
+  "t('sourceControl.stagedChanges')",
+  "t('sourceControl.changes')",
+  "t('sourceControl.onlyChanged')",
+  "t('sourceControl.refreshAll')",
+  "t('sourceControl.actionFetch')",
+  "label: 'Pull'",
+  "label: 'Push'",
+  "t('sourceControl.actionSync')",
+]) {
   if (!source.includes(requiredLabel) && !sectionSource.includes(requiredLabel)) {
     throw new Error(`source control must render ${requiredLabel}`)
   }
@@ -28,18 +37,18 @@ if (!source.includes('if (isExpanded && repositoryStatus?.isRepository && histor
 if (!source.includes('histories[repositoryPath] === undefined')) throw new Error('loaded history must not be requested again on render')
 if (!source.includes('pendingActionsRef.current.has(actionKey)')) throw new Error('repository actions must prevent duplicate pending operations')
 if (!source.includes('manuallyToggledCommitsRef.current.has(repositoryPath)')) throw new Error('outgoing commits must respect a manual accordion toggle')
-if (!source.includes('onRetryStatus') || !sectionSource.includes('Retry operation')) throw new Error('status and action failures must provide retry controls')
+if (!source.includes('onRetryStatus') || !sectionSource.includes("t('sourceControl.retryOperation')")) throw new Error('status and action failures must provide retry controls')
 if (!source.includes("t('workspace.noRepositoriesConfigured')") || !source.includes("t('workspace.configureSourceControl')")) {
   throw new Error('unconfigured source control must link to workspace settings')
 }
 
 for (const requiredSectionText of [
-  'Commit message',
+  "t('sourceControl.commitMessage')",
   'disabled={!canCommit || Boolean(pendingAction)}',
   '.slice(0, 5)',
-  'No se pudo cargar el historial',
+  "t('sourceControl.loadHistoryError'",
   'Date.parse',
-  'No upstream',
+  "t('sourceControl.noUpstream')",
 ]) {
   if (!sectionSource.includes(requiredSectionText)) throw new Error(`repository section must preserve ${requiredSectionText}`)
 }

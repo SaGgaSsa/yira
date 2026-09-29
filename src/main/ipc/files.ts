@@ -7,6 +7,7 @@ import { basename, isAbsolute, relative, resolve, sep } from 'path'
 import type { FileEntry, FileListOptions, FileListResult, FileSearchEntry, FileSearchResult, FileSelectFolderResult, FileWriteInput } from '@shared/types'
 import { compileFileSearchQuery } from '@shared/fileSearch'
 import { canonicalizeRootFolderPath } from '../workspace-root'
+import { mainText } from '../i18n'
 import { readFile, readPreviewAsset, resolveRootTarget, statFile, writeFile } from './file-access'
 
 const electronApi = createRequire(import.meta.url)('electron') as typeof import('electron')
@@ -347,7 +348,7 @@ export function registerFilesIPC(): void {
     const win = BrowserWindow.getFocusedWindow()
     const options: OpenDialogOptions = {
       properties: ['openDirectory'],
-      title: 'Select Workspace Root Folder',
+      title: mainText('selectWorkspaceRootFolder'),
       defaultPath: defaultPath || undefined,
     }
     const result = win

@@ -1,4 +1,5 @@
 import React, { useRef, useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useCanvasStore } from '@/store/canvasStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { TileChrome } from '@/components/TileChrome'
@@ -133,6 +134,7 @@ export function Canvas({
   onFocusSplitPanel,
   workspaceRootPath,
 }: CanvasProps): React.ReactElement {
+  const { t } = useTranslation()
   const containerRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<DragState | null>(null)
   const spaceHeldRef = useRef(false)
@@ -620,8 +622,8 @@ export function Canvas({
         {tiles.length === 0 ? (
           <div className="absolute inset-0 flex items-center justify-center px-6">
             <div className="nd-panel-raised w-full max-w-xl rounded-[20px] px-5 py-8 text-center text-text-secondary">
-              <div className="nd-label">[ EMPTY ]</div>
-              <div className="mt-3 text-sm text-text-disabled">Create a terminal, note, browser, timer, or workspace board.</div>
+              <div className="nd-label">{t('ui.empty')}</div>
+              <div className="mt-3 text-sm text-text-disabled">{t('ui.createWorkspaceContent')}</div>
               <TileCreationSelector {...tileCreationSelectorProps} className="mt-5 text-left" />
             </div>
           </div>
@@ -799,7 +801,7 @@ export function Canvas({
                         y: triggerRect.bottom - containerRect.top + 8,
                       })
                     }}
-                    title="Group color"
+                    title={t('ui.groupColor')}
                   />
 
                   <button
@@ -925,10 +927,11 @@ export function Canvas({
           items={[
             ...(groupsEnabled ? [
               { label: selectionActionLabel, icon: LayoutGrid, action: () => { void onCreateGroupFromSelection() }, disabled: !canCreateGroup },
-              { label: 'Clear Selection', action: () => selectTiles([]), disabled: selectedTileIds.length === 0 },
+            { label: t('canvas.clearSelection'), action: () => selectTiles([]), disabled: selectedTileIds.length === 0 },
               { divider: true, label: '' },
             ] : []),
             ...getCanvasCreationMenuItems({
+              translate: (key) => t(key),
               onCreateTerminal,
               onCreateRichNote,
               onCreateMarkdownNote,

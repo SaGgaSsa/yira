@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ArrowLeft, ArrowRight, ExternalLink, Globe, RefreshCw } from 'lucide-react'
 import { useSettingsStore } from '@/store/settingsStore'
 import { normalizeBrowserUrl } from '@/utils/browserUrl'
@@ -21,6 +22,7 @@ interface WebviewElement extends HTMLElement {
 }
 
 export function BrowserTile({ tile, autoFocus = false, onUpdate }: BrowserTileProps): React.ReactElement {
+  const { t } = useTranslation()
   const homeUrl = useSettingsStore((s) => s.browser.homeUrl)
   const initialUrl = useMemo(() => normalizeBrowserUrl(tile.browserUrl ?? homeUrl), [tile.browserUrl, homeUrl])
   const webviewRef = useRef<WebviewElement | null>(null)
@@ -85,7 +87,7 @@ export function BrowserTile({ tile, autoFocus = false, onUpdate }: BrowserTilePr
           className="flex h-9 w-9 items-center justify-center rounded-full border border-border-visible text-text-secondary transition-colors hover:text-text-display disabled:opacity-40"
           onClick={() => webviewRef.current?.goBack()}
           disabled={!canGoBack}
-          title="Back"
+          title={t('ui.back')}
         >
           <ArrowLeft size={14} />
         </button>
@@ -93,14 +95,14 @@ export function BrowserTile({ tile, autoFocus = false, onUpdate }: BrowserTilePr
           className="flex h-9 w-9 items-center justify-center rounded-full border border-border-visible text-text-secondary transition-colors hover:text-text-display disabled:opacity-40"
           onClick={() => webviewRef.current?.goForward()}
           disabled={!canGoForward}
-          title="Forward"
+          title={t('ui.forward')}
         >
           <ArrowRight size={14} />
         </button>
         <button
           className="flex h-9 w-9 items-center justify-center rounded-full border border-border-visible text-text-secondary transition-colors hover:text-text-display"
           onClick={() => webviewRef.current?.reload()}
-          title="Reload"
+          title={t('ui.reload')}
         >
           <RefreshCw size={14} />
         </button>
@@ -124,7 +126,7 @@ export function BrowserTile({ tile, autoFocus = false, onUpdate }: BrowserTilePr
         <button
           className="flex h-9 w-9 items-center justify-center rounded-full border border-border-visible text-text-secondary transition-colors hover:text-text-display"
           onClick={() => void window.electron.shell.openExternal(currentUrl)}
-          title="Open externally"
+          title={t('ui.openExternally')}
         >
           <ExternalLink size={14} />
         </button>
@@ -132,7 +134,7 @@ export function BrowserTile({ tile, autoFocus = false, onUpdate }: BrowserTilePr
 
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex items-center justify-between border-b border-border px-4 py-2">
-          <span className="nd-label text-text-secondary">Web Surface</span>
+        <span className="nd-label text-text-secondary">{t('ui.webSurface')}</span>
           <span className="nd-caption max-w-[45%] truncate text-text-secondary">{currentUrl}</span>
         </div>
         <div className="min-h-0 flex-1 p-3">

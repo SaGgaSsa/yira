@@ -104,13 +104,13 @@ export function TileEditorDialog({ request, onCancel, onConfirm }: TileEditorDia
       >
         <div className="flex items-center justify-between gap-4 border-b border-border px-6 py-5">
           <div className="min-w-0">
-            <div className="nd-label text-text-secondary">Tile Settings</div>
+        <div className="nd-label text-text-secondary">{t('tile.tileSettings')}</div>
             <h2 id="tile-editor-title" className="mt-2 text-xl text-text-display">{request.title}</h2>
           </div>
           <button
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border-visible text-text-secondary transition-colors hover:text-text-display"
             onClick={onCancel}
-            title="Close dialog"
+            title={t('dialogs.closeDialog')}
           >
             <X size={16} />
           </button>
@@ -119,7 +119,7 @@ export function TileEditorDialog({ request, onCancel, onConfirm }: TileEditorDia
         <div className="max-h-[calc(86vh-88px)] space-y-6 overflow-y-auto px-6 py-6">
           <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
             <label className="block">
-              <span className="nd-label mb-2 block text-text-secondary">Name</span>
+          <span className="nd-label mb-2 block text-text-secondary">{t('common.name')}</span>
               <div className="flex items-center gap-3 rounded-full border border-border-visible bg-bg-primary px-4 py-3">
                 <CornerDownLeft size={14} className="shrink-0 text-text-secondary" />
                 <input
@@ -127,7 +127,7 @@ export function TileEditorDialog({ request, onCancel, onConfirm }: TileEditorDia
                   className="w-full bg-transparent font-mono text-sm text-text-display outline-none"
                   value={value.label}
                   onChange={(event) => setValue((current) => current ? { ...current, label: event.target.value } : current)}
-                  placeholder="Untitled"
+            placeholder={t('tile.untitled')}
                   spellCheck={false}
                 />
               </div>
@@ -143,12 +143,12 @@ export function TileEditorDialog({ request, onCancel, onConfirm }: TileEditorDia
                 </span>
               </div>
               <label className="block">
-                <span className="nd-label mb-2 block text-text-secondary">Command</span>
+          <span className="nd-label mb-2 block text-text-secondary">{t('ui.command')}</span>
                 <input
                   className="w-full rounded-full border border-border-visible bg-bg-primary px-4 py-3 font-mono text-sm text-text-display outline-none"
                   value={value.startupCommand}
                   onChange={(event) => setValue((current) => current ? { ...current, startupCommand: event.target.value } : current)}
-                  placeholder="Optional startup command"
+            placeholder={t('ui.optionalStartupCommand')}
                   spellCheck={false}
                 />
               </label>

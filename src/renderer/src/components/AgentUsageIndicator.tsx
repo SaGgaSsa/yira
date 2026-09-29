@@ -1,4 +1,6 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
+import { i18n } from '@/i18n'
 import type { AgentProvider, AgentUsageProviderSnapshot, AgentUsageWindow, AgentUsageWindowKind } from '@shared/types'
 
 export interface AgentUsageIndicatorProps {
@@ -93,10 +95,6 @@ function resetDataValue(value: AgentUsageWindow['resetsAt']): string | undefined
   return Number.isNaN(new Date(value).getTime()) ? undefined : value
 }
 
-function windowLabel(kind: AgentUsageWindowKind): string {
-  return kind === 'fiveHour' ? '5 h' : 'sem.'
-}
-
 function isUsageWindow(value: unknown): value is AgentUsageWindow {
   if (typeof value !== 'object' || value === null) return false
   const candidate = value as Partial<AgentUsageWindow>
@@ -110,18 +108,19 @@ function UsageWindow({
   providerLabel: string
   window: AgentUsageWindow
 }): React.ReactElement {
+  const { t } = useTranslation()
   const percent = clampUsagePercent(window.usedPercent)
   const threshold = getUsageThreshold(percent)
   const style = thresholdStyles[threshold]
-  const label = windowLabel(window.kind)
-  const resetText = formatUsageResetAt(window.resetsAt, window.kind)
+  const label = t(window.kind === 'fiveHour' ? 'ui.fiveHourShort' : 'ui.weeklyShort')
+  const resetText = formatUsageResetAt(window.resetsAt, window.kind, { locale: i18n.language })
   const resetValue = resetDataValue(window.resetsAt)
   const progressOffset = percent === null
     ? ringCircumference
     : ringCircumference * (1 - percent / 100)
-  const accessibleValue = percent === null ? 'unavailable' : `${percent}%`
-  const accessibleReset = resetText ? `, resets ${resetText}` : ', reset unavailable'
-  const ringLabel = `${providerLabel} ${label} usage: ${accessibleValue}${accessibleReset}`
+  const accessibleValue = percent === null ? t('ui.unavailable') : `${percent}%`
+  const accessibleReset = resetText ? t('ui.usageResets', { date: resetText }) : t('ui.resetUnavailable')
+  const ringLabel = `${providerLabel} ${label} ${t('ui.usage')}: ${accessibleValue}, ${accessibleReset}`
 
   return (
     <span
@@ -184,6 +183,7 @@ export function AgentUsageIndicator({
   provider,
   snapshot,
 }: AgentUsageIndicatorProps): React.ReactElement {
+  const { t } = useTranslation()
   const details = agentProviderDetails[provider]
   const resolvedStatus = snapshot?.status ?? 'unavailable'
   const available = resolvedStatus === 'available'
@@ -197,7 +197,7 @@ export function AgentUsageIndicator({
       data-agent-usage-indicator="true"
       data-provider={provider}
       data-status={resolvedStatus}
-      aria-label={`${details.label} usage${available ? '' : ' unavailable'}`}
+      aria-label={`${details.label} ${t('ui.usage')}${available ? '' : ` ${t('ui.unavailable')}`}`}
     >
       <span className="inline-flex min-w-0 shrink-0 items-center text-text-primary" data-provider-identity="true">
         <img

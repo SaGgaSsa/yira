@@ -52,7 +52,7 @@ import { normalizeCanvasStateForJson } from './utils/canvasStateNormalization'
 import {
   sumTerminalAttentionCounts,
 } from './utils/workspaceAttention'
-import { TILE_META } from './components/TileContent'
+import { getTileTypeLabel } from './components/TileContent'
 import { resolveWorkspaceFocusTarget } from './utils/workspaceFocus'
 import { mergeWorkspaceSelectionResult, setWorkspacePinnedOptimistically } from './utils/workspaceSelectionActions'
 import { getWorkspaceSidebarOrder } from './utils/workspaceOrdering'
@@ -1347,16 +1347,16 @@ function AppContent(): React.ReactElement {
       mode: 'create',
       tileIds: [...selectedTileIds],
       request: {
-        title: 'Create group',
-        confirmLabel: 'Create Group',
+        title: t('ui.createGroup'),
+        confirmLabel: t('ui.createGroupConfirm'),
         value: {
-          name: 'Untitled Group',
+          name: t('ui.untitledGroup'),
           colorId: GROUP_COLOR_ORDER[groups.length % GROUP_COLOR_ORDER.length] ?? GROUP_COLOR_ORDER[0],
           locked: false,
         },
       },
     })
-  }, [addTilesToGroup, groupingBlockedReason, groups.length, groupsEnabled, mergeTargetGroup, selectedTileIds])
+  }, [addTilesToGroup, groupingBlockedReason, groups.length, groupsEnabled, mergeTargetGroup, selectedTileIds, t])
 
   const openGroupEditor = useCallback((group: TileGroup) => {
     setGroupMenu(null)
@@ -1364,8 +1364,8 @@ function AppContent(): React.ReactElement {
       mode: 'edit',
       groupId: group.id,
       request: {
-        title: 'Edit group',
-        confirmLabel: 'Save Group',
+        title: t('ui.editGroup'),
+        confirmLabel: t('ui.saveGroup'),
         value: {
           name: group.name,
           colorId: group.colorId,
@@ -1373,7 +1373,7 @@ function AppContent(): React.ReactElement {
         },
       },
     })
-  }, [])
+  }, [t])
 
   const handleConfirmGroupEditor = useCallback((value: GroupEditorValue) => {
     if (!groupEditor) return
@@ -1395,15 +1395,15 @@ function AppContent(): React.ReactElement {
 
   const handleUngroup = useCallback(async (group: TileGroup) => {
     const confirmed = await requestConfirm({
-      title: 'Ungroup tiles',
-      message: `Ungroup "${group.name}" and keep its tiles separate on the canvas?`,
-      confirmLabel: 'Ungroup',
-      cancelLabel: 'Keep Group',
+      title: t('ui.ungroupTiles'),
+      message: t('ui.ungroupTilesMessage', { name: group.name }),
+      confirmLabel: t('ui.ungroup'),
+      cancelLabel: t('ui.keepGroup'),
       danger: true,
     })
     if (!confirmed) return
     ungroup(group.id)
-  }, [requestConfirm, ungroup])
+  }, [requestConfirm, t, ungroup])
 
   const handleToggleGroupLock = useCallback((group: TileGroup) => {
     setGroupLocked(group.id, !group.locked)
@@ -1452,8 +1452,8 @@ function AppContent(): React.ReactElement {
     setTileEditor({
       tileId: tile.id,
       request: {
-        title: `Edit ${TILE_META[tile.type].label}`,
-        confirmLabel: `Save ${TILE_META[tile.type].label}`,
+        title: t('ui.editTile', { tile: getTileTypeLabel(tile.type, t) }),
+        confirmLabel: t('ui.saveTile', { tile: getTileTypeLabel(tile.type, t) }),
         tileType: tile.type,
         shellProfileId: tile.shellProfileId,
         value: {
@@ -1463,7 +1463,7 @@ function AppContent(): React.ReactElement {
         },
       },
     })
-  }, [])
+  }, [t])
 
   const handleConfirmTileEditor = useCallback((value: TileEditorValue) => {
     if (!tileEditor) return
@@ -1580,45 +1580,45 @@ function AppContent(): React.ReactElement {
   }, [])
 
   const requestRefreshTileConfirmation = useCallback((tile: TileState) => {
-    const label = tile.label ?? TILE_META[tile.type].label
+    const label = tile.label ?? getTileTypeLabel(tile.type, t)
 
     if (tile.type === 'terminal') {
       return requestConfirm({
-        title: 'Refresh terminal',
-        message: `Refresh "${label}"? This restarts the terminal and stops any running process in that session.`,
-        confirmLabel: 'Refresh',
-        cancelLabel: 'Keep Running',
+        title: t('ui.refreshTerminal'),
+        message: t('ui.refreshTerminalMessage', { label }),
+        confirmLabel: t('common.refresh'),
+        cancelLabel: t('ui.keepRunning'),
         danger: true,
       })
     }
 
     if (tile.type === 'browser') {
       return requestConfirm({
-        title: 'Refresh browser tile',
-        message: `Refresh "${label}"? This reloads the current web surface.`,
-        confirmLabel: 'Refresh',
-        cancelLabel: 'Keep Current',
+        title: t('ui.refreshBrowser'),
+        message: t('ui.refreshBrowserMessage', { label }),
+        confirmLabel: t('common.refresh'),
+        cancelLabel: t('ui.keepCurrent'),
       })
     }
 
     if (tile.type === 'note') {
       return requestConfirm({
-        title: 'Refresh note tile',
-        message: `Refresh "${label}"? This reloads the note from saved state and may discard recent unsaved changes.`,
-        confirmLabel: 'Refresh',
-        cancelLabel: 'Keep Editing',
+        title: t('ui.refreshNote'),
+        message: t('ui.refreshNoteMessage', { label }),
+        confirmLabel: t('common.refresh'),
+        cancelLabel: t('ui.keepEditing'),
         danger: true,
       })
     }
 
     return requestConfirm({
-      title: 'Refresh tile',
-      message: `Refresh "${label}"? This reloads the surface from saved state and may discard recent unsaved changes.`,
-      confirmLabel: 'Refresh',
-      cancelLabel: 'Keep Editing',
+      title: t('ui.refreshTile'),
+      message: t('ui.refreshTileMessage', { label }),
+      confirmLabel: t('common.refresh'),
+      cancelLabel: t('ui.keepEditing'),
       danger: true,
     })
-  }, [requestConfirm])
+  }, [requestConfirm, t])
 
   const handleRefreshTile = useCallback(async (tile: TileState) => {
     setTileMenu(null)
@@ -1787,23 +1787,23 @@ function AppContent(): React.ReactElement {
   const handleCreateBoardTask = useCallback(async () => {
     if (!activeWorkspaceId) return
     const title = await requestPrompt({
-      title: 'New Task',
-      message: 'Capture the task title.',
-      confirmLabel: 'Continue',
-      placeholder: 'Title',
+      title: t('ui.newTask'),
+      message: t('ui.captureTaskTitle'),
+      confirmLabel: t('common.continue'),
+      placeholder: t('ui.title'),
     })
     if (!title) return
     const task = await requestPrompt({
-      title: 'Task Details',
-      message: 'Capture the work to be done.',
-      confirmLabel: 'Create Task',
-      placeholder: 'Task',
+      title: t('ui.taskDetails'),
+      message: t('ui.captureWork'),
+      confirmLabel: t('ui.createTask'),
+      placeholder: t('ui.task'),
     })
     if (!task) return
     const nextBoard = await window.electron.board.createUserTask(activeWorkspaceId, { title, task })
     setBoardState(nextBoard)
     openBoard()
-  }, [activeWorkspaceId, openBoard, requestPrompt])
+  }, [activeWorkspaceId, openBoard, requestPrompt, t])
 
   const handleBoardButton = useCallback(async () => {
     if (!activeWorkspaceId) return
@@ -1834,15 +1834,15 @@ function AppContent(): React.ReactElement {
   const deleteBacklogBoardTask = useCallback(async (task: BoardTask) => {
     if (!activeWorkspaceId) return
     const confirmed = await requestConfirm({
-      title: 'Delete task',
-      message: `Delete "${task.title}" from Backlog?`,
-      confirmLabel: 'Delete',
-      cancelLabel: 'Keep Task',
+      title: t('ui.deleteTask'),
+      message: t('ui.deleteTaskMessage', { title: task.title }),
+      confirmLabel: t('common.delete'),
+      cancelLabel: t('ui.keepTask'),
       danger: true,
     })
     if (!confirmed) return
     setBoardState(await window.electron.board.deleteBacklogTask(activeWorkspaceId, task.id))
-  }, [activeWorkspaceId, requestConfirm])
+  }, [activeWorkspaceId, requestConfirm, t])
 
   const approveReviewBoardTask = useCallback(async (task: BoardTask) => {
     if (!activeWorkspaceId) return
@@ -1852,15 +1852,15 @@ function AppContent(): React.ReactElement {
   const rejectReviewBoardTask = useCallback(async (task: BoardTask) => {
     if (!activeWorkspaceId) return
     const note = await requestPrompt({
-      title: 'Reject task',
-      message: `Explain why "${task.title}" is returning to In Progress.`,
-      confirmLabel: 'Reject',
-      placeholder: 'Required note',
+      title: t('ui.rejectTask'),
+      message: t('ui.rejectTaskMessage', { title: task.title }),
+      confirmLabel: t('board.reject'),
+      placeholder: t('ui.requiredNote'),
       danger: true,
     })
     if (!note) return
     setBoardState(await window.electron.board.rejectReviewTask(activeWorkspaceId, { taskId: task.id, note }))
-  }, [activeWorkspaceId, requestPrompt])
+  }, [activeWorkspaceId, requestPrompt, t])
 
   const activeTileMenu = tileMenu ? tiles.find((tile) => tile.id === tileMenu.tileId) ?? null : null
   const activeGroupMenu = groupsEnabled && groupMenu ? effectiveGroups.find((group) => group.id === groupMenu.groupId) ?? null : null
@@ -1873,28 +1873,29 @@ function AppContent(): React.ReactElement {
         onToggleNotificationsMuted: toggleTileNotificationsMuted,
         onToggleLock: (tile) => updateTile(tile.id, { locked: !tile.locked }),
         onBeforeAction: () => setTileMenu(null),
+        translate: (key) => t(key),
       })
     : []
   const groupMenuItems: MenuItem[] = activeGroupMenu ? [
     {
-      label: 'Show',
+      label: t('ui.show'),
       icon: Columns,
       action: () => handleShowGroup(activeGroupMenu),
     },
     {
-      label: 'Edit Group',
+      label: t('ui.editGroupAction'),
       icon: Pencil,
       action: () => {
         openGroupEditor(activeGroupMenu)
       },
     },
     {
-      label: activeGroupMenu.locked ? 'Unlock' : 'Lock',
+      label: activeGroupMenu.locked ? t('ui.unlock') : t('ui.lock'),
       icon: Lock,
       action: () => handleToggleGroupLock(activeGroupMenu),
     },
     {
-      label: 'Ungroup',
+      label: t('ui.ungroup'),
       icon: Trash2,
       danger: true,
       action: () => {
@@ -2052,13 +2053,13 @@ function AppContent(): React.ReactElement {
 
   const confirmRemoveTileFromGroup = useCallback(async (tile: TileState, group: TileGroup) => {
     return requestConfirm({
-      title: 'Remove tile from group',
-      message: `Remove "${tile.label ?? 'this tile'}" from "${group.name}"? The tile will be moved outside the group frame.`,
-      confirmLabel: 'Remove',
-      cancelLabel: 'Keep In Group',
+      title: t('ui.removeTileFromGroup'),
+      message: t('ui.removeTileFromGroupMessage', { tile: tile.label ?? t('ui.thisTile'), group: group.name }),
+      confirmLabel: t('ui.remove'),
+      cancelLabel: t('ui.keepInGroup'),
       danger: true,
     })
-  }, [requestConfirm])
+  }, [requestConfirm, t])
 
   const currentUpdateBannerKey = updateStatus === 'downloaded'
     ? `downloaded:${updateAvailableVersion ?? 'ready'}`
@@ -2070,23 +2071,27 @@ function AppContent(): React.ReactElement {
   const updateBannerCopy = (() => {
     if (updateStatus === 'downloaded') {
       return {
-        title: `Update ${updateAvailableVersion ?? ''} is ready`,
-        message: 'Restart Yira to install the downloaded version.',
+        title: t('ui.updateReady', { version: updateAvailableVersion ?? '' }),
+        message: t('ui.restartUpdateMessage'),
       }
     }
 
     if (updateStatus === 'downloading') {
       return {
-        title: `Downloading update${updateAvailableVersion ? ` ${updateAvailableVersion}` : ''}`,
+        title: updateAvailableVersion
+          ? t('ui.downloadingUpdate', { version: updateAvailableVersion })
+          : t('ui.downloadingUpdateUnknown'),
         message: updateProgressPercent !== null
-          ? `${updateProgressPercent}% completed in the background.`
-          : 'The update is downloading in the background.',
+          ? t('ui.updateProgress', { percent: updateProgressPercent })
+          : t('ui.downloadingUpdateMessage'),
       }
     }
 
     return {
-      title: `Update${updateAvailableVersion ? ` ${updateAvailableVersion}` : ''} found`,
-      message: updateMessage ?? 'Yira is downloading the new version in the background.',
+      title: updateAvailableVersion
+        ? t('ui.updateFound', { version: updateAvailableVersion })
+        : t('ui.updateFoundUnknown'),
+      message: updateMessage ?? t('update.downloading'),
     }
   })()
 
@@ -2160,13 +2165,13 @@ function AppContent(): React.ReactElement {
             {showProfilePicker && (
               <div className="absolute bottom-full left-4 z-[9999] mb-3 w-[260px]">
                 <TileCreationMenu
-                  title="Shell Profiles"
+                  title={t('ui.shellProfiles')}
                   items={[
                     ...availableProfiles.map((profile) => ({
                       id: profile.id,
                       icon: Terminal,
                       label: profile.label,
-                      detail: profile.available ? '[ READY ]' : '[ MISSING ]',
+                      detail: profile.available ? `[ ${t('ui.ready').toUpperCase()} ]` : `[ ${t('ui.missing').toUpperCase()} ]`,
                       disabled: !profile.available,
                       onClick: () => {
                         addTerminal(profile.id)
@@ -2176,18 +2181,18 @@ function AppContent(): React.ReactElement {
                     {
                       id: 'remote-ssh',
                       icon: Terminal,
-                      label: 'Remote SSH',
+                      label: t('ui.remoteSsh'),
                       detail: canCreateRemoteTerminal
-                        ? '[ READY ]'
+                        ? `[ ${t('ui.ready').toUpperCase()} ]`
                         : remoteTerminalConfigured
-                          ? '[ OPENSSH MISSING ]'
-                          : '[ CONFIGURE ]',
+                          ? t('ui.opensshMissingStatus')
+                          : t('ui.configureStatus'),
                       disabled: !canCreateRemoteTerminal,
                       title: !remoteTerminalConfigured
-                        ? 'Configure Remote terminal in Workspace Settings first'
+                        ? t('ui.configureRemoteTerminalFirst')
                         : !remoteSshAvailable
-                          ? 'OpenSSH client is missing on this computer'
-                          : 'Create a terminal connected through SSH',
+                          ? t('ui.opensshMissing')
+                          : t('ui.createSshTerminal'),
                       onClick: () => {
                         addRemoteTerminal()
                         setShowProfilePicker(false)
@@ -2201,13 +2206,13 @@ function AppContent(): React.ReactElement {
             {showNotePicker && (
               <div className="absolute bottom-full left-4 z-[9999] mb-3 w-[260px]">
                 <TileCreationMenu
-                  title="Note Type"
+                  title={t('ui.noteType')}
                   items={[
                     {
                       id: 'rich-note',
                       icon: StickyNote,
-                      label: 'Rich Note',
-                      detail: '[ RICH ]',
+                      label: t('ui.richNote'),
+                      detail: t('ui.richStatus'),
                       onClick: () => {
                         addNote('rich')
                         setShowNotePicker(false)
@@ -2216,8 +2221,8 @@ function AppContent(): React.ReactElement {
                     {
                       id: 'markdown-note',
                       icon: StickyNote,
-                      label: 'Markdown Note',
-                      detail: '[ MARKDOWN ]',
+                      label: t('ui.markdownNote'),
+                      detail: t('ui.markdownStatus'),
                       onClick: () => {
                         addNote('markdown')
                         setShowNotePicker(false)
@@ -2300,7 +2305,7 @@ function AppContent(): React.ReactElement {
           <div className="border-b border-border bg-bg-secondary px-6 py-3">
             <div className="flex items-center justify-between gap-4 rounded-[20px] border border-border-visible bg-bg-tertiary px-4 py-3">
               <div className="min-w-0">
-                <div className="nd-label text-text-secondary">Updates</div>
+                <div className="nd-label text-text-secondary">{t('ui.updates')}</div>
                 <div className="mt-1 text-sm text-text-display">{updateBannerCopy.title}</div>
                 <div className="mt-1 text-sm text-text-secondary">{updateBannerCopy.message}</div>
               </div>
@@ -2314,14 +2319,14 @@ function AppContent(): React.ReactElement {
                     }}
                   >
                     <Download size={14} />
-                    <span>Restart to install</span>
+                    <span>{t('update.restartToInstall')}</span>
                   </button>
                 )}
 
                 <button
                   className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border-visible text-text-secondary transition-colors hover:text-text-display"
                   onClick={() => setDismissedUpdateVersion(currentUpdateBannerKey)}
-                  title="Dismiss update banner"
+                  title={t('ui.dismissUpdateBanner')}
                 >
                   <X size={16} />
                 </button>

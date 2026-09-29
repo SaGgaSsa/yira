@@ -8,6 +8,7 @@ import type {
   WakeOnLanConfig,
 } from '@shared/types'
 import { sendWakeOnLan } from './wake-on-lan'
+import { mainText } from './i18n'
 
 const DEFAULT_SSH_PORT = 22
 const DEFAULT_SSH_TIMEOUT_MS = 1500
@@ -194,8 +195,8 @@ function reportProgress(
 function timeoutError(hostResponded: boolean): Error {
   return createStableError(
     hostResponded
-      ? 'Equipo responde, SSH no disponible tras 60 segundos'
-      : 'Sin respuesta; activación no confirmada tras 60 segundos',
+      ? mainText('hostRespondedSshUnavailable')
+      : mainText('wakeUnconfirmed'),
   )
 }
 
@@ -226,13 +227,13 @@ export async function ensureRemoteSshReady(
     return { status: 'host-online', wakeSent: false }
   }
   if (initialResult === 'invalid-host') {
-    throw createStableError('No se pudo resolver el host remoto')
+    throw createStableError(mainText('remoteHostUnresolved'))
   }
 
   try {
     await wake(wakeOnLan)
   } catch (error) {
-    throw createStableError('No se pudo enviar Wake-on-LAN', error)
+    throw createStableError(mainText('wakeOnLanFailed'), error)
   }
   reportProgress(onProgress, 'packet-sent')
 
@@ -254,7 +255,7 @@ export async function ensureRemoteSshReady(
     if (result === 'available') {
       reportProgress(onProgress, 'ssh-ready')
       if (now() >= deadline) {
-        throw createStableError('SSH respondió fuera del plazo de 60 segundos')
+        throw createStableError(mainText('sshOutsideDeadline'))
       }
       return { status: 'woken', wakeSent: true }
     }
@@ -263,7 +264,7 @@ export async function ensureRemoteSshReady(
       reportProgress(onProgress, 'host-online')
     }
     if (result === 'invalid-host') {
-      throw createStableError('No se pudo resolver el host remoto')
+      throw createStableError(mainText('remoteHostUnresolved'))
     }
     if (now() >= deadline) {
       if (!hostResponded) reportProgress(onProgress, 'unconfirmed')

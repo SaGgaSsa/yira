@@ -1,9 +1,10 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import type { LucideIcon } from 'lucide-react'
 import { Maximize2, PanelBottomClose, PanelTopOpen, Pin, Settings, X } from 'lucide-react'
 import type { TileState } from '@shared/types'
 import { formatTerminalAttentionCount } from '@/utils/terminalAttention'
-import { TILE_META } from './TileContent'
+import { getTileTypeLabel, TILE_META } from './TileContent'
 import { TerminalTileActivityIcon } from './TerminalActivityIcon'
 
 export interface ListRowProps {
@@ -254,8 +255,10 @@ export function TileListItem({
   onDrop,
   className = '',
 }: TileListItemProps): React.ReactElement {
+  const { t } = useTranslation()
   const meta = TILE_META[tile.type]
-  const fallbackLabel = tile.type === 'note' ? meta.label : `${meta.label} ${tile.id.slice(-4)}`
+  const tileTypeLabel = getTileTypeLabel(tile.type, t)
+  const fallbackLabel = tile.type === 'note' ? tileTypeLabel : `${tileTypeLabel} ${tile.id.slice(-4)}`
   const label = (displayLabel ?? tile.label)?.trim() || fallbackLabel
   const hasActions = Boolean(onConfigure && onFocusTile && onClose)
 
@@ -273,11 +276,11 @@ export function TileListItem({
       onDetach={hasActions ? onDetachTile : undefined}
       detached={detached}
       onClose={hasActions ? onClose : undefined}
-      configureTitle="Configure tile"
-      focusTitle="Focus tile"
-      detachTitle="Detach tile"
-      attachTitle="Attach tile"
-      closeTitle="Close tile"
+      configureTitle={t('ui.configureTile')}
+      focusTitle={t('ui.focusTile')}
+      detachTitle={t('ui.detachTile')}
+      attachTitle={t('ui.attachTile')}
+      closeTitle={t('ui.closeTile')}
       draggable={draggable}
       onDragStart={onDragStart}
       onDragOver={onDragOver}

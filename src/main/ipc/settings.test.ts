@@ -21,6 +21,8 @@ test('exposes managed Claude statusLine setup alongside ordinary agent hooks', a
   assert.match(settings, /claudeStatusLine:install/)
   assert.match(settings, /claudeStatusLine:uninstall/)
   assert.match(settings, /CLAUDE_CONFIG_DIR/)
+  assert.match(settings, /language: hasLanguage \? parsed\.language : resolveSupportedLanguage\(app\.getLocale\(\)\)/)
+  assert.match(settings, /setMainLanguage\(defaults\.language\)/)
   assert.match(preload, /configureAgentHooks/)
   assert.match(preload, /uninstallAgentHooks/)
   assert.match(preload, /getClaudeStatusLineStatus/)

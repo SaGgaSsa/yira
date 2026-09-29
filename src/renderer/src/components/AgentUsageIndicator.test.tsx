@@ -3,6 +3,9 @@ import test from 'node:test'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { AgentUsageProviderSnapshot } from '@shared/types'
 import { AgentUsageIndicator, formatUsageResetAt } from './AgentUsageIndicator'
+import { initializeI18n } from '../i18n'
+
+await initializeI18n()
 
 const resetAt = '2026-08-12T15:30:00.000Z'
 
@@ -67,7 +70,7 @@ test('renders both compact windows and preserves the Claude provider identity', 
   assert.match(markup, />67%<\/span>/)
   assert.match(markup, />81%<\/span>/)
   assert.match(markup, />5 h<\/span>/)
-  assert.match(markup, />sem\.<\/span>/)
+  assert.match(markup, />wk\.<\/span>/)
 })
 
 test('renders a muted unavailable state when the snapshot is absent or unavailable', () => {

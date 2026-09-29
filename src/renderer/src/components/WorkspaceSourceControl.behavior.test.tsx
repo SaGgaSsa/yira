@@ -215,12 +215,12 @@ test('keeps healthy Git status visible when history loading fails', async () => 
     assert.match(healthyMarkup, />origin\/main · ↑0 ↓0</)
     assert.match(healthyMarkup, /Changes \(1\)/)
     assert.match(healthyMarkup, />README\.md</)
-    assert.doesNotMatch(healthyMarkup, /No se pudo cargar el historial/)
+    assert.doesNotMatch(healthyMarkup, /Unable to load history/)
 
     findCommitsButton(container).dispatchEvent(new TestEvent('click', { bubbles: true }))
-    await waitFor(() => serializedMarkup(container).includes('No se pudo cargar el historial: history service unavailable'))
+    await waitFor(() => serializedMarkup(container).includes('Unable to load history: history service unavailable'))
     const expandedMarkup = serializedMarkup(container)
-    assert.match(expandedMarkup, /No se pudo cargar el historial: history service unavailable/)
+    assert.match(expandedMarkup, /Unable to load history: history service unavailable/)
     assert.match(expandedMarkup, /Changes \(1\)/)
     assert.match(expandedMarkup, />README\.md</)
   } finally {
