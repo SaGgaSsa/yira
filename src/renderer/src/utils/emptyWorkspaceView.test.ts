@@ -22,8 +22,16 @@ if (!shouldKeepSidebarOpenForWorkspace([{
   throw new Error('a workspace with only detached tiles must keep the sidebar open')
 }
 
-if (resolveSidebarCollapsedAfterWorkspaceViewChange(true, 'workspace-a', 'workspace-b', 'fullview', false)) {
-  throw new Error('switching workspaces must leave the sidebar visible')
+if (!resolveSidebarCollapsedAfterWorkspaceViewChange(true, 'workspace-a', 'workspace-b', 'fullview', false)) {
+  throw new Error('switching to a populated workspace must keep a hidden sidebar hidden')
+}
+
+if (resolveSidebarCollapsedAfterWorkspaceViewChange(false, 'workspace-a', 'workspace-b', 'fullview', false)) {
+  throw new Error('switching to a populated workspace must keep a visible sidebar visible')
+}
+
+if (resolveSidebarCollapsedAfterWorkspaceViewChange(true, 'workspace-a', 'workspace-b', 'fullview', true)) {
+  throw new Error('switching to an empty workspace must show the sidebar')
 }
 
 if (!resolveSidebarCollapsedAfterWorkspaceViewChange(false, 'workspace-a', 'workspace-a', 'fullview', false)) {
