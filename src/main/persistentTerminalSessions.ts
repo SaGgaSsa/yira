@@ -186,6 +186,15 @@ export class PersistentTerminalSessions {
     return !this.shuttingDown
   }
 
+  /** Sessions this process knows about whose PTY is still running. */
+  runningSessionCount(): number {
+    let count = 0
+    for (const record of this.sessions.values()) {
+      if (!record.exited) count += 1
+    }
+    return count
+  }
+
   /** Clear a transport-loss gate only when the caller explicitly recovered. */
   recoverConnection(): void {
     if (this.shuttingDown) return

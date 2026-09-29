@@ -10,6 +10,7 @@ import test from 'node:test'
 
 import {
   connectTerminalDaemon,
+  stopTerminalDaemon,
   TERMINAL_DAEMON_APPIMAGE_BOOTSTRAP,
   TERMINAL_DAEMON_ENDPOINT_FILE,
   TERMINAL_DAEMON_STARTUP_LOCK_FILE,
@@ -196,6 +197,59 @@ test('does not launch a duplicate when an endpoint PID is alive but does not res
     /alive but did not complete the protocol handshake/i,
   )
   assert.equal(await readFile(join(directory, TERMINAL_DAEMON_STARTUP_LOCK_FILE), 'utf8').catch(() => null), null)
+})
+
+test('stops a live daemon process tree and removes its endpoint', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'yira-terminal-daemon-'))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const daemon = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
+  t.after(() => { if (daemon.exitCode === null) daemon.kill() })
+  assert.ok(positiveTestPid(daemon.pid))
+  const endpointPath = join(directory, TERMINAL_DAEMON_ENDPOINT_FILE)
+  await writeFile(endpointPath, JSON.stringify({ ...endpoint(1), pid: daemon.pid }))
+
+  assert.equal(await stopTerminalDaemon({ directory }), true)
+  assert.throws(() => process.kill(daemon.pid as number, 0))
+  assert.equal(await readFile(endpointPath, 'utf8').catch(() => null), null)
+})
+
+test('asks a live daemon to shut down before killing its process tree', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'yira-terminal-daemon-'))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const daemon = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
+  t.after(() => { if (daemon.exitCode === null) daemon.kill() })
+  assert.ok(positiveTestPid(daemon.pid))
+  const methods: string[] = []
+  const server = protocolServer((request, socket) => {
+    methods.push(request.method)
+    socket.write(JSON.stringify({ id: request.id, result: null }) + '\n')
+    if (request.method === 'shutdown') daemon.kill()
+  })
+  t.after(() => closeServer(server))
+  const port = await listen(server)
+  await writeFile(join(directory, TERMINAL_DAEMON_ENDPOINT_FILE), JSON.stringify({ ...endpoint(port), pid: daemon.pid }))
+  const killed: number[] = []
+
+  assert.equal(await stopTerminalDaemon({
+    directory,
+    killProcessTree: async (pid) => { killed.push(pid) },
+  }), true)
+  assert.deepEqual(methods, ['shutdown'])
+  assert.deepEqual(killed, [])
+})
+
+test('does not stop anything without a live daemon endpoint', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'yira-terminal-daemon-'))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const killed: number[] = []
+  const killProcessTree = async (pid: number): Promise<void> => { killed.push(pid) }
+
+  assert.equal(await stopTerminalDaemon({ directory, killProcessTree }), false)
+  await writeFile(join(directory, TERMINAL_DAEMON_ENDPOINT_FILE), JSON.stringify({ ...endpoint(1), pid: 999_999_999 }))
+  assert.equal(await stopTerminalDaemon({ directory, killProcessTree }), false)
+  await writeFile(join(directory, TERMINAL_DAEMON_ENDPOINT_FILE), JSON.stringify(endpoint(1)))
+  assert.equal(await stopTerminalDaemon({ directory, killProcessTree }), false)
+  assert.deepEqual(killed, [])
 })
 
 test('recovers a dead startup lock and reports a launch failure', async (t) => {

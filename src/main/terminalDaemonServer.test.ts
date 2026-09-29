@@ -318,6 +318,33 @@ test('keeps natural exits attachable and destroys detached sessions by workspace
   void second
 })
 
+test('answers a shutdown request and then kills every PTY', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'yira-daemon-'))
+  const ptyFactory = new FakePtyFactory()
+  let shutdownRequested = 0
+  const handle = await startTerminalDaemon({
+    directory,
+    ptyFactory,
+    token: 'shutdown-token',
+    idleMs: 5_000,
+    onShutdown: () => {
+      shutdownRequested += 1
+      void handle.close()
+    },
+  })
+  t.after(() => handle.close())
+  const client = await connectClient(handle.endpoint.port)
+  await request(client.socket, client.messages, handle.endpoint.token, 1, 'create', spawnParams({ workspaceId: 'w', tileId: 'one' }))
+
+  const shutdown = await request(client.socket, client.messages, handle.endpoint.token, 2, 'shutdown')
+  assert.deepEqual(shutdown.result, null)
+  await wait(40)
+  assert.equal(shutdownRequested, 1)
+  assert.equal(ptyFactory.instances[0].killed, 1)
+  assert.equal(await readFile(join(directory, 'endpoint.json'), 'utf8').catch(() => null), null)
+  client.socket.destroy()
+})
+
 test('orders all received output before the natural exit event', async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'yira-daemon-'))
   const ptyFactory = new FakePtyFactory()

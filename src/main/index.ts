@@ -11,6 +11,8 @@ import {
   hydrateTerminalSessions,
   shutdownTerminalSessions,
   destroyWorkspaceTerminalSessions,
+  stopTerminalDaemonForUpdate,
+  countRunningTerminalSessions,
 } from './ipc/terminal'
 import { loadStoredUserSettings, registerSettingsIPC } from './ipc/settings'
 import { registerNotesIPC } from './ipc/notes'
@@ -25,7 +27,7 @@ import { AgentUsageService } from './agentUsage'
 import { AgentUsageDetailsService } from './agentUsageDetails'
 import { readClaudeUsageStatusLinePayload } from './claudeUsageStatusLinePayload'
 import { APP_ID, APP_NAME, DEV_APP_NAME, YIRA_HOME } from './paths'
-import { registerUpdateIPC, scheduleStartupUpdateCheck } from './updater'
+import { isWindowsUpdateInstallPending, registerUpdateIPC, scheduleStartupUpdateCheck } from './updater'
 import { loadWindowState, saveWindowState } from './windowState'
 import { coordinateWindowClose, type CloseFailureDecision } from './windowCloseCoordinator'
 import { getWindowMaterialOptions, setWindowBackgroundMaterial } from './windowMaterial'
@@ -77,6 +79,47 @@ async function promptClosePreparationFailure(phase: 'flush' | 'persist' | 'termi
   return 'cancel'
 }
 
+async function drainTerminalSessions(): Promise<void> {
+  await shutdownTerminalSessions()
+  // The terminal daemon keeps Yira.exe running and would block the installer.
+  if (!isWindowsUpdateInstallPending()) return
+  try {
+    await stopTerminalDaemonForUpdate()
+  } catch (error) {
+    console.error('[main] unable to stop the terminal daemon before the update:', error)
+  }
+}
+
+async function confirmUpdateInstall(): Promise<boolean> {
+  if (process.platform !== 'win32') return true
+  const count = countRunningTerminalSessions()
+  if (count === 0) return true
+
+  const spanish = (await loadStoredUserSettings())?.language === 'es'
+  const options = spanish
+    ? {
+        title: 'Instalar actualización',
+        message: count === 1
+          ? 'Hay 1 terminal abierta. Se va a cerrar al instalar la actualización.'
+          : `Hay ${count} terminales abiertas. Se van a cerrar al instalar la actualización.`,
+        detail: 'Los procesos que corren en ellas, incluidos los agentes, se detienen. Podés instalar la actualización más tarde.',
+        buttons: ['Instalar y reiniciar', 'Más tarde'],
+      }
+    : {
+        title: 'Install update',
+        message: count === 1
+          ? '1 terminal is open. It will be closed to install the update.'
+          : `${count} terminals are open. They will be closed to install the update.`,
+        detail: 'Processes running in them, including agents, will stop. You can install the update later.',
+        buttons: ['Install and restart', 'Later'],
+      }
+  const messageOptions = { ...options, type: 'warning' as const, defaultId: 0, cancelId: 1, noLink: true }
+  const result = mainWindow && !mainWindow.isDestroyed()
+    ? await dialog.showMessageBox(mainWindow, messageOptions)
+    : await dialog.showMessageBox(messageOptions)
+  return result.response === 0
+}
+
 async function prepareApplicationClose(): Promise<boolean> {
   if (closePreparationApproved) return true
   if (closePreparationInFlight) return closePreparationInFlight
@@ -84,7 +127,7 @@ async function prepareApplicationClose(): Promise<boolean> {
   closePreparationInFlight = (async () => {
     const bridge = closePreparationBridge
     if (!bridge) {
-      await shutdownTerminalSessions()
+      await drainTerminalSessions()
       closePreparationApproved = true
       return true
     }
@@ -92,7 +135,7 @@ async function prepareApplicationClose(): Promise<boolean> {
     const result = await coordinateWindowClose({
       flushRenderers: () => bridge.requestAll('flush', CLOSE_PREPARATION_TIMEOUT_MS),
       persistPrimary: () => bridge.requestPrimary('persist', CLOSE_PREPARATION_TIMEOUT_MS),
-      drainTerminals: async () => { await shutdownTerminalSessions() },
+      drainTerminals: drainTerminalSessions,
       promptFailure: ({ phase, error }) => promptClosePreparationFailure(phase, error),
       timeoutMs: CLOSE_PREPARATION_TIMEOUT_MS,
     })
@@ -249,7 +292,7 @@ app.whenReady().then(async () => {
   registerNotificationIPC()
   closePreparationBridge = registerWindowIPC(() => mainWindow)
   registerFloatingTilesIPC(() => mainWindow, () => closePreparationApproved)
-  registerUpdateIPC({ prepareToClose: prepareApplicationClose })
+  registerUpdateIPC({ confirmInstall: confirmUpdateInstall, prepareToClose: prepareApplicationClose })
 
   ipcMain.handle('shell:openExternal', async (_event, url: string) => {
     await shell.openExternal(url)

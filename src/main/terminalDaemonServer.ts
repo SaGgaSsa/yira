@@ -89,6 +89,8 @@ export interface StartTerminalDaemonOptions {
   directory: string
   /** Called after the idle period when no clients and no sessions remain. */
   onIdle?: () => void
+  /** Called when a client requests shutdown. The default closes the daemon. */
+  onShutdown?: () => void
   /** Controlled PTY factory used by tests. The production entry injects node-pty. */
   ptyFactory?: TerminalDaemonPtyFactory
   /** Optional terminal factory used by tests. The default is @xterm/headless. */
@@ -145,6 +147,7 @@ const METHODS: readonly (keyof TerminalDaemonMethods)[] = [
   'destroy',
   'destroyCurrent',
   'destroyWorkspace',
+  'shutdown',
 ]
 
 type DaemonMethod = keyof TerminalDaemonMethods
@@ -1249,6 +1252,17 @@ export class TerminalDaemonServer {
         await Promise.all([...sessions].map(session => this.destroySession(session)))
         return null
       }
+      case 'shutdown':
+        requireUndefinedParams(params)
+        // Respond before closing, because close() drops every client socket.
+        setImmediate(() => {
+          if (!this.options.onShutdown) {
+            void this.close()
+            return
+          }
+          try { this.options.onShutdown() } catch { void this.close() }
+        })
+        return null
     }
   }
 

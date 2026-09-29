@@ -25,7 +25,7 @@ import { SemanticAgentAlertState } from '../agentAlerts'
 import { agentSessionRegistry } from '../agents/registry'
 import { normalizeAgentOpaqueId } from '../agents/query'
 import { buildAgentTerminalLaunch, type AgentTerminalLaunch } from '../agents/terminal'
-import { connectTerminalDaemon } from '../terminalDaemonClient'
+import { connectTerminalDaemon, stopTerminalDaemon } from '../terminalDaemonClient'
 import { YIRA_HOME } from '../paths'
 import {
   PersistentTerminalSessions,
@@ -78,10 +78,12 @@ const agentAlerts = new SemanticAgentAlertState({
   },
 })
 
+const TERMINAL_DAEMON_DIRECTORY = join(YIRA_HOME, 'terminal-runtime')
+
 const persistentTerminalSessions = new PersistentTerminalSessions({
   connect: () => {
     const options = {
-      directory: join(YIRA_HOME, 'terminal-runtime'),
+      directory: TERMINAL_DAEMON_DIRECTORY,
       executable: process.execPath,
       entryPath: join(__dirname, 'terminalDaemon.js'),
       appImagePath: appImagePathForDaemon(),
@@ -215,6 +217,16 @@ export function hydrateTerminalSessions(): Promise<void> {
 
 export function shutdownTerminalSessions(): Promise<void> {
   return persistentTerminalSessions.shutdown()
+}
+
+export function countRunningTerminalSessions(): number {
+  return persistentTerminalSessions.runningSessionCount()
+}
+
+/** Close every terminal and stop the daemon so an installer can replace the app. */
+export async function stopTerminalDaemonForUpdate(): Promise<void> {
+  await persistentTerminalSessions.shutdown()
+  await stopTerminalDaemon({ directory: TERMINAL_DAEMON_DIRECTORY, timeoutMs: 3_000 })
 }
 
 export function destroyWorkspaceTerminalSessions(workspaceId: string): Promise<void> {

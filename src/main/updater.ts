@@ -72,6 +72,11 @@ function getUpdater(): AppUpdater {
   return autoUpdater
 }
 
+/** True when quitting now runs the Windows installer, which needs every app process closed. */
+export function isWindowsUpdateInstallPending(): boolean {
+  return process.platform === 'win32' && updateState.status === 'downloaded' && getUpdater().autoInstallOnAppQuit
+}
+
 export function shouldUseLinuxDebUpdateLauncher(
   platform: string,
   downloadedFile: string | null | undefined,
@@ -224,7 +229,12 @@ async function runUpdateCheck(reason: 'startup' | 'manual'): Promise<UpdateState
   return updateState
 }
 
-async function installDownloadedUpdate(prepareToClose?: () => Promise<boolean>): Promise<void> {
+interface UpdateInstallHooks {
+  confirmInstall?: () => Promise<boolean>
+  prepareToClose?: () => Promise<boolean>
+}
+
+async function installDownloadedUpdate({ confirmInstall, prepareToClose }: UpdateInstallHooks): Promise<void> {
   await waitForUpdateDiagnosticsInitialization()
   const eligible = updateState.status === 'downloaded'
   const installRequest = recordUpdateDiagnostic('install-requested', { eligible, status: updateState.status })
@@ -233,6 +243,10 @@ async function installDownloadedUpdate(prepareToClose?: () => Promise<boolean>):
     return
   }
 
+  if (confirmInstall && !await confirmInstall()) {
+    void recordUpdateDiagnostic('install-cancelled')
+    return
+  }
   if (prepareToClose && !await prepareToClose()) return
 
   if (shouldUseLinuxDebUpdateLauncher(process.platform, downloadedUpdateFile) && downloadedUpdateFile) {
@@ -304,7 +318,7 @@ function registerUpdateLifecycleDiagnostics(): void {
   })
 }
 
-export function registerUpdateIPC(options: { prepareToClose?: () => Promise<boolean> } = {}): void {
+export function registerUpdateIPC(options: UpdateInstallHooks = {}): void {
   if (updaterRegistered) return
 
   updaterRegistered = true
@@ -315,7 +329,7 @@ export function registerUpdateIPC(options: { prepareToClose?: () => Promise<bool
   ipcMain.handle('updates:getState', async (): Promise<UpdateState> => updateState)
   ipcMain.handle('updates:check', async (): Promise<UpdateState> => runUpdateCheck('manual'))
   ipcMain.handle('updates:install', async (): Promise<void> => {
-    await installDownloadedUpdate(options.prepareToClose)
+    await installDownloadedUpdate(options)
   })
 }
 
