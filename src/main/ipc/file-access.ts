@@ -5,8 +5,13 @@ import type { FileHandle } from 'fs/promises'
 import { extname, isAbsolute, relative, resolve } from 'path'
 import type { FilePreviewAssetResult, FileReadResult, FileRevision, FileStatResult, FileWriteInput, FileWriteResult } from '@shared/types'
 
-export const MAX_TEXT_FILE_BYTES = 2 * 1024 * 1024
+export const MAX_TEXT_FILE_BYTES = 10 * 1024 * 1024
 export const MAX_PREVIEW_ASSET_BYTES = 10 * 1024 * 1024
+const TEXT_FILE_TOO_LARGE_MESSAGE = 'Files larger than 10 MiB cannot be opened in the editor'
+const MAX_CACHED_REVISIONS = 64
+
+// Editor tiles poll every file they show; reuse the hash while the metadata is unchanged.
+const revisionCache = new Map<string, FileRevision>()
 
 export interface ResolvedRootTarget {
   rootPath: string
@@ -96,7 +101,7 @@ export async function resolveRootTarget(
 
 function textFromBuffer(buffer: Buffer): string {
   if (buffer.byteLength > MAX_TEXT_FILE_BYTES) {
-    throw new UnsupportedFileError('Files larger than 2 MiB cannot be opened in the editor')
+    throw new UnsupportedFileError(TEXT_FILE_TOO_LARGE_MESSAGE)
   }
   if (buffer.includes(0)) {
     throw new UnsupportedFileError('Binary files containing NUL bytes cannot be opened in the editor')
@@ -109,12 +114,18 @@ function textFromBuffer(buffer: Buffer): string {
     throw new UnsupportedFileError('File content is not valid UTF-8 text')
   }
 
-  const characters = Array.from(content)
-  const nonTextControls = characters.filter((character) => {
-    const code = character.codePointAt(0) ?? 0
-    return (code >= 0 && code <= 8) || code === 11 || code === 12 || (code >= 14 && code <= 31) || (code >= 127 && code <= 159)
-  }).length
-  if (characters.length > 0 && nonTextControls / characters.length > 0.1) {
+  // Count code points without materializing them; control characters are all in the BMP.
+  let characterCount = 0
+  let nonTextControls = 0
+  for (let index = 0; index < content.length; index += 1) {
+    const code = content.charCodeAt(index)
+    if (code >= 0xdc00 && code <= 0xdfff) continue
+    characterCount += 1
+    if ((code >= 0 && code <= 8) || code === 11 || code === 12 || (code >= 14 && code <= 31) || (code >= 127 && code <= 159)) {
+      nonTextControls += 1
+    }
+  }
+  if (characterCount > 0 && nonTextControls / characterCount > 0.1) {
     throw new UnsupportedFileError('Binary files cannot be opened in the editor')
   }
 
@@ -207,7 +218,7 @@ async function readSnapshot(
   const before = await handle.stat()
   if (!before.isFile()) throw new UnsupportedFileError('Path is not a file')
   if (options.enforceEditorSizeLimit && before.size > MAX_TEXT_FILE_BYTES) {
-    throw new UnsupportedFileError('Files larger than 2 MiB cannot be opened in the editor')
+    throw new UnsupportedFileError(TEXT_FILE_TOO_LARGE_MESSAGE)
   }
   if (options.maxBytes !== undefined && before.size > options.maxBytes) {
     throw new UnsupportedFileError(options.maxBytesMessage ?? 'File is too large')
@@ -292,10 +303,21 @@ export async function readFile(rootPath: string, relativePath: string): Promise<
 
 export async function statFile(rootPath: string, relativePath: string): Promise<FileStatResult> {
   try {
-    const { handle } = await openValidatedFile(rootPath, relativePath, fsConstants.O_RDONLY)
+    const { handle, resolved } = await openValidatedFile(rootPath, relativePath, fsConstants.O_RDONLY)
+    const cacheKey = normalizeForCompare(resolved.targetPath)
     let revision: FileRevision
     try {
-      revision = await readRevisionIncrementally(handle)
+      const cached = revisionCache.get(cacheKey)
+      if (cached && cached.metadataToken === metadataTokenFor(await handle.stat())) {
+        revision = cached
+      } else {
+        revision = await readRevisionIncrementally(handle)
+        revisionCache.delete(cacheKey)
+        revisionCache.set(cacheKey, revision)
+        if (revisionCache.size > MAX_CACHED_REVISIONS) {
+          revisionCache.delete(revisionCache.keys().next().value as string)
+        }
+      }
     } finally {
       await handle.close()
     }

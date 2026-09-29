@@ -10,7 +10,6 @@ import { readFile, readPreviewAsset, statFile, writeFile } from './file-access'
 import { searchFiles } from './files'
 import * as fileAccess from './file-access'
 
-const TWO_MIB = 2 * 1024 * 1024
 const TEN_MIB = 10 * 1024 * 1024
 const DIRECTORY_SYMLINK_TYPE = process.platform === 'win32' ? 'junction' : 'dir'
 
@@ -299,31 +298,31 @@ test('rejects invalid UTF-8 files', async () => {
   }
 })
 
-test('rejects files larger than 2 MiB', async () => {
+test('rejects files larger than 10 MiB', async () => {
   const rootPath = await createWorkspace()
   try {
-    await fs.writeFile(join(rootPath, 'large.txt'), 'a'.repeat(TWO_MIB + 1), 'utf8')
+    await fs.writeFile(join(rootPath, 'large.txt'), 'a'.repeat(TEN_MIB + 1), 'utf8')
 
     assert.deepEqual(await readFile(rootPath, 'large.txt'), {
       status: 'unsupported',
-      reason: 'Files larger than 2 MiB cannot be opened in the editor',
+      reason: 'Files larger than 10 MiB cannot be opened in the editor',
     })
   } finally {
     await removeWorkspace(rootPath)
   }
 })
 
-test('accepts files at the 2 MiB limit', async () => {
+test('accepts files at the 10 MiB limit', async () => {
   const rootPath = await createWorkspace()
   try {
-    await fs.writeFile(join(rootPath, 'limit.txt'), 'a'.repeat(TWO_MIB), 'utf8')
+    await fs.writeFile(join(rootPath, 'limit.txt'), 'a'.repeat(TEN_MIB), 'utf8')
 
     const result = await readFile(rootPath, 'limit.txt')
 
     assert.equal(result.status, 'ready')
     if (result.status !== 'ready') throw new Error('limit file must be ready')
-    assert.equal(result.content.length, TWO_MIB)
-    assert.equal(result.revision.size, TWO_MIB)
+    assert.equal(result.content.length, TEN_MIB)
+    assert.equal(result.revision.size, TEN_MIB)
   } finally {
     await removeWorkspace(rootPath)
   }
@@ -589,17 +588,37 @@ test('reports a changed file with a new metadata token and coherent revision', a
   }
 })
 
+test('reuses the cached revision until the file metadata changes', async () => {
+  const rootPath = await createWorkspace()
+  try {
+    const filePath = join(rootPath, 'notes.txt')
+    await fs.writeFile(filePath, 'aaaa', 'utf8')
+    const first = await statFile(rootPath, 'notes.txt')
+    const repeated = await statFile(rootPath, 'notes.txt')
+    assert.deepEqual(repeated, first)
+
+    await fs.writeFile(filePath, 'bbbb', 'utf8')
+    await fs.utimes(filePath, new Date(2_000_000_000_000), new Date(2_000_000_000_000))
+    const changed = await statFile(rootPath, 'notes.txt')
+    assert.equal(changed.status, 'available')
+    if (changed.status !== 'available') throw new Error('changed file stat must be available')
+    assert.equal(changed.revision.sha256, createHash('sha256').update('bbbb').digest('hex'))
+  } finally {
+    await removeWorkspace(rootPath)
+  }
+})
+
 test('stats an existing file larger than the editor read limit', async () => {
   const rootPath = await createWorkspace()
   try {
-    const content = 'a'.repeat(TWO_MIB + 1)
+    const content = 'a'.repeat(TEN_MIB + 1)
     await fs.writeFile(join(rootPath, 'large.txt'), content, 'utf8')
 
     const result = await statFile(rootPath, 'large.txt')
 
     assert.equal(result.status, 'available')
     if (result.status !== 'available') throw new Error('large existing file must be available to stat')
-    assert.equal(result.revision.size, TWO_MIB + 1)
+    assert.equal(result.revision.size, TEN_MIB + 1)
     assert.equal(result.revision.sha256, createHash('sha256').update(content).digest('hex'))
   } finally {
     await removeWorkspace(rootPath)
