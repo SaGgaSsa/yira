@@ -13,3 +13,12 @@ docs/superpowers/
 docs/brand-concepts/
 docs/*-plan.md
 docs/workspace-terminal-activity.md
+
+# Local agent delegation packages and logs
+/*.jsonl
+/*-task.md
+/*-permissions.json
+/*-readonly.json
+/*-correction.md
+/workspace-order-followup.md
+/workspace-order-investigation.md
