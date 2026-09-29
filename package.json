@@ -113,6 +113,10 @@
         "to": "agent-hook-client.mjs"
       },
       {
+        "from": "resources/claude-statusline-capture.mjs",
+        "to": "claude-statusline-capture.mjs"
+      },
+      {
         "from": "resources/linux-deb-update-launcher.sh",
         "to": "linux-deb-update-launcher.sh"
       }

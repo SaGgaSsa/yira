@@ -4,10 +4,11 @@ import { join } from 'path'
 import { homedir } from 'os'
 import { is } from '@electron-toolkit/utils'
 import { YIRA_HOME } from '../paths'
-import type { UserSettings } from '@shared/types'
+import type { ClaudeStatusLineMutationResult, ClaudeStatusLineState, UserSettings } from '@shared/types'
 import { normalizeUserSettings } from '@shared/userSettings'
 import { resolveSupportedLanguage } from '@shared/language'
 import { installClaudeHookConfiguration, installCodexHookConfiguration, uninstallClaudeHookConfiguration, uninstallCodexHookConfiguration, type AgentHookProvider } from '../agentHookConfiguration'
+import { getClaudeStatusLineState, installClaudeStatusLine, uninstallClaudeStatusLine } from '../claudeStatusLineConfiguration'
 import { supportsBackgroundMaterial } from '../windowMaterial'
 
 const SETTINGS_PATH = join(YIRA_HOME, 'settings.json')
@@ -18,6 +19,67 @@ function getAgentHookPath(provider: AgentHookProvider): string {
 
 function getAgentHookClientCommand(): string {
   return is.dev ? `node ${JSON.stringify(join(process.cwd(), 'resources', 'agent-hook-client.mjs'))}` : `node ${JSON.stringify(join(process.resourcesPath, 'agent-hook-client.mjs'))}`
+}
+
+function getClaudeSettingsPath(): string {
+  return join(process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'), 'settings.json')
+}
+
+function getClaudeStatusLineClientCommand(): string {
+  const scriptPath = is.dev ? join(process.cwd(), 'resources', 'claude-statusline-capture.mjs') : join(process.resourcesPath, 'claude-statusline-capture.mjs')
+  return `node ${JSON.stringify(scriptPath)}`
+}
+
+async function readClaudeSettings(path: string): Promise<{ text: string; exists: boolean }> {
+  try { return { text: await fs.readFile(path, 'utf8'), exists: true } } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { text: '{}', exists: false }
+    throw error
+  }
+}
+
+async function getClaudeStatusLine(): Promise<ClaudeStatusLineState> {
+  try {
+    const { text } = await readClaudeSettings(getClaudeSettingsPath())
+    return getClaudeStatusLineState(text, getClaudeStatusLineClientCommand())
+  } catch {
+    return { status: 'unsupported', message: 'Claude Code settings could not be read.' }
+  }
+}
+
+async function mutateClaudeStatusLine(operation: 'install' | 'uninstall'): Promise<ClaudeStatusLineMutationResult> {
+  const path = getClaudeSettingsPath()
+  try {
+    const original = await readClaudeSettings(path)
+    const clientCommand = getClaudeStatusLineClientCommand()
+    const result = operation === 'install'
+      ? installClaudeStatusLine(original.text, clientCommand)
+      : uninstallClaudeStatusLine(original.text, clientCommand)
+    if (!result.ok || !result.changed) return result
+
+    await fs.mkdir(join(path, '..'), { recursive: true })
+    const current = await readClaudeSettings(path)
+    if (current.exists !== original.exists || current.text !== original.text) {
+      return {
+        ok: false,
+        success: false,
+        status: 'conflict',
+        changed: false,
+        text: original.text,
+        message: 'Claude Code settings changed while Yira was preparing the update. Review the file and try again.',
+      }
+    }
+    await fs.writeFile(path, result.text, 'utf8')
+    return result
+  } catch {
+    return {
+      ok: false,
+      success: false,
+      status: 'unsupported',
+      changed: false,
+      text: '{}',
+      message: 'Claude Code settings could not be updated.',
+    }
+  }
 }
 
 async function mutateAgentHooks(provider: AgentHookProvider, operation: 'install' | 'uninstall') {
@@ -94,4 +156,7 @@ export function registerSettingsIPC(): void {
 
   ipcMain.handle('agentHooks:configure', async (_, provider: AgentHookProvider) => mutateAgentHooks(provider, 'install'))
   ipcMain.handle('agentHooks:uninstall', async (_, provider: AgentHookProvider) => mutateAgentHooks(provider, 'uninstall'))
+  ipcMain.handle('claudeStatusLine:status', async (): Promise<ClaudeStatusLineState> => getClaudeStatusLine())
+  ipcMain.handle('claudeStatusLine:install', async (): Promise<ClaudeStatusLineMutationResult> => mutateClaudeStatusLine('install'))
+  ipcMain.handle('claudeStatusLine:uninstall', async (): Promise<ClaudeStatusLineMutationResult> => mutateClaudeStatusLine('uninstall'))
 }
