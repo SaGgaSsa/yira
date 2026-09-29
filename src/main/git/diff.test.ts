@@ -184,7 +184,30 @@ test('marks a staged deletion recreated as untracked unavailable instead of retu
   }
 })
 
-test('returns unavailable when HEAD or both push and upstream references are missing', async () => {
+test('compares a branch without upstream with the remote default branch', async () => {
+  const { rootPath, remotePath } = await createPushedRepository('yira-diff-no-upstream')
+  try {
+    await writeFile(join(rootPath, 'file.txt'), 'base\n')
+    await commitAll(rootPath, 'base')
+    await pushMain(rootPath)
+    await git(rootPath, ['remote', 'set-head', 'origin', 'main'])
+
+    await git(rootPath, ['checkout', '--quiet', '-b', 'feature'])
+    await writeFile(join(rootPath, 'feature.txt'), 'one\ntwo\n')
+    await commitAll(rootPath, 'feature commit')
+    await writeFile(join(rootPath, 'file.txt'), 'changed\n')
+
+    assert.deepEqual(await getGitDiffSummary(rootPath), {
+      additions: 3,
+      deletions: 1,
+      available: true,
+    })
+  } finally {
+    await Promise.all([rm(rootPath, { recursive: true, force: true }), rm(remotePath, { recursive: true, force: true })])
+  }
+})
+
+test('reports uncommitted changes without remote references and is unavailable without HEAD', async () => {
   const noReferencePath = await mkdtemp(join(tmpdir(), 'yira-diff-no-reference-'))
   const noHeadPath = await mkdtemp(join(tmpdir(), 'yira-diff-no-head-'))
   try {
@@ -194,7 +217,13 @@ test('returns unavailable when HEAD or both push and upstream references are mis
     assert.deepEqual(await getGitDiffSummary(noReferencePath), {
       additions: 0,
       deletions: 0,
-      available: false,
+      available: true,
+    })
+    await writeFile(join(noReferencePath, 'file.txt'), 'one\ntwo\n')
+    assert.deepEqual(await getGitDiffSummary(noReferencePath), {
+      additions: 1,
+      deletions: 0,
+      available: true,
     })
 
     await initRepository(noHeadPath)
