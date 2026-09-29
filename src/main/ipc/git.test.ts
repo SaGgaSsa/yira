@@ -91,6 +91,38 @@ test('registers and invokes discovery through the Git IPC boundary', async () =>
   assert.deepEqual(roots, ['/workspace'])
 })
 
+test('returns safe file diff content through the configured repository boundary', async () => {
+  const ipcMain = new FakeIpcMain()
+  const { registerGitIPC } = loadGitIPC(ipcMain)
+  let receivedRoot = ''
+  registerGitIPC(ipcMain, {
+    getWorkspaceGitConfigById: async () => ({ rootFolderPath: '/workspace', sourceControlRepositoryPaths: ['packages/app'] }),
+    discoverGitRepositories: async () => [],
+    resolveConfiguredGitRepository: async (_root, _paths, requested) => {
+      assert.equal(requested, 'packages/app')
+      return { absolutePath: '/workspace/packages/app', relativePath: requested, repository: { relativePath: requested, name: 'app' } }
+    },
+    getGitStatus: async () => statusResult(),
+    getGitCommitHistory: async () => historyResult(),
+    getGitDiffSummary: async () => ({ additions: 0, deletions: 0, available: true }),
+    getGitFileDiffContent: async (rootPath, input) => {
+      receivedRoot = rootPath
+      assert.deepEqual(input, { path: 'src/app.ts', originalPath: 'src/old.ts', staged: true })
+      return { original: 'old', modified: 'new' }
+    },
+    stageGitFiles: async () => undefined,
+    unstageGitFiles: async () => undefined,
+    commitGitChanges: async () => undefined,
+    fetchGitRepository: async () => undefined,
+    pullGitRepository: async () => undefined,
+    pushGitRepository: async () => undefined,
+    syncGitRepository: async () => undefined,
+  })
+  const result = await ipcMain.invoke('git:fileDiff', 'workspace-a', 'packages/app', 'src/app.ts', true, 'src/old.ts')
+  assert.equal(receivedRoot, '/workspace/packages/app')
+  assert.deepEqual(result, { original: 'old', modified: 'new' })
+})
+
 test('sums configured repository diffs and discards the total when one repository fails', async () => {
   const ipcMain = new FakeIpcMain()
   const { createGitIPCHandlers } = loadGitIPC(ipcMain)

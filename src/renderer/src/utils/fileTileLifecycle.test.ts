@@ -44,6 +44,35 @@ const deduplicated = planFileTileOpen([existing], proposed)
 if (deduplicated.kind !== 'focus-existing' || deduplicated.tileId !== 'existing') {
   throw new Error('opening a path already present must focus that tile instead of creating a duplicate')
 }
+const diffTile = fileTile('existing-diff', {
+  filePath: 'src/new.ts',
+  fileDiff: { repositoryPath: '.', path: 'src/new.ts', staged: true },
+})
+const normalDoesNotFocusDiff = planFileTileOpen([diffTile], proposed)
+if (normalDoesNotFocusDiff.kind !== 'create') throw new Error('a normal file tile must not focus an existing diff tile')
+const matchingDiff = planFileTileOpen([diffTile], fileTile('another-diff', {
+  filePath: 'src/new.ts',
+  fileDiff: { repositoryPath: '.', path: 'src/new.ts', staged: true },
+}))
+if (matchingDiff.kind !== 'focus-existing' || matchingDiff.tileId !== 'existing-diff') {
+  throw new Error('matching diffs must focus by workspace path and staged state')
+}
+const differentStage = planFileTileOpen([diffTile], fileTile('unstaged-diff', {
+  filePath: 'src/new.ts',
+  fileDiff: { repositoryPath: '.', path: 'src/new.ts', staged: false },
+}))
+if (differentStage.kind === 'focus-existing') throw new Error('staged and working tree diffs must be distinct tiles')
+const reusableDiff = fileTile('reusable-diff', {
+  fileDiff: { repositoryPath: '.', path: 'src/old.ts', staged: true },
+})
+const reusedDiff = planFileTileOpen([reusableDiff], fileTile('next-diff', {
+  filePath: 'src/new.ts',
+  label: 'new.ts (Working Tree)',
+  fileDiff: { repositoryPath: '.', path: 'src/new.ts', staged: false },
+}))
+if (reusedDiff.kind !== 'reuse-preview' || reusedDiff.tile.fileDiff?.staged !== false) {
+  throw new Error('a clean diff preview must be reusable for another diff preview')
+}
 if (existing.fileMarkdownView !== 'live') {
   throw new Error('focusing an existing file tile must preserve its selected Markdown view')
 }

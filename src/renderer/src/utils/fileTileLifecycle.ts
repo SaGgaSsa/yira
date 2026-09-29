@@ -51,6 +51,11 @@ export function isCleanReusableFilePreview(tile: TileState): boolean {
     tile.floating?.detached !== true
 }
 
+function sameFileTileKind(left: TileState, right: TileState): boolean {
+  if (Boolean(left.fileDiff) !== Boolean(right.fileDiff)) return false
+  return !left.fileDiff || !right.fileDiff || left.fileDiff.staged === right.fileDiff.staged
+}
+
 export function pinFileTile(tile: TileState): TileState {
   return isFileTile(tile) && tile.filePreview === true
     ? { ...tile, filePreview: false }
@@ -89,7 +94,7 @@ function preparePreviewTile(tile: TileState): TileState {
     filePath: tile.filePath,
     filePreview: true,
     fileDraft: undefined,
-    label: deriveFileTileTitle(tile.filePath),
+    label: tile.fileDiff ? tile.label : deriveFileTileTitle(tile.filePath),
   }
 }
 
@@ -101,16 +106,17 @@ function reusePreviewTile(preview: TileState, nextFile: TileState): TileState {
     fileDraft: undefined,
     fileVersion: nextFile.fileVersion,
     fileChangeToken: nextFile.fileChangeToken,
+    fileDiff: nextFile.fileDiff,
     label: nextFile.label,
   }
 }
 
 export function planFileTileOpen(tiles: readonly TileState[], proposedTile: TileState): FileTileOpenPlan {
   const nextFile = preparePreviewTile(proposedTile)
-  const existing = tiles.find((tile) => isFileTile(tile) && tile.filePath === nextFile.filePath)
+  const existing = tiles.find((tile) => isFileTile(tile) && tile.filePath === nextFile.filePath && sameFileTileKind(tile, nextFile))
   if (existing) return { kind: 'focus-existing', tileId: existing.id }
 
-  const reusablePreviews = tiles.filter(isCleanReusableFilePreview)
+  const reusablePreviews = tiles.filter((tile) => isCleanReusableFilePreview(tile) && Boolean(tile.fileDiff) === Boolean(nextFile.fileDiff))
   if (reusablePreviews.length === 1) {
     return {
       kind: 'reuse-preview',

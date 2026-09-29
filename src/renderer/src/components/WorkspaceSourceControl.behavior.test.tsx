@@ -165,9 +165,26 @@ function findCommitsButton(container: AnyRecord): AnyRecord {
   assert.fail('source control must render the commits accordion button')
 }
 
+function findChangeRow(container: AnyRecord): AnyRecord {
+  const rows = container.getElementsByTagName('div')
+  for (let index = 0; index < rows.length; index += 1) {
+    if (rows[index].getAttribute('role') === 'button' && rows[index].textContent?.includes('README.md')) return rows[index]
+  }
+  assert.fail('source control must render a clickable file row')
+}
+
+function findStageButton(container: AnyRecord): AnyRecord {
+  const buttons = container.getElementsByTagName('button')
+  for (let index = 0; index < buttons.length; index += 1) {
+    if (buttons[index].getAttribute('aria-label') === 'Stage README.md') return buttons[index]
+  }
+  assert.fail('the file row must include its stage action')
+}
+
 test('keeps healthy Git status visible when history loading fails', async () => {
   let statusCalls = 0
   let historyCalls = 0
+  const openedDiffs: unknown[][] = []
   const bridge = {
     git: {
       discoverRepositories: async () => [{ relativePath: repositoryPath, name: 'workspace' }],
@@ -206,6 +223,7 @@ test('keeps healthy Git status visible when history loading fails', async () => 
       sourceControlViewMode: 'list',
       onWorkspaceUpdated: () => undefined,
       onOpenWorkspaceSettings: () => undefined,
+      onOpenDiff: (...args: unknown[]) => { openedDiffs.push(args) },
     }),
   ))
 
@@ -216,6 +234,12 @@ test('keeps healthy Git status visible when history loading fails', async () => 
     assert.match(healthyMarkup, /Changes \(1\)/)
     assert.match(healthyMarkup, />README\.md</)
     assert.doesNotMatch(healthyMarkup, /No se pudo cargar el historial/)
+
+    findChangeRow(container).dispatchEvent(new TestEvent('click', { bubbles: true }))
+    assert.deepEqual(openedDiffs, [[repositoryPath, status.unstaged[0], false]])
+    const stageButton = findStageButton(container)
+    stageButton.dispatchEvent(new TestEvent('click', { bubbles: true }))
+    assert.equal(openedDiffs.length, 1, 'the stage button must not trigger the file diff click')
 
     findCommitsButton(container).dispatchEvent(new TestEvent('click', { bubbles: true }))
     await waitFor(() => serializedMarkup(container).includes('No se pudo cargar el historial: history service unavailable'))

@@ -1,6 +1,6 @@
 import { promises as fs } from 'node:fs'
-import { isAbsolute, join } from 'node:path'
-import type { WorkspaceGitDiffResult } from '@shared/types'
+import { isAbsolute, join, relative, resolve } from 'node:path'
+import type { GitFileDiffContent, WorkspaceGitDiffResult } from '@shared/types'
 import { execGitCommand, resolveGitRootPath, type GitCommandExecutor } from './runner'
 
 interface GitDiffRecord {
@@ -18,6 +18,94 @@ const UNAVAILABLE_DIFF: WorkspaceGitDiffResult = {
   additions: 0,
   deletions: 0,
   available: false,
+}
+
+const MAX_FILE_DIFF_BYTES = 2 * 1024 * 1024
+
+function validateDiffPath(value: unknown): asserts value is string {
+  if (typeof value !== 'string' || !value || value.includes('\0') || value.startsWith('-') || isAbsolute(value)
+    || /^[a-zA-Z]:/.test(value) || value.startsWith('/')
+    || value.split(/[\\/]+/).some((segment) => segment === '..')) {
+    throw new Error('Invalid file path')
+  }
+}
+
+async function showGitFile(rootPath: string, revision: string, path: string, executor: GitCommandExecutor): Promise<Buffer> {
+  try {
+    const result = await runGitAtRoot(rootPath, ['show', `${revision}:${path}`], executor)
+    return Buffer.from(result.stdout, 'utf8')
+  } catch (error) {
+    const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+    if (message.includes('maxbuffer') || message.includes('max buffer')) return Buffer.alloc(MAX_FILE_DIFF_BYTES + 1)
+    if (/missing object|bad object|invalid object|does not exist|exists on disk, but not/.test(message)) return Buffer.alloc(0)
+    throw error
+  }
+}
+
+async function gitFileExists(rootPath: string, revision: string, path: string, executor: GitCommandExecutor): Promise<boolean> {
+  try {
+    await runGitAtRoot(rootPath, ['cat-file', '-e', `${revision}:${path}`], executor)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function readWorkingFile(rootPath: string, path: string): Promise<Buffer> {
+  const root = await fs.realpath(rootPath)
+  const target = resolve(root, ...path.split(/[\\/]+/))
+  const rel = relative(root, target)
+  if (rel.startsWith('..') || isAbsolute(rel)) throw new Error('Invalid file path')
+  try {
+    const realTarget = await fs.realpath(target)
+    const realRelative = relative(root, realTarget)
+    if (realRelative.startsWith('..') || isAbsolute(realRelative)) throw new Error('Invalid file path')
+    const stats = await fs.stat(realTarget)
+    if (!stats.isFile()) return Buffer.alloc(0)
+    if (stats.size > MAX_FILE_DIFF_BYTES) return Buffer.alloc(MAX_FILE_DIFF_BYTES + 1)
+    return await fs.readFile(realTarget)
+  } catch (error) {
+    if (error instanceof Error && error.message === 'Invalid file path') throw error
+    if (error && typeof error === 'object' && 'code' in error && (error.code === 'ENOENT' || error.code === 'ENOTDIR')) return Buffer.alloc(0)
+    throw error
+  }
+}
+
+async function workingFileExists(rootPath: string, path: string): Promise<boolean> {
+  try {
+    const root = await fs.realpath(rootPath)
+    const target = await fs.realpath(resolve(root, ...path.split(/[\\/]+/)))
+    const rel = relative(root, target)
+    return !(rel.startsWith('..') || isAbsolute(rel)) && (await fs.stat(target)).isFile()
+  } catch {
+    return false
+  }
+}
+
+export async function getGitFileDiffContent(
+  repositoryPath: string,
+  input: { path: string; originalPath?: string; staged: boolean },
+  executor: GitCommandExecutor = execGitCommand,
+): Promise<GitFileDiffContent> {
+  if (!input || typeof input.staged !== 'boolean') throw new Error('Invalid file diff request')
+  validateDiffPath(input.path)
+  const basePath = input.originalPath ?? input.path
+  validateDiffPath(basePath)
+  const rootPath = await resolveGitRootPath(repositoryPath)
+  const [original, modified, modifiedExists] = input.staged
+    ? await Promise.all([
+        showGitFile(rootPath, 'HEAD', basePath, executor),
+        showGitFile(rootPath, '', input.path, executor),
+        gitFileExists(rootPath, '', input.path, executor),
+      ])
+    : await Promise.all([
+        showGitFile(rootPath, '', basePath, executor),
+        readWorkingFile(rootPath, input.path),
+        workingFileExists(rootPath, input.path),
+      ])
+  if (original.length > MAX_FILE_DIFF_BYTES || modified.length > MAX_FILE_DIFF_BYTES) return { original: '', modified: '', modifiedExists, tooLarge: true }
+  if (original.includes(0) || modified.includes(0)) return { original: '', modified: '', modifiedExists, binary: true }
+  return { original: original.toString('utf8'), modified: modified.toString('utf8'), modifiedExists }
 }
 
 function runGitAtRoot(rootPath: string, args: string[], executor: GitCommandExecutor): Promise<{ stdout: string; stderr: string }> {

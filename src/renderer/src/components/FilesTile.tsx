@@ -33,7 +33,7 @@ interface FilesTileProps {
   onOpenBrowser?: (url: string) => void
 }
 
-function defineYiraThemes(monaco: Monaco): void {
+export function defineYiraThemes(monaco: Monaco): void {
   const define = (
     name: string,
     base: 'vs-dark' | 'vs',

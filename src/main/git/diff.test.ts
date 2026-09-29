@@ -5,9 +5,65 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import test from 'node:test'
-import { getGitDiffSummary, parseGitDiffNumstat } from './diff'
+import { getGitDiffSummary, getGitFileDiffContent, parseGitDiffNumstat } from './diff'
 
 const execFileAsync = promisify(execFile)
+
+test('reads staged and working tree file sides through Git show with path validation', async () => {
+  const rootPath = await mkdtemp(join(tmpdir(), 'git-file-diff-'))
+  try {
+    await writeFile(join(rootPath, 'file.ts'), 'working\n')
+    const calls: string[][] = []
+    const executor = async (_command: string, args: string[]) => {
+      calls.push(args)
+      const spec = args.at(-1) ?? ''
+      if (spec === 'HEAD:file.ts') return { stdout: 'head\n', stderr: '' }
+      if (spec === ':file.ts') return { stdout: 'index\n', stderr: '' }
+      return { stdout: '', stderr: '' }
+    }
+    const staged = await getGitFileDiffContent(rootPath, { path: 'file.ts', staged: true }, executor)
+    assert.deepEqual(staged, { original: 'head\n', modified: 'index\n', modifiedExists: true })
+    const unstaged = await getGitFileDiffContent(rootPath, { path: 'file.ts', staged: false }, executor)
+    assert.deepEqual(unstaged, { original: 'index\n', modified: 'working\n', modifiedExists: true })
+    assert.equal(calls.some((args) => args.at(-1) === 'HEAD:file.ts'), true)
+    await assert.rejects(getGitFileDiffContent(rootPath, { path: '../secret', staged: false }, executor), /Invalid file path/)
+  } finally {
+    await rm(rootPath, { recursive: true, force: true })
+  }
+})
+
+test('handles added, untracked, deleted, renamed, and binary file diff sides', async () => {
+  const rootPath = await mkdtemp(join(tmpdir(), 'git-file-diff-cases-'))
+  try {
+    await writeFile(join(rootPath, 'untracked.txt'), 'new file')
+    await writeFile(join(rootPath, 'renamed.ts'), 'renamed worktree')
+    await writeFile(join(rootPath, 'binary.bin'), Buffer.from([0, 1, 2]))
+    await writeFile(join(rootPath, 'large.txt'), Buffer.alloc(2 * 1024 * 1024 + 1, 97))
+    const executor = async (_command: string, args: string[]) => {
+      const spec = args.at(-1) ?? ''
+      const values: Record<string, string> = {
+        'HEAD:added.txt': '', ':added.txt': 'added',
+        'HEAD:deleted.txt': 'deleted', ':deleted.txt': '',
+        'HEAD:old.ts': 'before rename', ':renamed.ts': 'after rename',
+        ':untracked.txt': '',
+        ':deleted-worktree.txt': 'index version',
+      }
+      if (!(spec in values)) throw new Error('missing object')
+      if (!values[spec]) throw new Error('missing object')
+      return { stdout: values[spec], stderr: '' }
+    }
+    assert.equal((await getGitFileDiffContent(rootPath, { path: 'added.txt', staged: true }, executor)).original, '')
+    assert.equal((await getGitFileDiffContent(rootPath, { path: 'added.txt', staged: true }, executor)).modified, 'added')
+    assert.equal((await getGitFileDiffContent(rootPath, { path: 'untracked.txt', staged: false }, executor)).original, '')
+    assert.equal((await getGitFileDiffContent(rootPath, { path: 'deleted.txt', staged: true }, executor)).modified, '')
+    assert.deepEqual(await getGitFileDiffContent(rootPath, { path: 'deleted-worktree.txt', staged: false }, executor), { original: 'index version', modified: '', modifiedExists: false })
+    assert.deepEqual(await getGitFileDiffContent(rootPath, { path: 'renamed.ts', originalPath: 'old.ts', staged: true }, executor), { original: 'before rename', modified: 'after rename', modifiedExists: true })
+    assert.deepEqual(await getGitFileDiffContent(rootPath, { path: 'binary.bin', staged: false }, executor), { original: '', modified: '', modifiedExists: true, binary: true })
+    assert.deepEqual(await getGitFileDiffContent(rootPath, { path: 'large.txt', staged: false }, executor), { original: '', modified: '', modifiedExists: true, tooLarge: true })
+  } finally {
+    await rm(rootPath, { recursive: true, force: true })
+  }
+})
 
 async function git(rootPath: string, args: string[]): Promise<string> {
   const result = await execFileAsync('git', ['-C', rootPath, ...args], { encoding: 'utf8' })
@@ -255,5 +311,49 @@ test('a real push resets the pending diff to zero', async () => {
     })
   } finally {
     await Promise.all([rm(rootPath, { recursive: true, force: true }), rm(remotePath, { recursive: true, force: true })])
+  }
+})
+
+test('reads file diff sides from a real repository, including unborn HEAD and untracked files', async () => {
+  const rootPath = await mkdtemp(join(tmpdir(), 'yira-file-diff-real-'))
+  try {
+    await initRepository(rootPath)
+    await writeFile(join(rootPath, 'first.txt'), 'first\n')
+    await git(rootPath, ['add', '--', 'first.txt'])
+    assert.deepEqual(await getGitFileDiffContent(rootPath, { path: 'first.txt', staged: true }), {
+      original: '',
+      modified: 'first\n',
+      modifiedExists: true,
+    })
+
+    await commitAll(rootPath, 'base')
+    await writeFile(join(rootPath, 'untracked.txt'), 'untracked\n')
+    await git(rootPath, ['mv', 'first.txt', 'renamed.txt'])
+    await writeFile(join(rootPath, 'renamed.txt'), 'first\nsecond\n')
+    await git(rootPath, ['add', '--', 'renamed.txt'])
+    await writeFile(join(rootPath, 'renamed.txt'), 'first\nsecond\nthird\n')
+
+    assert.deepEqual(await getGitFileDiffContent(rootPath, { path: 'renamed.txt', originalPath: 'first.txt', staged: true }), {
+      original: 'first\n',
+      modified: 'first\nsecond\n',
+      modifiedExists: true,
+    })
+    assert.deepEqual(await getGitFileDiffContent(rootPath, { path: 'renamed.txt', staged: false }), {
+      original: 'first\nsecond\n',
+      modified: 'first\nsecond\nthird\n',
+      modifiedExists: true,
+    })
+    assert.deepEqual(await getGitFileDiffContent(rootPath, { path: 'untracked.txt', staged: false }), {
+      original: '',
+      modified: 'untracked\n',
+      modifiedExists: true,
+    })
+    assert.deepEqual(await getGitFileDiffContent(rootPath, { path: 'first.txt', staged: true }), {
+      original: 'first\n',
+      modified: '',
+      modifiedExists: false,
+    })
+  } finally {
+    await rm(rootPath, { recursive: true, force: true })
   }
 })

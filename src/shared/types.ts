@@ -345,6 +345,15 @@ export interface GitFileChange {
   originalPath?: string
 }
 
+export interface GitFileDiffContent {
+  original: string
+  modified: string
+  modifiedExists?: boolean
+  binary?: boolean
+  tooLarge?: boolean
+  error?: string
+}
+
 export interface GitStatusResult {
   isRepository: boolean
   branch: string | null
@@ -723,6 +732,7 @@ export function normalizeFileMarkdownViewMode(value: unknown): MarkdownViewMode 
 
 export interface FileTileOpenOptions {
   markdownView?: MarkdownViewMode
+  diff?: { repositoryPath: string; path: string; originalPath?: string; staged: boolean }
 }
 
 export const NOTE_COLORS: Record<NoteColor, { bg: string; text: string }> = {
@@ -896,6 +906,7 @@ export interface TileState {
 
   // Files-specific
   filePath?: string
+  fileDiff?: { repositoryPath: string; path: string; originalPath?: string; staged: boolean }
   filePreview?: boolean
   fileDraft?: string
   /** SHA-256 revision expected by a subsequent write. */

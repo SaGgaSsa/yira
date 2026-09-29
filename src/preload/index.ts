@@ -1,7 +1,7 @@
 import type { AppThemeId } from '@shared/appThemes'
 import type { WindowBackgroundMaterial, WindowBackgroundMaterialState } from '@shared/types'
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AgentActiveSessionSnapshot, AgentProviderAvailabilitySnapshot, AgentSessionHistoryQuery, AgentSessionHistoryResult, AgentUsageDetailsSnapshot, AgentUsageSnapshot, BoardTask, FileListOptions, FileSearchResult, FileWriteInput, FloatingNavigationEvent, FloatingNavigationRequest, GitCommitHistoryResult, GitRepository, GitStatusResult, NotificationAttentionOptions, RemotePreparationResult, RemotePreparationStatus, TerminalCreateOptions, TerminalCreateResult, TerminalExitEvent, UpdateState, WindowBounds, WindowClosePreparationRequest, WindowClosePreparationResponse, Workspace, WorkspaceCreateInput, WorkspaceGitDiffResult, WorkspaceManagementCommitInput, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
+import type { AgentActiveSessionSnapshot, AgentProviderAvailabilitySnapshot, AgentSessionHistoryQuery, AgentSessionHistoryResult, AgentUsageDetailsSnapshot, AgentUsageSnapshot, BoardTask, FileListOptions, FileSearchResult, FileWriteInput, FloatingNavigationEvent, FloatingNavigationRequest, GitCommitHistoryResult, GitFileDiffContent, GitRepository, GitStatusResult, NotificationAttentionOptions, RemotePreparationResult, RemotePreparationStatus, TerminalCreateOptions, TerminalCreateResult, TerminalExitEvent, UpdateState, WindowBounds, WindowClosePreparationRequest, WindowClosePreparationResponse, Workspace, WorkspaceCreateInput, WorkspaceGitDiffResult, WorkspaceManagementCommitInput, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
 import { createSerialTaskQueue } from '@shared/serialTaskQueue'
 import {
   terminalSessionDataChannel,
@@ -125,6 +125,7 @@ contextBridge.exposeInMainWorld('electron', {
     status: (workspaceId: string, repositoryPath: string) => ipcRenderer.invoke('git:status', workspaceId, repositoryPath) as Promise<GitStatusResult>,
     history: (workspaceId: string, repositoryPath: string) => ipcRenderer.invoke('git:history', workspaceId, repositoryPath) as Promise<GitCommitHistoryResult>,
     workspaceDiff: (workspaceId: string) => ipcRenderer.invoke('git:workspaceDiff', workspaceId) as Promise<WorkspaceGitDiffResult>,
+    fileDiff: (workspaceId: string, repositoryPath: string, relativePath: string, staged: boolean, originalPath?: string) => ipcRenderer.invoke('git:fileDiff', workspaceId, repositoryPath, relativePath, staged, originalPath) as Promise<GitFileDiffContent>,
     stage: (workspaceId: string, repositoryPath: string, relativePath: string, originalPath?: string) => ipcRenderer.invoke('git:stage', workspaceId, repositoryPath, relativePath, originalPath),
     unstage: (workspaceId: string, repositoryPath: string, relativePath: string, originalPath?: string) => ipcRenderer.invoke('git:unstage', workspaceId, repositoryPath, relativePath, originalPath),
     commit: (workspaceId: string, repositoryPath: string, message: string) => ipcRenderer.invoke('git:commit', workspaceId, repositoryPath, message),
