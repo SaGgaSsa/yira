@@ -52,6 +52,7 @@ export function WorkspaceListItem({
           workspaceId={workspace.id}
           rootFolderPath={workspace.config.rootFolderPath}
           sourceControlRepositoryPaths={workspace.config.sourceControlRepositoryPaths}
+          active={active}
         />
       ) : undefined}
       active={active}

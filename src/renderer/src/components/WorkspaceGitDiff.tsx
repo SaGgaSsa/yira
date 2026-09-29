@@ -7,6 +7,7 @@ export interface WorkspaceGitDiffProps {
   workspaceId: string
   rootFolderPath?: string
   sourceControlRepositoryPaths?: readonly string[]
+  active?: boolean
 }
 
 function normalizeCount(value: number): number {
@@ -88,12 +89,14 @@ export function WorkspaceGitDiff({
   workspaceId,
   rootFolderPath,
   sourceControlRepositoryPaths,
+  active,
 }: WorkspaceGitDiffProps): React.ReactElement | null {
   const configured = canReadWorkspaceGitDiff(rootFolderPath)
   const result = useWorkspaceGitDiff({
     workspaceId,
     rootFolderPath,
     sourceControlRepositoryPaths,
+    active,
   })
   if (!configured) return null
 

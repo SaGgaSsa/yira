@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { WorkspaceGitDiffResult } from '@shared/types'
 
 export type WorkspaceGitDiffReader = (workspaceId: string) => Promise<WorkspaceGitDiffResult>
@@ -13,8 +13,6 @@ interface WorkspaceGitDiffRequestControllerOptions {
   read: WorkspaceGitDiffReader
   onResult: (result: WorkspaceGitDiffResult) => void
 }
-
-export const WORKSPACE_GIT_DIFF_REFRESH_INTERVAL_MS = 10_000
 
 export function canReadWorkspaceGitDiff(
   rootFolderPath: string | undefined,
@@ -66,14 +64,15 @@ export interface UseWorkspaceGitDiffOptions {
   workspaceId: string
   rootFolderPath?: string
   sourceControlRepositoryPaths?: readonly string[]
-  refreshIntervalMs?: number
+  /** Reads again each time the workspace becomes active. */
+  active?: boolean
 }
 
 export function useWorkspaceGitDiff({
   workspaceId,
   rootFolderPath,
   sourceControlRepositoryPaths,
-  refreshIntervalMs = WORKSPACE_GIT_DIFF_REFRESH_INTERVAL_MS,
+  active = false,
 }: UseWorkspaceGitDiffOptions): WorkspaceGitDiffResult | null {
   const normalizedRootFolderPath = rootFolderPath?.trim() ?? ''
   const repositoryPathsKey = useMemo(
@@ -89,6 +88,7 @@ export function useWorkspaceGitDiff({
     key: '',
     result: null,
   })
+  const controllerRef = useRef<WorkspaceGitDiffRequestController | null>(null)
 
   useEffect(() => {
     if (!configured) {
@@ -108,22 +108,21 @@ export function useWorkspaceGitDiff({
           : current)
       },
     })
-    const refresh = (): void => {
-      void controller.refresh()
-    }
-
-    refresh()
-    const interval = window.setInterval(refresh, refreshIntervalMs)
-    const handleWindowFocus = (): void => refresh()
-    window.addEventListener('focus', handleWindowFocus)
+    controllerRef.current = controller
+    void controller.refresh()
 
     return () => {
       effectActive = false
       controller.dispose()
-      window.clearInterval(interval)
-      window.removeEventListener('focus', handleWindowFocus)
+      if (controllerRef.current === controller) controllerRef.current = null
     }
-  }, [configurationKey, configured, refreshIntervalMs, workspaceId])
+  }, [configurationKey, configured, workspaceId])
+
+  // Git state changes outside the app, so refresh when the user opens the
+  // workspace instead of polling every workspace in the background.
+  useEffect(() => {
+    if (active) void controllerRef.current?.refresh()
+  }, [active])
 
   return configured && snapshot.key === configurationKey ? snapshot.result : null
 }

@@ -191,33 +191,34 @@ async function resolveDiffBase(
   }
   if (!head) return undefined
 
-  let reference: string | undefined
-  for (const candidate of ['@{push}', '@{upstream}']) {
+  // A local branch without upstream is compared with the remote default
+  // branch, so unpushed feature work still counts.
+  for (const candidate of ['@{push}', '@{upstream}', 'refs/remotes/origin/HEAD']) {
+    let reference: string
     try {
-      const result = await runGitAtRoot(rootPath, ['rev-parse', '--verify', candidate], executor)
-      const resolved = result.stdout.trim()
-      if (resolved) {
-        reference = resolved
-        break
-      }
+      reference = (await runGitAtRoot(rootPath, ['rev-parse', '--verify', candidate], executor)).stdout.trim()
     } catch {
-      // A missing push ref is expected when only an upstream is configured.
+      // Missing references are expected; try the next candidate.
+      continue
+    }
+    if (!reference) continue
+
+    try {
+      const base = (await runGitAtRoot(rootPath, ['merge-base', 'HEAD', reference], executor)).stdout.trim()
+      if (base) return { base }
+    } catch {
+      // Unrelated histories have no merge base; try the next candidate.
     }
   }
-  if (!reference) return undefined
 
-  try {
-    const result = await runGitAtRoot(rootPath, ['merge-base', 'HEAD', reference], executor)
-    const base = result.stdout.trim()
-    return base ? { base } : undefined
-  } catch {
-    return undefined
-  }
+  // Without any remote reference, report only uncommitted changes.
+  return { base: head }
 }
 
 /**
  * Return the net diff between the local push/upstream base and the worktree.
- * The result is unavailable when Git cannot establish a complete base.
+ * Branches without upstream use the remote default branch, and repositories
+ * without remote references use HEAD. The result is unavailable without HEAD.
  */
 export async function getGitDiffSummary(
   rootPathInput: string,
