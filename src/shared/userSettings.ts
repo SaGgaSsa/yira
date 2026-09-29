@@ -48,7 +48,7 @@ export function normalizeUserSettings(raw: RawUserSettings = {}): UserSettings {
     ...settings,
     language: normalizeLanguage(raw.language),
     themeId: normalizeAppThemeId(raw.themeId),
-    windowBackgroundMaterial: raw.windowBackgroundMaterial === 'mica' || raw.windowBackgroundMaterial === 'acrylic'
+    windowBackgroundMaterial: raw.windowBackgroundMaterial === 'mica' || raw.windowBackgroundMaterial === 'acrylic' || raw.windowBackgroundMaterial === 'translucent'
       ? raw.windowBackgroundMaterial
       : 'none',
     interfaceFontSizePx: clampFontSizePx(raw.interfaceFontSizePx, fontFallback),

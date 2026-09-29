@@ -14,6 +14,7 @@ import type {
   ClaudeStatusLineMutationResult,
   ClaudeStatusLineState,
   WindowBackgroundMaterial,
+  WindowBackgroundMaterialState,
   WindowBounds,
   WindowClosePreparationRequest,
   BoardState,
@@ -180,8 +181,8 @@ interface ElectronWorld {
   }
   window: {
     setTitle: (title: string) => Promise<void>
-    getBackgroundMaterialSupport: () => Promise<boolean>
-    setBackgroundMaterial: (material: WindowBackgroundMaterial) => Promise<void>
+    getBackgroundMaterialState: () => Promise<WindowBackgroundMaterialState>
+    setBackgroundMaterial: (material: WindowBackgroundMaterial) => Promise<WindowBackgroundMaterialState>
     setTitleBarOverlayTheme: (theme: 'dark' | 'light' | AppThemeId) => Promise<void>
     onClosePreparationRequest: (
       callback: (request: WindowClosePreparationRequest) => void | Promise<void>,

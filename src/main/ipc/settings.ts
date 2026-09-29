@@ -9,7 +9,6 @@ import { normalizeUserSettings } from '@shared/userSettings'
 import { resolveSupportedLanguage } from '@shared/language'
 import { installClaudeHookConfiguration, installCodexHookConfiguration, uninstallClaudeHookConfiguration, uninstallCodexHookConfiguration, type AgentHookProvider } from '../agentHookConfiguration'
 import { getClaudeStatusLineState, installClaudeStatusLine, uninstallClaudeStatusLine } from '../claudeStatusLineConfiguration'
-import { supportsBackgroundMaterial } from '../windowMaterial'
 
 const SETTINGS_PATH = join(YIRA_HOME, 'settings.json')
 
@@ -143,8 +142,7 @@ export async function loadStoredUserSettings(): Promise<UserSettings | null> {
 export function registerSettingsIPC(): void {
   ipcMain.handle('settings:load', async (): Promise<UserSettings | null> => {
     const settings = await loadStoredUserSettings()
-    if (!settings || supportsBackgroundMaterial()) return settings
-    return { ...settings, windowBackgroundMaterial: 'none' }
+    return settings
   })
 
   ipcMain.handle('settings:save', async (_, settings: UserSettings): Promise<void> => {

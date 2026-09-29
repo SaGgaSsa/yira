@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { UserSettings, AppearanceMode, ConfigurableTileCreationType } from '@shared/types'
+import type { UserSettings, AppearanceMode, ConfigurableTileCreationType, WindowBackgroundMaterial } from '@shared/types'
 import { DEFAULT_USER_SETTINGS } from '@shared/types'
 import type { TerminalThemeId } from '@shared/terminalThemes'
 import { clampFontSizePx, normalizeUserSettings } from '@shared/userSettings'
@@ -8,6 +8,8 @@ import { i18n } from '@/i18n'
 
 export interface SettingsState extends UserSettings {
   loaded: boolean
+  activeWindowBackgroundMaterial: WindowBackgroundMaterial
+  windowBackgroundMaterialRequiresRestart: boolean
 
   // Actions
   setAppearance: (mode: AppearanceMode) => void
@@ -93,6 +95,8 @@ function scheduleSave() {
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   ...DEFAULT_USER_SETTINGS,
   loaded: false,
+  activeWindowBackgroundMaterial: 'none',
+  windowBackgroundMaterialRequiresRestart: false,
 
   setAppearance: (mode) => {
     set({ appearance: mode })
@@ -201,7 +205,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     })
     await i18n.changeLanguage(normalized.language)
     void window.electron.terminal.setAgentAlertsEnabled(normalized.terminal.agentAlertsEnabled)
-    void window.electron.window.setBackgroundMaterial(normalized.windowBackgroundMaterial)
+    const materialState = await window.electron.window.setBackgroundMaterial(normalized.windowBackgroundMaterial)
+    set({
+      activeWindowBackgroundMaterial: materialState.active,
+      windowBackgroundMaterialRequiresRestart: materialState.requiresRestart,
+    })
   },
 
   loadSettings: async () => {
@@ -209,11 +217,14 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       const settings = await window.electron.settings.load()
       if (settings) {
         const normalized = normalizeUserSettings(settings)
+        const materialState = await window.electron.window.setBackgroundMaterial(normalized.windowBackgroundMaterial)
         set({
           language: normalized.language,
           themeId: normalized.themeId,
           appearance: normalized.appearance,
           windowBackgroundMaterial: normalized.windowBackgroundMaterial,
+          activeWindowBackgroundMaterial: materialState.active,
+          windowBackgroundMaterialRequiresRestart: materialState.requiresRestart,
           interfaceFontSizePx: normalized.interfaceFontSizePx,
           tileFontSizePx: normalized.tileFontSizePx,
           showGrid: normalized.showGrid,
@@ -244,9 +255,13 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           loaded: true,
         })
         void window.electron.terminal.setAgentAlertsEnabled(normalized.terminal.agentAlertsEnabled)
-        void window.electron.window.setBackgroundMaterial(normalized.windowBackgroundMaterial)
       } else {
-        set({ loaded: true })
+        const materialState = await window.electron.window.getBackgroundMaterialState()
+        set({
+          loaded: true,
+          activeWindowBackgroundMaterial: materialState.active,
+          windowBackgroundMaterialRequiresRestart: materialState.requiresRestart,
+        })
       }
     } catch (err) {
       console.error('[settingsStore] Failed to load settings:', err)

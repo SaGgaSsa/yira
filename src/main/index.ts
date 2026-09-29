@@ -162,7 +162,7 @@ app.on('before-quit', (event) => {
 async function createWindow(): Promise<BrowserWindow> {
   const windowState = await loadWindowState(WINDOW_STATE_PATH)
   const storedSettings = await loadStoredUserSettings()
-  setWindowBackgroundMaterial(storedSettings?.windowBackgroundMaterial ?? 'none')
+  setWindowBackgroundMaterial(storedSettings?.windowBackgroundMaterial ?? 'none', true)
   const materialOptions = getWindowMaterialOptions()
 
   // electron-vite outputs .mjs for preload; try .mjs first, fallback to .js
@@ -182,7 +182,9 @@ async function createWindow(): Promise<BrowserWindow> {
     ...(supportsTitleBarOverlay
       ? {
           titleBarStyle: 'hidden' as const,
-          titleBarOverlay: materialOptions.backgroundMaterial ? { ...titleBarOverlay, color: '#00000000' } : titleBarOverlay,
+          titleBarOverlay: materialOptions.backgroundMaterial || materialOptions.transparent
+            ? { ...titleBarOverlay, color: '#00000000' }
+            : titleBarOverlay,
         }
       : {}),
     webPreferences: {

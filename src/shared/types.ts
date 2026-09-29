@@ -387,7 +387,13 @@ export interface Config {
 // ─── App Settings ──────────────────────────────────────────────────────────
 
 export type AppearanceMode = 'dark' | 'light' | 'system'
-export type WindowBackgroundMaterial = 'none' | 'mica' | 'acrylic'
+export type WindowBackgroundMaterial = 'none' | 'mica' | 'acrylic' | 'translucent'
+
+export interface WindowBackgroundMaterialState {
+  supported: WindowBackgroundMaterial[]
+  active: WindowBackgroundMaterial
+  requiresRestart: boolean
+}
 export type ConfigurableTileCreationType = 'note' | 'browser' | 'timer'
 
 export type TileCreationAvailability = Record<ConfigurableTileCreationType, boolean>

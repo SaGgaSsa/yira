@@ -55,7 +55,10 @@ test('applySettings persists the complete draft before replacing the active sett
           setAgentAlertsEnabled: async () => undefined,
         },
         window: {
-          setBackgroundMaterial: async (material: string) => { appliedMaterials.push(material) },
+          setBackgroundMaterial: async (material: string) => {
+            appliedMaterials.push(material)
+            return { supported: ['none'], active: material, requiresRestart: false }
+          },
         },
       },
     },
@@ -114,6 +117,8 @@ test('applySettings persists the complete draft before replacing the active sett
     assert.deepEqual(appliedMaterials, ['none'])
 
     const state = useSettingsStore.getState()
+    assert.equal(state.activeWindowBackgroundMaterial, 'none')
+    assert.equal(state.windowBackgroundMaterialRequiresRestart, false)
     assert.equal(state.themeId, 'nord')
     assert.equal(createUserSettingsDraft(state).themeId, 'nord')
     assert.equal(state.language, 'es')

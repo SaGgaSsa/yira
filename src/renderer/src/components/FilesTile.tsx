@@ -110,7 +110,7 @@ function TextFileTile({ tile, rootPath, isFocused, isVisible, onUpdate, onOpenFi
   const { t } = useTranslation()
   const themeId = useSettingsStore((state) => state.themeId)
   const appearance = useSettingsStore((state) => state.appearance)
-  const windowBackgroundMaterial = useSettingsStore((state) => state.windowBackgroundMaterial)
+  const activeWindowBackgroundMaterial = useSettingsStore((state) => state.activeWindowBackgroundMaterial)
   const tileFontSizePx = useSettingsStore((state) => state.tileFontSizePx)
   const filePath = tile.filePath?.trim() ?? ''
   const [state, setState] = useState<FileEditorState>(() => createFileEditorState(tile))
@@ -404,7 +404,7 @@ function TextFileTile({ tile, rootPath, isFocused, isVisible, onUpdate, onOpenFi
               language={fileLanguage(filePath)}
               value={state.draft}
               beforeMount={defineYiraThemes}
-              theme={`${themeId === 'default' ? (lightTheme ? 'yira-light' : 'yira-dark') : `yira-${themeId}`}${windowBackgroundMaterial === 'none' ? '' : '-material'}`}
+              theme={`${themeId === 'default' ? (lightTheme ? 'yira-light' : 'yira-dark') : `yira-${themeId}`}${activeWindowBackgroundMaterial === 'none' ? '' : '-material'}`}
               onChange={(value) => {
                 const current = stateRef.current
                 if (current.status !== 'ready') return

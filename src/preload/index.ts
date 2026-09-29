@@ -1,5 +1,5 @@
 import type { AppThemeId } from '@shared/appThemes'
-import type { WindowBackgroundMaterial } from '@shared/types'
+import type { WindowBackgroundMaterial, WindowBackgroundMaterialState } from '@shared/types'
 import { contextBridge, ipcRenderer } from 'electron'
 import type { AgentActiveSessionSnapshot, AgentProviderAvailabilitySnapshot, AgentSessionHistoryQuery, AgentSessionHistoryResult, AgentUsageDetailsSnapshot, AgentUsageSnapshot, BoardTask, FileListOptions, FileSearchResult, FileWriteInput, FloatingNavigationEvent, FloatingNavigationRequest, GitCommitHistoryResult, GitRepository, GitStatusResult, NotificationAttentionOptions, RemotePreparationResult, RemotePreparationStatus, TerminalCreateOptions, TerminalCreateResult, TerminalExitEvent, UpdateState, WindowBounds, WindowClosePreparationRequest, WindowClosePreparationResponse, Workspace, WorkspaceCreateInput, WorkspaceGitDiffResult, WorkspaceManagementCommitInput, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
 import { createSerialTaskQueue } from '@shared/serialTaskQueue'
@@ -208,8 +208,8 @@ contextBridge.exposeInMainWorld('electron', {
 
   window: {
     setTitle: (title: string) => ipcRenderer.invoke('window:setTitle', title),
-    getBackgroundMaterialSupport: () => ipcRenderer.invoke('window:getBackgroundMaterialSupport') as Promise<boolean>,
-    setBackgroundMaterial: (material: WindowBackgroundMaterial) => ipcRenderer.invoke('window:setBackgroundMaterial', material) as Promise<void>,
+    getBackgroundMaterialState: () => ipcRenderer.invoke('window:getBackgroundMaterialState') as Promise<WindowBackgroundMaterialState>,
+    setBackgroundMaterial: (material: WindowBackgroundMaterial) => ipcRenderer.invoke('window:setBackgroundMaterial', material) as Promise<WindowBackgroundMaterialState>,
     setTitleBarOverlayTheme: (theme: 'dark' | 'light' | AppThemeId) =>
       ipcRenderer.invoke('window:setTitleBarOverlayTheme', theme),
     onClosePreparationRequest: (

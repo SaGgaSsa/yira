@@ -1,12 +1,12 @@
 import { getAppThemeTokens, normalizeAppThemeId, type AppThemeId } from '@shared/appThemes'
 import { BrowserWindow, ipcMain, nativeTheme } from 'electron'
-import type { WindowClosePreparationResponse } from '@shared/types'
+import type { WindowBackgroundMaterial, WindowClosePreparationResponse } from '@shared/types'
 import {
   WindowBridgeRequestBroker,
   type RendererRequestTarget,
   type WindowPreparationPhase,
 } from '../windowBridgeRequestBroker'
-import { getWindowBackgroundMaterial, setWindowBackgroundMaterial, supportsBackgroundMaterial } from '../windowMaterial'
+import { getWindowBackgroundMaterial, getWindowBackgroundMaterialState, setWindowBackgroundMaterial } from '../windowMaterial'
 
 type TitleBarTheme = 'dark' | 'light' | AppThemeId
 
@@ -80,13 +80,16 @@ export function registerWindowIPC(getMainWindow: () => BrowserWindow | null): Wi
     applyTitleBarTheme(nativeWindow)
   })
 
-  ipcMain.handle('window:getBackgroundMaterialSupport', (): boolean => supportsBackgroundMaterial())
-  ipcMain.handle('window:setBackgroundMaterial', (_event, material: unknown): void => {
-    if (material !== 'none' && material !== 'mica' && material !== 'acrylic') return
-    if (material === getWindowBackgroundMaterial()) return
-    setWindowBackgroundMaterial(material)
+  ipcMain.handle('window:getBackgroundMaterialState', () => getWindowBackgroundMaterialState())
+  ipcMain.handle('window:setBackgroundMaterial', (_event, material: unknown) => {
+    if (material !== 'none' && material !== 'mica' && material !== 'acrylic' && material !== 'translucent') {
+      return getWindowBackgroundMaterialState()
+    }
+    const previousActive = getWindowBackgroundMaterial()
+    const state = setWindowBackgroundMaterial(material as WindowBackgroundMaterial)
     const mainWindow = getMainWindow()
-    if (mainWindow && !mainWindow.isDestroyed() && process.platform === 'win32') applyTitleBarTheme(mainWindow)
+    if (mainWindow && !mainWindow.isDestroyed() && process.platform === 'win32' && previousActive !== state.active) applyTitleBarTheme(mainWindow)
+    return state
   })
 
   ipcMain.on('window:closePreparationResponse', (event, response: unknown) => {

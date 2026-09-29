@@ -8,7 +8,7 @@ import { X, Monitor, Moon, Sun, Type, Grid3X3, Globe, Code2, Info, RefreshCw, Do
 import { createUserSettingsDraft, useSettingsStore } from '@/store/settingsStore'
 import { useUpdateStore } from '@/store/updateStore'
 import { SHORTCUT_CATALOG } from '@/utils/shortcutCatalog'
-import type { UpdateState, UserSettings } from '@shared/types'
+import type { UpdateState, UserSettings, WindowBackgroundMaterial } from '@shared/types'
 import { DEFAULT_USER_SETTINGS } from '@shared/types'
 import type { TerminalThemeId } from '@shared/terminalThemes'
 import { TERMINAL_THEMES } from '@shared/terminalThemes'
@@ -112,12 +112,13 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [supportLinkFailed, setSupportLinkFailed] = useState(false)
-  const [backgroundMaterialSupported, setBackgroundMaterialSupported] = useState(false)
+  const [backgroundMaterialSupported, setBackgroundMaterialSupported] = useState<WindowBackgroundMaterial[]>(['none'])
   const [legalDocument, setLegalDocument] = useState<LegalDocumentId | null>(null)
   const privacyDocumentButtonRef = useRef<HTMLButtonElement | null>(null)
   const termsDocumentButtonRef = useRef<HTMLButtonElement | null>(null)
   const restoreLegalDocumentFocusRef = useRef<LegalDocumentId | null>(null)
   const applySettings = useSettingsStore((s) => s.applySettings)
+  const windowBackgroundMaterialRequiresRestart = useSettingsStore((s) => s.windowBackgroundMaterialRequiresRestart)
   const language = draft.language
   const appearance = draft.appearance
   const interfaceFontSizePx = draft.interfaceFontSizePx
@@ -201,9 +202,9 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
     setSupportLinkFailed(false)
     setLegalDocument(null)
     restoreLegalDocumentFocusRef.current = null
-    void window.electron.window.getBackgroundMaterialSupport()
-      .then(setBackgroundMaterialSupported)
-      .catch(() => setBackgroundMaterialSupported(false))
+    void window.electron.window.getBackgroundMaterialState()
+      .then((state) => setBackgroundMaterialSupported(state.supported))
+      .catch(() => setBackgroundMaterialSupported(['none']))
   }, [initialSection, open])
 
   useEffect(() => {
@@ -326,26 +327,36 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
           </div>
           <div className="mt-5 rounded-[20px] border border-border-visible bg-bg-secondary px-4 py-4">
             <div className="nd-label text-text-display">{t('settings.windowBackgroundEffect')}</div>
-            {!backgroundMaterialSupported && <p className="mt-1 text-sm text-text-secondary">{t('settings.requiresWindows11')}</p>}
+            {backgroundMaterialSupported.length === 1 && <p className="mt-1 text-sm text-text-secondary">{t('settings.requiresWindows11')}</p>}
             <div className="mt-4 grid grid-cols-3 gap-3">
               {([
                 { value: 'none' as const, label: t('settings.windowBackgroundNone') },
                 { value: 'mica' as const, label: t('settings.windowBackgroundMica') },
                 { value: 'acrylic' as const, label: t('settings.windowBackgroundAcrylic') },
-              ]).map(({ value, label }) => (
+                { value: 'translucent' as const, label: t('settings.windowBackgroundTranslucent') },
+              ]).filter(({ value }) => backgroundMaterialSupported.includes(value)).map(({ value, label }) => (
                 <button
                   key={value}
                   className={`rounded-full border px-4 py-3 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-                    draft.windowBackgroundMaterial === value ? 'border-text-display bg-bg-tertiary text-text-display' : 'border-border text-text-secondary'
+                    (backgroundMaterialSupported.includes(draft.windowBackgroundMaterial) ? draft.windowBackgroundMaterial : 'none') === value ? 'border-text-display bg-bg-tertiary text-text-display' : 'border-border text-text-secondary'
                   }`}
-                  disabled={!backgroundMaterialSupported}
-                  aria-pressed={draft.windowBackgroundMaterial === value}
+                  disabled={backgroundMaterialSupported.length === 1}
+                  aria-pressed={(backgroundMaterialSupported.includes(draft.windowBackgroundMaterial) ? draft.windowBackgroundMaterial : 'none') === value}
                   onClick={() => setDraft((current) => ({ ...current, windowBackgroundMaterial: value }))}
                 >
                   {label}
                 </button>
               ))}
             </div>
+            {backgroundMaterialSupported.includes('translucent') && (
+              <div className="mt-3 space-y-1 text-sm text-text-secondary">
+                <p>{t('settings.windowBackgroundRequiresRestart')}</p>
+                {windowBackgroundMaterialRequiresRestart && (
+                  <p>{t('settings.windowBackgroundAppliedAfterRestart')}</p>
+                )}
+                <p>{t('settings.windowBackgroundBlurHelp')}</p>
+              </div>
+            )}
           </div>
           <div className="mt-5 rounded-[20px] border border-border-visible bg-bg-secondary px-4 py-4">
             <div className="nd-label text-text-display">{t('settings.language')}</div>

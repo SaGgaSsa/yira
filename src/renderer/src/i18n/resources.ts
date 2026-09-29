@@ -131,6 +131,10 @@ type TranslationResources = {
     windowBackgroundNone: string
     windowBackgroundMica: string
     windowBackgroundAcrylic: string
+    windowBackgroundTranslucent: string
+    windowBackgroundRequiresRestart: string
+    windowBackgroundAppliedAfterRestart: string
+    windowBackgroundBlurHelp: string
     requiresWindows11: string
     defaultAppearanceDescription: string
     followAppTheme: string
@@ -568,7 +572,11 @@ const en: TranslationResources = {
     windowBackgroundNone: 'None',
     windowBackgroundMica: 'Mica',
     windowBackgroundAcrylic: 'Acrylic',
-    requiresWindows11: 'Requires Windows 11',
+    windowBackgroundTranslucent: 'Translucent',
+    windowBackgroundRequiresRestart: 'Yira must restart for this setting to take effect.',
+    windowBackgroundAppliedAfterRestart: 'It will be applied when Yira restarts.',
+    windowBackgroundBlurHelp: 'Blur depends on your desktop: in GNOME, use the Blur my Shell extension (Applications, Yira class); in KDE, Hyprland, and other compositors, add a blur rule for the Yira class.',
+    requiresWindows11: 'Requires Windows 11 or Linux',
     defaultAppearanceDescription: 'Light, dark, and system modes apply to Default. The other presets use their own dark palette.',
     followAppTheme: 'Default · Follow application',
     appearance: 'Appearance',
@@ -1005,7 +1013,11 @@ const es: TranslationResources = {
     windowBackgroundNone: 'Ninguno',
     windowBackgroundMica: 'Mica',
     windowBackgroundAcrylic: 'Acrylic',
-    requiresWindows11: 'Requiere Windows 11',
+    windowBackgroundTranslucent: 'Translúcido',
+    windowBackgroundRequiresRestart: 'Requiere reiniciar Yira.',
+    windowBackgroundAppliedAfterRestart: 'Se aplicará al reiniciar Yira.',
+    windowBackgroundBlurHelp: 'El desenfoque depende del escritorio: en GNOME usa la extensión Blur my Shell (Applications, clase Yira); en KDE, Hyprland y otros compositores, una regla de blur para la clase Yira.',
+    requiresWindows11: 'Requiere Windows 11 o Linux',
     defaultAppearanceDescription: 'Los modos claro, oscuro y del sistema se aplican a Default. Los otros temas usan su propia paleta oscura.',
     followAppTheme: 'Default · Seguir aplicación',
     appearance: 'Apariencia',

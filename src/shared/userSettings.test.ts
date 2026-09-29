@@ -9,7 +9,7 @@ if (defaults.terminal.attentionEnabled !== true) throw new Error('terminal atten
 if (defaults.terminal.agentAlertsEnabled !== true) throw new Error('agent alerts must default on')
 if (defaults.terminal.themeId !== DEFAULT_TERMINAL_THEME_ID) throw new Error('terminal theme must default to Yira default')
 if (defaults.windowBackgroundMaterial !== 'none') throw new Error('window background material must default to none')
-for (const material of ['mica', 'acrylic'] as const) {
+for (const material of ['mica', 'acrylic', 'translucent'] as const) {
   if (normalizeUserSettings({ windowBackgroundMaterial: material }).windowBackgroundMaterial !== material) {
     throw new Error(`${material} window background material must be preserved`)
   }
