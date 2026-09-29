@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react'
+import { useSidePanelWidth } from '@/hooks/useSidePanelWidth'
 
 interface SidebarProps {
   collapsed: boolean
@@ -7,12 +8,8 @@ interface SidebarProps {
   footer?: React.ReactNode
 }
 
-const SIDEBAR_MIN = 300
-const SIDEBAR_MAX = 560
-const SIDEBAR_DEFAULT = 344
-
 export function Sidebar({ collapsed, children, footer }: SidebarProps): React.ReactElement {
-  const [width, setWidth] = useState(SIDEBAR_DEFAULT)
+  const [width, setWidth] = useSidePanelWidth()
   const [resizing, setResizing] = useState(false)
   const resizeStartRef = useRef<{ x: number; w: number } | null>(null)
 
@@ -32,8 +29,7 @@ export function Sidebar({ collapsed, children, footer }: SidebarProps): React.Re
       const start = resizeStartRef.current
       if (!start) return
       const dx = e.clientX - start.x
-      const newWidth = Math.max(SIDEBAR_MIN, Math.min(SIDEBAR_MAX, start.w + dx))
-      setWidth(newWidth)
+      setWidth(start.w + dx)
     }
 
     const handleUp = () => {
@@ -56,7 +52,7 @@ export function Sidebar({ collapsed, children, footer }: SidebarProps): React.Re
 
   return (
     <aside
-      className={`relative flex shrink-0 flex-col overflow-hidden border-r border-border ${collapsed ? 'w-0 border-r-0' : ''}`}
+      className={`relative box-border flex shrink-0 flex-col overflow-hidden border-r border-border ${collapsed ? 'w-0 border-r-0' : ''}`}
       style={{
         width: collapsed ? 0 : width,
         background: 'var(--surface)',
@@ -71,7 +67,7 @@ export function Sidebar({ collapsed, children, footer }: SidebarProps): React.Re
         </div>
       )}
 
-      <div className="flex min-h-0 flex-1 flex-col" style={{ minWidth: collapsed ? 0 : SIDEBAR_MIN }}>
+      <div className="flex min-h-0 flex-1 flex-col" style={{ minWidth: collapsed ? 0 : 300 }}>
         <div className="flex-1 overflow-y-auto overflow-x-hidden">{children}</div>
         {footer && <div className="shrink-0 border-t border-border">{footer}</div>}
       </div>

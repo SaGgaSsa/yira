@@ -136,6 +136,9 @@ interface ElectronWorld {
     stage: (workspaceId: string, repositoryPath: string, relativePath: string, originalPath?: string) => Promise<void>
     unstage: (workspaceId: string, repositoryPath: string, relativePath: string, originalPath?: string) => Promise<void>
     commit: (workspaceId: string, repositoryPath: string, message: string) => Promise<void>
+    fetch: (workspaceId: string, repositoryPath: string) => Promise<void>
+    pull: (workspaceId: string, repositoryPath: string) => Promise<void>
+    push: (workspaceId: string, repositoryPath: string) => Promise<void>
     sync: (workspaceId: string, repositoryPath: string) => Promise<void>
   }
   canvas: {

@@ -125,29 +125,36 @@ async function listCandidateDirectories(rootPath: string, maxDepth: number): Pro
   return candidates
 }
 
-async function canonicalGitRootPath(candidatePath: string): Promise<string | undefined> {
+async function gitRepositoryPaths(candidatePath: string): Promise<{ rootPath: string; gitDirectory: string; commonDirectory: string } | undefined> {
   let result
   try {
-    result = await execGitCommand('git', ['-C', candidatePath, 'rev-parse', '--show-toplevel'])
+    result = await execGitCommand('git', ['-C', candidatePath, 'rev-parse', '--path-format=absolute', '--show-toplevel', '--git-dir', '--git-common-dir'])
   } catch {
     return undefined
   }
 
-  const reportedPath = result.stdout.trim()
-  if (!reportedPath) return undefined
+  const [reportedRoot, reportedGitDirectory, reportedCommonDirectory] = result.stdout.trim().split(/\r?\n/)
+  if (!reportedRoot || !reportedGitDirectory || !reportedCommonDirectory) return undefined
 
   try {
-    return await fs.realpath(reportedPath)
+    const resolveGitPath = async (value: string) => fs.realpath(isAbsolute(value) ? value : resolve(candidatePath, value))
+    const [rootPath, gitDirectory, commonDirectory] = await Promise.all([
+      fs.realpath(reportedRoot),
+      resolveGitPath(reportedGitDirectory),
+      resolveGitPath(reportedCommonDirectory),
+    ])
+    return { rootPath, gitDirectory, commonDirectory }
   } catch {
     return undefined
   }
 }
 
-async function isActualGitRoot(candidatePath: string): Promise<boolean> {
+async function isActualGitRoot(candidatePath: string, excludeLinkedWorktree = true): Promise<boolean> {
   const canonicalCandidatePath = await fs.realpath(candidatePath)
-  const canonicalGitPath = await canonicalGitRootPath(canonicalCandidatePath)
-  return canonicalGitPath !== undefined
-    && normalizeForCompare(canonicalGitPath) === normalizeForCompare(canonicalCandidatePath)
+  const gitPaths = await gitRepositoryPaths(canonicalCandidatePath)
+  return gitPaths !== undefined
+    && normalizeForCompare(gitPaths.rootPath) === normalizeForCompare(canonicalCandidatePath)
+    && (!excludeLinkedWorktree || normalizeForCompare(gitPaths.gitDirectory) === normalizeForCompare(gitPaths.commonDirectory))
 }
 
 function compareRepositories(left: GitRepository, right: GitRepository): number {
@@ -223,7 +230,7 @@ export async function resolveConfiguredGitRepository(
   if (!configuredPaths.includes(relativePath)) throw new Error('Repository is not configured')
 
   const absolutePath = await resolveDirectoryWithoutSymlinks(rootPath, relativePath)
-  if (!(await isActualGitRoot(absolutePath))) {
+  if (!(await isActualGitRoot(absolutePath, false))) {
     throw new Error('Configured repository path is not a Git repository root')
   }
 

@@ -11,6 +11,9 @@ import {
   resolveGitTargetPath,
   getGitStatus,
   commitGitChanges,
+  fetchGitRepository,
+  pullGitRepository,
+  pushGitRepository,
   syncGitRepository,
   stageGitFiles,
   stageGitFile,
@@ -148,6 +151,27 @@ try {
   ].join('\n')) {
     throw new Error('sync must require upstream, pull fast-forward-only, then push')
   }
+
+  const fetchCalls: string[] = []
+  await fetchGitRepository(tempRoot, async (_command, args) => {
+    fetchCalls.push(args.join('|'))
+    return { stdout: '', stderr: '' }
+  })
+  assert.deepEqual(fetchCalls, [['-C', canonicalRoot, 'fetch', '--prune'].join('|')])
+
+  for (const [operation, run, expected] of [
+    ['pull', pullGitRepository, 'pull|--ff-only'],
+    ['push', pushGitRepository, 'push'],
+  ] as const) {
+    const calls: string[] = []
+    await run(tempRoot, async (_command, args) => {
+      calls.push(args.slice(2).join('|'))
+      return args.includes('rev-parse') ? { stdout: 'origin/main\n', stderr: '' } : { stdout: '', stderr: '' }
+    })
+    assert.deepEqual(calls, ['rev-parse|--abbrev-ref|--symbolic-full-name|@{upstream}', expected], `${operation} must check upstream before running`)
+  }
+  await assert.rejects(pullGitRepository(tempRoot, async () => { throw new Error('fatal: no such branch') }), /Current branch has no upstream configured/)
+  await assert.rejects(pushGitRepository(tempRoot, async () => { throw new Error('fatal: no such branch') }), /Current branch has no upstream configured/)
 
   const failedSyncCalls: string[] = []
   try {
@@ -304,6 +328,13 @@ test('discovers Git roots at workspace depth zero, one, and two only', async () 
   const outsidePath = await mkdtemp(join(tmpdir(), 'yira-git-repositories-outside-'))
   try {
     await initGitRepository(rootPath)
+    await execFileAsync('git', ['-C', rootPath, 'config', 'user.name', 'Yira Tests'])
+    await execFileAsync('git', ['-C', rootPath, 'config', 'user.email', 'yira-tests@example.com'])
+    await writeFile(join(rootPath, 'root.txt'), 'root')
+    await execFileAsync('git', ['-C', rootPath, 'add', 'root.txt'])
+    await execFileAsync('git', ['-C', rootPath, 'commit', '--quiet', '-m', 'root'])
+    await mkdir(join(rootPath, '.worktrees'))
+    await execFileAsync('git', ['-C', rootPath, 'worktree', 'add', '--quiet', '-b', 'linked-worktree', join(rootPath, '.worktrees', 'linked')])
 
     const alphaPath = join(rootPath, 'alpha')
     const zetaPath = join(rootPath, 'zeta')
@@ -352,6 +383,12 @@ test('discovers Git roots at workspace depth zero, one, and two only', async () 
     const outsideRepositoryPath = join(outsidePath, 'linked-repository')
     await mkdir(outsideRepositoryPath)
     await initGitRepository(outsideRepositoryPath)
+    await execFileAsync('git', ['-C', outsideRepositoryPath, 'config', 'user.name', 'Yira Tests'])
+    await execFileAsync('git', ['-C', outsideRepositoryPath, 'config', 'user.email', 'yira-tests@example.com'])
+    await writeFile(join(outsideRepositoryPath, 'module.txt'), 'module')
+    await execFileAsync('git', ['-C', outsideRepositoryPath, 'add', 'module.txt'])
+    await execFileAsync('git', ['-C', outsideRepositoryPath, 'commit', '--quiet', '-m', 'module'])
+    await execFileAsync('git', ['-c', 'protocol.file.allow=always', '-C', rootPath, 'submodule', 'add', '--quiet', outsideRepositoryPath, 'module'])
     await symlink(outsideRepositoryPath, join(rootPath, 'linked'), process.platform === 'win32' ? 'junction' : 'dir')
 
     const repositories = await discoverGitRepositories(rootPath)
@@ -359,6 +396,7 @@ test('discovers Git roots at workspace depth zero, one, and two only', async () 
     assert.deepEqual(repositories.map(({ relativePath }) => relativePath), [
       'alpha',
       'container/beta',
+      'module',
       'parent',
       'first/repository',
       'second/repository',
@@ -368,6 +406,7 @@ test('discovers Git roots at workspace depth zero, one, and two only', async () 
     assert.deepEqual(repositories.map(({ name }) => name), [
       'alpha',
       'beta',
+      'module',
       'parent',
       'repository',
       'repository',
@@ -377,11 +416,12 @@ test('discovers Git roots at workspace depth zero, one, and two only', async () 
     assert.equal(repositories.some(({ relativePath }) => relativePath === 'container/beta/deep'), false)
     assert.equal(repositories.some(({ relativePath }) => relativePath === 'parent/child'), false)
     assert.equal(repositories.some(({ relativePath }) => relativePath === 'linked'), false)
+    assert.equal(repositories.some(({ relativePath }) => relativePath === '.worktrees/linked'), false)
     assert.equal(repositories.some(({ relativePath }) => relativePath.includes('node_modules')), false)
 
     const shallowRepositories = await discoverGitRepositories(rootPath, 1)
     assert.deepEqual(shallowRepositories.map(({ relativePath }) => relativePath).sort(), [
-      '.', 'alpha', 'parent', 'zeta',
+      '.', 'alpha', 'module', 'parent', 'zeta',
     ])
   } finally {
     await rm(rootPath, { recursive: true, force: true })
