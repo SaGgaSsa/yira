@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useCanvasStore } from '@/store/canvasStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { findSelectedGroup, getGroupAnchorTile } from '@/utils/grouping'
@@ -8,14 +9,6 @@ import type { ConfirmDialogOptions } from '@/components/AppDialog'
 import { GRID_MAX_TILES, getDefaultTileSize } from '@shared/types'
 import type { TileState, ShellProfileId, NoteColor, NoteKind, SplitPanelId, TerminalAgentMetadata } from '@shared/types'
 import type { TerminalSessionTarget } from '@shared/terminalSessionIdentity'
-
-const TILE_TYPE_LABELS: Record<TileState['type'], string> = {
-  terminal: 'Terminal',
-  note: 'Note',
-  browser: 'Browser',
-  timer: 'Timer',
-  files: 'File',
-}
 
 function generateId(): string {
   return `tile-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -46,6 +39,7 @@ export async function removeTileAfterTerminalRuntimeCleanup({
 }
 
 export function useCanvasActions({ requestConfirm, destroyTerminalRuntime }: UseCanvasActionsOptions) {
+  const { t } = useTranslation()
   const browserHomeUrl = useSettingsStore((s) => s.browser.homeUrl)
   const tileCreationAvailability = useSettingsStore((s) => s.tiles.creationAvailability)
   const groupsEnabled = useSettingsStore((s) => s.groups.enabled)
@@ -67,13 +61,13 @@ export function useCanvasActions({ requestConfirm, destroyTerminalRuntime }: Use
     if (state.tiles.length < GRID_MAX_TILES) return true
 
     void requestConfirm({
-      title: 'Grid is full',
-      message: `Grid workspaces can contain at most ${GRID_MAX_TILES} tiles.`,
-      confirmLabel: 'OK',
+      title: t('ui.gridFull'),
+      message: t('ui.gridFullMessage', { count: GRID_MAX_TILES }),
+      confirmLabel: t('common.confirm'),
       hideCancel: true,
     })
     return false
-  }, [requestConfirm])
+  }, [requestConfirm, t])
 
   const snapCoordinate = useCallback(
     (value: number) => (
@@ -331,13 +325,13 @@ export function useCanvasActions({ requestConfirm, destroyTerminalRuntime }: Use
       const tile = state.tiles.find((t) => t.id === tileId)
       if (!tile) return false
 
-      const label = tile.label?.trim() || TILE_TYPE_LABELS[tile.type]
+      const label = tile.label?.trim() || t(`tile.${tile.type}`)
       const workspaceId = state.activeWorkspaceId
       const confirmed = await requestConfirm({
-        title: 'Close tile',
-        message: `Close "${label}"? Any running session or unsaved surface state may be lost.`,
-        confirmLabel: 'Close',
-        cancelLabel: 'Keep Open',
+        title: t('ui.closeTile'),
+        message: t('ui.closeTileMessage', { label }),
+        confirmLabel: t('common.close'),
+        cancelLabel: t('ui.keepOpen'),
         danger: true,
       })
       if (!confirmed) return false
@@ -351,7 +345,7 @@ export function useCanvasActions({ requestConfirm, destroyTerminalRuntime }: Use
       })
       return true
     },
-    [destroyTerminalRuntime, removeTile, requestConfirm],
+    [destroyTerminalRuntime, removeTile, requestConfirm, t],
   )
 
   const resetZoom = useCallback(() => {

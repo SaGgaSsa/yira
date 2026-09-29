@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { Maximize2, PanelBottomClose, PanelTopOpen, Settings, X } from 'lucide-react'
 
 interface TileActionButtonsProps {
@@ -43,20 +44,21 @@ export function TileActionButtons({
   detached = false,
   className = '',
 }: TileActionButtonsProps): React.ReactElement {
+  const { t } = useTranslation()
   return (
     <div className={`flex shrink-0 items-center gap-1 ${className}`.trim()}>
-      <TileActionButton title="Configure tile" onClick={onConfigure}>
+      <TileActionButton title={t('ui.configureTile')} onClick={onConfigure}>
         <Settings size={13} />
       </TileActionButton>
-      <TileActionButton title="Focus tile" onClick={() => onFocus()}>
+      <TileActionButton title={t('ui.focusTile')} onClick={() => onFocus()}>
         <Maximize2 size={13} />
       </TileActionButton>
       {onDetach && (
-        <TileActionButton title={detached ? 'Attach tile' : 'Detach tile'} onClick={() => onDetach()}>
+        <TileActionButton title={detached ? t('ui.attachTile') : t('ui.detachTile')} onClick={() => onDetach()}>
           {detached ? <PanelBottomClose size={13} /> : <PanelTopOpen size={13} />}
         </TileActionButton>
       )}
-      <TileActionButton title="Close tile" onClick={() => onClose()}>
+      <TileActionButton title={t('ui.closeTile')} onClick={() => onClose()}>
         <X size={13} />
       </TileActionButton>
     </div>

@@ -268,7 +268,7 @@ test('returns a stable error for an invalid initial host without sending Wake-on
         wakeCalls += 1
       },
     }),
-    { message: 'No se pudo resolver el host remoto' },
+    { message: 'Could not resolve the remote host' },
   )
   assert.equal(wakeCalls, 0)
 })
@@ -319,7 +319,7 @@ test('rejects when a post-Wake-on-LAN probe completes after the startup deadline
       now: () => clock,
       onProgress: (status) => progress.push(status),
     }),
-    { message: 'SSH respondió fuera del plazo de 60 segundos' },
+    { message: 'SSH responded outside the 60-second deadline' },
   )
   assert.deepEqual(progress, ['checking', 'packet-sent', 'ssh-ready'])
 })
@@ -337,7 +337,7 @@ test('wraps Wake-on-LAN errors with a stable message and cause', async () => {
     (error) => {
       assert.equal(error instanceof Error, true)
       const actual = error as Error & { cause?: unknown }
-      assert.equal(actual.message, 'No se pudo enviar Wake-on-LAN')
+      assert.equal(actual.message, 'Could not send Wake-on-LAN')
       assert.equal(actual.cause, failure)
       return true
     },
@@ -363,7 +363,7 @@ test('fails with a stable timeout after 60 seconds of SSH polling', async () => 
       now: () => clock,
       onProgress: (status) => progress.push(status),
     }),
-    { message: 'Sin respuesta; activación no confirmada tras 60 segundos' },
+    { message: 'No response; wake-up was not confirmed after 60 seconds' },
   )
   assert.equal(wakeCalls, 1)
   assert.equal(delays.length, 30)
@@ -391,7 +391,7 @@ test('keeps host-online after a refused probe and reports the host-response time
       now: () => clock,
       onProgress: (status) => progress.push(status),
     }),
-    { message: 'Equipo responde, SSH no disponible tras 60 segundos' },
+    { message: 'Host responded, but SSH was unavailable after 60 seconds' },
   )
 
   assert.equal(probeCalls, 30)
@@ -418,7 +418,7 @@ test('does not emit unconfirmed when the final in-flight probe is refused after 
       now: () => clock,
       onProgress: (status) => progress.push(status),
     }),
-    { message: 'Equipo responde, SSH no disponible tras 60 segundos' },
+    { message: 'Host responded, but SSH was unavailable after 60 seconds' },
   )
 
   assert.deepEqual(progress, ['checking', 'packet-sent', 'host-online'])

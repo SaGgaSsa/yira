@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { PanelBottomClose } from 'lucide-react'
 import type { ShellProfileId, TileState, WorkspaceConfig } from '@shared/types'
 import { createFloatingFileNavigationRequest } from '@shared/floatingNavigation'
 import { normalizeWorkspaceConfig } from '@shared/workspaceConfig'
 import { useCanvasStore } from '@/store/canvasStore'
-import { TileContent, TILE_META } from './TileContent'
+import { getTileTypeLabel, TileContent, TILE_META } from './TileContent'
 import { getTerminalDisplayTitle } from '@/utils/terminalDisplayTitle'
 import { getTileWindowTitle } from '@/utils/windowTitle'
 import { windowBufferRegistry } from '@/utils/windowBufferRegistry'
@@ -36,6 +37,7 @@ function getParams(): { workspaceId: string; tileId: string } {
 }
 
 export function FloatingTileWindow(): React.ReactElement {
+  const { t } = useTranslation()
   const [{ workspaceId, tileId }] = useState(getParams)
   const [tile, setTile] = useState<TileState | null>(null)
   const [initialTerminalTitle, setInitialTerminalTitle] = useState<string | undefined>()
@@ -87,8 +89,8 @@ export function FloatingTileWindow(): React.ReactElement {
   const title = useMemo(() => {
     if (!tile) return 'Yira Tile'
     if (tile.type === 'terminal') return getTerminalDisplayTitle(tile, terminalTitle ? { [tile.id]: terminalTitle } : {})
-    return tile.label?.trim() || TILE_META[tile.type].label
-  }, [terminalTitle, tile])
+    return tile.label?.trim() || getTileTypeLabel(tile.type, t)
+  }, [t, terminalTitle, tile])
 
   const windowTitle = getTileWindowTitle(tile, terminalTitle && tile ? { [tile.id]: terminalTitle } : {}, workspaceName)
   useEffect(() => {
@@ -109,7 +111,7 @@ export function FloatingTileWindow(): React.ReactElement {
   if (loadFailed) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-bg-primary text-text-secondary">
-        <span className="nd-label">[ TILE UNAVAILABLE ]</span>
+            <span className="nd-label">{t('ui.tileUnavailable')}</span>
       </div>
     )
   }
@@ -117,7 +119,7 @@ export function FloatingTileWindow(): React.ReactElement {
   if (!tile || !workspaceConfig) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-bg-primary text-text-secondary">
-        <span className="nd-label">[ LOADING TILE ]</span>
+            <span className="nd-label">{t('ui.loadingTile')}</span>
       </div>
     )
   }
@@ -132,7 +134,7 @@ export function FloatingTileWindow(): React.ReactElement {
         <button
           type="button"
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
-          title="Attach tile"
+          title={t('ui.attachTile')}
           onClick={() => {
             void window.electron.floating.requestAttach(tile.id)
           }}

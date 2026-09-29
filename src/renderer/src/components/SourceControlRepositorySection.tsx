@@ -22,6 +22,8 @@ import type {
   SourceControlViewMode,
 } from '@shared/types'
 import { buildSourceControlTree, type SourceControlTreeNode } from '@/utils/sourceControlTree'
+import { useTranslation } from 'react-i18next'
+import { i18n } from '@/i18n'
 
 export type SourceControlAction =
   | { type: 'toggle'; change: GitFileChange; staged: boolean }
@@ -74,6 +76,7 @@ function FileChangeRow({ change, staged, depth, displayPath, disabled, onToggle,
   onToggle: (change: GitFileChange, staged: boolean) => void
   onOpenDiff: (change: GitFileChange, staged: boolean) => void
 }): React.ReactElement {
+  const { t } = useTranslation()
   return (
     <div
       className="flex min-w-0 cursor-pointer items-center gap-2 py-1.5 pr-3 text-sm text-text-secondary hover:bg-hover-bg"
@@ -94,8 +97,8 @@ function FileChangeRow({ change, staged, depth, displayPath, disabled, onToggle,
         className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-text-secondary hover:bg-hover-bg hover:text-text-display disabled:opacity-50"
         onClick={(event) => { event.stopPropagation(); onToggle(change, staged) }}
         disabled={disabled}
-        title={staged ? 'Unstage file' : 'Stage file'}
-        aria-label={staged ? `Unstage ${change.path}` : `Stage ${change.path}`}
+        title={staged ? t('sourceControl.unstageFile') : t('sourceControl.stageFile')}
+        aria-label={staged ? `${t('sourceControl.unstageFile')}: ${change.path}` : `${t('sourceControl.stageFile')}: ${change.path}`}
       >
         {staged ? <SquareMinus size={15} /> : <SquarePlus size={15} />}
       </button>
@@ -138,11 +141,12 @@ function ChangeSection({ title, changes, staged, viewMode, disabled, onToggle, o
   onToggle: (change: GitFileChange, staged: boolean) => void
   onOpenDiff: (change: GitFileChange, staged: boolean) => void
 }): React.ReactElement {
+  const { t } = useTranslation()
   return (
     <section className="border-b border-border py-2 last:border-b-0">
       <div className="nd-label px-4 py-1.5 text-text-secondary">{title} ({changes.length})</div>
       {changes.length === 0 ? (
-        <div className="px-4 py-2 text-xs text-text-disabled">No changes</div>
+        <div className="px-4 py-2 text-xs text-text-disabled">{t('sourceControl.noChanges')}</div>
       ) : viewMode === 'tree' ? (
         <div>
           {buildSourceControlTree(changes).map((node) => (
@@ -160,32 +164,31 @@ function ChangeSection({ title, changes, staged, viewMode, disabled, onToggle, o
   )
 }
 
-function relativeCommitDate(commitDate: string | null | undefined): string {
+function relativeCommitDate(commitDate: string | null | undefined, language: string): string {
   const timestamp = typeof commitDate === 'string' ? Date.parse(commitDate) : Number.NaN
-  if (!Number.isFinite(timestamp)) return 'fecha desconocida'
+  if (!Number.isFinite(timestamp)) return i18n.t('sourceControl.unknownDate')
 
-  const elapsedSeconds = Math.round((Date.now() - timestamp) / 1000)
+  const elapsedSeconds = (timestamp - Date.now()) / 1000
   const elapsed = Math.abs(elapsedSeconds)
-  if (elapsed < 60) return elapsedSeconds < 0 ? 'en un momento' : 'hace un momento'
-
   const units = [
-    { seconds: 31_536_000, singular: 'año', plural: 'años' },
-    { seconds: 2_592_000, singular: 'mes', plural: 'meses' },
-    { seconds: 604_800, singular: 'semana', plural: 'semanas' },
-    { seconds: 86_400, singular: 'día', plural: 'días' },
-    { seconds: 3_600, singular: 'hora', plural: 'horas' },
-    { seconds: 60, singular: 'minuto', plural: 'minutos' },
+    { seconds: 31_536_000, unit: 'year' as const },
+    { seconds: 2_592_000, unit: 'month' as const },
+    { seconds: 604_800, unit: 'week' as const },
+    { seconds: 86_400, unit: 'day' as const },
+    { seconds: 3_600, unit: 'hour' as const },
+    { seconds: 60, unit: 'minute' as const },
   ]
-  const unit = units.find(({ seconds }) => elapsed >= seconds)
-  if (!unit) return elapsedSeconds < 0 ? 'en un momento' : 'hace un momento'
-
+  const unit = units.find(({ seconds }) => elapsed >= seconds) ?? { seconds: 1, unit: 'second' as const }
   const value = Math.max(1, Math.floor(elapsed / unit.seconds))
-  const label = value === 1 ? unit.singular : unit.plural
-  return elapsedSeconds < 0 ? `en ${value} ${label}` : `hace ${value} ${label}`
+  return new Intl.RelativeTimeFormat(language, { numeric: 'auto' }).format(
+    Math.sign(elapsedSeconds) * value,
+    unit.unit,
+  )
 }
 
 function CommitRow({ commit }: { commit: GitCommitSummary }): React.ReactElement {
-  const subject = typeof commit.subject === 'string' && commit.subject ? commit.subject : '(sin asunto)'
+  const { t } = useTranslation()
+  const subject = typeof commit.subject === 'string' && commit.subject ? commit.subject : t('sourceControl.noSubject')
   const shortHash = typeof commit.shortHash === 'string' && commit.shortHash ? commit.shortHash : '—'
   const commitDate = typeof commit.commitDate === 'string' && commit.commitDate ? commit.commitDate : undefined
 
@@ -193,19 +196,20 @@ function CommitRow({ commit }: { commit: GitCommitSummary }): React.ReactElement
     <div className="flex min-w-0 items-center gap-2 px-4 py-1.5 text-xs text-text-secondary" title={subject}>
       <span className="shrink-0 font-mono text-[11px] text-text-disabled">{shortHash}</span>
       <span className="min-w-0 flex-1 truncate">{subject}</span>
-      <time className="shrink-0 text-[11px] text-text-disabled" dateTime={commitDate} title={commitDate ?? 'Fecha desconocida'}>
-        {relativeCommitDate(commit.commitDate)}
+      <time className="shrink-0 text-[11px] text-text-disabled" dateTime={commitDate} title={commitDate ?? t('sourceControl.unknownDate')}>
+        {relativeCommitDate(commit.commitDate, i18n.language)}
       </time>
     </div>
   )
 }
 
 function CommitSection({ title, commits }: { title: string; commits: GitCommitSummary[] }): React.ReactElement {
+  const { t } = useTranslation()
   return (
     <section className="border-t border-border py-2 first:border-t-0">
       <div className="nd-label px-4 py-1.5 text-text-secondary">{title}</div>
       {commits.length === 0 ? (
-        <div className="px-4 py-2 text-xs text-text-disabled">No hay commits</div>
+        <div className="px-4 py-2 text-xs text-text-disabled">{t('sourceControl.noCommits')}</div>
       ) : (
         <div>{commits.map((commit, index) => <CommitRow key={`${commit.shortHash}-${index}`} commit={commit} />)}</div>
       )}
@@ -220,6 +224,7 @@ function CommitHistoryAccordion({ history, upstream, expanded, onToggle, id }: {
   onToggle: () => void
   id: string
 }): React.ReactElement {
+  const { t } = useTranslation()
   const outgoing = history?.outgoing ?? []
   const upstreamCommits = history?.upstream ?? []
   const localCommits = history?.local ?? []
@@ -235,29 +240,29 @@ function CommitHistoryAccordion({ history, upstream, expanded, onToggle, id }: {
           aria-controls={id}
         >
           <ChevronDown size={14} className={`shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`} />
-          <span>Commits</span>
+          <span>{t('sourceControl.commits')}</span>
         </button>
       </h2>
       {expanded && (
-        <div id={id} role="region" aria-label="Commits">
+        <div id={id} role="region" aria-label={t('sourceControl.commits')}>
           {history === undefined ? (
-            <div className="px-4 py-2 text-xs text-text-disabled">Cargando historial…</div>
+            <div className="px-4 py-2 text-xs text-text-disabled">{t('sourceControl.loadingHistory')}</div>
           ) : (
             <>
               {history.error && (
                 <div className="px-4 py-2 text-xs text-red-300" role="status">
-                  No se pudo cargar el historial: {history.error}
+                  {t('sourceControl.loadHistoryError', { error: history.error })}
                 </div>
               )}
               {upstream ? (
                 <>
-                  <CommitSection title={`Por subir (${outgoing.length})`} commits={outgoing} />
-                  <CommitSection title="Últimos en remoto" commits={upstreamCommits.slice(0, 5)} />
+                  <CommitSection title={t('sourceControl.outgoing', { count: outgoing.length })} commits={outgoing} />
+                  <CommitSection title={t('sourceControl.latestRemote')} commits={upstreamCommits.slice(0, 5)} />
                 </>
               ) : (
                 <>
-                  <div className="px-4 py-2 text-xs text-text-secondary">No hay comparación remota</div>
-                  <CommitSection title="Últimos locales" commits={localCommits.slice(0, 5)} />
+                  <div className="px-4 py-2 text-xs text-text-secondary">{t('sourceControl.noRemoteComparison')}</div>
+                  <CommitSection title={t('sourceControl.latestLocal')} commits={localCommits.slice(0, 5)} />
                 </>
               )}
             </>
@@ -277,11 +282,12 @@ function RepositoryActions({
   pendingAction: string | undefined
   onAction: (action: RepositoryAction) => void
 }): React.ReactElement {
+  const { t } = useTranslation()
   const actions = [
-    { type: 'fetch', label: 'Fetch', subtitle: 'Fetch refs', Icon: ArrowDownToLine, requiresUpstream: false },
-    { type: 'pull', label: 'Pull', subtitle: `↓${repositoryStatus.behind} behind`, Icon: ArrowDownToLine, requiresUpstream: true },
-    { type: 'push', label: 'Push', subtitle: `↑${repositoryStatus.ahead} ahead`, Icon: ArrowUpFromLine, requiresUpstream: true },
-    { type: 'sync', label: 'Sync', subtitle: 'Pull then push', Icon: RefreshCw, requiresUpstream: true },
+    { type: 'fetch', label: t('sourceControl.actionFetch'), subtitle: t('sourceControl.fetchRefs'), Icon: ArrowDownToLine, requiresUpstream: false },
+    { type: 'pull', label: 'Pull', subtitle: `↓${t('sourceControl.behind', { count: repositoryStatus.behind })}`, Icon: ArrowDownToLine, requiresUpstream: true },
+    { type: 'push', label: 'Push', subtitle: `↑${t('sourceControl.ahead', { count: repositoryStatus.ahead })}`, Icon: ArrowUpFromLine, requiresUpstream: true },
+    { type: 'sync', label: t('sourceControl.actionSync'), subtitle: t('sourceControl.pullThenPush'), Icon: RefreshCw, requiresUpstream: true },
   ] as const
 
   return (
@@ -296,13 +302,13 @@ function RepositoryActions({
             type="button"
             className="flex min-w-0 items-center gap-2 rounded border border-border px-2 py-1.5 text-left text-text-secondary hover:bg-hover-bg hover:text-text-display disabled:cursor-not-allowed disabled:opacity-50"
             disabled={Boolean(pendingAction) || disabledForUpstream}
-            title={disabledForUpstream ? `${label} requires an upstream branch` : label}
+            title={disabledForUpstream ? t('sourceControl.requiresUpstream', { action: label }) : label}
             onClick={() => onAction(type === 'sync' ? { type: 'sync' } : { type })}
           >
             {isPending ? <LoaderCircle size={15} className="shrink-0 animate-spin" /> : <Icon size={15} className="shrink-0" />}
             <span className="min-w-0">
               <span className="block text-xs text-text-display">{label}</span>
-              <span className="block truncate text-[11px] text-text-disabled">{isPending ? 'Working…' : subtitle}</span>
+              <span className="block truncate text-[11px] text-text-disabled">{isPending ? t('sourceControl.working') : subtitle}</span>
             </span>
           </button>
         )
@@ -332,6 +338,7 @@ export function SourceControlRepositorySection({
   onRetryAction,
   onOpenDiff,
 }: SourceControlRepositorySectionProps): React.ReactElement {
+  const { t } = useTranslation()
   const changeCount = (repositoryStatus?.staged.length ?? 0) + (repositoryStatus?.unstaged.length ?? 0)
   const isRepository = repositoryStatus?.isRepository === true
   const canCommit = Boolean(repositoryStatus?.staged.length) && Boolean(commitMessage.trim())
@@ -353,7 +360,7 @@ export function SourceControlRepositorySection({
             {repository.name}{duplicateName ? <span className="text-xs text-text-disabled"> · {repository.relativePath}</span> : null}
           </span>
           <span className="max-w-24 truncate text-xs text-text-secondary">
-            {repositoryStatus?.branch ?? (statusLoading ? 'Loading…' : 'No branch')}
+            {repositoryStatus?.branch ?? (statusLoading ? t('sourceControl.loading') : t('sourceControl.noBranch'))}
           </span>
           {statusLoading && !repositoryStatus ? <LoaderCircle size={14} className="animate-spin" /> : null}
           {repositoryStatus?.error ? <span className="text-xs text-red-300" title={repositoryStatus.error}>!</span> : null}
@@ -367,17 +374,17 @@ export function SourceControlRepositorySection({
       {expanded && (
         <>
           {statusLoading && !repositoryStatus && (
-            <div className="px-4 py-3 text-sm text-text-disabled">Loading source control…</div>
+            <div className="px-4 py-3 text-sm text-text-disabled">{t('sourceControl.loadingSourceControl')}</div>
           )}
           {repositoryStatus && !isRepository && (
             <div className="px-4 py-3 text-sm text-red-300">
-              <p>{repositoryStatus.error ?? 'This workspace is not a Git repository.'}</p>
+              <p>{repositoryStatus.error ?? t('sourceControl.notGitRepository')}</p>
               <button
                 type="button"
                 className="mt-3 inline-flex items-center gap-1.5 text-sm text-text-display hover:underline"
                 onClick={onRetryStatus}
               >
-                <RefreshCw size={14} /> Retry
+                <RefreshCw size={14} /> {t('sourceControl.retry')}
               </button>
             </div>
           )}
@@ -393,16 +400,16 @@ export function SourceControlRepositorySection({
                       onClick={() => { void window.electron.shell.openExternal(repositoryStatus.originUrl!) }}
                       title={repositoryStatus.originUrl}
                     >
-                      {repositoryStatus.branch ?? 'No branch'}
+                      {repositoryStatus.branch ?? t('sourceControl.noBranch')}
                     </button>
                   ) : (
-                    <span className="min-w-0 truncate text-sm text-text-display">{repositoryStatus.branch ?? 'No branch'}</span>
+                    <span className="min-w-0 truncate text-sm text-text-display">{repositoryStatus.branch ?? t('sourceControl.noBranch')}</span>
                   )}
                 </div>
                 <div className="mt-1 pl-6 text-xs text-text-disabled">
                   {repositoryStatus.upstream
                     ? `${repositoryStatus.upstream} · ↑${repositoryStatus.ahead} ↓${repositoryStatus.behind}`
-                    : 'No upstream'}
+                    : t('sourceControl.noUpstream')}
                 </div>
                 <RepositoryActions repositoryStatus={repositoryStatus} pendingAction={pendingAction} onAction={onAction} />
               </div>
@@ -415,7 +422,7 @@ export function SourceControlRepositorySection({
                 id={historyId}
               />
               <ChangeSection
-                title="Staged Changes"
+                title={t('sourceControl.stagedChanges')}
                 changes={repositoryStatus.staged}
                 staged
                 viewMode={viewMode}
@@ -424,7 +431,7 @@ export function SourceControlRepositorySection({
                 onOpenDiff={onOpenDiff}
               />
               <ChangeSection
-                title="Changes"
+                title={t('sourceControl.changes')}
                 changes={repositoryStatus.unstaged}
                 staged={false}
                 viewMode={viewMode}
@@ -433,13 +440,13 @@ export function SourceControlRepositorySection({
                 onOpenDiff={onOpenDiff}
               />
               <div className="border-t border-border p-3">
-                <label htmlFor={commitMessageId} className="sr-only">Commit message</label>
+                <label htmlFor={commitMessageId} className="sr-only">{t('sourceControl.commitMessage')}</label>
                 <textarea
                   id={commitMessageId}
                   className="h-16 w-full resize-none rounded border border-border-visible bg-bg-primary px-2 py-1.5 text-sm text-text-display outline-none placeholder:text-text-disabled disabled:opacity-50"
                   value={commitMessage}
                   onChange={(event) => onCommitMessageChange(event.target.value)}
-                  placeholder="Commit message"
+                  placeholder={t('sourceControl.commitMessage')}
                   disabled={Boolean(pendingAction)}
                 />
                 <div className="mt-2 flex justify-end">
@@ -449,7 +456,7 @@ export function SourceControlRepositorySection({
                     onClick={() => onAction({ type: 'commit', message: commitMessage.trim() })}
                     disabled={!canCommit || Boolean(pendingAction)}
                   >
-                    Commit
+                    {t('sourceControl.commit')}
                   </button>
                 </div>
               </div>
@@ -465,7 +472,7 @@ export function SourceControlRepositorySection({
                   onClick={onRetryAction}
                   disabled={Boolean(pendingAction)}
                 >
-                  Retry operation
+                  {t('sourceControl.retryOperation')}
                 </button>
               )}
             </div>

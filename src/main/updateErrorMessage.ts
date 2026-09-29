@@ -1,3 +1,5 @@
+import { mainText } from './i18n'
+
 const NETWORK_ERROR_CODES = new Set([
   'EAI_AGAIN',
   'ECONNREFUSED',
@@ -41,20 +43,20 @@ export function getUpdateErrorMessage(error: unknown): string {
     || /httperror:\s*(401|403)|status(?:code)?\s*[:=]?\s*(401|403)/.test(message)
 
   if (NETWORK_ERROR_CODES.has(code) || /\b(eai_again|econnrefused|econnreset|enetunreach|enotfound|ehostunreach|etimedout|network error)\b/.test(errorText)) {
-    return 'Unable to reach GitHub. Check your internet connection and try again.'
+    return mainText('updateNetworkError')
   }
 
   if (message.includes('latest.yml') && isNotFound) {
-    return 'This Yira release is missing update information. Try again later or download the latest version from GitHub Releases.'
+    return mainText('updateMissingMetadata')
   }
 
   if (isUnauthorized) {
-    return 'GitHub could not authorize the update check. Try again later.'
+    return mainText('updateUnauthorized')
   }
 
   if (message.includes('latest.yml') && /\b(parse|invalid|malformed|corrupt)\b/.test(message)) {
-    return 'GitHub returned invalid update information. Try again later.'
+    return mainText('updateInvalidMetadata')
   }
 
-  return 'Unable to check for updates right now. Try again later.'
+  return mainText('updateGenericError')
 }

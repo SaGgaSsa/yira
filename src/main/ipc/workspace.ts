@@ -16,6 +16,7 @@ import {
 } from '@shared/workspaceSelection'
 import { applyWorkspaceManagementChanges, setWorkspaceType } from '@shared/workspaceManagement'
 import { YIRA_HOME, CONFIG_PATH, WORKSPACES_DIR } from '../paths'
+import { mainText } from '../i18n'
 import {
   buildUnknownWorkspaceFolderResult,
   canonicalizeRootFolderPath,
@@ -394,7 +395,7 @@ export function registerWorkspaceIPC(
     const win = BrowserWindow.getFocusedWindow()
     const result = await dialog.showOpenDialog(win!, {
       properties: ['openDirectory'],
-      title: 'Open Project Folder',
+      title: mainText('openProjectFolder'),
     })
     if (result.canceled || result.filePaths.length === 0) {
       return { workspace: null, canceled: true }

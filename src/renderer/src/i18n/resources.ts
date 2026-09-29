@@ -321,6 +321,53 @@ type TranslationResources = {
     gitDiffTooltip: string
     gitDiffUnavailable: string
   }
+  sourceControl: {
+    noChanges: string
+    noCommits: string
+    unknownDate: string
+    noSubject: string
+    commits: string
+    loadingHistory: string
+    loadHistoryError: string
+    outgoing_one: string
+    outgoing_other: string
+    latestRemote: string
+    noRemoteComparison: string
+    latestLocal: string
+    fetchRefs: string
+    behind_one: string
+    behind_other: string
+    ahead_one: string
+    ahead_other: string
+    pullThenPush: string
+    requiresUpstream: string
+    working: string
+    loading: string
+    noBranch: string
+    loadingSourceControl: string
+    notGitRepository: string
+    retry: string
+    noUpstream: string
+    stagedChanges: string
+    changes: string
+    commitMessage: string
+    commit: string
+    retryOperation: string
+    stageFile: string
+    unstageFile: string
+    loadStatusError: string
+    loadHistoryErrorFallback: string
+    onlyChanged: string
+    listView: string
+    treeView: string
+    refreshAll: string
+    noChangedRepositories: string
+    repositories: string
+    changed: string
+    actionFetch: string
+    actionSync: string
+    repositoriesSummary: string
+  }
   tile: {
     terminal: string
     note: string
@@ -447,6 +494,177 @@ type TranslationResources = {
     grid: string
     split: string
     toggleSidebar: string
+  }
+  ui: {
+    boardType: string
+    boardContext: string
+    boardRelated: string
+    addNote: string
+    deleteBacklogTask: string
+    copyMcpConfig: string
+    newTask: string
+    searchHistory: string
+    back: string
+    forward: string
+    reload: string
+    openExternally: string
+    webSurface: string
+    createWorkspaceContent: string
+    groupColor: string
+    moveTile: string
+    resizeSplit: string
+    groupSettings: string
+    groupName: string
+    untitledGroup: string
+    color: string
+    lockGroup: string
+    lockGroupDescription: string
+    loadingNote: string
+    rawState: string
+    applyJson: string
+    noItemsOpen: string
+    configureTile: string
+    focusTile: string
+    closeTile: string
+    detachTile: string
+    attachTile: string
+    hours: string
+    seconds: string
+    loadDuration: string
+    startTimer: string
+    stopTimer: string
+    resetTimer: string
+    unableToLoadDirectory: string
+    searchWorkspaceFiles: string
+    searchFiles: string
+    closeSearch: string
+    typeToSearchFiles: string
+    searching: string
+    noFilesFound: string
+    emptyFolder: string
+    shellProfiles: string
+    noteType: string
+    updates: string
+    dismissUpdateBanner: string
+    noteSuffix: string
+    closedTasks_one: string
+    closedTasks_other: string
+    taskCount_one: string
+    taskCount_other: string
+    taskFallback: string
+    boardBacklog: string
+    boardReady: string
+    boardInProgress: string
+    boardReview: string
+    boardDone: string
+    empty: string
+    tileUnavailable: string
+    loadingTile: string
+    emptyGrid: string
+    newTerminal: string
+    newBrowser: string
+    newTimer: string
+    newNote: string
+    editAction: string
+    renameAction: string
+    duplicateAction: string
+    refreshAction: string
+    muteActivity: string
+    unmuteActivity: string
+    muteNotifications: string
+    unmuteNotifications: string
+    lock: string
+    unlock: string
+    openMarkdownTile: string
+    copyPath: string
+    openBrowserTile: string
+    copyUrl: string
+    copyText: string
+    paste: string
+    selectAll: string
+    gridFull: string
+    gridFullMessage: string
+    createGroup: string
+    editGroup: string
+    ungroupTiles: string
+    ungroupTilesMessage: string
+    refreshTerminal: string
+    refreshTerminalMessage: string
+    refreshBrowser: string
+    refreshBrowserMessage: string
+    refreshNote: string
+    refreshNoteMessage: string
+    refreshTile: string
+    refreshTileMessage: string
+    captureTaskTitle: string
+    captureWork: string
+    title: string
+    task: string
+    deleteTask: string
+    deleteTaskMessage: string
+    rejectTask: string
+    rejectTaskMessage: string
+    requiredNote: string
+    show: string
+    editGroupAction: string
+    ungroup: string
+    removeTileFromGroup: string
+    removeTileFromGroupMessage: string
+    updateReady: string
+    restartUpdateMessage: string
+    downloadingUpdate: string
+    updateFound: string
+    noteEditMode: string
+    notePreviewMode: string
+    noteSplitMode: string
+    tileTypeFile: string
+    yiraTile: string
+    tileComingSoon: string
+    createGroupConfirm: string
+    saveGroup: string
+    saveTile: string
+    keepRunning: string
+    keepCurrent: string
+    keepEditing: string
+    keepTask: string
+    keepInGroup: string
+    remove: string
+    updateProgress: string
+    downloadingUpdateUnknown: string
+    updateFoundUnknown: string
+    editTile: string
+    remoteSsh: string
+    configureRemoteTerminalFirst: string
+    opensshMissing: string
+    createSshTerminal: string
+    configureStatus: string
+    opensshMissingStatus: string
+    usage: string
+    unavailable: string
+    resetUnavailable: string
+    usageResets: string
+    fiveHourShort: string
+    weeklyShort: string
+    providerAgent: string
+    downloadingUpdateMessage: string
+    lockedStatus: string
+    unlockedStatus: string
+    errorStatus: string
+    richStatus: string
+    markdownStatus: string
+    taskDetails: string
+    createTask: string
+    thisTile: string
+    closeTileMessage: string
+    keepOpen: string
+    keepGroup: string
+    ready: string
+    missing: string
+    richNote: string
+    markdownNote: string
+    command: string
+    optionalStartupCommand: string
+    toggleZoom: string
   }
 }
 
@@ -771,6 +989,53 @@ const en: TranslationResources = {
     gitDiffTooltip: 'Includes repositories at the workspace root, in its direct child folders, and those selected in settings. Net diff of pending commits and uncommitted changes since the common ancestor with the known remote reference (+{{additions}} −{{deletions}}). It may not represent the latest push.',
     gitDiffUnavailable: 'Git diff unavailable for this workspace.',
   },
+  sourceControl: {
+    noChanges: 'No changes',
+    noCommits: 'No commits',
+    unknownDate: 'Unknown date',
+    noSubject: '(no subject)',
+    commits: 'Commits',
+    loadingHistory: 'Loading history…',
+    loadHistoryError: 'Unable to load history: {{error}}',
+    outgoing_one: '{{count}} to push',
+    outgoing_other: '{{count}} to push',
+    latestRemote: 'Latest remote',
+    noRemoteComparison: 'No remote comparison available',
+    latestLocal: 'Latest local',
+    fetchRefs: 'Fetch refs',
+    behind_one: '{{count}} behind',
+    behind_other: '{{count}} behind',
+    ahead_one: '{{count}} ahead',
+    ahead_other: '{{count}} ahead',
+    pullThenPush: 'Pull then push',
+    requiresUpstream: '{{action}} requires an upstream branch',
+    working: 'Working…',
+    loading: 'Loading…',
+    noBranch: 'No branch',
+    loadingSourceControl: 'Loading source control…',
+    notGitRepository: 'This workspace is not a Git repository.',
+    retry: 'Retry',
+    noUpstream: 'No upstream',
+    stagedChanges: 'Staged Changes',
+    changes: 'Changes',
+    commitMessage: 'Commit message',
+    commit: 'Commit',
+    retryOperation: 'Retry operation',
+    stageFile: 'Stage file',
+    unstageFile: 'Unstage file',
+    loadStatusError: 'Unable to load source control status',
+    loadHistoryErrorFallback: 'Unable to load commit history',
+    onlyChanged: 'Only changed',
+    listView: 'List view',
+    treeView: 'Tree view',
+    refreshAll: 'Refresh all',
+    noChangedRepositories: 'No changed repositories',
+    repositories: 'repositories',
+    changed: 'changed',
+    actionFetch: 'Fetch',
+    actionSync: 'Sync',
+    repositoriesSummary: 'Repositories ({{count}}) · {{changed}} changed',
+  },
   tile: {
     terminal: 'Terminal',
     note: 'Note',
@@ -897,6 +1162,177 @@ const en: TranslationResources = {
     grid: 'Grid',
     split: 'Split',
     toggleSidebar: 'Toggle sidebar',
+  },
+  ui: {
+    boardType: 'TYPE',
+    boardContext: 'CONTEXT',
+    boardRelated: 'RELATED',
+    addNote: 'Add note',
+    deleteBacklogTask: 'Delete backlog task',
+    copyMcpConfig: 'Copy MCP config command',
+    newTask: 'New Task',
+    searchHistory: 'Search history',
+    back: 'Back',
+    forward: 'Forward',
+    reload: 'Reload',
+    openExternally: 'Open externally',
+    webSurface: 'Web Surface',
+    createWorkspaceContent: 'Create a terminal, note, browser, timer, or workspace board.',
+    groupColor: 'Group color',
+    moveTile: 'Move tile',
+    resizeSplit: 'Resize split',
+    groupSettings: 'Group Settings',
+    groupName: 'Group name',
+    untitledGroup: 'Untitled Group',
+    color: 'Color',
+    lockGroup: 'Lock group',
+    lockGroupDescription: 'Prevent moving or resizing the group and its tiles.',
+    loadingNote: 'Loading note...',
+    rawState: 'Raw State',
+    applyJson: 'Apply JSON',
+    noItemsOpen: 'No items open',
+    configureTile: 'Configure tile',
+    focusTile: 'Focus tile',
+    closeTile: 'Close tile',
+    detachTile: 'Detach tile',
+    attachTile: 'Attach tile',
+    hours: 'Hours',
+    seconds: 'Seconds',
+    loadDuration: 'Load duration',
+    startTimer: 'Start timer',
+    stopTimer: 'Stop timer',
+    resetTimer: 'Reset timer',
+    unableToLoadDirectory: 'Unable to load directory',
+    searchWorkspaceFiles: 'Search workspace files',
+    searchFiles: 'Search files',
+    closeSearch: 'Close search',
+    typeToSearchFiles: 'Type to search files',
+    searching: 'Searching…',
+    noFilesFound: 'No files found',
+    emptyFolder: 'Empty folder',
+    shellProfiles: 'Shell Profiles',
+    noteType: 'Note Type',
+    updates: 'Updates',
+    dismissUpdateBanner: 'Dismiss update banner',
+    noteSuffix: 'NOTE',
+    closedTasks_one: '{{count}} closed task',
+    closedTasks_other: '{{count}} closed tasks',
+    taskCount_one: '{{count}} task',
+    taskCount_other: '{{count}} tasks',
+    taskFallback: 'Task',
+    boardBacklog: 'Backlog',
+    boardReady: 'Ready',
+    boardInProgress: 'In Progress',
+    boardReview: 'Review',
+    boardDone: 'Done',
+    empty: '[ EMPTY ]',
+    tileUnavailable: '[ TILE UNAVAILABLE ]',
+    loadingTile: '[ LOADING TILE ]',
+    emptyGrid: '[ EMPTY GRID ]',
+    newTerminal: 'New Terminal',
+    newBrowser: 'New Browser',
+    newTimer: 'New Timer',
+    newNote: 'New Note',
+    editAction: 'Edit',
+    renameAction: 'Rename',
+    duplicateAction: 'Duplicate',
+    refreshAction: 'Refresh',
+    muteActivity: 'Mute Activity',
+    unmuteActivity: 'Unmute Activity',
+    muteNotifications: 'Mute Notifications',
+    unmuteNotifications: 'Unmute Notifications',
+    lock: 'Lock',
+    unlock: 'Unlock',
+    openMarkdownTile: 'Open in Markdown tile',
+    copyPath: 'Copy path',
+    openBrowserTile: 'Open in Browser tile',
+    copyUrl: 'Copy URL',
+    copyText: 'Copy',
+    paste: 'Paste',
+    selectAll: 'Select All',
+    gridFull: 'Grid is full',
+    gridFullMessage: 'Grid workspaces can contain at most {{count}} tiles.',
+    createGroup: 'Create group',
+    editGroup: 'Edit group',
+    ungroupTiles: 'Ungroup tiles',
+    ungroupTilesMessage: 'Ungroup "{{name}}" and keep its tiles separate on the canvas?',
+    refreshTerminal: 'Refresh terminal',
+    refreshTerminalMessage: 'Refresh "{{label}}"? This restarts the terminal and stops any running process in that session.',
+    refreshBrowser: 'Refresh browser tile',
+    refreshBrowserMessage: 'Refresh "{{label}}"? This reloads the current web surface.',
+    refreshNote: 'Refresh note tile',
+    refreshNoteMessage: 'Refresh "{{label}}"? This reloads the note from saved state and may discard recent unsaved changes.',
+    refreshTile: 'Refresh tile',
+    refreshTileMessage: 'Refresh "{{label}}"? This reloads the surface from saved state and may discard recent unsaved changes.',
+    captureTaskTitle: 'Capture the task title.',
+    captureWork: 'Capture the work to be done.',
+    title: 'Title',
+    task: 'Task',
+    deleteTask: 'Delete task',
+    deleteTaskMessage: 'Delete "{{title}}" from Backlog?',
+    rejectTask: 'Reject task',
+    rejectTaskMessage: 'Explain why "{{title}}" is returning to In Progress.',
+    requiredNote: 'Required note',
+    show: 'Show',
+    editGroupAction: 'Edit Group',
+    ungroup: 'Ungroup',
+    removeTileFromGroup: 'Remove tile from group',
+    removeTileFromGroupMessage: 'Remove "{{tile}}" from "{{group}}"? The tile will be moved outside the group frame.',
+    updateReady: 'Update {{version}} is ready',
+    restartUpdateMessage: 'Restart Yira to install the downloaded version.',
+    downloadingUpdate: 'Downloading update {{version}}',
+    updateFound: 'Update {{version}} found',
+    noteEditMode: 'Edit',
+    notePreviewMode: 'Preview',
+    noteSplitMode: 'Split',
+    tileTypeFile: 'File',
+    yiraTile: 'Yira Tile',
+    tileComingSoon: '{{tile}} coming soon',
+    createGroupConfirm: 'Create Group',
+    saveGroup: 'Save Group',
+    saveTile: 'Save {{tile}}',
+    keepRunning: 'Keep Running',
+    keepCurrent: 'Keep Current',
+    keepEditing: 'Keep Editing',
+    keepTask: 'Keep Task',
+    keepInGroup: 'Keep In Group',
+    remove: 'Remove',
+    updateProgress: '{{percent}}% completed in the background.',
+    downloadingUpdateUnknown: 'Downloading update',
+    updateFoundUnknown: 'Update found',
+    editTile: 'Edit {{tile}}',
+    remoteSsh: 'Remote SSH',
+    configureRemoteTerminalFirst: 'Configure Remote terminal in Workspace Settings first',
+    opensshMissing: 'OpenSSH client is missing on this computer',
+    createSshTerminal: 'Create a terminal connected through SSH',
+    configureStatus: '[ CONFIGURE ]',
+    opensshMissingStatus: '[ OPENSSH MISSING ]',
+    usage: 'usage',
+    unavailable: 'unavailable',
+    resetUnavailable: 'reset unavailable',
+    usageResets: 'resets {{date}}',
+    fiveHourShort: '5 h',
+    weeklyShort: 'wk.',
+    providerAgent: '{{provider}} agent',
+    downloadingUpdateMessage: 'The update is downloading in the background.',
+    lockedStatus: '[ LOCKED ]',
+    unlockedStatus: '[ UNLOCKED ]',
+    errorStatus: '[ ERROR ]',
+    richStatus: '[ RICH ]',
+    markdownStatus: '[ MARKDOWN ]',
+    taskDetails: 'Task Details',
+    createTask: 'Create Task',
+    thisTile: 'this tile',
+    closeTileMessage: 'Close "{{label}}"? Any running session or unsaved surface state may be lost.',
+    keepOpen: 'Keep Open',
+    keepGroup: 'Keep Group',
+    ready: 'Ready',
+    missing: 'Missing',
+    richNote: 'Rich Note',
+    markdownNote: 'Markdown Note',
+    command: 'Command',
+    optionalStartupCommand: 'Optional startup command',
+    toggleZoom: 'Toggle zoom 100%',
   },
 }
 
@@ -1221,6 +1657,53 @@ const es: TranslationResources = {
     gitDiffTooltip: 'Incluye los repositorios de la raíz, de las carpetas hijas directas y los seleccionados en la configuración. Diff neto de commits pendientes y cambios sin commit desde el ancestro común con la referencia remota conocida (+{{additions}} −{{deletions}}). Puede no representar el último push.',
     gitDiffUnavailable: 'El diff de Git no está disponible para este espacio de trabajo.',
   },
+  sourceControl: {
+    noChanges: 'Sin cambios',
+    noCommits: 'No hay commits',
+    unknownDate: 'Fecha desconocida',
+    noSubject: '(sin asunto)',
+    commits: 'Commits',
+    loadingHistory: 'Cargando historial…',
+    loadHistoryError: 'No se pudo cargar el historial: {{error}}',
+    outgoing_one: '{{count}} por subir',
+    outgoing_other: '{{count}} por subir',
+    latestRemote: 'Últimos en remoto',
+    noRemoteComparison: 'No hay comparación remota',
+    latestLocal: 'Últimos locales',
+    fetchRefs: 'Obtener referencias',
+    behind_one: '{{count}} detrás',
+    behind_other: '{{count}} detrás',
+    ahead_one: '{{count}} por delante',
+    ahead_other: '{{count}} por delante',
+    pullThenPush: 'Pull y luego Push',
+    requiresUpstream: '{{action}} requiere una rama upstream',
+    working: 'En curso…',
+    loading: 'Cargando…',
+    noBranch: 'Sin rama',
+    loadingSourceControl: 'Cargando control de código fuente…',
+    notGitRepository: 'Este espacio de trabajo no es un repositorio de Git.',
+    retry: 'Reintentar',
+    noUpstream: 'Sin upstream',
+    stagedChanges: 'Cambios preparados',
+    changes: 'Cambios',
+    commitMessage: 'Mensaje del commit',
+    commit: 'Crear commit',
+    retryOperation: 'Reintentar operación',
+    stageFile: 'Preparar archivo',
+    unstageFile: 'Quitar archivo de los preparados',
+    loadStatusError: 'No se pudo cargar el estado del control de código fuente',
+    loadHistoryErrorFallback: 'No se pudo cargar el historial de commits',
+    onlyChanged: 'Solo con cambios',
+    listView: 'Vista de lista',
+    treeView: 'Vista de árbol',
+    refreshAll: 'Actualizar todo',
+    noChangedRepositories: 'No hay repositorios con cambios',
+    repositories: 'repositorios',
+    changed: 'con cambios',
+    actionFetch: 'Obtener',
+    actionSync: 'Sincronizar',
+    repositoriesSummary: 'Repositorios ({{count}}) · {{changed}} con cambios',
+  },
   tile: {
     terminal: 'Terminal',
     note: 'Nota',
@@ -1347,6 +1830,177 @@ const es: TranslationResources = {
     grid: 'Cuadrícula',
     split: 'Dividir',
     toggleSidebar: 'Alternar barra lateral',
+  },
+  ui: {
+    boardType: 'TIPO',
+    boardContext: 'CONTEXTO',
+    boardRelated: 'RELACIONADAS',
+    addNote: 'Añadir nota',
+    deleteBacklogTask: 'Eliminar tarea pendiente',
+    copyMcpConfig: 'Copiar comando de configuración de MCP',
+    newTask: 'Nueva tarea',
+    searchHistory: 'Buscar en el historial',
+    back: 'Atrás',
+    forward: 'Adelante',
+    reload: 'Recargar',
+    openExternally: 'Abrir externamente',
+    webSurface: 'Superficie web',
+    createWorkspaceContent: 'Crea una terminal, una nota, un navegador, un temporizador o un tablero del espacio de trabajo.',
+    groupColor: 'Color del grupo',
+    moveTile: 'Mover panel',
+    resizeSplit: 'Cambiar tamaño de la división',
+    groupSettings: 'Configuración del grupo',
+    groupName: 'Nombre del grupo',
+    untitledGroup: 'Grupo sin título',
+    color: 'Color',
+    lockGroup: 'Bloquear grupo',
+    lockGroupDescription: 'Evita mover o cambiar el tamaño del grupo y sus paneles.',
+    loadingNote: 'Cargando nota...',
+    rawState: 'Estado sin procesar',
+    applyJson: 'Aplicar JSON',
+    noItemsOpen: 'No hay elementos abiertos',
+    configureTile: 'Configurar panel',
+    focusTile: 'Enfocar panel',
+    closeTile: 'Cerrar panel',
+    detachTile: 'Separar panel',
+    attachTile: 'Acoplar panel',
+    hours: 'Horas',
+    seconds: 'Segundos',
+    loadDuration: 'Cargar duración',
+    startTimer: 'Iniciar temporizador',
+    stopTimer: 'Detener temporizador',
+    resetTimer: 'Restablecer temporizador',
+    unableToLoadDirectory: 'No se pudo cargar la carpeta',
+    searchWorkspaceFiles: 'Buscar archivos del espacio de trabajo',
+    searchFiles: 'Buscar archivos',
+    closeSearch: 'Cerrar búsqueda',
+    typeToSearchFiles: 'Escribe para buscar archivos',
+    searching: 'Buscando…',
+    noFilesFound: 'No se encontraron archivos',
+    emptyFolder: 'Carpeta vacía',
+    shellProfiles: 'Perfiles de shell',
+    noteType: 'Tipo de nota',
+    updates: 'Actualizaciones',
+    dismissUpdateBanner: 'Descartar aviso de actualización',
+    noteSuffix: 'NOTA',
+    closedTasks_one: '{{count}} tarea cerrada',
+    closedTasks_other: '{{count}} tareas cerradas',
+    taskCount_one: '{{count}} tarea',
+    taskCount_other: '{{count}} tareas',
+    taskFallback: 'Tarea',
+    boardBacklog: 'Pendientes',
+    boardReady: 'Listo',
+    boardInProgress: 'En curso',
+    boardReview: 'Revisión',
+    boardDone: 'Completado',
+    empty: '[ VACÍO ]',
+    tileUnavailable: '[ PANEL NO DISPONIBLE ]',
+    loadingTile: '[ CARGANDO PANEL ]',
+    emptyGrid: '[ CUADRÍCULA VACÍA ]',
+    newTerminal: 'Nueva terminal',
+    newBrowser: 'Nuevo navegador',
+    newTimer: 'Nuevo temporizador',
+    newNote: 'Nueva nota',
+    editAction: 'Editar',
+    renameAction: 'Cambiar nombre',
+    duplicateAction: 'Duplicar',
+    refreshAction: 'Actualizar',
+    muteActivity: 'Silenciar actividad',
+    unmuteActivity: 'Reactivar actividad',
+    muteNotifications: 'Silenciar notificaciones',
+    unmuteNotifications: 'Reactivar notificaciones',
+    lock: 'Bloquear',
+    unlock: 'Desbloquear',
+    openMarkdownTile: 'Abrir en un panel Markdown',
+    copyPath: 'Copiar ruta',
+    openBrowserTile: 'Abrir en un panel del navegador',
+    copyUrl: 'Copiar URL',
+    copyText: 'Copiar',
+    paste: 'Pegar',
+    selectAll: 'Seleccionar todo',
+    gridFull: 'La cuadrícula está llena',
+    gridFullMessage: 'Los espacios de trabajo en cuadrícula admiten hasta {{count}} paneles.',
+    createGroup: 'Crear grupo',
+    editGroup: 'Editar grupo',
+    ungroupTiles: 'Separar paneles del grupo',
+    ungroupTilesMessage: '¿Separar "{{name}}" y dejar sus paneles sueltos en el lienzo?',
+    refreshTerminal: 'Actualizar terminal',
+    refreshTerminalMessage: '¿Actualizar "{{label}}"? Esto reiniciará la terminal y detendrá los procesos que estén en esa sesión.',
+    refreshBrowser: 'Actualizar panel del navegador',
+    refreshBrowserMessage: '¿Actualizar "{{label}}"? Se volverá a cargar la página actual.',
+    refreshNote: 'Actualizar panel de notas',
+    refreshNoteMessage: '¿Actualizar "{{label}}"? Se volverá a cargar la nota guardada y podrían perderse los cambios recientes sin guardar.',
+    refreshTile: 'Actualizar panel',
+    refreshTileMessage: '¿Actualizar "{{label}}"? Se volverá a cargar el contenido guardado y podrían perderse los cambios recientes sin guardar.',
+    captureTaskTitle: 'Escribe el título de la tarea.',
+    captureWork: 'Describe el trabajo que hay que hacer.',
+    title: 'Título',
+    task: 'Tarea',
+    deleteTask: 'Eliminar tarea',
+    deleteTaskMessage: '¿Eliminar "{{title}}" de Pendientes?',
+    rejectTask: 'Rechazar tarea',
+    rejectTaskMessage: 'Explica por qué "{{title}}" vuelve a En curso.',
+    requiredNote: 'Nota obligatoria',
+    show: 'Mostrar',
+    editGroupAction: 'Editar grupo',
+    ungroup: 'Separar del grupo',
+    removeTileFromGroup: 'Quitar panel del grupo',
+    removeTileFromGroupMessage: '¿Quitar "{{tile}}" de "{{group}}"? El panel quedará fuera del marco del grupo.',
+    updateReady: 'La actualización {{version}} está lista',
+    restartUpdateMessage: 'Reinicia Yira para instalar la versión descargada.',
+    downloadingUpdate: 'Descargando la actualización {{version}}',
+    updateFound: 'Se encontró la actualización {{version}}',
+    noteEditMode: 'Editar',
+    notePreviewMode: 'Vista previa',
+    noteSplitMode: 'Dividir',
+    tileTypeFile: 'Archivo',
+    yiraTile: 'Panel de Yira',
+    tileComingSoon: '{{tile}} estará disponible próximamente',
+    createGroupConfirm: 'Crear grupo',
+    saveGroup: 'Guardar grupo',
+    saveTile: 'Guardar {{tile}}',
+    keepRunning: 'Seguir ejecutando',
+    keepCurrent: 'Conservar actual',
+    keepEditing: 'Seguir editando',
+    keepTask: 'Conservar tarea',
+    keepInGroup: 'Mantener en el grupo',
+    remove: 'Quitar',
+    updateProgress: '{{percent}}% completado en segundo plano.',
+    downloadingUpdateUnknown: 'Descargando actualización',
+    updateFoundUnknown: 'Se encontró una actualización',
+    editTile: 'Editar {{tile}}',
+    remoteSsh: 'SSH remoto',
+    configureRemoteTerminalFirst: 'Primero configura la terminal remota en los ajustes del espacio de trabajo',
+    opensshMissing: 'OpenSSH no está instalado en este equipo',
+    createSshTerminal: 'Crear una terminal conectada por SSH',
+    configureStatus: '[ CONFIGURAR ]',
+    opensshMissingStatus: '[ FALTA OPENSSH ]',
+    usage: 'uso',
+    unavailable: 'no disponible',
+    resetUnavailable: 'reinicio no disponible',
+    usageResets: 'se restablece {{date}}',
+    fiveHourShort: '5 h',
+    weeklyShort: 'sem.',
+    providerAgent: 'agente de {{provider}}',
+    downloadingUpdateMessage: 'La actualización se está descargando en segundo plano.',
+    lockedStatus: '[ BLOQUEADO ]',
+    unlockedStatus: '[ DESBLOQUEADO ]',
+    errorStatus: '[ ERROR ]',
+    richStatus: '[ FORMATO ]',
+    markdownStatus: '[ MARKDOWN ]',
+    taskDetails: 'Detalles de la tarea',
+    createTask: 'Crear tarea',
+    thisTile: 'este panel',
+    closeTileMessage: '¿Cerrar "{{label}}"? Se podría perder una sesión en curso o el estado de una superficie sin guardar.',
+    keepOpen: 'Mantener abierto',
+    keepGroup: 'Mantener grupo',
+    ready: 'Disponible',
+    missing: 'No disponible',
+    richNote: 'Nota con formato',
+    markdownNote: 'Nota Markdown',
+    command: 'Comando',
+    optionalStartupCommand: 'Comando de inicio opcional',
+    toggleZoom: 'Alternar zoom al 100%',
   },
 }
 

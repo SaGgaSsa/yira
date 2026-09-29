@@ -233,7 +233,7 @@ test('keeps healthy Git status visible when history loading fails', async () => 
     assert.match(healthyMarkup, />origin\/main · ↑0 ↓0</)
     assert.match(healthyMarkup, /Changes \(1\)/)
     assert.match(healthyMarkup, />README\.md</)
-    assert.doesNotMatch(healthyMarkup, /No se pudo cargar el historial/)
+    assert.doesNotMatch(healthyMarkup, /Unable to load history/)
 
     findChangeRow(container).dispatchEvent(new TestEvent('click', { bubbles: true }))
     assert.deepEqual(openedDiffs, [[repositoryPath, status.unstaged[0], false]])
@@ -242,9 +242,9 @@ test('keeps healthy Git status visible when history loading fails', async () => 
     assert.equal(openedDiffs.length, 1, 'the stage button must not trigger the file diff click')
 
     findCommitsButton(container).dispatchEvent(new TestEvent('click', { bubbles: true }))
-    await waitFor(() => serializedMarkup(container).includes('No se pudo cargar el historial: history service unavailable'))
+    await waitFor(() => serializedMarkup(container).includes('Unable to load history: history service unavailable'))
     const expandedMarkup = serializedMarkup(container)
-    assert.match(expandedMarkup, /No se pudo cargar el historial: history service unavailable/)
+    assert.match(expandedMarkup, /Unable to load history: history service unavailable/)
     assert.match(expandedMarkup, /Changes \(1\)/)
     assert.match(expandedMarkup, />README\.md</)
   } finally {

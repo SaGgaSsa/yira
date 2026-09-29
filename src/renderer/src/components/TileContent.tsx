@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { Terminal, StickyNote, Globe, Clock, FileText } from 'lucide-react'
 import type { FileTileOpenOptions, TileState, WorkspaceConfig } from '@shared/types'
 import { TerminalTileWrapper } from './TerminalTile'
@@ -16,6 +17,10 @@ export const TILE_META = {
   files: { label: 'File', icon: FileText },
 } as const
 
+export function getTileTypeLabel(type: TileState['type'], translate: (key: string) => string): string {
+  return type === 'files' ? translate('ui.tileTypeFile') : translate(`tile.${type}`)
+}
+
 interface TileContentProps {
   tile: TileState
   workspaceId: string
@@ -32,6 +37,7 @@ interface TileContentProps {
 }
 
 export function TileContent({ tile, workspaceId, workspaceConfig, isFocused, edgeToEdge = false, isVisible = true, autoFocus = false, onFocus, onUpdate, onOpenBrowserTile, onOpenFileTile, workspaceRootPath = '' }: TileContentProps): React.ReactElement {
+  const { t } = useTranslation()
   if (tile.type === 'terminal') {
     return (
       <TerminalTileWrapper
@@ -80,12 +86,11 @@ export function TileContent({ tile, workspaceId, workspaceConfig, isFocused, edg
 
   const meta = TILE_META[tile.type as keyof typeof TILE_META]
   const Icon = meta.icon
-  const label = meta.label
 
   return (
     <div className="flex h-full w-full items-center justify-center gap-2 text-sm text-text-secondary">
       <Icon size={24} className="mr-2" />
-      <span className="nd-label">{label} coming soon</span>
+      <span className="nd-label">{t('ui.tileComingSoon', { tile: getTileTypeLabel(tile.type as TileState['type'], t) })}</span>
     </div>
   )
 }

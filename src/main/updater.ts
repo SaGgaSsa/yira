@@ -8,6 +8,7 @@ import { getSafeUpdateErrorData, getSafeUpdaterLogData, UpdateDiagnostics, waitF
 import { startLinuxDebUpdateLauncher } from './linuxDebUpdateLauncher'
 import { loadStoredUserSettings } from './ipc/settings'
 import { YIRA_HOME } from './paths'
+import { mainText } from './i18n'
 
 const { autoUpdater } = electronUpdater
 
@@ -64,7 +65,7 @@ function createInitialState(): UpdateState {
     currentVersion: app.getVersion(),
     availableVersion: null,
     progressPercent: null,
-    message: app.isPackaged ? null : 'Automatic updates are only available in installed builds.',
+    message: app.isPackaged ? null : mainText('automaticUpdatesUnavailable'),
   }
 }
 
@@ -115,7 +116,7 @@ function handleUpdateAvailable(info: UpdateInfo): void {
     status: 'available',
     availableVersion: info.version ?? null,
     progressPercent: null,
-    message: 'A new version is available. Downloading in the background.',
+    message: mainText('newVersionAvailable'),
   })
 }
 
@@ -125,7 +126,7 @@ function handleUpdateNotAvailable(): void {
     status: 'up-to-date',
     availableVersion: null,
     progressPercent: null,
-    message: 'You are already on the latest version.',
+    message: mainText('alreadyLatestVersion'),
   })
 }
 
@@ -135,7 +136,7 @@ function handleDownloadProgress(progress: ProgressInfo): void {
   setUpdateState({
     status: 'downloading',
     progressPercent: percent,
-    message: 'Downloading the latest update in the background.',
+    message: mainText('downloadingLatestUpdate'),
   })
 }
 
@@ -149,7 +150,7 @@ function handleUpdateDownloaded(event: UpdateDownloadedEvent): void {
     status: 'downloaded',
     availableVersion: event.version ?? updateState.availableVersion,
     progressPercent: 100,
-    message: 'The update is ready to install. Restart Yira to apply it.',
+    message: mainText('updateReady'),
   })
 }
 
@@ -168,8 +169,8 @@ function getCheckTimeoutMs(reason: 'startup' | 'manual'): number {
 }
 
 function getCheckTimeoutMessage(reason: 'startup' | 'manual'): string {
-  if (reason === 'startup') return 'Update check timed out. Yira will keep working offline.'
-  return 'Update check timed out. Yira is still usable offline; try again later.'
+  if (reason === 'startup') return mainText('startupUpdateTimeout')
+  return mainText('manualUpdateTimeout')
 }
 
 async function runUpdateCheck(reason: 'startup' | 'manual'): Promise<UpdateState> {
@@ -182,7 +183,7 @@ async function runUpdateCheck(reason: 'startup' | 'manual'): Promise<UpdateState
       status: 'unsupported',
       availableVersion: null,
       progressPercent: null,
-      message: 'Automatic updates are only available in installed builds.',
+      message: mainText('automaticUpdatesUnavailable'),
     })
     return updateState
   }
@@ -199,8 +200,8 @@ async function runUpdateCheck(reason: 'startup' | 'manual'): Promise<UpdateState
 
   checkInFlight = true
   setCheckingState(reason === 'startup'
-    ? 'Checking for updates in the background.'
-    : 'Checking for updates.')
+    ? mainText('checkingUpdatesBackground')
+    : mainText('checkingUpdates'))
 
   let timedOut = false
   let timeoutId: NodeJS.Timeout | null = null

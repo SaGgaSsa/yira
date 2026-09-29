@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { createPortal } from 'react-dom'
 import { AlertCircle, Save, X } from 'lucide-react'
 import type { CanvasState, GridWorkspaceState, WorkspaceType } from '@shared/types'
@@ -15,6 +16,7 @@ interface RawJsonEditorProps {
 }
 
 export function RawJsonEditor({ open, workspaceId, workspaceType, state, onClose, onApply }: RawJsonEditorProps): React.ReactElement | null {
+  const { t } = useTranslation()
   const [value, setValue] = useState('')
   const [error, setError] = useState<string | null>(null)
 
@@ -43,7 +45,7 @@ export function RawJsonEditor({ open, workspaceId, workspaceType, state, onClose
       <div className="flex h-[84vh] w-[860px] max-w-[94vw] flex-col overflow-hidden rounded-[24px] border border-border-visible bg-bg-secondary">
         <div className="flex items-center justify-between border-b border-border px-6 py-5">
           <div>
-            <div className="nd-label text-text-secondary">Raw State</div>
+      <div className="nd-label text-text-secondary">{t('ui.rawState')}</div>
             <h2 className="mt-2 text-xl text-text-display">{workspaceType === 'grid' ? 'Grid JSON' : 'Canvas JSON'}</h2>
             <p className="nd-caption mt-2 text-text-secondary">{workspaceId}</p>
           </div>
@@ -69,7 +71,7 @@ export function RawJsonEditor({ open, workspaceId, workspaceType, state, onClose
             {error && (
               <>
                 <AlertCircle size={14} />
-                <span className="nd-caption">[ ERROR ] {error}</span>
+                <span className="nd-caption">{t('ui.errorStatus')} {error}</span>
               </>
             )}
           </div>
@@ -90,7 +92,7 @@ export function RawJsonEditor({ open, workspaceId, workspaceType, state, onClose
             }}
           >
             <Save size={14} />
-            <span className="nd-label">Apply JSON</span>
+      <span className="nd-label">{t('ui.applyJson')}</span>
           </button>
         </div>
       </div>

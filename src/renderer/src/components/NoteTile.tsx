@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { BlockNoteSchema, defaultBlockSpecs, selectedFragmentToHTML, type PartialBlock } from '@blocknote/core'
 import { useCreateBlockNote } from '@blocknote/react'
 import { BlockNoteView } from '@blocknote/mantine'
@@ -138,6 +139,7 @@ function RichNoteEditor({
 }
 
 function RichNoteTile({ tile, autoFocus, onUpdate }: NoteTileProps): React.ReactElement {
+  const { t } = useTranslation()
   const [title, setTitle] = useState(titleFromTile(tile))
   const [blocks, setBlocks] = useState<PartialBlock[] | null>(null)
   const [revision, setRevision] = useState(0)
@@ -296,7 +298,7 @@ function RichNoteTile({ tile, autoFocus, onUpdate }: NoteTileProps): React.React
               onChange={handleBlocksChange}
             />
           ) : (
-            <div className="px-4 py-3 text-sm text-text-secondary">Loading note...</div>
+            <div className="px-4 py-3 text-sm text-text-secondary">{t('ui.loadingNote')}</div>
           )}
         </div>
       </div>
@@ -321,13 +323,13 @@ const MARKDOWN_COMMANDS = [
   commands.orderedListCommand,
 ]
 
-const MARKDOWN_VIEW_OPTIONS: Array<{ mode: MarkdownViewMode; label: string }> = [
-  { mode: 'edit', label: 'Edit' },
-  { mode: 'preview', label: 'Preview' },
-  { mode: 'live', label: 'Split' },
-]
-
 function MarkdownNoteTile({ tile, autoFocus = false, onUpdate, workspaceRootPath = '' }: NoteTileProps): React.ReactElement {
+  const { t } = useTranslation()
+  const markdownViewOptions: Array<{ mode: MarkdownViewMode; label: string }> = [
+    { mode: 'edit', label: t('ui.noteEditMode') },
+    { mode: 'preview', label: t('ui.notePreviewMode') },
+    { mode: 'live', label: t('ui.noteSplitMode') },
+  ]
   const [title, setTitle] = useState(titleFromTile(tile))
   const [markdown, setMarkdown] = useState(tile.markdown ?? '')
   const [viewMode, setViewMode] = useState<MarkdownViewMode>(normalizeMarkdownViewMode(tile.markdownView))
@@ -498,7 +500,7 @@ function MarkdownNoteTile({ tile, autoFocus = false, onUpdate, workspaceRootPath
         </div>
 
         <div className="flex items-center justify-end gap-1 border-b border-border px-6 py-2">
-          {MARKDOWN_VIEW_OPTIONS.map(({ mode, label }) => (
+          {markdownViewOptions.map(({ mode, label }) => (
             <button
               key={mode}
               className={`rounded-md px-2 py-1 text-xs transition-colors ${viewMode === mode ? 'bg-hover-bg text-text-display' : 'text-text-secondary hover:text-text-display'}`}

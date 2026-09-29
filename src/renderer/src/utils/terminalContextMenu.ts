@@ -6,6 +6,7 @@ export type TerminalLinkTarget =
   | { kind: 'markdown'; value: string }
 
 export interface TerminalContextMenuInput {
+  translate?: (key: string) => string
   selectedText: string
   notificationsMuted: boolean
   linkTarget?: TerminalLinkTarget
@@ -20,32 +21,33 @@ export interface TerminalContextMenuInput {
 }
 
 export function buildTerminalContextMenuItems(input: TerminalContextMenuInput): MenuItem[] {
+  const label = (key: string, fallback: string): string => input.translate?.(key) ?? fallback
   const linkTarget = input.linkTarget
   const linkItems: MenuItem[] = linkTarget?.kind === 'markdown'
     ? [
         {
-          label: 'Open in Markdown tile',
+          label: label('ui.openMarkdownTile', 'Open in Markdown tile'),
           action: () => {
             void input.onOpenFileTile?.(linkTarget.value, { markdownView: 'preview' })
           },
         },
         {
-          label: 'Copy path',
+          label: label('ui.copyPath', 'Copy path'),
           action: () => input.onCopyLink(linkTarget.value),
         },
       ]
     : linkTarget?.kind === 'web'
       ? [
           ...(input.onOpenBrowserTile ? [{
-            label: 'Open in Browser tile',
+            label: label('ui.openBrowserTile', 'Open in Browser tile'),
             action: () => input.onOpenBrowserTile?.(linkTarget.value),
           }] : []),
           {
-            label: 'Open externally',
+            label: label('ui.openExternally', 'Open externally'),
             action: () => input.onOpenExternal(linkTarget.value),
           },
           {
-            label: 'Copy URL',
+            label: label('ui.copyUrl', 'Copy URL'),
             action: () => input.onCopyLink(linkTarget.value),
           },
         ]
@@ -55,20 +57,20 @@ export function buildTerminalContextMenuItems(input: TerminalContextMenuInput): 
 
   return [
     {
-      label: 'Copy',
+      label: label('ui.copyText', 'Copy'),
       disabled: !input.selectedText,
       action: input.onCopySelection,
     },
     {
-      label: 'Paste',
+      label: label('ui.paste', 'Paste'),
       action: input.onPaste,
     },
     {
-      label: 'Select All',
+      label: label('ui.selectAll', 'Select All'),
       action: input.onSelectAll,
     },
     {
-      label: input.notificationsMuted ? 'Unmute Activity' : 'Mute Activity',
+      label: input.notificationsMuted ? label('ui.unmuteActivity', 'Unmute Activity') : label('ui.muteActivity', 'Mute Activity'),
       action: input.onToggleNotifications,
     },
   ]

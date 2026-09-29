@@ -103,13 +103,14 @@ function RunningSessionCard({
   onFocusTile: (tileId: string) => void
   fallbackTitle: string
 }): React.ReactElement {
+  const { t } = useTranslation()
   const title = getTerminalTitle(session, tile, terminalTitles, fallbackTitle)
   return (
     <button
       type="button"
       className="w-full rounded-[18px] border border-border-visible bg-bg-primary px-3 py-3 text-left transition-colors hover:border-text-secondary hover:bg-hover-bg"
       onClick={() => onFocusTile(session.tileId)}
-      title={`Focus ${title}`}
+      title={`${t('shortcuts.focus')} ${title}`}
     >
       <div className="flex min-w-0 items-center gap-2">
         <Bot size={15} className="shrink-0 text-text-secondary" />
@@ -119,7 +120,7 @@ function RunningSessionCard({
       <div className="mt-2 flex items-center gap-2 text-xs text-text-secondary">
         <span className={statusClassName(session.status)}>{statusLabel(session.status)}</span>
         <span className="text-text-disabled">·</span>
-        <time dateTime={session.startedAt} title={`Started ${session.startedAt}`}>
+        <time dateTime={session.startedAt} title={`${t('agents.started')} ${session.startedAt}`}>
           {formatAgentAge(session.startedAt)}
         </time>
       </div>
@@ -340,7 +341,7 @@ export function AgentPanel({
                 tile={tileById.get(session.tileId)}
                 terminalTitles={terminalTitles}
                 onFocusTile={onFocusTile}
-                fallbackTitle={`${providerLabel(session.provider)} agent`}
+                fallbackTitle={t('ui.providerAgent', { provider: providerLabel(session.provider) })}
               />
             ))}
           </div>

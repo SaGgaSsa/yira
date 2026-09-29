@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { createPortal } from 'react-dom'
 import { Lock, X } from 'lucide-react'
 import { GROUP_COLORS, GROUP_COLOR_ORDER, type GroupColorId } from '@shared/types'
@@ -22,6 +23,7 @@ interface GroupEditorDialogProps {
 }
 
 export function GroupEditorDialog({ request, onCancel, onConfirm }: GroupEditorDialogProps): React.ReactElement | null {
+  const { t } = useTranslation()
   const nameInputRef = useRef<HTMLInputElement | null>(null)
   const [value, setValue] = useState<GroupEditorValue | null>(request?.value ?? null)
 
@@ -70,13 +72,13 @@ export function GroupEditorDialog({ request, onCancel, onConfirm }: GroupEditorD
       <div className="w-[620px] max-h-[86vh] max-w-[calc(100vw-32px)] overflow-hidden rounded-[24px] border border-border-visible bg-bg-secondary shadow-2xl">
         <div className="flex items-center justify-between gap-4 border-b border-border px-6 py-5">
           <div className="min-w-0">
-            <div className="nd-label text-text-secondary">Group Settings</div>
+      <div className="nd-label text-text-secondary">{t('ui.groupSettings')}</div>
             <h2 className="mt-2 text-xl text-text-display">{request.title}</h2>
           </div>
           <button
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border-visible text-text-secondary transition-colors hover:text-text-display"
             onClick={onCancel}
-            title="Close dialog"
+        title={t('dialogs.closeDialog')}
           >
             <X size={16} />
           </button>
@@ -85,13 +87,13 @@ export function GroupEditorDialog({ request, onCancel, onConfirm }: GroupEditorD
         <div className="max-h-[calc(86vh-88px)] space-y-6 overflow-y-auto px-6 py-6">
           <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
             <label className="block">
-              <span className="nd-label mb-2 block text-text-secondary">Group name</span>
+        <span className="nd-label mb-2 block text-text-secondary">{t('ui.groupName')}</span>
               <input
                 ref={nameInputRef}
                 className="w-full rounded-full border border-border-visible bg-bg-primary px-4 py-3 font-mono text-sm text-text-display outline-none"
                 value={value.name}
                 onChange={(event) => setValue((current) => current ? { ...current, name: event.target.value } : current)}
-                placeholder="Untitled Group"
+          placeholder={t('ui.untitledGroup')}
                 spellCheck={false}
               />
             </label>
@@ -99,7 +101,7 @@ export function GroupEditorDialog({ request, onCancel, onConfirm }: GroupEditorD
 
           <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
             <div className="mb-3 flex items-center gap-2">
-              <span className="nd-label text-text-secondary">Color</span>
+        <span className="nd-label text-text-secondary">{t('ui.color')}</span>
             </div>
             <div className="grid grid-cols-5 gap-3">
               {GROUP_COLOR_ORDER.map((colorId) => {
@@ -138,11 +140,11 @@ export function GroupEditorDialog({ request, onCancel, onConfirm }: GroupEditorD
               <div className="flex items-center gap-3">
                 <Lock size={15} className={value.locked ? 'text-text-display' : 'text-text-secondary'} />
                 <div>
-                  <div className="nd-label text-text-display">Lock group</div>
-                  <div className="mt-1 text-sm text-text-secondary">Prevent moving or resizing the group and its tiles.</div>
+      <div className="nd-label text-text-display">{t('ui.lockGroup')}</div>
+      <div className="mt-1 text-sm text-text-secondary">{t('ui.lockGroupDescription')}</div>
                 </div>
               </div>
-              <span className="nd-caption text-text-secondary">{value.locked ? '[ LOCKED ]' : '[ UNLOCKED ]'}</span>
+              <span className="nd-caption text-text-secondary">{value.locked ? t('ui.lockedStatus') : t('ui.unlockedStatus')}</span>
             </button>
           </section>
 
@@ -153,7 +155,7 @@ export function GroupEditorDialog({ request, onCancel, onConfirm }: GroupEditorD
             className="rounded-full border border-border-visible px-4 py-2 text-sm text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
             onClick={onCancel}
           >
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             className="rounded-full border border-text-display px-4 py-2 text-sm text-text-display transition-colors disabled:cursor-not-allowed disabled:opacity-50"
@@ -163,7 +165,7 @@ export function GroupEditorDialog({ request, onCancel, onConfirm }: GroupEditorD
             })}
             disabled={!canSubmit}
           >
-            {request.confirmLabel ?? 'Save Group'}
+            {request.confirmLabel ?? t('ui.saveGroup')}
           </button>
         </div>
       </div>

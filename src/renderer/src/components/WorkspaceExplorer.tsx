@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ChevronDown, ChevronRight, ExternalLink, File, Folder, RefreshCw, Search, X } from 'lucide-react'
 import type { FileEntry } from '@shared/types'
 import {
@@ -19,8 +20,8 @@ import {
   type WorkspaceSearchState,
 } from '@/utils/workspaceExplorerSearch'
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'Unable to load directory'
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback
 }
 
 function rootLabel(rootPath: string): string {
@@ -42,6 +43,7 @@ interface ExplorerTreeNodeProps {
 }
 
 function ExplorerTreeNode({ node, depth, onToggleDirectory, onOpenFile, onRetry, activeFilePath }: ExplorerTreeNodeProps): React.ReactElement {
+  const { t } = useTranslation()
   const isDirectory = node.kind === 'directory'
   const isActiveFile = !isDirectory && node.relativePath === activeFilePath
   const Icon = isDirectory ? Folder : File
@@ -64,18 +66,18 @@ function ExplorerTreeNode({ node, depth, onToggleDirectory, onOpenFile, onRetry,
       {isDirectory && node.expanded && (
         <div>
           {node.status === 'loading' && (
-            <div className="px-3 py-2 text-xs text-text-disabled" style={{ paddingLeft: `${42 + depth * 16}px` }}>Loading…</div>
+            <div className="px-3 py-2 text-xs text-text-disabled" style={{ paddingLeft: `${42 + depth * 16}px` }}>{t('common.loading')}</div>
           )}
           {node.status === 'error' && (
             <div className="flex items-center gap-2 px-3 py-2 text-xs text-red-300" style={{ paddingLeft: `${28 + depth * 16}px` }}>
-              <span className="min-w-0 flex-1 truncate" title={node.error}>{node.error ?? 'Unable to load directory'}</span>
+              <span className="min-w-0 flex-1 truncate" title={node.error}>{node.error ?? t('ui.unableToLoadDirectory')}</span>
               <button
                 className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded hover:bg-hover-bg"
                 onClick={(event) => {
                   event.stopPropagation()
                   onRetry(node)
                 }}
-                title="Retry"
+                title={t('files.retry')}
               >
                 <RefreshCw size={13} />
               </button>
@@ -105,6 +107,7 @@ interface WorkspaceExplorerProps {
 }
 
 export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile }: WorkspaceExplorerProps): React.ReactElement {
+  const { t } = useTranslation()
   const [root, setRoot] = useState<ExplorerNode>(() => createExplorerNode('', rootLabel(rootPath), 'directory'))
   const [openError, setOpenError] = useState<string | null>(null)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -127,10 +130,10 @@ export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile }: Work
     } catch (error) {
       setRoot((current) => updateExplorerDirectory(current, relativePath, {
         status: 'error',
-        error: errorMessage(error),
+        error: errorMessage(error, t('ui.unableToLoadDirectory')),
       }))
     }
-  }, [rootPath])
+  }, [rootPath, t])
 
   useEffect(() => {
     const nextRoot = createExplorerNode('', rootName, 'directory')
@@ -181,9 +184,9 @@ export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile }: Work
     setOpenError(null)
     void onOpenFile(relativePath)
       .catch((error: unknown) => {
-        setOpenError(errorMessage(error))
+        setOpenError(errorMessage(error, t('ui.unableToLoadDirectory')))
       })
-  }, [onOpenFile])
+  }, [onOpenFile, t])
 
   const handleOpenFile = useCallback((node: ExplorerNode) => {
     handleOpenRelativePath(node.relativePath)
@@ -215,7 +218,7 @@ export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile }: Work
           <>
             <input
               autoFocus
-              aria-label="Search workspace files"
+              aria-label={t('ui.searchWorkspaceFiles')}
               className="min-w-0 flex-1 bg-transparent text-sm text-text-display outline-none placeholder:text-text-disabled"
               onChange={(event) => handleSearchQueryChange(event.target.value)}
               onKeyDown={(event) => {
@@ -223,7 +226,7 @@ export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile }: Work
                 event.preventDefault()
                 handleCloseSearch()
               }}
-              placeholder="Search files"
+              placeholder={t('ui.searchFiles')}
               type="search"
               value={searchState.query}
             />
@@ -231,8 +234,8 @@ export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile }: Work
               type="button"
               className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-text-secondary hover:bg-hover-bg hover:text-text-display"
               onClick={handleCloseSearch}
-              title="Close search"
-              aria-label="Close search"
+              title={t('ui.closeSearch')}
+              aria-label={t('ui.closeSearch')}
             >
               <X size={15} />
             </button>
@@ -246,8 +249,8 @@ export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile }: Work
               onClick={() => {
                 void window.electron.files.openFolder(rootPath).catch(() => {})
               }}
-              title="Open folder"
-              aria-label="Open folder"
+              title={t('files.openFolder')}
+              aria-label={t('files.openFolder')}
             >
               <ExternalLink size={15} />
             </button>
@@ -255,8 +258,8 @@ export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile }: Work
               type="button"
               className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-text-secondary hover:bg-hover-bg hover:text-text-display"
               onClick={handleOpenSearch}
-              title="Search workspace files"
-              aria-label="Search workspace files"
+              title={t('ui.searchWorkspaceFiles')}
+              aria-label={t('ui.searchWorkspaceFiles')}
             >
               <Search size={15} />
             </button>
@@ -266,10 +269,10 @@ export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile }: Work
       <div className="min-h-0 flex-1 overflow-auto py-1">
         {searchOpen ? (
           <>
-            {searchView === 'prompt' && <div className="px-4 py-3 text-sm text-text-disabled">Type to search files</div>}
-            {searchView === 'loading' && <div className="px-4 py-3 text-sm text-text-disabled">Searching…</div>}
+            {searchView === 'prompt' && <div className="px-4 py-3 text-sm text-text-disabled">{t('ui.typeToSearchFiles')}</div>}
+            {searchView === 'loading' && <div className="px-4 py-3 text-sm text-text-disabled">{t('ui.searching')}</div>}
             {searchView === 'error' && <div className="px-4 py-3 text-sm text-red-300">{searchState.error}</div>}
-            {searchView === 'no-results' && <div className="px-4 py-3 text-sm text-text-disabled">No files found</div>}
+            {searchView === 'no-results' && <div className="px-4 py-3 text-sm text-text-disabled">{t('ui.noFilesFound')}</div>}
             {searchView === 'results' && (
               <ul>
                 {searchState.entries.map((entry) => {
@@ -293,12 +296,12 @@ export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile }: Work
             )}
           </>
         ) : root.status === 'loading' ? (
-          <div className="px-4 py-3 text-sm text-text-disabled">Loading…</div>
+          <div className="px-4 py-3 text-sm text-text-disabled">{t('common.loading')}</div>
         ) : root.status === 'error' ? (
           <div className="flex items-center gap-2 px-4 py-3 text-sm text-red-300">
-            <span className="min-w-0 flex-1">{root.error ?? 'Unable to load directory'}</span>
-            <button className="inline-flex h-7 items-center gap-1 rounded px-2 hover:bg-hover-bg" onClick={() => handleRetry(root)} title="Retry">
-              <RefreshCw size={13} /> Retry
+            <span className="min-w-0 flex-1">{root.error ?? t('ui.unableToLoadDirectory')}</span>
+            <button className="inline-flex h-7 items-center gap-1 rounded px-2 hover:bg-hover-bg" onClick={() => handleRetry(root)} title={t('files.retry')}>
+              <RefreshCw size={13} /> {t('files.retry')}
             </button>
           </div>
         ) : root.children?.length ? (
@@ -315,7 +318,7 @@ export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile }: Work
               />
             ))}
           </ul>
-        ) : <div className="px-4 py-3 text-sm text-text-disabled">Empty folder</div>}
+        ) : <div className="px-4 py-3 text-sm text-text-disabled">{t('ui.emptyFolder')}</div>}
       </div>
       {openError && <div className="shrink-0 border-t border-border px-3 py-2 text-xs text-red-300">{openError}</div>}
     </div>

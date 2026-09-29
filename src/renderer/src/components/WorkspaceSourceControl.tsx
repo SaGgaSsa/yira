@@ -13,12 +13,12 @@ interface WorkspaceSourceControlProps {
   onOpenDiff: (repositoryPath: string, change: GitFileChange, staged: boolean) => void
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'Unable to load source control status'
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback
 }
 
-function historyErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'Unable to load commit history'
+function historyErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback
 }
 
 function repositoryNameFromPath(relativePath: string): string {
@@ -30,7 +30,7 @@ function sortRepositories(repositories: GitRepository[]): GitRepository[] {
   return [...repositories].sort((left, right) => left.name.localeCompare(right.name) || left.relativePath.localeCompare(right.relativePath))
 }
 
-function emptyStatus(error: unknown): GitStatusResult {
+function emptyStatus(error: unknown, fallback: string): GitStatusResult {
   return {
     isRepository: false,
     branch: null,
@@ -38,7 +38,7 @@ function emptyStatus(error: unknown): GitStatusResult {
     behind: 0,
     staged: [],
     unstaged: [],
-    error: errorMessage(error),
+    error: errorMessage(error, fallback),
   }
 }
 
@@ -88,7 +88,7 @@ export function WorkspaceSourceControl({
     try {
       nextStatus = await window.electron.git.status(requestWorkspaceId, repositoryPath)
     } catch (error) {
-      nextStatus = emptyStatus(error)
+      nextStatus = emptyStatus(error, t('sourceControl.loadStatusError'))
     }
 
     if (workspaceRef.current !== requestWorkspaceId
@@ -96,7 +96,7 @@ export function WorkspaceSourceControl({
 
     setStatuses((current) => ({ ...current, [repositoryPath]: nextStatus }))
     setStatusLoading((current) => ({ ...current, [repositoryPath]: false }))
-  }, [workspaceId])
+  }, [t, workspaceId])
 
   const refreshAllStatuses = useCallback(async (targets: GitRepository[]) => {
     const requestWorkspaceId = workspaceId
@@ -180,13 +180,13 @@ export function WorkspaceSourceControl({
         historyLoadedPathsRef.current.add(repositoryPath)
         setHistories((current) => ({
           ...current,
-          [repositoryPath]: { outgoing: [], upstream: [], local: [], error: historyErrorMessage(error) },
+          [repositoryPath]: { outgoing: [], upstream: [], local: [], error: historyErrorMessage(error, t('sourceControl.loadHistoryErrorFallback')) },
         }))
       }
     } finally {
       historyLoadingPathsRef.current.delete(repositoryPath)
     }
-  }, [workspaceId])
+  }, [t, workspaceId])
 
   useEffect(() => {
     repositories.forEach((repository) => {
@@ -244,7 +244,7 @@ export function WorkspaceSourceControl({
       setRetryActions((current) => ({ ...current, [repositoryPath]: undefined }))
     } catch (error) {
       if (workspaceRef.current === requestWorkspaceId) {
-        setActionErrors((current) => ({ ...current, [repositoryPath]: errorMessage(error) }))
+        setActionErrors((current) => ({ ...current, [repositoryPath]: errorMessage(error, t('sourceControl.loadStatusError')) }))
         setRetryActions((current) => ({ ...current, [repositoryPath]: repositoryAction }))
       }
     } finally {
@@ -253,7 +253,7 @@ export function WorkspaceSourceControl({
         setPendingActions((current) => ({ ...current, [repositoryPath]: undefined }))
       }
     }
-  }, [loadRepositoryHistory, refreshRepositoryStatus, repositories, workspaceId])
+  }, [loadRepositoryHistory, refreshRepositoryStatus, repositories, t, workspaceId])
 
   const handleViewModeChange = useCallback((viewMode: SourceControlViewMode) => {
     if (viewMode === sourceControlViewMode) return
@@ -267,9 +267,9 @@ export function WorkspaceSourceControl({
         setGlobalError(null)
       })
       .catch((error: unknown) => {
-        if (workspaceRef.current === requestWorkspaceId) setGlobalError(errorMessage(error))
+        if (workspaceRef.current === requestWorkspaceId) setGlobalError(errorMessage(error, t('sourceControl.loadStatusError')))
       })
-  }, [onWorkspaceUpdated, sourceControlViewMode, workspaceId])
+  }, [onWorkspaceUpdated, sourceControlViewMode, t, workspaceId])
 
   const handleCommitsToggle = useCallback((repositoryPath: string) => {
     manuallyToggledCommitsRef.current.add(repositoryPath)
@@ -299,7 +299,7 @@ export function WorkspaceSourceControl({
   const changedRepositoryCount = repositories.filter((repository) => isRepositoryChanged(statuses[repository.relativePath])).length
 
   if (repositoriesLoading) {
-    return <div className="px-4 py-3 text-sm text-text-disabled">Loading source control…</div>
+    return <div className="px-4 py-3 text-sm text-text-disabled">{t('sourceControl.loadingSourceControl')}</div>
   }
 
   if (repositories.length === 0) {
@@ -321,23 +321,23 @@ export function WorkspaceSourceControl({
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border px-3 py-2">
         <span className="min-w-0 flex-1 text-xs text-text-display">
-          Repositories ({repositories.length}) · {changedRepositoryCount} changed
+          {t('sourceControl.repositoriesSummary', { count: repositories.length, changed: changedRepositoryCount })}
         </span>
         <button
           type="button"
           className={`inline-flex h-7 items-center gap-1 rounded px-2 text-xs ${onlyChanged ? 'bg-active-bg text-text-display' : 'text-text-secondary hover:bg-hover-bg hover:text-text-display'}`}
           aria-pressed={onlyChanged}
           onClick={() => setOnlyChanged((current) => !current)}
-          title="Only changed"
+          title={t('sourceControl.onlyChanged')}
         >
-          <ListFilter size={14} /> Only changed
+          <ListFilter size={14} /> {t('sourceControl.onlyChanged')}
         </button>
         <button
           type="button"
           className={`inline-flex h-7 w-7 items-center justify-center rounded ${sourceControlViewMode === 'list' ? 'bg-active-bg text-text-display' : 'text-text-secondary hover:bg-hover-bg'}`}
           onClick={() => handleViewModeChange('list')}
-          title="List view"
-          aria-label="List view"
+          title={t('sourceControl.listView')}
+          aria-label={t('sourceControl.listView')}
         >
           <List size={15} />
         </button>
@@ -345,8 +345,8 @@ export function WorkspaceSourceControl({
           type="button"
           className={`inline-flex h-7 w-7 items-center justify-center rounded ${sourceControlViewMode === 'tree' ? 'bg-active-bg text-text-display' : 'text-text-secondary hover:bg-hover-bg'}`}
           onClick={() => handleViewModeChange('tree')}
-          title="Tree view"
-          aria-label="Tree view"
+          title={t('sourceControl.treeView')}
+          aria-label={t('sourceControl.treeView')}
         >
           <TreePine size={15} />
         </button>
@@ -355,11 +355,11 @@ export function WorkspaceSourceControl({
           className="inline-flex h-7 w-7 items-center justify-center rounded text-text-secondary hover:bg-hover-bg hover:text-text-display disabled:opacity-50"
           onClick={() => void refreshAllStatuses(repositories)}
           disabled={statusRefreshing}
-          title="Refresh all"
-          aria-label="Refresh all"
+          title={t('sourceControl.refreshAll')}
+          aria-label={t('sourceControl.refreshAll')}
         >
           <RefreshCw size={15} className={statusRefreshing ? 'animate-spin' : ''} />
-          <span className="sr-only">Refresh all</span>
+          <span className="sr-only">{t('sourceControl.refreshAll')}</span>
         </button>
       </div>
 
@@ -405,7 +405,7 @@ export function WorkspaceSourceControl({
           )
         })}
         {onlyChanged && visibleRepositories.length === 0 && (
-          <div className="px-4 py-4 text-sm text-text-disabled">No changed repositories</div>
+          <div className="px-4 py-4 text-sm text-text-disabled">{t('sourceControl.noChangedRepositories')}</div>
         )}
       </div>
       {globalError && (

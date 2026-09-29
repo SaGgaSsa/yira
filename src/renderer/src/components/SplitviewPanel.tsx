@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { SplitPanelId, SplitViewState, TileState } from '@shared/types'
 import { useCanvasStore } from '@/store/canvasStore'
 import { getTerminalDisplayTitle } from '@/utils/terminalDisplayTitle'
@@ -50,6 +51,7 @@ function PanelTabStrip({
   onMoveTile,
   onFocusPanel,
 }: PanelTabStripProps): React.ReactElement {
+  const { t } = useTranslation()
   const terminalTitles = useCanvasStore((s) => s.terminalTitles)
   const horizontal = orientation === 'horizontal'
 
@@ -78,7 +80,7 @@ function PanelTabStrip({
       <div className="flex h-full items-stretch gap-2 overflow-x-auto">
         {tiles.length === 0 ? (
           <div className="nd-panel-raised flex min-w-[220px] items-center px-5 text-text-secondary">
-            <span className="nd-label">No items open</span>
+            <span className="nd-label">{t('ui.noItemsOpen')}</span>
           </div>
         ) : (
           tiles.map((tile) => {

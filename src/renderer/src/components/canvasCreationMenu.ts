@@ -3,6 +3,7 @@ import type { ShellProfileId } from '@shared/types'
 import type { MenuItem } from './ContextMenu'
 
 export interface CanvasCreationMenuInput {
+  translate?: (key: string) => string
   onCreateTerminal: (profileId: ShellProfileId) => void
   onCreateRichNote: () => void
   onCreateMarkdownNote: () => void
@@ -15,9 +16,10 @@ export interface CanvasCreationMenuInput {
 }
 
 export function getCanvasCreationMenuItems(input: CanvasCreationMenuInput): MenuItem[] {
+  const label = (key: string, fallback: string): string => input.translate?.(key) ?? fallback
   return [
     {
-      label: 'New Terminal',
+      label: label('ui.newTerminal', 'New Terminal'),
       icon: Terminal,
       submenu: input.profiles.map((profile) => ({
         label: profile.label,
@@ -26,14 +28,14 @@ export function getCanvasCreationMenuItems(input: CanvasCreationMenuInput): Menu
       })),
     },
     ...(input.canCreateNote ? [{
-      label: 'New Note',
+      label: label('ui.newNote', 'New Note'),
       icon: StickyNote,
       submenu: [
-        { label: 'Rich Note', action: input.onCreateRichNote },
-        { label: 'Markdown Note', action: input.onCreateMarkdownNote },
+        { label: label('ui.richNote', 'Rich Note'), action: input.onCreateRichNote },
+        { label: label('ui.markdownNote', 'Markdown Note'), action: input.onCreateMarkdownNote },
       ],
     }] : []),
-    ...(input.canCreateBrowser ? [{ label: 'New Browser', icon: Globe, action: input.onCreateBrowser }] : []),
-    ...(input.canCreateTimer ? [{ label: 'New Timer', icon: Clock, action: input.onCreateTimer }] : []),
+    ...(input.canCreateBrowser ? [{ label: label('ui.newBrowser', 'New Browser'), icon: Globe, action: input.onCreateBrowser }] : []),
+    ...(input.canCreateTimer ? [{ label: label('ui.newTimer', 'New Timer'), icon: Clock, action: input.onCreateTimer }] : []),
   ]
 }
