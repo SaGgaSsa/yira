@@ -282,6 +282,20 @@ type TranslationResources = {
     codex: string
     agentProviderArgs: string
     agentProviderArgsPlaceholder: string
+    claudeUsageTitle: string
+    claudeUsageDescription: string
+    claudeUsageActive: string
+    claudeUsageInactive: string
+    claudeUsageChainable: string
+    claudeUsageOutdated: string
+    claudeUsageError: string
+    claudeUsageLoading: string
+    claudeUsageActivate: string
+    claudeUsageRepair: string
+    claudeUsageDeactivate: string
+    claudeUsageEnabledMessage: string
+    claudeUsageDisabledMessage: string
+    claudeUsageActionError: string
     closeRemoteTerminalHelp: string
     gotIt: string
     editWorkspace: string
@@ -705,6 +719,20 @@ const en: TranslationResources = {
     codex: 'Codex',
     agentProviderArgs: 'Arguments (one per line)',
     agentProviderArgsPlaceholder: '--model\nvalue',
+    claudeUsageTitle: 'Claude usage data',
+    claudeUsageDescription: 'Yira adds a managed status line to Claude Code settings (~/.claude/settings.json) to read the usage limits (5 hours and weekly), context, cost, changed lines, and model that Claude Code provides. It saves them locally in ~/.claude/statusline/. Nothing leaves this machine. If you already have a custom status line, it stays visible because Yira runs it after saving the data; disabling this restores it. This applies to new Claude Code sessions.',
+    claudeUsageActive: 'Active',
+    claudeUsageInactive: 'Not active',
+    claudeUsageChainable: 'A custom status line is configured and will be preserved.',
+    claudeUsageOutdated: 'Needs repair',
+    claudeUsageError: 'Configuration error',
+    claudeUsageLoading: 'Checking Claude Code configuration…',
+    claudeUsageActivate: 'Activate',
+    claudeUsageRepair: 'Repair',
+    claudeUsageDeactivate: 'Deactivate',
+    claudeUsageEnabledMessage: 'Claude usage capture is enabled.',
+    claudeUsageDisabledMessage: 'Claude usage capture is disabled.',
+    claudeUsageActionError: 'The Claude Code configuration could not be updated.',
     closeRemoteTerminalHelp: 'Close remote terminal help',
     gotIt: 'Got it',
     editWorkspace: 'Edit workspace',
@@ -1128,6 +1156,20 @@ const es: TranslationResources = {
     codex: 'Codex',
     agentProviderArgs: 'Argumentos (uno por línea)',
     agentProviderArgsPlaceholder: '--model\nvalor',
+    claudeUsageTitle: 'Datos de uso de Claude',
+    claudeUsageDescription: 'Yira agrega una línea de estado administrada a la configuración de Claude Code (~/.claude/settings.json) para leer los límites de uso (5 horas y semanal), contexto, costo, líneas cambiadas y modelo que Claude Code proporciona. Los guarda localmente en ~/.claude/statusline/. Nada sale de esta máquina. Si ya tienes una línea de estado propia, seguirá visible porque Yira la ejecuta después de guardar los datos; al desactivar se restaura. Se aplica a las nuevas sesiones de Claude Code.',
+    claudeUsageActive: 'Activo',
+    claudeUsageInactive: 'No activo',
+    claudeUsageChainable: 'Hay una línea de estado propia y se conservará.',
+    claudeUsageOutdated: 'Necesita reparación',
+    claudeUsageError: 'Error de configuración',
+    claudeUsageLoading: 'Consultando la configuración de Claude Code…',
+    claudeUsageActivate: 'Activar',
+    claudeUsageRepair: 'Reparar',
+    claudeUsageDeactivate: 'Desactivar',
+    claudeUsageEnabledMessage: 'La captura de uso de Claude está activada.',
+    claudeUsageDisabledMessage: 'La captura de uso de Claude está desactivada.',
+    claudeUsageActionError: 'No se pudo actualizar la configuración de Claude Code.',
     closeRemoteTerminalHelp: 'Cerrar ayuda de terminal remota',
     gotIt: 'Entendido',
     editWorkspace: 'Editar espacio de trabajo',

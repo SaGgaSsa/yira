@@ -11,6 +11,8 @@ import type {
   WorkspaceType,
   WorkspaceUpdatePatch,
   UserSettings,
+  ClaudeStatusLineMutationResult,
+  ClaudeStatusLineState,
   WindowBackgroundMaterial,
   WindowBounds,
   WindowClosePreparationRequest,
@@ -96,6 +98,9 @@ interface ElectronWorld {
     save: (settings: UserSettings) => Promise<void>
     configureAgentHooks: (provider: 'codex' | 'claude') => Promise<{ message: string }>
     uninstallAgentHooks: (provider: 'codex' | 'claude') => Promise<{ message: string }>
+    getClaudeStatusLineStatus: () => Promise<ClaudeStatusLineState>
+    installClaudeStatusLine: () => Promise<ClaudeStatusLineMutationResult>
+    uninstallClaudeStatusLine: () => Promise<ClaudeStatusLineMutationResult>
   }
   note: {
     save: (tileId: string, data: NoteData) => Promise<void>

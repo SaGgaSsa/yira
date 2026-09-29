@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ExternalLink, FolderOpen, GitBranch, Grid3X3, History, Info, LayoutGrid, TerminalSquare, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import type { AgentProvider, AgentProvidersConfig, GitRepository, RemoteTerminalConfig, WakeOnLanConfig, WorkspaceType } from '@shared/types'
+import type { AgentProvider, AgentProvidersConfig, ClaudeStatusLineState, GitRepository, RemoteTerminalConfig, WakeOnLanConfig, WorkspaceType } from '@shared/types'
 import { normalizeAgentProvidersConfig, normalizeWorkspaceAgentProvider } from '@shared/workspaceConfig'
 
 export interface WorkspaceDialogValue {
@@ -112,6 +112,9 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
   const [activeTab, setActiveTab] = useState<WorkspaceDialogTabId>('general')
   const [repositories, setRepositories] = useState<GitRepository[]>([])
   const [repositoriesLoading, setRepositoriesLoading] = useState(false)
+  const [claudeStatusLine, setClaudeStatusLine] = useState<ClaudeStatusLineState | null>(null)
+  const [claudeStatusLineLoading, setClaudeStatusLineLoading] = useState(false)
+  const [claudeStatusLineMessage, setClaudeStatusLineMessage] = useState('')
 
   useEffect(() => {
     setValue(request?.value ?? null)
@@ -120,6 +123,9 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
     setActiveTab(request?.initialTab ?? 'general')
     setRepositories([])
     setRepositoriesLoading(false)
+    setClaudeStatusLine(null)
+    setClaudeStatusLineLoading(false)
+    setClaudeStatusLineMessage('')
 
     if (!request) return
 
@@ -180,6 +186,39 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
       cancelled = true
     }
   }, [activeTab, value?.rootFolderPath])
+
+  useEffect(() => {
+    if (!request || activeTab !== 'agents' || value?.agentProvider !== 'claude') return
+    let cancelled = false
+    setClaudeStatusLine(null)
+    setClaudeStatusLineLoading(true)
+    void window.electron.settings.getClaudeStatusLineStatus().then((status) => {
+      if (!cancelled) setClaudeStatusLine(status)
+    }).catch(() => {
+      if (!cancelled) setClaudeStatusLine({ status: 'unsupported', message: '' })
+    }).finally(() => {
+      if (!cancelled) setClaudeStatusLineLoading(false)
+    })
+    return () => { cancelled = true }
+  }, [activeTab, request, value?.agentProvider])
+
+  const mutateClaudeStatusLine = async (operation: 'install' | 'uninstall') => {
+    setClaudeStatusLineLoading(true)
+    setClaudeStatusLineMessage('')
+    try {
+      const result = operation === 'install'
+        ? await window.electron.settings.installClaudeStatusLine()
+        : await window.electron.settings.uninstallClaudeStatusLine()
+      setClaudeStatusLineMessage(result.ok
+        ? t(operation === 'install' ? 'workspace.claudeUsageEnabledMessage' : 'workspace.claudeUsageDisabledMessage')
+        : t('workspace.claudeUsageActionError'))
+      setClaudeStatusLine(await window.electron.settings.getClaudeStatusLineStatus())
+    } catch {
+      setClaudeStatusLineMessage(t('workspace.claudeUsageActionError'))
+    } finally {
+      setClaudeStatusLineLoading(false)
+    }
+  }
 
   if (!request || !value) return null
 
@@ -629,6 +668,42 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
                     aria-label={`${selectedProvider === 'claude' ? t('workspace.claude') : t('workspace.codex')} ${t('workspace.agentProviderArgs')}`}
                   />
                 </label>
+              )}
+              {selectedProvider === 'claude' && (
+                <div className="mt-5 rounded-[18px] border border-border-visible bg-bg-secondary px-4 py-4">
+                  <div className="nd-label text-text-display">{t('workspace.claudeUsageTitle')}</div>
+                  <p className="mt-2 text-sm leading-6 text-text-secondary">{t('workspace.claudeUsageDescription')}</p>
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                    <span className="text-sm text-text-secondary" role="status">
+                      {claudeStatusLineLoading
+                        ? t('workspace.claudeUsageLoading')
+                        : claudeStatusLine?.status === 'active'
+                          ? t('workspace.claudeUsageActive')
+                          : claudeStatusLine?.status === 'inactive'
+                            ? t('workspace.claudeUsageInactive')
+                            : claudeStatusLine?.status === 'chainable'
+                              ? t('workspace.claudeUsageChainable')
+                              : claudeStatusLine?.status === 'outdated'
+                                ? t('workspace.claudeUsageOutdated')
+                                : t('workspace.claudeUsageError')}
+                    </span>
+                    {claudeStatusLine?.status !== 'malformed' && claudeStatusLine?.status !== 'unsupported' && (
+                      <button
+                        type="button"
+                        className="rounded-[12px] border border-border-visible px-3 py-2 text-sm text-text-display transition-colors hover:bg-hover-bg disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={claudeStatusLineLoading || !claudeStatusLine}
+                        onClick={() => void mutateClaudeStatusLine(claudeStatusLine?.status === 'active' ? 'uninstall' : 'install')}
+                      >
+                        {claudeStatusLine?.status === 'active'
+                          ? t('workspace.claudeUsageDeactivate')
+                          : claudeStatusLine?.status === 'outdated'
+                            ? t('workspace.claudeUsageRepair')
+                            : t('workspace.claudeUsageActivate')}
+                      </button>
+                    )}
+                  </div>
+                  {claudeStatusLineMessage && <p className="mt-2 text-sm text-text-secondary" role="status">{claudeStatusLineMessage}</p>}
+                </div>
               )}
             </section>
           )}

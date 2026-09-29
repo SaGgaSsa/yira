@@ -7,6 +7,23 @@ import type { TerminalSessionIdentity } from './terminalSessionIdentity'
 /** Providers supported by Yira's agent terminal integration. */
 export type AgentProvider = 'claude' | 'codex'
 
+export type ClaudeStatusLineStateStatus = 'active' | 'inactive' | 'chainable' | 'outdated' | 'malformed' | 'unsupported'
+export type ClaudeStatusLineMutationStatus = 'installed' | 'already-installed' | 'uninstalled' | 'already-uninstalled' | 'malformed' | 'unsupported' | 'invalid' | 'conflict'
+
+export interface ClaudeStatusLineState {
+  status: ClaudeStatusLineStateStatus
+  message: string
+}
+
+export interface ClaudeStatusLineMutationResult {
+  ok: boolean
+  success: boolean
+  status: ClaudeStatusLineMutationStatus
+  changed: boolean
+  text: string
+  message: string
+}
+
 export const AGENT_PROVIDERS: readonly AgentProvider[] = ['claude', 'codex']
 
 /** Provider commands are fixed by the main process; only arguments are configurable. */
