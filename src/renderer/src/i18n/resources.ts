@@ -619,6 +619,7 @@ type TranslationResources = {
     lock: string
     unlock: string
     openMarkdownTile: string
+    openFileTile: string
     copyPath: string
     openBrowserTile: string
     copyUrl: string
@@ -1330,6 +1331,7 @@ const en: TranslationResources = {
     lock: 'Lock',
     unlock: 'Unlock',
     openMarkdownTile: 'Open in Markdown tile',
+    openFileTile: 'Open in file tile',
     copyPath: 'Copy path',
     openBrowserTile: 'Open in Browser tile',
     copyUrl: 'Copy URL',
@@ -2041,6 +2043,7 @@ const es: TranslationResources = {
     lock: 'Bloquear',
     unlock: 'Desbloquear',
     openMarkdownTile: 'Abrir en un panel Markdown',
+    openFileTile: 'Abrir en un panel de archivo',
     copyPath: 'Copiar ruta',
     openBrowserTile: 'Abrir en un panel del navegador',
     copyUrl: 'Copiar URL',

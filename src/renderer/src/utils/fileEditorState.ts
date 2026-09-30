@@ -259,3 +259,10 @@ export function fileLanguage(filePath: string): string {
   }
   return extension ? languages[extension] ?? 'plaintext' : 'plaintext'
 }
+
+export function isSourceFilePath(filePath: string): boolean {
+  const name = filePath.split(/[\\/]/).at(-1)?.toLowerCase() ?? ''
+  if (name === 'dockerfile') return true
+  const language = fileLanguage(filePath)
+  return language !== 'plaintext' && language !== 'markdown'
+}

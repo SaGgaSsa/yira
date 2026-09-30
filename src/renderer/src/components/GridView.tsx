@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { GripVertical } from 'lucide-react'
 import type { GridLayoutNode, GridLayoutSplitNode, TileState, WorkspaceConfig } from '@shared/types'
+import type { FileTileOpenOptions } from '@shared/types'
 import {
   commitGridDragAction,
   resizeGridChild,
@@ -35,7 +36,7 @@ interface GridViewProps {
   onDetachTile: (tile: TileState) => void
   onCloseTile: (tileId: string) => void
   onOpenBrowserTile: (url: string) => void
-  onOpenFileTile: (relativePath: string) => void | Promise<void>
+  onOpenFileTile: (relativePath: string, options?: FileTileOpenOptions) => void | Promise<void>
   tileCreationSelectorProps: TileCreationSelectorProps
   workspaceRootPath: string
 }

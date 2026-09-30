@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
+import type { ILinkProvider } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
@@ -15,6 +16,7 @@ import {
   type WorkspaceAttentionCounts,
 } from '@/utils/workspaceAttention'
 import { createTerminalMarkdownLinkProvider } from '@/utils/terminalMarkdownLinks'
+import { createTerminalSourceLinkProvider, resolveTerminalSourcePath } from '@/utils/terminalSourceLinks'
 import {
   getTerminalContextSelectionSnapshot,
   isTerminalCopyShortcut,
@@ -22,7 +24,7 @@ import {
   decodeOsc52ClipboardPayload,
   readTerminalPasteData,
 } from '@/utils/terminalClipboard'
-import { shouldOpenTerminalLink } from '@/utils/terminalLinkActivation'
+import { shouldInterceptTerminalLinkClick, shouldOpenTerminalLink } from '@/utils/terminalLinkActivation'
 import { getXtermTheme } from '@/utils/terminalTheme'
 import {
   createTerminalRuntime,
@@ -195,6 +197,7 @@ export function TerminalRuntimeProvider({
       state.registerTerminalCreated(target.tileId)
     }
 
+    let runtimeRootElement: HTMLDivElement | null = null
     return createTerminalRuntime({
       target,
       createOptions,
@@ -203,6 +206,7 @@ export function TerminalRuntimeProvider({
         bridge: window.electron.terminal,
         createElement: () => {
           const root = document.createElement('div')
+          runtimeRootElement = root
           root.style.width = '100%'
           root.style.height = '100%'
           root.style.overflow = 'hidden'
@@ -228,13 +232,46 @@ export function TerminalRuntimeProvider({
             else hoveredLinkTargetsRef.current.delete(key)
           }
 
+          let interceptedClick: (() => void) | null = null
+          const interceptDown = (event: MouseEvent): void => {
+            if (!shouldInterceptTerminalLinkClick({
+              button: event.button,
+              ctrlKey: event.ctrlKey,
+              metaKey: event.metaKey,
+              mouseTrackingMode: terminal.modes.mouseTrackingMode,
+              hasHoveredLink: Boolean(hoveredLinkTargetsRef.current.get(terminalRuntimeKey(target))),
+              platform: navigator.platform,
+            })) return
+            const link = hoveredLinkTargetsRef.current.get(terminalRuntimeKey(target))
+            if (!link) return
+            interceptedClick = link.activate ?? (() => {
+              if (link.kind === 'web') {
+                void window.electron.shell.openExternal(link.value).catch((error: unknown) => {
+                  console.error('[TerminalRuntime] open external failed:', getErrorMessage(error))
+                })
+              }
+            })
+            event.preventDefault()
+            event.stopPropagation()
+          }
+          const interceptUp = (event: MouseEvent): void => {
+            if (!interceptedClick) return
+            const activate = interceptedClick
+            interceptedClick = null
+            event.preventDefault()
+            event.stopPropagation()
+            activate()
+          }
+          runtimeRootElement?.addEventListener('mousedown', interceptDown, true)
+          runtimeRootElement?.addEventListener('mouseup', interceptUp, true)
+
           const webLinksAddon = new WebLinksAddon((event, url) => {
             if (!shouldOpenTerminalLink(event.button)) return
             void window.electron.shell.openExternal(url).catch((error: unknown) => {
               console.error('[TerminalRuntime] open external failed:', getErrorMessage(error))
             })
           }, {
-            hover: (_event, url) => setHoveredLinkTarget({ kind: 'web', value: url }),
+            hover: (_event, url) => setHoveredLinkTarget({ kind: 'web', value: url, activate: () => { void window.electron.shell.openExternal(url) } }),
             leave: () => {
               const current = hoveredLinkTargetsRef.current.get(terminalRuntimeKey(target))
               if (current?.kind === 'web') setHoveredLinkTarget(undefined)
@@ -247,18 +284,55 @@ export function TerminalRuntimeProvider({
             Boolean(viewOptions.workspaceRootPath.trim()) &&
             Boolean(viewOptions.onOpenFileTile)
           ) {
-            terminal.registerLinkProvider(createTerminalMarkdownLinkProvider(terminal, {
+            const markdownProvider = createTerminalMarkdownLinkProvider(terminal, {
               baseDirectory: markdownBaseDirectory,
               onActivate: (relativePath) => {
                 const runtime = registry.get(target)
                 return runtime?.openFileTile(relativePath, { markdownView: 'preview' })
               },
-              onHover: (relativePath) => setHoveredLinkTarget({ kind: 'markdown', value: relativePath }),
+              onHover: (relativePath, activate) => setHoveredLinkTarget({ kind: 'markdown', value: relativePath, activate }),
               onLeave: (relativePath) => {
                 const current = hoveredLinkTargetsRef.current.get(terminalRuntimeKey(target))
                 if (current?.kind === 'markdown' && current.value === relativePath) setHoveredLinkTarget(undefined)
               },
-            }))
+            })
+            const sourceProvider = createTerminalSourceLinkProvider(terminal, {
+              workspaceRootPath: viewOptions.workspaceRootPath,
+              baseDirectory: markdownBaseDirectory,
+              search: async (query) => (await window.electron.files.search(viewOptions.workspaceRootPath, query)).entries,
+              onActivate: async (relativePath, reveal, rawPath) => {
+                let resolvedPath = relativePath
+                const isAbsolutePath = Boolean(rawPath && (/^[a-z]:[\\/]|^\//i.test(rawPath)))
+                if (rawPath && /[\\/]/.test(rawPath) && !isAbsolutePath && markdownBaseDirectory) {
+                  const rootRelative = resolveTerminalSourcePath(rawPath)
+                  if (rootRelative && rootRelative !== relativePath) {
+                    try {
+                      const baseRead = await window.electron.files.read(viewOptions.workspaceRootPath, relativePath)
+                      if (baseRead.status === 'missing') {
+                        const rootRead = await window.electron.files.read(viewOptions.workspaceRootPath, rootRelative)
+                        if (rootRead.status === 'ready') resolvedPath = rootRelative
+                      }
+                    } catch {
+                      // Preserve the cwd candidate; openFileTile reports its normal missing-file state.
+                    }
+                  }
+                }
+                return registry.get(target)?.openFileTile(resolvedPath, { reveal })
+              },
+              onHover: (value, activate) => setHoveredLinkTarget({ kind: 'source', value, activate }),
+              onLeave: (value) => {
+                const current = hoveredLinkTargetsRef.current.get(terminalRuntimeKey(target))
+                if (current?.kind === 'source' && current.value === value) setHoveredLinkTarget(undefined)
+              },
+            })
+            const combinedProvider: ILinkProvider = {
+              provideLinks: (row, callback) => {
+                markdownProvider.provideLinks(row, (markdownLinks) => {
+                  sourceProvider.provideLinks(row, (sourceLinks) => callback([...(markdownLinks ?? []), ...(sourceLinks ?? [])]))
+                })
+              },
+            }
+            terminal.registerLinkProvider(combinedProvider)
           }
 
           terminal.attachCustomKeyEventHandler((event) => {

@@ -2,8 +2,9 @@ import type { MenuItem } from '../components/ContextMenu'
 import type { FileTileOpenOptions } from '@shared/types'
 
 export type TerminalLinkTarget =
-  | { kind: 'web'; value: string }
-  | { kind: 'markdown'; value: string }
+  | { kind: 'web'; value: string; activate?: () => void }
+  | { kind: 'markdown'; value: string; activate?: () => void }
+  | { kind: 'source'; value: string; activate?: () => void }
 
 export interface TerminalContextMenuInput {
   translate?: (key: string) => string
@@ -23,7 +24,12 @@ export interface TerminalContextMenuInput {
 export function buildTerminalContextMenuItems(input: TerminalContextMenuInput): MenuItem[] {
   const label = (key: string, fallback: string): string => input.translate?.(key) ?? fallback
   const linkTarget = input.linkTarget
-  const linkItems: MenuItem[] = linkTarget?.kind === 'markdown'
+  const linkItems: MenuItem[] = linkTarget?.kind === 'source'
+    ? [
+        { label: label('ui.openFileTile', 'Open in file tile'), action: () => { linkTarget.activate?.() } },
+        { label: label('ui.copyPath', 'Copy path'), action: () => input.onCopyLink(linkTarget.value) },
+      ]
+    : linkTarget?.kind === 'markdown'
     ? [
         {
           label: label('ui.openMarkdownTile', 'Open in Markdown tile'),

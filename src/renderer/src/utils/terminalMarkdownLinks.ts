@@ -17,7 +17,7 @@ export interface TerminalMarkdownLinkMatch {
 export interface TerminalMarkdownLinkProviderOptions {
   baseDirectory?: string
   onActivate: (relativePath: string) => void | Promise<void>
-  onHover?: (relativePath: string) => void
+  onHover?: (relativePath: string, activate: () => void) => void
   onLeave?: (relativePath: string) => void
 }
 
@@ -316,7 +316,7 @@ function createTerminalMarkdownLink(
       activateTerminalMarkdownLink(match.relativePath, options.onActivate)
     },
     hover: () => {
-      options.onHover?.(match.relativePath)
+      options.onHover?.(match.relativePath, () => activateTerminalMarkdownLink(match.relativePath, options.onActivate))
     },
     leave: () => {
       options.onLeave?.(match.relativePath)
