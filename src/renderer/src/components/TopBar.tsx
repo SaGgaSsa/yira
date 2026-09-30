@@ -3,6 +3,7 @@ import { Settings, Grid3X3, LayoutGrid, Columns, PanelLeft, PanelRight, SplitSqu
 import { useTranslation } from 'react-i18next'
 import type { AgentProvider, AgentUsageSnapshot, SplitOrientation, ViewMode, WorkspaceType } from '@shared/types'
 import { AgentUsageIndicator } from './AgentUsageIndicator'
+import { useSettingsStore } from '@/store/settingsStore'
 
 interface TopBarProps {
   hasWorkspace: boolean
@@ -98,6 +99,7 @@ export function TopBar({
   onOpenSettings,
 }: TopBarProps): React.ReactElement {
   const { t } = useTranslation()
+  const agents = useSettingsStore((state) => state.agents)
   const zoomPercent = Math.round(zoom * 100)
   const SplitIcon = splitOrientation === 'horizontal' ? SplitSquareVertical : SplitSquareHorizontal
   const isGridWorkspace = workspaceType === 'grid'
@@ -128,7 +130,7 @@ export function TopBar({
             >
               <Activity size={14} />
             </button>
-            {agentProvider && <AgentUsageIndicator provider={agentProvider} snapshot={agentUsage?.[agentProvider]} />}
+            {agentProvider && agents[agentProvider]?.enabled && <AgentUsageIndicator provider={agentProvider} snapshot={agentUsage?.[agentProvider]} />}
           </div>
 
           <div className="absolute left-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1 rounded-md border border-border-visible bg-bg-secondary px-0.5 top-1/2">

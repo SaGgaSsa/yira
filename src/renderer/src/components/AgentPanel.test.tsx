@@ -86,4 +86,4 @@ if (!source.includes('onFocusTile(session.tileId)')) throw new Error('running ca
 if (!source.includes('canResume(item.provider)')) throw new Error('resume must gate the selected provider before creating a tile')
 if (!source.includes('resumeDisabled={!canResume(item.provider)}')) throw new Error('unavailable providers must disable resume actions')
 if (!source.includes('}, [historySearch, workspaceId, selectedProvider])')) throw new Error('search changes must invalidate in-flight history requests')
-if (!workspacePanelSource.includes('key={`${workspaceId}:${agentProvider ?? \'none\'}`}')) throw new Error('Agents panel must remount when its workspace provider scope changes')
+if (!workspacePanelSource.includes('key={`${workspaceId}:${effectiveAgentProvider ?? \'none\'}`}')) throw new Error('Agents panel must remount when its workspace provider scope changes')

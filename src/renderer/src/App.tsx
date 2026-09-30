@@ -29,6 +29,7 @@ import { useCanvasActions } from './hooks/useCanvasActions'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useTheme } from './hooks/useTheme'
 import { useFontSize } from './hooks/useFontSize'
+import { resolveSidebarCollapsedForActivity } from './utils/emptyWorkspaceView'
 import { useUpdateStore } from './store/updateStore'
 import { findMergeTargetGroup, getGroupingBlockedReason } from './utils/grouping'
 import { GRID_MAX_TILES, GROUP_COLOR_ORDER, getDefaultTileSize, type AgentUsageSnapshot, type BoardState, type BoardTask, type FileTileOpenOptions, type TileState, type CanvasState, type GridWorkspaceState, type Workspace, type WorkspaceMetadata, type TileGroup, type ViewMode, type SplitPanelId, type SplitViewState, type WorkspaceManagementEntry, type WorkspaceType } from '@shared/types'
@@ -301,6 +302,7 @@ function AppContent(): React.ReactElement {
   const updateProgressPercent = useUpdateStore((s) => s.progressPercent)
   const updateMessage = useUpdateStore((s) => s.message)
   const installUpdate = useUpdateStore((s) => s.installUpdate)
+  const agentSettings = useSettingsStore((s) => s.agents)
   const groupsEnabled = useSettingsStore((s) => s.groups.enabled)
   const terminalAttentionEnabled = useSettingsStore((s) => s.terminal.attentionEnabled)
   const tileCreationAvailability = useSettingsStore((s) => s.tiles.creationAvailability)
@@ -419,6 +421,8 @@ function AppContent(): React.ReactElement {
   const [showJsonEditor, setShowJsonEditor] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [activityOpen, setActivityOpen] = useState(false)
+  const sidebarBeforeActivityRef = useRef(false)
+  const previousActivityOpenRef = useRef(false)
   const [groupEditor, setGroupEditor] = useState<GroupEditorState>(null)
   const [workspaceEditor, setWorkspaceEditor] = useState<WorkspaceEditorState>(null)
   const [tileEditor, setTileEditor] = useState<TileEditorState>(null)
@@ -437,6 +441,14 @@ function AppContent(): React.ReactElement {
   const prevZoomRef = useRef(1)
   const footerRef = useRef<HTMLDivElement | null>(null)
   const fileTileOpenRequestsRef = useRef(createFileTileOpenRequestTracker())
+
+  useEffect(() => {
+    const wasOpen = previousActivityOpenRef.current
+    if (activityOpen && !wasOpen) sidebarBeforeActivityRef.current = sidebarCollapsed
+    const resolved = resolveSidebarCollapsedForActivity(wasOpen, activityOpen, sidebarCollapsed, sidebarBeforeActivityRef.current)
+    previousActivityOpenRef.current = activityOpen
+    if (resolved.collapsed !== sidebarCollapsed) setSidebarCollapsed(resolved.collapsed)
+  }, [activityOpen])
 
   const deleteTile = useCallback(async (tileId: string): Promise<boolean> => {
     const isGridWorkspace = useCanvasStore.getState().activeWorkspaceConfig.type === 'grid'
@@ -2489,6 +2501,8 @@ function AppContent(): React.ReactElement {
                   workspaces={workspaceMetadata}
                   onOpenWorkspace={openActivityWorkspace}
                   onGoToTerminal={goToWorkspaceTerminal}
+                  onOpenSettings={openSettings}
+                  agents={agentSettings}
                 />
               )}
             </div>
@@ -2499,6 +2513,8 @@ function AppContent(): React.ReactElement {
               workspaces={workspaceMetadata}
               onOpenWorkspace={openActivityWorkspace}
               onGoToTerminal={goToWorkspaceTerminal}
+              onOpenSettings={openSettings}
+              agents={agentSettings}
             />
           ) : (
             <div className="flex flex-1 items-center justify-center bg-bg-primary" />

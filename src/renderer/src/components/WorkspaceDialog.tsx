@@ -4,6 +4,8 @@ import { ExternalLink, FolderOpen, GitBranch, Grid3X3, History, Info, LayoutGrid
 import { useTranslation } from 'react-i18next'
 import type { AgentProvider, AgentProvidersConfig, ClaudeStatusLineState, GitRepository, RemoteTerminalConfig, WakeOnLanConfig, WorkspaceType } from '@shared/types'
 import { normalizeAgentProvidersConfig, normalizeWorkspaceAgentProvider } from '@shared/workspaceConfig'
+import { useSettingsStore } from '@/store/settingsStore'
+import { getEffectiveAgentProvider } from '@/utils/effectiveAgent'
 
 export interface WorkspaceDialogValue {
   type: WorkspaceType
@@ -105,6 +107,7 @@ type WorkspaceDialogTabId = 'general' | 'terminal' | 'agents' | 'sourceControl'
 
 export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialogProps): React.ReactElement | null {
   const { t } = useTranslation()
+  const agents = useSettingsStore((state) => state.agents)
   const nameInputRef = useRef<HTMLInputElement | null>(null)
   const [value, setValue] = useState<WorkspaceDialogValue | null>(request?.value ?? null)
   const [showRemoteHelp, setShowRemoteHelp] = useState(false)
@@ -232,10 +235,10 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
   const typeEditable = request.typeEditable === true
   const providerOptions: Array<{ provider: AgentProvider | undefined; label: string }> = [
     { provider: undefined, label: t('workspace.noAgentProvider') },
-    { provider: 'claude', label: t('workspace.claude') },
-    { provider: 'codex', label: t('workspace.codex') },
+    ...(agents.claude.enabled ? [{ provider: 'claude' as const, label: t('workspace.claude') }] : []),
+    ...(agents.codex.enabled ? [{ provider: 'codex' as const, label: t('workspace.codex') }] : []),
   ]
-  const selectedProvider = value.agentProvider
+  const selectedProvider = getEffectiveAgentProvider(value, agents)
 
   const tabs: Array<{ id: WorkspaceDialogTabId; label: string }> = [
     { id: 'general', label: t('workspace.general') },

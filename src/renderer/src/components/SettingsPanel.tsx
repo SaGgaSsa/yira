@@ -4,16 +4,20 @@ import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
-import { X, Monitor, Moon, Sun, Type, Grid3X3, Globe, Code2, Info, RefreshCw, Download, LayoutGrid, Keyboard, Terminal, ExternalLink, FileText } from 'lucide-react'
+import {
+  X, Monitor, Moon, Sun, Type, Grid3X3, Globe, Code2, Info, RefreshCw, Download,
+  LayoutGrid, Keyboard, Terminal, ExternalLink, FileText, Bot,
+} from 'lucide-react'
 import { createUserSettingsDraft, useSettingsStore } from '@/store/settingsStore'
 import { useUpdateStore } from '@/store/updateStore'
 import { SHORTCUT_CATALOG } from '@/utils/shortcutCatalog'
-import type { UpdateState, UserSettings, WindowBackgroundMaterial } from '@shared/types'
+import type { AgentDetectionSnapshot, AgentProvider, UpdateState, UserSettings, WindowBackgroundMaterial } from '@shared/types'
 import { DEFAULT_USER_SETTINGS } from '@shared/types'
 import type { TerminalThemeId } from '@shared/terminalThemes'
 import { TERMINAL_THEMES } from '@shared/terminalThemes'
 import { MAX_FONT_SIZE_PX, MIN_FONT_SIZE_PX } from '@shared/userSettings'
 import { LegalDocuments, type LegalDocumentId } from './LegalDocuments'
+import { agentProviderDetails } from './AgentUsageIndicator'
 
 export type SettingsSectionId =
   | 'appearance'
@@ -21,6 +25,7 @@ export type SettingsSectionId =
   | 'canvas'
   | 'tiles'
   | 'terminal'
+  | 'agents'
   | 'shortcuts'
   | 'browser'
   | 'advanced'
@@ -44,6 +49,7 @@ const SETTINGS_SECTIONS: Array<{
   { id: 'canvas', icon: Grid3X3 },
   { id: 'tiles', icon: LayoutGrid },
   { id: 'terminal', icon: Terminal },
+  { id: 'agents', icon: Bot },
   { id: 'shortcuts', icon: Keyboard },
   { id: 'browser', icon: Globe },
   { id: 'advanced', icon: Code2 },
@@ -104,10 +110,26 @@ function getShortcutItemLabel(t: TFunction, label: string): string {
   }
 }
 
+function getSectionLabel(t: TFunction, id: SettingsSectionId): string {
+  switch (id) {
+    case 'appearance': return t('settings.appearance')
+    case 'density': return t('settings.fontSize')
+    case 'canvas': return t('settings.canvas')
+    case 'tiles': return t('settings.tiles')
+    case 'terminal': return t('settings.terminal')
+    case 'agents': return t('settings.agents')
+    case 'shortcuts': return t('settings.shortcuts')
+    case 'browser': return t('settings.browser')
+    case 'advanced': return t('settings.advanced')
+    case 'about': return t('settings.aboutAndUpdates')
+  }
+}
+
 export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection = 'appearance' }: SettingsPanelProps): React.ReactElement {
   const { t } = useTranslation()
   const [activeSection, setActiveSection] = useState<SettingsSectionId>('appearance')
-  const [agentHookMessage, setAgentHookMessage] = useState('')
+  const [agentHookMessages, setAgentHookMessages] = useState<Partial<Record<AgentProvider, string>>>({})
+  const [agentDetection, setAgentDetection] = useState<AgentDetectionSnapshot | null>(null)
   const [draft, setDraft] = useState<UserSettings>(() => createUserSettingsDraft(useSettingsStore.getState()))
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
@@ -134,6 +156,10 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
   const attentionDelayEnabled = draft.notifications.attentionDelayEnabled
   const tileCreationAvailability = draft.tiles.creationAvailability
   const groupsEnabled = draft.groups.enabled
+  const setAgentEnabled = (provider: AgentProvider, enabled: boolean) => setDraft((current) => ({
+    ...current,
+    agents: { ...current.agents, [provider]: { enabled } },
+  }))
   const setAppearance = (appearance: UserSettings['appearance']) => setDraft((current) => ({ ...current, appearance }))
   const setLanguage = (language: UserSettings['language']) => setDraft((current) => ({ ...current, language }))
   const setInterfaceFontSizePx = (interfaceFontSizePx: number) => setDraft((current) => ({ ...current, interfaceFontSizePx }))
@@ -206,6 +232,11 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
       .then((state) => setBackgroundMaterialSupported(state.supported))
       .catch(() => setBackgroundMaterialSupported(['none']))
   }, [initialSection, open])
+
+  useEffect(() => {
+    if (!open) return
+    void window.electron.agents.detect().then(setAgentDetection).catch(() => setAgentDetection(null))
+  }, [open])
 
   useEffect(() => {
     const documentToRestore = restoreLegalDocumentFocusRef.current
@@ -457,6 +488,126 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
       )
     }
 
+    if (activeSection === 'agents') {
+      return (
+        <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
+          <div className="mb-5 flex items-center gap-3">
+            <Bot size={16} className="text-text-secondary" />
+            <div>
+              <div className="nd-label text-text-secondary">{t('settings.agents')}</div>
+              <h3 className="mt-1 text-xl text-text-display">{t('settings.agentIntegrations')}</h3>
+            </div>
+          </div>
+          <div className="space-y-3">
+            <label className="flex items-center justify-between gap-4 rounded-[20px] border border-border-visible bg-bg-primary px-4 py-4">
+              <span>
+                <span className="nd-label block text-text-display">{t('settings.agentAlerts')}</span>
+                <span className="mt-2 block text-sm leading-6 text-text-secondary">
+                  {t('settings.agentAlertsDescription')}
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                checked={agentAlertsEnabled}
+                onChange={(event) => setAgentAlertsEnabled(event.target.checked)}
+              />
+            </label>
+            {(['claude', 'codex'] as const).map((provider) => {
+              const detection = agentDetection?.[provider]
+              const enabled = draft.agents[provider].enabled
+              const busy = !detection?.installed && !enabled
+              const mutateHooks = async (operation: 'install' | 'uninstall') => {
+                try {
+                  const result = operation === 'install'
+                    ? await window.electron.settings.configureAgentHooks(provider)
+                    : await window.electron.settings.uninstallAgentHooks(provider)
+                  setAgentHookMessages((messages) => ({ ...messages, [provider]: result.message }))
+                  setAgentDetection(await window.electron.agents.detect())
+                } catch (error) {
+                  setAgentHookMessages((messages) => ({ ...messages, [provider]: String(error) }))
+                }
+              }
+              return (
+                <article
+                  key={provider}
+                  className="rounded-[20px] border border-border-visible bg-bg-primary px-4 py-4"
+                >
+                  <div className="flex items-center gap-3">
+                    <img
+                      className="size-7 object-contain"
+                      src={agentProviderDetails[provider].logoPath}
+                      alt=""
+                      aria-hidden="true"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <h4 className="nd-label text-text-display">
+                        {agentProviderDetails[provider].label}
+                      </h4>
+                      <p className="mt-1 text-xs text-text-secondary">
+                        {detection
+                          ? detection.installed
+                            ? t('settings.agentInstalled', {
+                              path: provider === 'claude' ? '~/.claude' : '~/.codex',
+                            })
+                            : t('settings.agentNotInstalled')
+                          : t('settings.agentDetecting')}
+                      </p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      aria-label={`${agentProviderDetails[provider].label} ${t('settings.enableAgent')}`}
+                      checked={enabled}
+                      disabled={busy}
+                      onChange={(event) => setAgentEnabled(provider, event.target.checked)}
+                    />
+                  </div>
+                  {enabled ? (
+                    <div className="mt-4 border-t border-border pt-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="mr-auto text-sm text-text-secondary">
+                          {t('settings.yiraHooks')}: {detection?.hooksInstalled
+                            ? t('settings.hooksInstalled')
+                            : t('settings.hooksMissing')}
+                        </span>
+                        <button
+                          type="button"
+                          className="rounded-full border border-border-visible px-3 py-1.5 text-xs text-text-display"
+                          onClick={() => void mutateHooks('install')}
+                        >
+                          {detection?.hooksInstalled ? t('settings.repair') : t('settings.install')}
+                        </button>
+                        {detection?.hooksInstalled && (
+                          <button
+                            type="button"
+                            className="rounded-full border border-border-visible px-3 py-1.5 text-xs text-text-secondary"
+                            onClick={() => void mutateHooks('uninstall')}
+                          >
+                            {t('settings.uninstall')}
+                          </button>
+                        )}
+                      </div>
+                      {provider === 'codex' && (
+                        <p className="mt-2 text-xs text-text-secondary">
+                          {t('settings.codexHooksHelp')}
+                        </p>
+                      )}
+                      {agentHookMessages[provider] && (
+                        <p className="mt-2 text-xs text-text-secondary" role="status">
+                          {agentHookMessages[provider]}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-sm text-text-secondary">{t('settings.agentDisabled')}</p>
+                  )}
+                </article>
+              )
+            })}
+          </div>
+        </section>
+      )
+    }
+
     if (activeSection === 'advanced') {
       return (
         <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
@@ -478,32 +629,6 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
                 type="checkbox"
                 checked={updateDiagnosticsEnabled}
                 onChange={(event) => setUpdateDiagnosticsEnabled(event.target.checked)}
-              />
-            </label>
-
-            <div className="rounded-[20px] border border-border-visible bg-bg-primary px-4 py-4">
-              <span className="nd-label block text-text-display">{t('settings.agentHookSetup')}</span>
-              <p className="mt-2 text-sm leading-6 text-text-secondary">{t('settings.agentHookSetupDescription')}</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {(['codex', 'claude'] as const).map((provider) => (
-                  <React.Fragment key={provider}>
-                    <button className="rounded-full border border-border-visible px-3 py-2 text-xs text-text-display" onClick={() => void window.electron.settings.configureAgentHooks(provider).then((result) => setAgentHookMessage(result.message)).catch((error: unknown) => setAgentHookMessage(String(error)))}>{t('settings.configure')} {provider === 'codex' ? 'Codex' : 'Claude'}</button>
-                    <button className="rounded-full border border-border-visible px-3 py-2 text-xs text-text-secondary" onClick={() => void window.electron.settings.uninstallAgentHooks(provider).then((result) => setAgentHookMessage(result.message)).catch((error: unknown) => setAgentHookMessage(String(error)))}>{t('settings.uninstall')} {provider === 'codex' ? 'Codex' : 'Claude'}</button>
-                  </React.Fragment>
-                ))}
-              </div>
-              {agentHookMessage && <p className="mt-3 text-sm text-text-secondary">{agentHookMessage}</p>}
-            </div>
-
-            <label className="flex items-center justify-between gap-4 rounded-[20px] border border-border-visible bg-bg-primary px-4 py-4">
-              <span>
-                <span className="nd-label block text-text-display">{t('settings.agentAlerts')}</span>
-                <span className="mt-2 block text-sm leading-6 text-text-secondary">{t('settings.agentAlertsDescription')}</span>
-              </span>
-              <input
-                type="checkbox"
-                checked={agentAlertsEnabled}
-                onChange={(event) => setAgentAlertsEnabled(event.target.checked)}
               />
             </label>
 
@@ -867,7 +992,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
                     }}
                   >
                     <Icon size={15} className={isActive ? 'text-text-display' : 'text-text-secondary'} />
-                    <span className="nd-label">{id === 'appearance' ? t('settings.appearance') : id === 'density' ? t('settings.fontSize') : id === 'canvas' ? t('settings.canvas') : id === 'tiles' ? t('settings.tiles') : id === 'terminal' ? t('settings.terminal') : id === 'shortcuts' ? t('settings.shortcuts') : id === 'browser' ? t('settings.browser') : id === 'advanced' ? t('settings.advanced') : t('settings.aboutAndUpdates')}</span>
+                    <span className="nd-label">{getSectionLabel(t, id)}</span>
                   </button>
                 )
               })}

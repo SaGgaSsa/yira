@@ -11,6 +11,8 @@ import type {
   GitFileChange,
 } from '@shared/types'
 import { AgentPanel } from './AgentPanel'
+import { useSettingsStore } from '@/store/settingsStore'
+import { getEffectiveAgentProvider } from '@/utils/effectiveAgent'
 import { WorkspaceExplorer } from './WorkspaceExplorer'
 import { WorkspaceSourceControl } from './WorkspaceSourceControl'
 import { useSidePanelWidth } from '@/hooks/useSidePanelWidth'
@@ -54,6 +56,8 @@ export function WorkspacePanel({
   onFocusTile,
   onOpenWorkspaceSettings,
 }: WorkspacePanelProps): React.ReactElement {
+  const agents = useSettingsStore((state) => state.agents)
+  const effectiveAgentProvider = getEffectiveAgentProvider({ agentProvider }, agents)
   const [width, setWidth] = useSidePanelWidth()
   const [resizing, setResizing] = useState(false)
   const [tab, setTab] = useState<WorkspacePanelTab>('explorer')
@@ -114,9 +118,9 @@ export function WorkspacePanel({
         {tab === 'explorer' && <WorkspaceExplorer rootPath={rootPath} activeFilePath={activeFilePath} onOpenFile={onOpenFile} />}
         {tab === 'agents' && (
           <AgentPanel
-            key={`${workspaceId}:${agentProvider ?? 'none'}`}
+            key={`${workspaceId}:${effectiveAgentProvider ?? 'none'}`}
             workspaceId={workspaceId}
-            selectedProvider={agentProvider}
+            selectedProvider={effectiveAgentProvider}
             agentProviders={agentProviders}
             availableProfiles={availableProfiles}
             tiles={tiles}
