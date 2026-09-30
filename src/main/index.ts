@@ -3,7 +3,7 @@ import { join } from 'path'
 import { existsSync } from 'fs'
 import { mkdir, writeFile } from 'fs/promises'
 import { is } from '@electron-toolkit/utils'
-import { getConfiguredAgentProviders, getWorkspaceRootFolders, initWorkspaces, registerWorkspaceIPC } from './ipc/workspace'
+import { getWorkspaceRootFolders, initWorkspaces, registerWorkspaceIPC } from './ipc/workspace'
 import { registerCanvasIPC } from './ipc/canvas'
 import {
   registerTerminalIPC,
@@ -14,7 +14,7 @@ import {
   stopTerminalDaemonForUpdate,
   countRunningTerminalSessions,
 } from './ipc/terminal'
-import { loadStoredUserSettings, registerSettingsIPC } from './ipc/settings'
+import { getEnabledAgentProviders, loadStoredUserSettings, registerSettingsIPC } from './ipc/settings'
 import { registerNotesIPC } from './ipc/notes'
 import { registerBoardsIPC } from './ipc/boards'
 import { registerFilesIPC } from './ipc/files'
@@ -25,6 +25,7 @@ import { registerFloatingTilesIPC } from './ipc/floatingTiles'
 import { registerAgentsIPC } from './ipc/agents'
 import { AgentUsageService } from './agentUsage'
 import { AgentUsageDetailsService } from './agentUsageDetails'
+import { AgentUsageIndex } from './agentUsageIndex'
 import { readClaudeUsageStatusLinePayload } from './claudeUsageStatusLinePayload'
 import { APP_ID, APP_NAME, DEV_APP_NAME, YIRA_HOME } from './paths'
 import { isWindowsUpdateInstallPending, registerUpdateIPC, scheduleStartupUpdateCheck } from './updater'
@@ -243,9 +244,10 @@ app.whenReady().then(async () => {
 
   // Ensure app dirs
   await initWorkspaces()
+  await loadStoredUserSettings()
 
   const agentUsageService = new AgentUsageService({
-    getConfiguredProviders: getConfiguredAgentProviders,
+    getConfiguredProviders: async () => getEnabledAgentProviders(),
     providerReaders: {
       claude: async () => {
         const payload = await readClaudeUsageStatusLinePayload()
@@ -262,8 +264,9 @@ app.whenReady().then(async () => {
   })
   const agentUsageDetailsService = new AgentUsageDetailsService({
     getWorkspaces: getWorkspaceRootFolders,
-    getConfiguredProviders: getConfiguredAgentProviders,
+    getConfiguredProviders: async () => getEnabledAgentProviders(),
   })
+  const agentUsageIndex = new AgentUsageIndex()
   void agentUsageService.start().catch(() => undefined)
 
   // Detect available shells
@@ -271,13 +274,16 @@ app.whenReady().then(async () => {
 
   // Register all IPC handlers
   registerWorkspaceIPC({ beforeDelete: destroyWorkspaceTerminalSessions })
-  registerAgentsIPC({ usageService: agentUsageService, usageDetailsService: agentUsageDetailsService })
+  registerAgentsIPC({ usageService: agentUsageService, usageDetailsService: agentUsageDetailsService, usageIndex: agentUsageIndex, enabledProviders: async () => getEnabledAgentProviders(), workspaces: getWorkspaceRootFolders })
   registerCanvasIPC()
   registerTerminalIPC()
   void hydrateTerminalSessions().catch((error) => {
     console.warn('[main] terminal session hydration failed:', error instanceof Error ? error.message : String(error))
   })
-  registerSettingsIPC()
+  registerSettingsIPC({ onSave: () => {
+    agentUsageDetailsService.invalidate()
+    void agentUsageService.refresh()
+  } })
   registerNotesIPC()
   registerBoardsIPC()
   registerFilesIPC()

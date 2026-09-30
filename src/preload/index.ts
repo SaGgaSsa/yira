@@ -1,7 +1,7 @@
 import type { AppThemeId } from '@shared/appThemes'
 import type { WindowBackgroundMaterial, WindowBackgroundMaterialState } from '@shared/types'
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AgentActiveSessionSnapshot, AgentProviderAvailabilitySnapshot, AgentSessionHistoryQuery, AgentSessionHistoryResult, AgentUsageDetailsSnapshot, AgentUsageSnapshot, BoardTask, FileListOptions, FileSearchResult, FileWriteInput, FloatingNavigationEvent, FloatingNavigationRequest, GitCommitHistoryResult, GitFileDiffContent, GitRepository, GitStatusResult, NotificationAttentionOptions, RemotePreparationResult, RemotePreparationStatus, TerminalCreateOptions, TerminalCreateResult, TerminalExitEvent, UpdateState, WindowBounds, WindowClosePreparationRequest, WindowClosePreparationResponse, Workspace, WorkspaceCreateInput, WorkspaceGitDiffResult, WorkspaceManagementCommitInput, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
+import type { AgentActiveSessionSnapshot, AgentDetectionSnapshot, AgentProviderAvailabilitySnapshot, AgentSessionHistoryQuery, AgentSessionHistoryResult, AgentUsageDetailsSnapshot, AgentUsageHistoryRequest, AgentUsageHistorySnapshot, AgentUsageSnapshot, BoardTask, FileListOptions, FileSearchResult, FileWriteInput, FloatingNavigationEvent, FloatingNavigationRequest, GitCommitHistoryResult, GitFileDiffContent, GitRepository, GitStatusResult, NotificationAttentionOptions, RemotePreparationResult, RemotePreparationStatus, TerminalCreateOptions, TerminalCreateResult, TerminalExitEvent, UpdateState, WindowBounds, WindowClosePreparationRequest, WindowClosePreparationResponse, Workspace, WorkspaceCreateInput, WorkspaceGitDiffResult, WorkspaceManagementCommitInput, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
 import { createSerialTaskQueue } from '@shared/serialTaskQueue'
 import {
   terminalSessionDataChannel,
@@ -51,6 +51,8 @@ contextBridge.exposeInMainWorld('electron', {
     },
     usageSnapshot: () => ipcRenderer.invoke('agents:usage:snapshot') as Promise<AgentUsageSnapshot | null>,
     usageDetails: () => ipcRenderer.invoke('agents:usage:details') as Promise<AgentUsageDetailsSnapshot | null>,
+    usageHistory: (request: AgentUsageHistoryRequest) => ipcRenderer.invoke('agents:usage:history', request) as Promise<AgentUsageHistorySnapshot | null>,
+    detect: () => ipcRenderer.invoke('agents:detect') as Promise<AgentDetectionSnapshot>,
     onUsageChanged: (callback: (snapshot: AgentUsageSnapshot) => void) => {
       const handler = (_event: unknown, snapshot: AgentUsageSnapshot) => callback(snapshot)
       ipcRenderer.on('agents:usage:changed', handler)

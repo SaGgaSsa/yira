@@ -1,14 +1,24 @@
 import { randomUUID } from 'node:crypto'
+import { promises as fs } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { BrowserWindow, ipcMain, type WebContents } from 'electron'
 import type {
   AgentProviderAvailabilitySnapshot,
+  AgentProvider,
   AgentSessionHistoryResult,
   AgentActiveSessionSnapshot,
   AgentUsageSnapshot,
   AgentUsageDetailsSnapshot,
+  AgentUsageHistoryRequest,
+  AgentUsageHistorySnapshot,
+  AgentDetectionSnapshot,
 } from '@shared/types'
 import type { AgentUsageService } from '../agentUsage'
 import type { AgentUsageDetailsService } from '../agentUsageDetails'
+import type { AgentUsageIndex } from '../agentUsageIndex'
+import { hasManagedAgentHooks } from '../agentHookConfiguration'
+import { getAgentHomeDirectory } from '../agents/providers'
 import { agentSessionRegistry, type AgentSessionRegistry } from '../agents/registry'
 import { readAgentSessionHistory } from '../agents/history'
 import { getAgentProviderAvailability } from '../agents/providers'
@@ -39,6 +49,9 @@ export interface AgentIPCOptions {
   }) => Promise<AgentSessionHistoryResult>
   usageService?: Pick<AgentUsageService, 'getSnapshot' | 'refresh' | 'subscribe'>
   usageDetailsService?: Pick<AgentUsageDetailsService, 'getSnapshot'>
+  usageIndex?: Pick<AgentUsageIndex, 'getHistory'>
+  enabledProviders?: () => Promise<AgentProvider[]>
+  workspaces?: () => Promise<Array<{ id: string; rootFolderPath: string }>>
 }
 
 const subscriptions = new Map<number, AgentSubscription>()
@@ -108,8 +121,25 @@ export function registerAgentsIPC(options: AgentIPCOptions = {}): void {
   const availability = options.availability ?? (() => getAgentProviderAvailability())
   const usageService = options.usageService
   const usageDetailsService = options.usageDetailsService
+  const usageIndex = options.usageIndex
 
   ipcMain.handle('agents:availability', async (): Promise<AgentProviderAvailabilitySnapshot> => availability())
+  ipcMain.handle('agents:detect', async (): Promise<AgentDetectionSnapshot> => {
+    const home = homedir()
+    const result = {} as AgentDetectionSnapshot
+    for (const provider of ['claude', 'codex'] as const) {
+      const root = getAgentHomeDirectory(provider, home)
+      let installed = false
+      let hooksInstalled = false
+      try { installed = (await fs.stat(root)).isDirectory() } catch { /* absent */ }
+      try {
+        const hookPath = join(root, provider === 'claude' ? 'settings.json' : 'hooks.json')
+        hooksInstalled = hasManagedAgentHooks(await fs.readFile(hookPath, 'utf8'), provider)
+      } catch { /* absent or unreadable */ }
+      result[provider] = { installed, hooksInstalled }
+    }
+    return result
+  })
   ipcMain.handle('agents:usage:snapshot', async (): Promise<AgentUsageSnapshot | null> => {
     await usageService?.refresh()
     return usageService?.getSnapshot() ?? null
@@ -120,6 +150,14 @@ export function registerAgentsIPC(options: AgentIPCOptions = {}): void {
     } catch {
       return null
     }
+  })
+  ipcMain.handle('agents:usage:history', async (_event, request: AgentUsageHistoryRequest): Promise<AgentUsageHistorySnapshot | null> => {
+    try {
+      if (!usageIndex || !request || !['today', '7d', '30d'].includes(request.period)) return null
+      const enabled = await (options.enabledProviders?.() ?? Promise.resolve(['claude', 'codex'] as AgentProvider[]))
+      const workspaces = await (options.workspaces?.() ?? Promise.resolve([]))
+      return await usageIndex.getHistory(request, enabled, workspaces)
+    } catch { return null }
   })
   usageService?.subscribe(broadcastUsageSnapshot)
 

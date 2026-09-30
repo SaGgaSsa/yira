@@ -150,6 +150,23 @@ export const uninstallCodexHooks = uninstallCodexHookConfiguration
 export const installClaudeHooks = installClaudeHookConfiguration
 export const uninstallClaudeHooks = uninstallClaudeHookConfiguration
 
+/** Detect any intact Yira-managed hook by its ownership markers; performs no I/O. */
+export function hasManagedAgentHooks(text: string, provider: AgentHookProvider): boolean {
+  const parsed = parseHookConfiguration(text, provider)
+  if (!parsed.ok) return false
+  const hooks = parsed.value.hooks
+  if (!isJsonObject(hooks)) return false
+  const keys = provider === 'codex' ? CODEX_HOOK_SPECS.map((spec) => spec.event) : ['Notification']
+  return keys.some((key) => {
+    const entries = hooks[key]
+    return Array.isArray(entries) && entries.some((entry) => {
+      if (!isJsonObject(entry) || !Array.isArray(entry.hooks)) return false
+      return entry.hooks.some((hook) => isJsonObject(hook) && typeof hook.command === 'string' &&
+        readManagedProvider(hook.command) === provider && readManagedIdentity(hook.command) !== null)
+    })
+  })
+}
+
 interface EventPlan {
   readonly key: string
   readonly spec: CodexHookSpec | ClaudeHookSpec

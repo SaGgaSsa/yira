@@ -70,7 +70,7 @@ test('declares the agent bridge and registers it from main', async () => {
   assert.match(preload, /AgentSessionHistoryResult/)
   assert.match(preload, /subscribeSessions:[\s\S]*Promise<string \| false>/)
   assert.match(preload, /unsubscribeSessions: \(token: string\)/)
-  assert.match(main, /registerAgentsIPC\(\{ usageService: agentUsageService, usageDetailsService: agentUsageDetailsService \}\)/)
+  assert.match(main, /registerAgentsIPC\(\{ usageService: agentUsageService, usageDetailsService: agentUsageDetailsService, usageIndex: agentUsageIndex,/)
 })
 
 type IpcHandler = (event: { sender: FakeWebContents }, ...args: unknown[]) => unknown

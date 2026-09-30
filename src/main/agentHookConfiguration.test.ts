@@ -5,12 +5,18 @@ import {
   CLAUDE_HOOK_SPECS,
   CODEX_HOOK_SPECS,
   installClaudeHookConfiguration,
+  hasManagedAgentHooks,
   installCodexHookConfiguration,
   uninstallClaudeHookConfiguration,
   uninstallCodexHookConfiguration,
 } from './agentHookConfiguration'
 
 const clientCommand = '/opt/yira/resources/agent-hook-client.mjs'
+
+test('managed hook detection is read-only and identifies Yira markers', () => {
+  assert.equal(hasManagedAgentHooks(installClaudeHookConfiguration('{}', clientCommand).text, 'claude'), true)
+  assert.equal(hasManagedAgentHooks('{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"other"}]}]}}', 'codex'), false)
+})
 
 function parse(text: string): Record<string, any> {
   return JSON.parse(text) as Record<string, any>

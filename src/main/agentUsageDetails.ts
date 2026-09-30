@@ -208,6 +208,11 @@ export class AgentUsageDetailsService {
     return operation
   }
 
+  invalidate(): void {
+    this.snapshot = null
+    this.cachedAt = 0
+  }
+
   private async readSnapshot(): Promise<AgentUsageDetailsSnapshot> {
     const now = this.now()
     const start = localStart(now)

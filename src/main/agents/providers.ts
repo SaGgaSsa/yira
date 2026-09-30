@@ -47,10 +47,14 @@ export function isValidResumeId(value: unknown): value is string {
   return normalizeResumeId(value) !== null
 }
 
-function providerRoot(provider: AgentProvider, homeDirectory: string): string {
+export function getAgentHomeDirectory(provider: AgentProvider, homeDirectory = homedir()): string {
   return provider === 'claude'
-    ? join(homeDirectory, '.claude', 'projects')
-    : join(homeDirectory, '.codex', 'sessions')
+    ? process.env.CLAUDE_CONFIG_DIR || join(homeDirectory, '.claude')
+    : process.env.CODEX_HOME || join(homeDirectory, '.codex')
+}
+
+function providerRoot(provider: AgentProvider, homeDirectory: string): string {
+  return join(getAgentHomeDirectory(provider, homeDirectory), provider === 'claude' ? 'projects' : 'sessions')
 }
 
 function pathEntries(command: string, options: InstalledCommandOptions): string[] {

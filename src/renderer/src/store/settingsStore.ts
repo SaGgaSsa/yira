@@ -36,6 +36,7 @@ const autosaveTimer = { current: null as ReturnType<typeof setTimeout> | null }
 
 export function createUserSettingsDraft(settings: UserSettings): UserSettings {
   return {
+    agents: { claude: { ...settings.agents.claude }, codex: { ...settings.agents.codex } },
     language: settings.language,
     themeId: settings.themeId,
     appearance: settings.appearance,
@@ -62,6 +63,7 @@ function scheduleSave() {
   autosaveTimer.current = setTimeout(() => {
     const state = useSettingsStore.getState()
     const settings: UserSettings = {
+      agents: { claude: { ...state.agents.claude }, codex: { ...state.agents.codex } },
       language: state.language,
       themeId: state.themeId,
       appearance: state.appearance,
@@ -272,6 +274,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   saveSettings: () => {
     const state = get()
     const settings: UserSettings = {
+      agents: { claude: { ...state.agents.claude }, codex: { ...state.agents.codex } },
       language: state.language,
       themeId: state.themeId,
       appearance: state.appearance,

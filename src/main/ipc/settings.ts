@@ -1,20 +1,28 @@
 import { app, ipcMain } from 'electron'
 import { promises as fs } from 'fs'
+import { existsSync } from 'fs'
 import { join } from 'path'
 import { homedir } from 'os'
 import { is } from '@electron-toolkit/utils'
 import { YIRA_HOME } from '../paths'
-import type { ClaudeStatusLineMutationResult, ClaudeStatusLineState, UserSettings } from '@shared/types'
+import type { AgentProvider, ClaudeStatusLineMutationResult, ClaudeStatusLineState, UserSettings } from '@shared/types'
 import { normalizeUserSettings } from '@shared/userSettings'
 import { resolveSupportedLanguage } from '@shared/language'
 import { installClaudeHookConfiguration, installCodexHookConfiguration, uninstallClaudeHookConfiguration, uninstallCodexHookConfiguration, type AgentHookProvider } from '../agentHookConfiguration'
 import { getClaudeStatusLineState, installClaudeStatusLine, uninstallClaudeStatusLine } from '../claudeStatusLineConfiguration'
 import { setMainLanguage } from '../i18n'
+import { getAgentHomeDirectory } from '../agents/providers'
 
 const SETTINGS_PATH = join(YIRA_HOME, 'settings.json')
+let currentSettings: UserSettings | null = null
+
+export function getEnabledAgentProviders(): AgentProvider[] {
+  const settings = currentSettings
+  return (['claude', 'codex'] as const).filter((provider) => settings?.agents[provider].enabled === true)
+}
 
 function getAgentHookPath(provider: AgentHookProvider): string {
-  return provider === 'codex' ? join(homedir(), '.codex', 'hooks.json') : join(homedir(), '.claude', 'settings.json')
+  return join(getAgentHomeDirectory(provider), provider === 'codex' ? 'hooks.json' : 'settings.json')
 }
 
 function getAgentHookClientCommand(): string {
@@ -106,9 +114,14 @@ export async function loadStoredUserSettings(): Promise<UserSettings | null> {
     const hasLanguage = Object.prototype.hasOwnProperty.call(parsed, 'language')
     const normalized = normalizeUserSettings({
       ...parsed,
+      ...(!Object.prototype.hasOwnProperty.call(parsed, 'agents') ? { agents: {
+        claude: { enabled: existsSync(getAgentHomeDirectory('claude')) },
+        codex: { enabled: existsSync(getAgentHomeDirectory('codex')) },
+      } } : {}),
       language: hasLanguage ? parsed.language : resolveSupportedLanguage(app.getLocale()),
     })
     setMainLanguage(normalized.language)
+    currentSettings = normalized
 
     if (
       Object.prototype.hasOwnProperty.call(parsed, 'fontSize') ||
@@ -125,6 +138,7 @@ export async function loadStoredUserSettings(): Promise<UserSettings | null> {
       typeof parsed?.terminal?.agentAlertsEnabled !== 'boolean' ||
       parsed?.terminal?.themeId !== normalized.terminal.themeId ||
       parsed.windowBackgroundMaterial !== normalized.windowBackgroundMaterial
+      || !Object.prototype.hasOwnProperty.call(parsed, 'agents')
     ) {
       await fs.writeFile(SETTINGS_PATH, JSON.stringify(normalized, null, 2))
     }
@@ -133,6 +147,9 @@ export async function loadStoredUserSettings(): Promise<UserSettings | null> {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       const defaults = normalizeUserSettings({ language: resolveSupportedLanguage(app.getLocale()) })
+      defaults.agents.claude.enabled = existsSync(getAgentHomeDirectory('claude'))
+      defaults.agents.codex.enabled = existsSync(getAgentHomeDirectory('codex'))
+      currentSettings = defaults
       setMainLanguage(defaults.language)
       await fs.mkdir(YIRA_HOME, { recursive: true })
       await fs.writeFile(SETTINGS_PATH, JSON.stringify(defaults, null, 2))
@@ -142,7 +159,7 @@ export async function loadStoredUserSettings(): Promise<UserSettings | null> {
   }
 }
 
-export function registerSettingsIPC(): void {
+export function registerSettingsIPC(options: { onSave?: () => void } = {}): void {
   ipcMain.handle('settings:load', async (): Promise<UserSettings | null> => {
     const settings = await loadStoredUserSettings()
     return settings
@@ -151,9 +168,11 @@ export function registerSettingsIPC(): void {
   ipcMain.handle('settings:save', async (_, settings: UserSettings): Promise<void> => {
     const normalized = normalizeUserSettings(settings)
     setMainLanguage(normalized.language)
+    currentSettings = normalized
 
     await fs.mkdir(YIRA_HOME, { recursive: true })
     await fs.writeFile(SETTINGS_PATH, JSON.stringify(normalized, null, 2))
+    options.onSave?.()
   })
 
   ipcMain.handle('agentHooks:configure', async (_, provider: AgentHookProvider) => mutateAgentHooks(provider, 'install'))
