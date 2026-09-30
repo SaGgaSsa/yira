@@ -2,6 +2,7 @@
 
 import { loader } from '@monaco-editor/react'
 import * as monaco from 'monaco-editor/editor/editor.api.js'
+import 'monaco-editor/editor/contrib/find/browser/findController.js'
 import 'monaco-editor/languages/definitions/bat/register.js'
 import 'monaco-editor/languages/definitions/cpp/register.js'
 import 'monaco-editor/languages/definitions/csharp/register.js'
