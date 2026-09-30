@@ -9,7 +9,7 @@ import { findMergeTargetGroup, findSelectedGroup, getGroupingBlockedReason } fro
 import { clampViewportToWorld } from '@/utils/canvasWorld'
 import { calculateCanvasFitViewport, CANVAS_FIT_MARGIN, type CanvasFitBounds, type CanvasFitPadding } from '@/utils/canvasViewportFit'
 import { LayoutGrid, Lock } from 'lucide-react'
-import { GROUP_COLORS, GROUP_COLOR_ORDER, type TileState, type TileGroup, type GroupColorId, type ViewMode, type SplitViewState, type SplitPanelId, type SplitOrientation, type WorkspaceConfig } from '@shared/types'
+import { GROUP_COLORS, GROUP_COLOR_ORDER, type FileTileOpenOptions, type TileState, type TileGroup, type GroupColorId, type ViewMode, type SplitViewState, type SplitPanelId, type SplitOrientation, type WorkspaceConfig } from '@shared/types'
 import { getAttachedTiles } from '@shared/floatingTiles'
 import { shouldAutoFocusTile } from '@/utils/focusView'
 import { TileCreationSelector, type TileCreationSelectorProps } from './TileCreationSelector'
@@ -87,7 +87,7 @@ interface CanvasProps extends CanvasCreationMenuInput {
   workspaceConfig: WorkspaceConfig
   tileCreationSelectorProps: TileCreationSelectorProps
   onOpenBrowserTile: (url: string) => void
-  onOpenFileTile: (relativePath: string) => void | Promise<void>
+  onOpenFileTile: (relativePath: string, options?: FileTileOpenOptions) => void | Promise<void>
   onCreateGroupFromSelection: () => void | Promise<void>
   onDeleteTile: (tileId: string) => Promise<boolean>
   onConfigureTile: (tile: TileState, x: number, y: number) => void

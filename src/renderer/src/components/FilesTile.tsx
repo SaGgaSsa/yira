@@ -1,6 +1,7 @@
 import { COLOR_PRESETS } from '@shared/appThemes'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import Editor, { type Monaco } from '@monaco-editor/react'
+import type { editor as MonacoEditor } from 'monaco-editor'
 import { AlertTriangle, Check, Code2, Columns2, Eye, RefreshCw, Save } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { TileState } from '@shared/types'
@@ -117,9 +118,12 @@ function TextFileTile({ tile, rootPath, isFocused, isVisible, onUpdate, onOpenFi
   const [operationError, setOperationError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveConfirmed, setSaveConfirmed] = useState(false)
+  const [editorReady, setEditorReady] = useState(false)
   const [lightTheme, setLightTheme] = useState(() => document.documentElement.classList.contains('light'))
   const stateRef = useRef(state)
   const readRequestRef = useRef(0)
+  const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
+  const appliedRevealIdRef = useRef<string | null>(null)
   const savingRef = useRef(false)
   const onUpdateRef = useRef(onUpdate)
   const isMarkdown = isMarkdownFilePath(filePath)
@@ -158,6 +162,26 @@ function TextFileTile({ tile, rootPath, isFocused, isVisible, onUpdate, onOpenFi
     setState(transition.state)
     if (hasPatch(transition.patch)) onUpdate(transition.patch)
   }, [onUpdate])
+
+  useEffect(() => {
+    const request = tile.fileRevealRequest
+    const editor = editorRef.current
+    if (!request || !editor || state.status !== 'ready' || appliedRevealIdRef.current === request.id) return
+    const model = editor.getModel()
+    if (!model) return
+    const line = Math.max(1, Math.min(request.line, model.getLineCount()))
+    const column = Math.max(1, Math.min(request.column ?? 1, model.getLineMaxColumn(line)))
+    const endLine = Math.max(line, Math.min(request.endLine ?? line, model.getLineCount()))
+    const endColumn = model.getLineMaxColumn(endLine)
+    editor.setPosition({ lineNumber: line, column })
+    if (request.endLine !== undefined) {
+      editor.setSelection({ startLineNumber: line, startColumn: column, endLineNumber: endLine, endColumn })
+      editor.revealRangeInCenter({ startLineNumber: line, startColumn: column, endLineNumber: endLine, endColumn })
+    } else editor.revealLineInCenter(line)
+    editor.focus()
+    appliedRevealIdRef.current = request.id
+    void onUpdate({ fileRevealRequest: undefined })
+  }, [editorReady, onUpdate, state.status, tile.fileRevealRequest])
 
   const readFile = useCallback(async (restorePersistedDraft: boolean) => {
     const requestId = ++readRequestRef.current
@@ -400,6 +424,7 @@ function TextFileTile({ tile, rootPath, isFocused, isVisible, onUpdate, onOpenFi
         {markdownLayout.showEditor && (
           <div className={`min-h-0 min-w-0 flex-1 ${markdownLayout.showPreview ? 'border-r border-border' : ''}`}>
             <Editor
+              onMount={(editor) => { editorRef.current = editor; setEditorReady(true) }}
               path={`file:///${filePath}`}
               language={fileLanguage(filePath)}
               value={state.draft}

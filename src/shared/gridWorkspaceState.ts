@@ -64,7 +64,7 @@ function normalizeViewMode(mode: unknown): GridViewMode {
 
 function normalizeTile(tile: TileState): TileState {
   const size = normalizeTileSize(tile.type, tile)
-  const { hideTitlebar: _hideTitlebar, ...tileWithoutTitlebar } = tile as TileState & { hideTitlebar?: unknown }
+  const { hideTitlebar: _hideTitlebar, fileRevealRequest: _fileRevealRequest, ...tileWithoutTitlebar } = tile as TileState & { hideTitlebar?: unknown }
   const normalizedTile = tileWithoutTitlebar.type === 'files'
     ? { ...tileWithoutTitlebar, fileMarkdownView: normalizeFileMarkdownViewMode(tileWithoutTitlebar.fileMarkdownView) }
     : tileWithoutTitlebar

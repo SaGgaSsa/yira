@@ -1210,10 +1210,12 @@ function AppContent(): React.ReactElement {
       filePreview: true,
       ...(options.diff ? { fileDiff: options.diff } : {}),
       ...(options.markdownView ? { fileMarkdownView: options.markdownView } : {}),
+      ...(options.reveal ? { fileRevealRequest: { ...options.reveal, id: `${Date.now()}-${Math.random()}` } } : {}),
     }
 
     const initialPlan = planFileTileOpen(initialState.tiles, proposed)
     if (initialPlan.kind === 'focus-existing') {
+      if (options.reveal) initialState.updateTile(initialPlan.tileId, { fileRevealRequest: { ...options.reveal, id: `${Date.now()}-${Math.random()}` } })
       makeOpenedFileVisible(initialPlan.tileId)
       return
     }
@@ -1249,12 +1251,13 @@ function AppContent(): React.ReactElement {
     const plan = planFileTileOpen(state.tiles, initializedTile)
 
     if (plan.kind === 'focus-existing') {
+      if (options.reveal) state.updateTile(plan.tileId, { fileRevealRequest: { ...options.reveal, id: `${Date.now()}-${Math.random()}` } })
       makeOpenedFileVisible(plan.tileId)
       return
     }
 
     if (plan.kind === 'reuse-preview') {
-      state.setTiles(state.tiles.map((tile) => tile.id === plan.tile.id ? plan.tile : tile))
+      state.setTiles(state.tiles.map((tile) => tile.id === plan.tile.id ? { ...plan.tile, ...(options.reveal ? { fileRevealRequest: { ...options.reveal, id: `${Date.now()}-${Math.random()}` } } : {}) } : tile))
       makeOpenedFileVisible(plan.tile.id)
       return
     }
@@ -1266,10 +1269,10 @@ function AppContent(): React.ReactElement {
     makeOpenedFileVisible(plan.tile.id)
   }, [makeOpenedFileVisible, t, workspaceRootPath])
 
-  useEffect(() => window.electron.floating.onNavigationRequested(({ workspaceId, kind, target, fileMarkdownView }) => {
+  useEffect(() => window.electron.floating.onNavigationRequested(({ workspaceId, kind, target, fileMarkdownView, fileReveal }) => {
     if (workspaceId !== useCanvasStore.getState().activeWorkspaceId) return
     if (kind === 'file') {
-      void openFileTile(target, { markdownView: fileMarkdownView }).catch((error: unknown) => {
+      void openFileTile(target, { markdownView: fileMarkdownView, reveal: fileReveal }).catch((error: unknown) => {
         console.error('[App] Failed to open file tile from floating navigation:', error)
       })
       return

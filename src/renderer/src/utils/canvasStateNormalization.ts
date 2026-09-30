@@ -49,7 +49,7 @@ export function normalizeCanvasStateForJson(state: CanvasState): CanvasState {
     ...state,
     tiles: tiles.map((tile) => {
       const size = normalizeTileSize(tile.type, tile)
-      const { hideTitlebar: _hideTitlebar, ...tileWithoutTitlebar } = tile as typeof tile & { hideTitlebar?: unknown }
+      const { hideTitlebar: _hideTitlebar, fileRevealRequest: _fileRevealRequest, ...tileWithoutTitlebar } = tile as typeof tile & { hideTitlebar?: unknown }
       const normalizedNote = tileWithoutTitlebar.type !== 'note'
         ? tileWithoutTitlebar
         : normalizeNoteKind(tileWithoutTitlebar.noteKind) === 'markdown'

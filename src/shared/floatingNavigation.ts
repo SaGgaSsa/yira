@@ -22,6 +22,7 @@ export function createFloatingFileNavigationRequest(
   if (isMarkdownViewMode(options?.markdownView)) {
     request.fileMarkdownView = options.markdownView
   }
+  if (options?.reveal) request.fileReveal = { ...options.reveal }
 
   return request
 }
@@ -38,6 +39,16 @@ export function normalizeFloatingNavigationRequest(value: unknown): FloatingNavi
 
   if (value.kind === 'file' && isMarkdownViewMode(value.fileMarkdownView)) {
     request.fileMarkdownView = value.fileMarkdownView
+  }
+  if (value.kind === 'file' && isRecord(value.fileReveal)) {
+    const { line, column, endLine } = value.fileReveal
+    if (typeof line === 'number' && Number.isFinite(line) && line > 0) {
+      request.fileReveal = {
+        line,
+        ...(typeof column === 'number' && Number.isFinite(column) && column > 0 ? { column } : {}),
+        ...(typeof endLine === 'number' && Number.isFinite(endLine) && endLine >= line ? { endLine } : {}),
+      }
+    }
   }
 
   return request

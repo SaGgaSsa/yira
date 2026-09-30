@@ -751,6 +751,7 @@ export function normalizeFileMarkdownViewMode(value: unknown): MarkdownViewMode 
 
 export interface FileTileOpenOptions {
   markdownView?: MarkdownViewMode
+  reveal?: { line: number; column?: number; endLine?: number }
   diff?: { repositoryPath: string; path: string; originalPath?: string; staged: boolean }
 }
 
@@ -885,6 +886,7 @@ export interface FloatingNavigationRequest {
   kind: 'file' | 'browser'
   target: string
   fileMarkdownView?: MarkdownViewMode
+  fileReveal?: { line: number; column?: number; endLine?: number }
 }
 
 export interface FloatingNavigationEvent extends FloatingNavigationRequest {
@@ -933,6 +935,8 @@ export interface TileState {
   /** File metadata token used to detect external changes. */
   fileChangeToken?: string
   fileMarkdownView?: MarkdownViewMode
+  /** One-shot editor navigation request; removed by canvas persistence normalization. */
+  fileRevealRequest?: { id: string; line: number; column?: number; endLine?: number }
 
   // Timer-specific
   timerDurationMs?: number
