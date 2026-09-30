@@ -74,6 +74,8 @@ test('builds fixed-viewBox stacked areas and localized axis labels', () => {
   assert.ok(chart.ticks.some((tick) => tick.value === 0))
   assert.deepEqual(chart.xLabels.map((item) => item.label), ['00', '06', '12', '13', '18'])
   assert.equal(chart.areas[0].lastX, 48 + 13 / 23 * (628 - 48))
+  const drawnX = chart.areas[0].points.split(' ').map((point) => Number(point.split(',')[0]))
+  assert.equal(Math.max(...drawnX), chart.areas[0].lastX, 'today must stop drawing at the current hour')
   assert.deepEqual(
     buildUsageChart(snapshot, ['claude'], 'today', 1767268800000).areas.map((area) => area.provider),
     ['claude'],
