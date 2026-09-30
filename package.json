@@ -1,6 +1,6 @@
 {
   "name": "yira",
-  "version": "0.1.91",
+  "version": "0.1.92",
   "private": true,
   "productName": "Yira",
   "description": "A terminal-centered desktop workspace with terminal, note, browser, and file tiles, Canvas, Grid, Focus, and Split views, and a Board.",
