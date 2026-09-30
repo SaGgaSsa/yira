@@ -116,8 +116,10 @@ export function buildUsageChart(
 
   for (const provider of providers) {
     const upper = points.map((point, index) => lower[index] + (point[provider] ?? 0))
-    const topPoints = upper.map((value, index) => `${xFor(index)},${yFor(value)}`)
-    const bottomPoints = lower.map((value, index) => `${xFor(index)},${yFor(value)}`).reverse()
+    // Today keeps the 24-hour scale but stops drawing at the current hour.
+    const visible = lastIndex + 1
+    const topPoints = upper.slice(0, visible).map((value, index) => `${xFor(index)},${yFor(value)}`)
+    const bottomPoints = lower.slice(0, visible).map((value, index) => `${xFor(index)},${yFor(value)}`).reverse()
     const markerIndex = Math.min(lastIndex, upper.length - 1)
     const lastX = markerIndex >= 0 ? xFor(markerIndex) : plot.left
     const lastY = markerIndex >= 0 ? yFor(upper[markerIndex]) : plot.bottom
