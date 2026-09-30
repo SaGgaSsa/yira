@@ -45,10 +45,13 @@ import type {
   WorkspaceGitDiffResult,
   AgentActiveSessionSnapshot,
   AgentProviderAvailabilitySnapshot,
+  AgentDetectionSnapshot,
   AgentSessionHistoryQuery,
   AgentSessionHistoryResult,
   AgentUsageSnapshot,
   AgentUsageDetailsSnapshot,
+  AgentUsageHistoryRequest,
+  AgentUsageHistorySnapshot,
   NoteBlocks,
   MarkdownViewMode,
   NoteKind,
@@ -84,6 +87,7 @@ interface ElectronWorld {
   agents: {
     availability: () => Promise<AgentProviderAvailabilitySnapshot>
     getAvailability: () => Promise<AgentProviderAvailabilitySnapshot>
+    detect: () => Promise<AgentDetectionSnapshot>
     sessionsSnapshot: (workspaceId?: string) => Promise<AgentActiveSessionSnapshot>
     getSessions: (workspaceId?: string) => Promise<AgentActiveSessionSnapshot>
     subscribeSessions: (workspaceId?: string) => Promise<string | false>
@@ -91,6 +95,7 @@ interface ElectronWorld {
     onSessionsChanged: (callback: (snapshot: AgentActiveSessionSnapshot) => void) => () => void
     usageSnapshot: () => Promise<AgentUsageSnapshot | null>
     usageDetails: () => Promise<AgentUsageDetailsSnapshot | null>
+    usageHistory: (request: AgentUsageHistoryRequest) => Promise<AgentUsageHistorySnapshot | null>
     onUsageChanged: (callback: (snapshot: AgentUsageSnapshot) => void) => () => void
     history: (query?: AgentSessionHistoryQuery) => Promise<AgentSessionHistoryResult>
     queryHistory: (query?: AgentSessionHistoryQuery) => Promise<AgentSessionHistoryResult>

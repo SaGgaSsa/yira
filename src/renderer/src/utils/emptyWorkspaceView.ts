@@ -16,3 +16,14 @@ export function resolveSidebarCollapsedAfterWorkspaceViewChange(
   if (viewMode === 'fullview') return !shouldKeepSidebarOpen
   return currentCollapsed
 }
+
+export function resolveSidebarCollapsedForActivity(
+  activityOpen: boolean,
+  nextActivityOpen: boolean,
+  currentCollapsed: boolean,
+  previousCollapsed: boolean,
+): { collapsed: boolean; previousCollapsed: boolean } {
+  if (!activityOpen && nextActivityOpen) return { collapsed: true, previousCollapsed: currentCollapsed }
+  if (activityOpen && !nextActivityOpen) return { collapsed: previousCollapsed, previousCollapsed }
+  return { collapsed: currentCollapsed, previousCollapsed }
+}

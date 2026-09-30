@@ -1,7 +1,15 @@
 import {
   resolveSidebarCollapsedAfterWorkspaceViewChange,
+  resolveSidebarCollapsedForActivity,
   shouldKeepSidebarOpenForWorkspace,
 } from './emptyWorkspaceView'
+
+const collapsedOnOpen = resolveSidebarCollapsedForActivity(false, true, false, false)
+if (!collapsedOnOpen.collapsed || collapsedOnOpen.previousCollapsed) throw new Error('opening Activity must collapse and remember the visible sidebar')
+const restoredOnClose = resolveSidebarCollapsedForActivity(true, false, true, collapsedOnOpen.previousCollapsed)
+if (restoredOnClose.collapsed) throw new Error('closing Activity must restore the previous visible sidebar')
+const preservedCollapsed = resolveSidebarCollapsedForActivity(false, true, true, false)
+if (!preservedCollapsed.collapsed || !preservedCollapsed.previousCollapsed) throw new Error('opening Activity must remember an already-collapsed sidebar')
 
 if (!shouldKeepSidebarOpenForWorkspace([])) {
   throw new Error('an empty workspace must keep the sidebar open')

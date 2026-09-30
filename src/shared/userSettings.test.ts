@@ -18,6 +18,9 @@ if (normalizeUserSettings({ windowBackgroundMaterial: 'invalid' as never }).wind
   throw new Error('invalid window background material must normalize to none')
 }
 if (defaults.notifications.attentionDelayEnabled !== true) throw new Error('native attention delay must default on')
+if (!defaults.agents.claude.enabled || !defaults.agents.codex.enabled) throw new Error('agent settings must default enabled before main-process detection')
+const agentPreferences = normalizeUserSettings({ agents: { claude: { enabled: false }, codex: { enabled: true } } })
+if (agentPreferences.agents.claude.enabled || !agentPreferences.agents.codex.enabled) throw new Error('saved agent preferences must be preserved')
 
 const diagnosticsDefault = normalizeUserSettings({} as unknown as Partial<UserSettings>)
 if (diagnosticsDefault.updateDiagnosticsEnabled !== true) {

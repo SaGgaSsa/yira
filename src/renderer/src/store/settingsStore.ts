@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { UserSettings, AppearanceMode, ConfigurableTileCreationType, WindowBackgroundMaterial } from '@shared/types'
+import type { UserSettings, AgentProvider, AppearanceMode, ConfigurableTileCreationType, WindowBackgroundMaterial } from '@shared/types'
 import { DEFAULT_USER_SETTINGS } from '@shared/types'
 import type { TerminalThemeId } from '@shared/terminalThemes'
 import { clampFontSizePx, normalizeUserSettings } from '@shared/userSettings'
@@ -23,6 +23,7 @@ export interface SettingsState extends UserSettings {
   setBrowserHomeUrl: (url: string) => void
   setTerminalAttentionEnabled: (enabled: boolean) => void
   setAgentAlertsEnabled: (enabled: boolean) => void
+  setAgentEnabled: (provider: AgentProvider, enabled: boolean) => void
   setTerminalThemeId: (themeId: TerminalThemeId) => void
   setNotificationAttentionDelayEnabled: (enabled: boolean) => void
   setTileCreationAvailable: (type: ConfigurableTileCreationType, available: boolean) => void
@@ -36,6 +37,7 @@ const autosaveTimer = { current: null as ReturnType<typeof setTimeout> | null }
 
 export function createUserSettingsDraft(settings: UserSettings): UserSettings {
   return {
+    agents: { claude: { ...settings.agents.claude }, codex: { ...settings.agents.codex } },
     language: settings.language,
     themeId: settings.themeId,
     appearance: settings.appearance,
@@ -62,6 +64,7 @@ function scheduleSave() {
   autosaveTimer.current = setTimeout(() => {
     const state = useSettingsStore.getState()
     const settings: UserSettings = {
+      agents: { claude: { ...state.agents.claude }, codex: { ...state.agents.codex } },
       language: state.language,
       themeId: state.themeId,
       appearance: state.appearance,
@@ -155,6 +158,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     scheduleSave()
   },
 
+  setAgentEnabled: (provider, enabled) => {
+    set((state) => ({ agents: { ...state.agents, [provider]: { enabled } } }))
+    scheduleSave()
+  },
+
   setTerminalThemeId: (themeId) => {
     set((state) => ({ terminal: { ...state.terminal, themeId } }))
     scheduleSave()
@@ -219,6 +227,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         const normalized = normalizeUserSettings(settings)
         const materialState = await window.electron.window.setBackgroundMaterial(normalized.windowBackgroundMaterial)
         set({
+          agents: { claude: { ...normalized.agents.claude }, codex: { ...normalized.agents.codex } },
           language: normalized.language,
           themeId: normalized.themeId,
           appearance: normalized.appearance,
@@ -272,6 +281,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   saveSettings: () => {
     const state = get()
     const settings: UserSettings = {
+      agents: { claude: { ...state.agents.claude }, codex: { ...state.agents.codex } },
       language: state.language,
       themeId: state.themeId,
       appearance: state.appearance,

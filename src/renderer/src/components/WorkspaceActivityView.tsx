@@ -1,10 +1,32 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { AgentUsageDetailsSnapshot, AgentUsageSnapshot, WorkspaceMetadata } from '@shared/types'
+import type {
+  AgentProvider,
+  AgentUsageHistorySnapshot,
+  AgentUsagePeriod,
+  AgentUsageSnapshot,
+  UserSettings,
+  WorkspaceMetadata,
+} from '@shared/types'
+import { getEnabledAgentProviders } from '@/utils/effectiveAgent'
+import {
+  ACTIVITY_FILTER_KEY,
+  getActivityUsageRequests,
+  normalizeActivityFilter,
+  readActivityFilters,
+  type ActivityProviderFilter,
+} from '@/utils/activityUsage'
 import type { WorkspaceActivityCardData } from '@/utils/workspaceActivity'
-import { getVisibleAgentProviders } from '@/utils/agentUsagePanel'
-import { WorkspaceActivityCard } from './WorkspaceActivityCard'
-import { AgentUsagePanel } from './AgentUsagePanel'
+import { ActivityToolbar } from './activity/ActivityToolbar'
+import { ModelBreakdown } from './activity/ModelBreakdown'
+import { PlanLimits } from './activity/PlanLimits'
+import { RecentSessions } from './activity/RecentSessions'
+import { TokenMix } from './activity/TokenMix'
+import { UsageBreakdown } from './activity/UsageBreakdown'
+import { UsageChart } from './activity/UsageChart'
+import { UsageKpis } from './activity/UsageKpis'
+import { WorkspaceStrip } from './activity/WorkspaceStrip'
+import { activityPanelClass } from './activity/shared'
 
 export interface WorkspaceActivityViewProps {
   cards: readonly WorkspaceActivityCardData[]
@@ -12,51 +34,143 @@ export interface WorkspaceActivityViewProps {
   workspaces?: readonly WorkspaceMetadata[]
   onOpenWorkspace: (workspace: WorkspaceMetadata) => void
   onGoToTerminal: (workspace: WorkspaceMetadata, tileId: string | null) => void
+  onOpenSettings?: (section?: 'agents') => void
+  agents: UserSettings['agents']
 }
 
-export function WorkspaceActivityView({ cards, agentUsage = null, workspaces, onOpenWorkspace, onGoToTerminal }: WorkspaceActivityViewProps): React.ReactElement {
+export function WorkspaceActivityView({
+  cards,
+  agentUsage = null,
+  workspaces,
+  onOpenWorkspace,
+  onGoToTerminal,
+  onOpenSettings,
+  agents,
+}: WorkspaceActivityViewProps): React.ReactElement {
   const { t } = useTranslation()
-  const [details, setDetails] = useState<AgentUsageDetailsSnapshot | null>(null)
-  const workspaceList = useMemo(() => workspaces ?? cards.map((card) => card.workspace), [workspaces, cards])
-  const providers = useMemo(() => getVisibleAgentProviders(workspaceList), [workspaceList])
-  const workspaceNames = useMemo(() => Object.fromEntries(workspaceList.map((workspace) => [workspace.id, workspace.name])), [workspaceList])
+  const enabled = useMemo(() => getEnabledAgentProviders(agents), [agents])
+  const [filters, setFilters] = useState(readActivityFilters)
+  const [history, setHistory] = useState<AgentUsageHistorySnapshot | null>(null)
+  const [todayHistory, setTodayHistory] = useState<AgentUsageHistorySnapshot | null>(null)
+  const providerFilter = normalizeActivityFilter(filters.provider, enabled)
+  const providers: AgentProvider[] = providerFilter === 'all' ? enabled : [providerFilter]
+  const workspaceList = workspaces ?? cards.map((card) => card.workspace)
+  const workspaceNames = useMemo(
+    () => Object.fromEntries(workspaceList.map((workspace) => [workspace.id, workspace.name])),
+    [workspaceList],
+  )
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(ACTIVITY_FILTER_KEY, JSON.stringify({ ...filters, provider: providerFilter }))
+    } catch {
+      // Browser storage can be disabled.
+    }
+  }, [filters, providerFilter])
 
   useEffect(() => {
     let active = true
-    const refresh = () => {
-      if (!window.electron?.agents?.usageDetails) return
-      void window.electron.agents.usageDetails().then((snapshot) => { if (active) setDetails(snapshot) }).catch(() => { if (active) setDetails(null) })
+    let timer = 0
+    setHistory(null)
+    setTodayHistory(null)
+    const refresh = async () => {
+      if (!window.electron?.agents?.usageHistory || providers.length === 0) return
+      try {
+        const [historyRequest, todayRequest] = getActivityUsageRequests(
+          filters.period,
+          providers,
+          enabled,
+        )
+        const nextHistory = await window.electron.agents.usageHistory(historyRequest)
+        const nextToday = todayRequest
+          ? await window.electron.agents.usageHistory(todayRequest)
+          : nextHistory
+        if (!active) return
+        setHistory(nextHistory)
+        setTodayHistory(nextToday)
+        const indexing = nextHistory?.indexing === true || nextToday?.indexing === true
+        timer = window.setTimeout(refresh, indexing ? 5000 : 60_000)
+      } catch {
+        if (active) timer = window.setTimeout(refresh, 60_000)
+      }
     }
-    refresh()
-    const timer = window.setInterval(refresh, 60_000)
-    return () => { active = false; window.clearInterval(timer) }
-  }, [])
+    void refresh()
+    return () => {
+      active = false
+      window.clearTimeout(timer)
+    }
+  }, [enabled.join(','), filters.period, providers.join(',')])
 
+  const changeFilters = (next: Partial<typeof filters>) => {
+    setFilters((current) => ({ ...current, ...next }))
+  }
+
+  if (enabled.length === 0) {
+    return (
+      <div
+        className="flex min-h-0 flex-1 items-center justify-center bg-bg-secondary"
+        data-activity-view="true"
+      >
+        <div className={`${activityPanelClass} max-w-lg text-center`}>
+          <h2 className="text-base font-semibold text-text-primary">
+            {t('activity.noAgentsEnabled')}
+          </h2>
+          <p className="mt-2 text-sm text-text-secondary">
+            {t('activity.enableAgentsHint')}
+          </p>
+          <button
+            type="button"
+            className="mt-4 rounded-full border border-border-visible px-4 py-2 text-sm text-text-primary"
+            onClick={() => onOpenSettings?.('agents')}
+          >
+            {t('settings.agents')}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  const period: AgentUsagePeriod = filters.period
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-bg-secondary" data-activity-view="true">
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
-        <div className={providers.length ? 'grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_360px]' : ''}>
-          <div className="min-w-0">
-            {cards.length === 0 ? (
-              <div className="nd-panel-raised rounded-[20px] px-5 py-8 text-center" data-activity-empty="true">
-                <div className="nd-label text-text-primary">{t('activity.emptyTitle')}</div>
-                <div className="mt-3 text-sm text-text-secondary">{t('activity.emptyMessage')}</div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                {cards.map((card) => (
-                  <WorkspaceActivityCard
-                    key={card.workspace.id}
-                    card={card}
-                    tokensToday={card.workspace.config.agentProvider ? details?.providers[card.workspace.config.agentProvider]?.tokensByWorkspace[card.workspace.id] : undefined}
-                    onOpen={() => onOpenWorkspace(card.workspace)}
-                    onGoToTerminal={card.attentionTileId ? () => onGoToTerminal(card.workspace, card.attentionTileId) : null}
-                  />
-                ))}
-              </div>
-            )}
+    <div
+      className="flex min-h-0 flex-1 flex-col overflow-hidden bg-bg-secondary"
+      data-activity-view="true"
+    >
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4">
+        <ActivityToolbar
+          enabled={enabled}
+          provider={providerFilter}
+          period={period}
+          updatedAt={history?.updatedAt}
+          indexing={history?.indexing === true || todayHistory?.indexing === true}
+          onProviderChange={(provider: ActivityProviderFilter) => changeFilters({ provider })}
+          onPeriodChange={(nextPeriod) => changeFilters({ period: nextPeriod })}
+        />
+
+        <section aria-label={t('activity.workspaces')}>
+          <WorkspaceStrip
+            cards={cards}
+            todayHistory={todayHistory}
+            agents={agents}
+            onOpenWorkspace={onOpenWorkspace}
+            onGoToTerminal={onGoToTerminal}
+          />
+        </section>
+
+        <UsageKpis history={history} workspaceNames={workspaceNames} />
+        <div className="grid gap-4 lg:grid-cols-[1.7fr_1fr]">
+          <UsageChart history={history} providers={providers} period={period} />
+          <PlanLimits providers={providers} usage={agentUsage} />
+        </div>
+        <div className="grid gap-4 lg:grid-cols-[1.7fr_1fr]">
+          <div className="space-y-4">
+            <UsageBreakdown history={history} workspaceNames={workspaceNames} />
+            <ModelBreakdown history={history} />
           </div>
-          {providers.length > 0 && <AgentUsagePanel providers={providers} usage={agentUsage} details={details} workspaceNames={workspaceNames} />}
+          <div className="space-y-4">
+            <TokenMix history={history} />
+            <RecentSessions history={history} workspaceNames={workspaceNames} />
+          </div>
         </div>
       </div>
     </div>

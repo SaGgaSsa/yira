@@ -22,6 +22,7 @@ import {
 import { buildRemoteSshLaunch } from '../remote-ssh'
 import { ensureRemoteSshReady } from '../remote-host-readiness'
 import { SemanticAgentAlertState } from '../agentAlerts'
+import { getEnabledAgentProviders } from './settings'
 import { agentSessionRegistry } from '../agents/registry'
 import { normalizeAgentOpaqueId } from '../agents/query'
 import { buildAgentTerminalLaunch, type AgentTerminalLaunch } from '../agents/terminal'
@@ -92,7 +93,7 @@ const persistentTerminalSessions = new PersistentTerminalSessions({
   },
   registry: agentSessionRegistry,
   onAgentAlert: (identity, alert) => {
-    if (alert) agentAlerts.report(alert)
+    if (alert && getEnabledAgentProviders().includes(alert.provider)) agentAlerts.report(alert)
     else agentAlerts.clearOnFocus(identity.tileId)
   },
   onAgentExit: (identity) => agentAlerts.clearOnDestroy(identity.tileId),

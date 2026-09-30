@@ -41,6 +41,13 @@
   --warning: #d4a843;
   --interactive: #5b9bf6;
   --activity: #22d3ee;
+  --agent-claude: #d97757;
+  --agent-codex: #8ea4ff;
+  --token-input: #60a5fa;
+  --token-output: #a78bfa;
+  --token-cache-read: #34d399;
+  --token-cache-write: #fbbf24;
+  --token-reasoning: #f472b6;
   --text-inverse: #000000;
   --bg-primary: var(--black);
   --bg-secondary: var(--surface);
@@ -114,6 +121,13 @@
   --text-display: #000000;
   --interactive: #007aff;
   --activity: #0891b2;
+  --agent-claude: #d97757;
+  --agent-codex: #8ea4ff;
+  --token-input: #2563eb;
+  --token-output: #7c3aed;
+  --token-cache-read: #059669;
+  --token-cache-write: #b45309;
+  --token-reasoning: #db2777;
   --text-inverse: #f5f5f5;
   --bg-primary: var(--black);
   --bg-secondary: var(--surface);

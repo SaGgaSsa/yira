@@ -81,6 +81,34 @@ type TranslationResources = {
     no: string
     context: string
     token: { cacheRead: string; cacheWrite: string; input: string; output: string; cached: string; reasoning: string }
+    noAgentsEnabled: string
+    enableAgentsHint: string
+    all: string
+    updatedAt: string
+    indexing: string
+    workspaces: string
+    totalTokens: string
+    sessionsSub: string
+    inputOutput: string
+    noCache: string
+    cacheHit: string
+    sessions: string
+    withoutSubagents: string
+    lines: string
+    claudeOnly: string
+    topWorkspace: string
+    workspaceTokens: string
+    tokensPerHour: string
+    tokensPerDay: string
+    planLimits: string
+    byWorkspace: string
+    byModel: string
+    tokenMix: string
+    period: { today: string; '7d': string; '30d': string }
+    noPeriodData: string
+    agentFilter: string
+    periodFilter: string
+    cacheReadAmount: string
   }
   terminalActivity: {
     'needs-input': string
@@ -123,6 +151,18 @@ type TranslationResources = {
     agentAlertsDescription: string
     agentHookSetup: string
     agentHookSetupDescription: string
+    agentIntegrations: string
+    agentInstalled: string
+    agentNotInstalled: string
+    agentDetecting: string
+    enableAgent: string
+    agentDisabled: string
+    yiraHooks: string
+    hooksInstalled: string
+    hooksMissing: string
+    install: string
+    repair: string
+    codexHooksHelp: string
     backToAbout: string
     configure: string
     uninstall: string
@@ -195,6 +235,7 @@ type TranslationResources = {
     snapEnabled: string
     systemControls: string
     terminal: string
+    agents: string
     terminalActivity: string
     terminalActivityDescription: string
     timerNativeAttention: string
@@ -750,6 +791,34 @@ const en: TranslationResources = {
     unlimitedCredits: 'Unlimited',
     no: 'No',
     context: 'Context',
+    noAgentsEnabled: 'No agents enabled',
+    enableAgentsHint: 'Enable an agent in Settings › Agents to see its usage here.',
+    all: 'All',
+    updatedAt: 'Updated {{time}}',
+    indexing: 'Indexing history…',
+    workspaces: 'Workspaces',
+    totalTokens: 'Total tokens',
+    sessionsSub: '{{count}} sessions',
+    inputOutput: 'Input + output',
+    noCache: 'excluding cache',
+    cacheHit: 'Cache hit',
+    sessions: 'Sessions',
+    withoutSubagents: 'without subagents',
+    lines: 'Lines +/−',
+    claudeOnly: 'reported by Claude only',
+    topWorkspace: 'Most active workspace',
+    workspaceTokens: 'tokens by workspace',
+    tokensPerHour: 'Tokens per hour',
+    tokensPerDay: 'Tokens per day',
+    planLimits: 'Plan limits',
+    byWorkspace: 'By workspace',
+    byModel: 'By model',
+    tokenMix: 'Token mix',
+    period: { today: 'Today', '7d': '7 days', '30d': '30 days' },
+    noPeriodData: 'No data in this period',
+    agentFilter: 'Agent filter',
+    periodFilter: 'Period filter',
+    cacheReadAmount: '{{count}} read from cache',
     token: { cacheRead: 'Cache read', cacheWrite: 'Cache write', input: 'Input', output: 'Output', cached: 'Cached', reasoning: 'Reasoning' },
   },
   terminalActivity: {
@@ -793,6 +862,18 @@ const en: TranslationResources = {
     agentAlertsDescription: 'Show semantic completion and intervention alerts from configured Codex and Claude hooks.',
     agentHookSetup: 'Codex and Claude hooks',
     agentHookSetupDescription: 'Configure or repair only Yira-managed hooks. Codex requires approving new hooks with /hooks.',
+    agentIntegrations: 'Agent integrations',
+    agentInstalled: '{{path}} found',
+    agentNotInstalled: 'Not installed on this machine',
+    agentDetecting: 'Checking installation…',
+    enableAgent: 'Enable agent',
+    agentDisabled: 'Off. Yira does not read its files or show it in Activity.',
+    yiraHooks: 'Yira hooks',
+    hooksInstalled: 'Installed',
+    hooksMissing: 'Not installed',
+    install: 'Install',
+    repair: 'Repair',
+    codexHooksHelp: 'Codex asks you to approve new hooks with /hooks.',
     backToAbout: 'Back to About',
     configure: 'Configure',
     uninstall: 'Uninstall',
@@ -865,6 +946,7 @@ const en: TranslationResources = {
     snapEnabled: 'Snap enabled',
     systemControls: 'Yira system controls',
     terminal: 'Terminal',
+    agents: 'Agents',
     terminalActivity: 'Terminal activity',
     terminalActivityDescription: 'Show or hide output counters. Terminal output does not request native attention.',
     timerNativeAttention: 'Timer native attention',
@@ -1420,6 +1502,34 @@ const es: TranslationResources = {
     unlimitedCredits: 'Ilimitados',
     no: 'No',
     context: 'Contexto',
+    noAgentsEnabled: 'No hay agentes activados',
+    enableAgentsHint: 'Activa un agente en Configuración › Agentes para ver su uso aquí.',
+    all: 'Todos',
+    updatedAt: 'Actualizado {{time}}',
+    indexing: 'Indexando historial…',
+    workspaces: 'Espacios de trabajo',
+    totalTokens: 'Tokens totales',
+    sessionsSub: '{{count}} sesiones',
+    inputOutput: 'Entrada + salida',
+    noCache: 'sin caché',
+    cacheHit: 'Uso de caché',
+    sessions: 'Sesiones',
+    withoutSubagents: 'sin subagentes',
+    lines: 'Líneas +/−',
+    claudeOnly: 'solo lo reporta Claude',
+    topWorkspace: 'Espacio más activo',
+    workspaceTokens: 'tokens por espacio',
+    tokensPerHour: 'Tokens por hora',
+    tokensPerDay: 'Tokens por día',
+    planLimits: 'Límites del plan',
+    byWorkspace: 'Por espacio',
+    byModel: 'Por modelo',
+    tokenMix: 'Mezcla de tokens',
+    period: { today: 'Hoy', '7d': '7 días', '30d': '30 días' },
+    noPeriodData: 'Sin datos en este período',
+    agentFilter: 'Filtro de agente',
+    periodFilter: 'Filtro de período',
+    cacheReadAmount: '{{count}} leídos de caché',
     token: { cacheRead: 'Lectura de caché', cacheWrite: 'Escritura de caché', input: 'Entrada', output: 'Salida', cached: 'En caché', reasoning: 'Razonamiento' },
   },
   terminalActivity: {
@@ -1463,6 +1573,18 @@ const es: TranslationResources = {
     agentAlertsDescription: 'Muestra alertas semánticas de finalización e intervención de los hooks configurados de Codex y Claude.',
     agentHookSetup: 'Hooks de Codex y Claude',
     agentHookSetupDescription: 'Configura o repara sólo hooks administrados por Yira. Codex requiere aprobar los nuevos hooks con /hooks.',
+    agentIntegrations: 'Integraciones de agentes',
+    agentInstalled: 'Se encontró {{path}}',
+    agentNotInstalled: 'No está instalado en esta máquina',
+    agentDetecting: 'Comprobando instalación…',
+    enableAgent: 'Activar agente',
+    agentDisabled: 'Apagado. Yira no lee sus archivos ni lo muestra en Actividad.',
+    yiraHooks: 'Hooks de Yira',
+    hooksInstalled: 'Instalados',
+    hooksMissing: 'No instalados',
+    install: 'Instalar',
+    repair: 'Reparar',
+    codexHooksHelp: 'Codex pide aprobar hooks nuevos con /hooks.',
     backToAbout: 'Volver a Acerca de',
     configure: 'Configurar',
     uninstall: 'Desinstalar',
@@ -1535,6 +1657,7 @@ const es: TranslationResources = {
     snapEnabled: 'Ajuste activado',
     systemControls: 'Controles del sistema Yira',
     terminal: 'Terminal',
+    agents: 'Agentes',
     terminalActivity: 'Actividad de terminal',
     terminalActivityDescription: 'Muestra u oculta los contadores de salida. La salida de terminal no solicita atención nativa.',
     timerNativeAttention: 'Atención nativa del temporizador',

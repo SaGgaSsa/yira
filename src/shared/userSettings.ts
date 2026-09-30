@@ -8,9 +8,10 @@ export const MAX_FONT_SIZE_PX = 36
 
 export type LegacyFontSize = 'small' | 'medium' | 'large'
 
-type RawUserSettings = Omit<Partial<UserSettings>, 'terminal' | 'updateDiagnosticsEnabled' | 'updateDiagnosticsMigrationComplete'> & {
+type RawUserSettings = Omit<Partial<UserSettings>, 'terminal' | 'agents' | 'updateDiagnosticsEnabled' | 'updateDiagnosticsMigrationComplete'> & {
   fontSize?: unknown
   terminal?: Partial<UserSettings['terminal']>
+  agents?: Partial<Record<'claude' | 'codex', { enabled?: unknown }>>
   updateDiagnosticsEnabled?: unknown
   updateDiagnosticsMigrationComplete?: unknown
 }
@@ -46,6 +47,10 @@ export function normalizeUserSettings(raw: RawUserSettings = {}): UserSettings {
   return {
     ...DEFAULT_USER_SETTINGS,
     ...settings,
+    agents: {
+      claude: { enabled: raw.agents?.claude?.enabled !== false },
+      codex: { enabled: raw.agents?.codex?.enabled !== false },
+    },
     language: normalizeLanguage(raw.language),
     themeId: normalizeAppThemeId(raw.themeId),
     windowBackgroundMaterial: raw.windowBackgroundMaterial === 'mica' || raw.windowBackgroundMaterial === 'acrylic' || raw.windowBackgroundMaterial === 'translucent'

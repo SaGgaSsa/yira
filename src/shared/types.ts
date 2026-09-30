@@ -208,6 +208,23 @@ export interface AgentUsageDetailsSnapshot {
   providers: Partial<Record<AgentProvider, AgentUsageProviderDetails>>
   recentSessions: AgentUsageRecentSession[]
 }
+export type AgentDetectionSnapshot = Record<AgentProvider, { installed: boolean; hooksInstalled: boolean }>
+
+export type AgentUsagePeriod = 'today' | '7d' | '30d'
+export interface AgentUsageHistoryRequest { period: AgentUsagePeriod; providers?: AgentProvider[] }
+export interface AgentUsageHistorySnapshot {
+  updatedAt: string
+  period: AgentUsagePeriod
+  providers: AgentProvider[]
+  indexing: boolean
+  totals: AgentTokenBreakdown & { total: number; messages: number; sessions: number }
+  series: { bucket: 'hour' | 'day'; points: Array<{ start: string } & Partial<Record<AgentProvider, number>>> }
+  byModel: Array<{ provider: AgentProvider; model: string; tokens: number }>
+  byWorkspace: Array<{ workspaceId: string; tokens: number }>
+  byProvider: Array<{ provider: AgentProvider; tokens: number }>
+  lines?: { added: number; removed: number }
+  recentSessions: AgentUsageRecentSession[]
+}
 
 /** Global usage state always includes a safe entry for each supported provider. */
 export interface AgentUsageSnapshot {
@@ -408,6 +425,7 @@ export type ConfigurableTileCreationType = 'note' | 'browser' | 'timer'
 export type TileCreationAvailability = Record<ConfigurableTileCreationType, boolean>
 
 export interface UserSettings {
+  agents: Record<AgentProvider, { enabled: boolean }>
   language: 'en' | 'es'
   themeId: AppThemeId
   appearance: AppearanceMode
@@ -439,6 +457,7 @@ export interface UserSettings {
 }
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
+  agents: { claude: { enabled: true }, codex: { enabled: true } },
   language: 'en',
   themeId: 'default',
   appearance: 'dark',
