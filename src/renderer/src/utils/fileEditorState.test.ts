@@ -20,6 +20,14 @@ if (fileLanguage('docs/guide.markdown') !== 'markdown') {
   throw new Error('.markdown files must use Monaco Markdown syntax highlighting')
 }
 
+if (fileLanguage('src/main/java/App.java') !== 'java') {
+  throw new Error('.java files must use Monaco Java syntax highlighting')
+}
+
+if (fileLanguage('C:\\repo\\docker\\Dockerfile') !== 'dockerfile') {
+  throw new Error('Dockerfile must use Monaco Dockerfile syntax highlighting')
+}
+
 const secondRevision: FileRevision = {
   size: 18,
   modifiedAt: '2026-08-04T10:01:00.000Z',
