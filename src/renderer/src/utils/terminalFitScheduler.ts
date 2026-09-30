@@ -28,6 +28,14 @@ interface TerminalFitSchedulerOptions {
   initialDimensions?: TerminalFitDimensions | null
 }
 
+// FitAddon clamps a zero-width host to 2 columns. A transient layout (window
+// restore, panel switch) can report that clamp while the host is not hidden.
+// ConPTY keeps only what fits in its buffer, so resizing to such a size drops
+// the start of the screen for good. Samples below these bounds count as
+// unmeasurable and never reach xterm or the PTY.
+const MIN_FIT_COLS = 10
+const MIN_FIT_ROWS = 2
+
 function normalizeFitDimensions(dimensions: TerminalFitDimensions | null | undefined): TerminalFitDimensions | null {
   if (!dimensions || !Number.isFinite(dimensions.cols) || !Number.isFinite(dimensions.rows)) return null
   const normalized = { cols: Math.floor(dimensions.cols), rows: Math.floor(dimensions.rows) }
@@ -61,7 +69,7 @@ export function createTerminalFitScheduler(options: TerminalFitSchedulerOptions 
         rows: Math.floor(dimensions.rows),
       }
 
-      if (normalizedDimensions.cols <= 0 || normalizedDimensions.rows <= 0) return null
+      if (normalizedDimensions.cols < MIN_FIT_COLS || normalizedDimensions.rows < MIN_FIT_ROWS) return null
       return normalizedDimensions
     } catch {
       return null
@@ -139,7 +147,7 @@ export function createTerminalFitScheduler(options: TerminalFitSchedulerOptions 
           effective = null
         }
         if (!effective) effective = proposeReadOnly(fitAddon)
-        if (!effective) {
+        if (!effective || effective.cols < MIN_FIT_COLS || effective.rows < MIN_FIT_ROWS) {
           complete('unmeasurable')
           return
         }

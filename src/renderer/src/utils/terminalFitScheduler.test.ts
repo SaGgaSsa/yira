@@ -507,3 +507,48 @@ if (unmeasurableResults.join(',') !== 'unmeasurable,fitted') {
   if (Number(failureResizes.length) !== 2) throw new Error(`failure retry same size must resend once, got ${failureResizes.length}`)
   if (failureResults.join(',') !== 'fitted,fitted') throw new Error(`failure retry must complete as fitted twice, got ${failureResults.join(',')}`)
 }
+
+// A collapsed host reports FitAddon's 2-column clamp. It must never reach
+// the PTY, where ConPTY would drop the start of the screen.
+{
+  const localQueue: Array<{ id: number; callback: () => void }> = []
+  let localId = 1
+  const collapsedScheduler = createTerminalFitScheduler({
+    requestFrame: (callback) => {
+      const id = localId++
+      localQueue.push({ id, callback })
+      return id
+    },
+    cancelFrame: () => {},
+    initialDimensions: { cols: 80, rows: 24 },
+  })
+  const collapsedCounters: SampleCounters = { fitCalls: 0, proposeCalls: 0 }
+  const collapsedResizes: Array<{ cols: number; rows: number }> = []
+  const collapsedResults: TerminalFitResult[] = []
+  let collapsedDimensions = { cols: 2, rows: 24 }
+  const collapsedAddon = makeAddon(() => collapsedDimensions, collapsedCounters)
+  const request = (): void => collapsedScheduler.requestFit(collapsedAddon, (cols, rows) => {
+    collapsedResizes.push({ cols, rows })
+  }, (result) => collapsedResults.push(result))
+  const drain = (): void => {
+    while (localQueue.length > 0) localQueue.shift()!.callback()
+  }
+
+  request()
+  drain()
+  if (collapsedCounters.fitCalls !== 0) throw new Error(`collapsed host must not fit, got ${collapsedCounters.fitCalls}`)
+  if (collapsedResizes.length !== 0) throw new Error(`collapsed host must not resize the PTY, got ${collapsedResizes.length}`)
+  if (collapsedResults.join(',') !== 'unmeasurable') throw new Error(`collapsed host must be unmeasurable, got ${collapsedResults.join(',')}`)
+
+  collapsedDimensions = { cols: 100, rows: 1 }
+  request()
+  drain()
+  if (collapsedResizes.length !== 0) throw new Error(`single-row host must not resize the PTY, got ${collapsedResizes.length}`)
+
+  collapsedDimensions = { cols: 100, rows: 30 }
+  request()
+  drain()
+  if (Number(collapsedResizes.length) !== 1 || collapsedResizes[0].cols !== 100) {
+    throw new Error(`restored host must resize once to the real size, got ${JSON.stringify(collapsedResizes)}`)
+  }
+}
