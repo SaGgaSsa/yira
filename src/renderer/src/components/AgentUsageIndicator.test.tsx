@@ -33,7 +33,7 @@ test('renders one available Codex window with an accessible progress ring and re
   })
 
   assert.match(markup, /data-provider="codex"/)
-  assert.match(markup, /src="\/agent-provider-logos\/openai\.svg"/)
+  assert.match(markup, /src="\.\/agent-provider-logos\/openai\.svg"/)
   assert.match(markup, /data-provider-logo="true"/)
   assert.match(markup, /alt=""/)
   assert.match(markup, /aria-hidden="true"/)
@@ -61,7 +61,7 @@ test('renders both compact windows and preserves the Claude provider identity', 
   }, 'claude')
 
   assert.match(markup, /data-provider="claude"/)
-  assert.match(markup, /src="\/agent-provider-logos\/anthropic\.svg"/)
+  assert.match(markup, /src="\.\/agent-provider-logos\/anthropic\.svg"/)
   assert.match(markup, /aria-label="Claude usage"/)
   assert.doesNotMatch(markup, />Claude</)
   assert.equal((markup.match(/data-window-kind=/g) ?? []).length, 2)

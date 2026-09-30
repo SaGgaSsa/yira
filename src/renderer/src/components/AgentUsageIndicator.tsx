@@ -41,8 +41,8 @@ export const agentProviderDetails: Record<AgentProvider, {
   label: string
   logoPath: string
 }> = {
-  codex: { label: 'Codex', logoPath: '/agent-provider-logos/openai.svg' },
-  claude: { label: 'Claude', logoPath: '/agent-provider-logos/anthropic.svg' },
+  codex: { label: 'Codex', logoPath: './agent-provider-logos/openai.svg' },
+  claude: { label: 'Claude', logoPath: './agent-provider-logos/anthropic.svg' },
 }
 
 export function clampUsagePercent(value: number): number | null {
