@@ -1,9 +1,10 @@
 import React from 'react'
-import { CircleCheck, CircleDot, CircleHelp, LoaderCircle, Terminal } from 'lucide-react'
+import { CircleCheck, CircleDot, CircleHelp, Hourglass, LoaderCircle, Terminal } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { TerminalActivitySummary } from '@/utils/terminalActivity'
 import { summarizeTerminalActivity } from '@/utils/terminalActivity'
 import { useAgentSessionSnapshot } from '@/hooks/useAgentSessionSnapshot'
+import { useTerminalProcessActivity } from '@/hooks/useTerminalProcessActivity'
 import { useCanvasStore } from '@/store/canvasStore'
 
 const ACTIVITY_STYLES = {
@@ -11,6 +12,7 @@ const ACTIVITY_STYLES = {
   working: { Icon: LoaderCircle, className: 'text-activity motion-safe:animate-spin' },
   unread: { Icon: CircleDot, className: 'text-text-display' },
   output: { Icon: LoaderCircle, className: 'text-activity motion-safe:animate-spin' },
+  background: { Icon: Hourglass, className: 'text-activity' },
   done: { Icon: CircleCheck, className: 'text-success' },
   idle: { Icon: Terminal, className: 'text-text-disabled' },
 } as const
@@ -43,8 +45,16 @@ export function TerminalTileActivityIcon({ tileId, attentionCount, size }: {
   size?: number
 }): React.ReactElement {
   const { sessions } = useAgentSessionSnapshot()
+  const processActivity = useTerminalProcessActivity()
   const workspaceId = useCanvasStore((state) => state.activeWorkspaceId)
   const storedAttentionCount = useCanvasStore((state) => state.terminalAttention[tileId]?.count ?? 0)
-  const activity = summarizeTerminalActivity(sessions, workspaceId, attentionCount ?? storedAttentionCount, tileId)
+  const activity = summarizeTerminalActivity(
+    sessions,
+    workspaceId,
+    attentionCount ?? storedAttentionCount,
+    tileId,
+    0,
+    processActivity.terminals,
+  )
   return <TerminalActivityIcon activity={activity} size={size} />
 }

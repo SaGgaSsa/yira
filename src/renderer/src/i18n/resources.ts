@@ -115,6 +115,7 @@ type TranslationResources = {
     working: string
     unread: string
     output: string
+    background: string
     done: string
     idle: string
     exited: string
@@ -833,10 +834,11 @@ const en: TranslationResources = {
     working: 'Working',
     unread: 'Unreviewed activity',
     output: 'Terminals active',
+    background: 'Running in background',
     done: 'Completed activity',
     idle: 'No detected activity',
     exited: 'Exited',
-    summary: '{{working}} working; {{needsInput}} need input; {{done}} completed; {{unread}} unreviewed output events; {{recentOutput}} terminals with recent output',
+    summary: '{{working}} working; {{needsInput}} need input; {{done}} completed; {{unread}} unreviewed output events; {{recentOutput}} terminals with recent output; {{background}} running in background',
   },
   agents: {
     title: 'Agents',
@@ -1551,10 +1553,11 @@ const es: TranslationResources = {
     working: 'Trabajando',
     unread: 'Actividad sin revisar',
     output: 'Terminales activas',
+    background: 'En segundo plano',
     done: 'Actividad finalizada',
     idle: 'Sin actividad detectada',
     exited: 'Finalizada',
-    summary: '{{working}} trabajando; {{needsInput}} requieren intervención; {{done}} finalizados; {{unread}} eventos de salida sin revisar; {{recentOutput}} terminales con salida reciente',
+    summary: '{{working}} trabajando; {{needsInput}} requieren intervención; {{done}} finalizados; {{unread}} eventos de salida sin revisar; {{recentOutput}} terminales con salida reciente; {{background}} en segundo plano',
   },
   agents: {
     title: 'Agentes',

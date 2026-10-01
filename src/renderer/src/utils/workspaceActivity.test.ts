@@ -61,6 +61,28 @@ test('recent output marks the workspace active', () => {
   assert.equal(hasWorkspaceActivityAttention(card), false)
 })
 
+test('process working marks its workspace active and background does not', () => {
+  const [working] = buildWorkspaceActivityCards({
+    workspaces: [workspace('working')],
+    sessionActiveIds: new Set(['working']),
+    attentionCounts: {},
+    terminalCounts: {},
+    activeWorkspaceId: null,
+    processActivity: [{ workspaceId: 'working', tileId: 't1', state: 'working' }],
+  })
+  const [background] = buildWorkspaceActivityCards({
+    workspaces: [workspace('background')],
+    sessionActiveIds: new Set(['background']),
+    attentionCounts: {},
+    terminalCounts: {},
+    activeWorkspaceId: null,
+    processActivity: [{ workspaceId: 'background', tileId: 't1', state: 'background' }],
+  })
+
+  assert.equal(working.status, 'active')
+  assert.equal(background.status, 'idle')
+})
+
 test('active wins over unread', () => {
   const [card] = buildWorkspaceActivityCards({
     workspaces: [workspace('busy')],

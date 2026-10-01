@@ -1,5 +1,6 @@
 import type { AppThemeId } from '@shared/appThemes'
 import type { WindowBackgroundMaterial, WindowBackgroundMaterialState } from '@shared/types'
+import type { TerminalProcessActivitySnapshot } from '@shared/terminalProcessActivity'
 import { contextBridge, ipcRenderer } from 'electron'
 import type { AgentActiveSessionSnapshot, AgentDetectionSnapshot, AgentProviderAvailabilitySnapshot, AgentSessionHistoryQuery, AgentSessionHistoryResult, AgentUsageDetailsSnapshot, AgentUsageHistoryRequest, AgentUsageHistorySnapshot, AgentUsageSnapshot, BoardTask, FileListOptions, FileSearchResult, FileWriteInput, FloatingNavigationEvent, FloatingNavigationRequest, GitCommitHistoryResult, GitFileDiffContent, GitRepository, GitStatusResult, NotificationAttentionOptions, RemotePreparationResult, RemotePreparationStatus, TerminalCreateOptions, TerminalCreateResult, TerminalExitEvent, UpdateState, WindowBounds, WindowClosePreparationRequest, WindowClosePreparationResponse, Workspace, WorkspaceCreateInput, WorkspaceGitDiffResult, WorkspaceManagementCommitInput, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
 import { createSerialTaskQueue } from '@shared/serialTaskQueue'
@@ -145,6 +146,13 @@ contextBridge.exposeInMainWorld('electron', {
 
   // Terminal
   terminal: {
+    getProcessActivity: () =>
+      ipcRenderer.invoke('terminal:processActivity:snapshot') as Promise<TerminalProcessActivitySnapshot>,
+    onProcessActivityChanged: (callback: (snapshot: TerminalProcessActivitySnapshot) => void) => {
+      const handler = (_event: unknown, snapshot: TerminalProcessActivitySnapshot) => callback(snapshot)
+      ipcRenderer.on('terminal:processActivity:changed', handler)
+      return () => ipcRenderer.removeListener('terminal:processActivity:changed', handler)
+    },
     prepareRemote: (workspaceId: string) =>
       ipcRenderer.invoke('terminal:prepareRemote', workspaceId) as Promise<RemotePreparationResult>,
     onPreparationProgress: (workspaceId: string, callback: (status: RemotePreparationStatus) => void) => {

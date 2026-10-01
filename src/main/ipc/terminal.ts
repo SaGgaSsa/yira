@@ -11,6 +11,7 @@ import type {
 } from '@shared/types'
 import type { TerminalSessionIdentity, TerminalSessionTarget } from '@shared/terminalSessionIdentity'
 import type { TerminalDaemonSpawn } from '@shared/terminalDaemonProtocol'
+import type { TerminalProcessActivitySnapshot } from '@shared/terminalProcessActivity'
 import { detectShellProfiles, detectSshClient } from '../shell-profiles'
 import { buildTerminalHistorySetup } from '../terminal-history'
 import { resolveTerminalWorkspaceRoot } from '../workspace-root'
@@ -28,6 +29,8 @@ import { normalizeAgentOpaqueId } from '../agents/query'
 import { buildAgentTerminalLaunch, type AgentTerminalLaunch } from '../agents/terminal'
 import { connectTerminalDaemon, stopTerminalDaemon } from '../terminalDaemonClient'
 import { YIRA_HOME } from '../paths'
+import { disposeProcessLister } from '../processTree'
+import { TerminalProcessActivityMonitor } from '../terminalProcessActivity'
 import {
   PersistentTerminalSessions,
   type PersistentTerminalSubscriber,
@@ -99,6 +102,22 @@ const persistentTerminalSessions = new PersistentTerminalSessions({
   onAgentExit: (identity) => agentAlerts.clearOnDestroy(identity.tileId),
   onAgentDestroyed: (identity) => agentAlerts.clearOnDestroy(identity.tileId),
 })
+
+let terminalProcessActivityMonitor: TerminalProcessActivityMonitor | null = null
+
+function getTerminalProcessActivityMonitor(): TerminalProcessActivityMonitor {
+  if (!terminalProcessActivityMonitor) {
+    terminalProcessActivityMonitor = new TerminalProcessActivityMonitor({
+      listRoots: () => persistentTerminalSessions.listRunningTerminalProcesses(),
+      onChange: (snapshot) => {
+        for (const window of BrowserWindow.getAllWindows()) {
+          if (!window.isDestroyed()) window.webContents.send('terminal:processActivity:changed', snapshot)
+        }
+      },
+    })
+  }
+  return terminalProcessActivityMonitor
+}
 
 const remotePreparations = new Map<string, Promise<RemotePreparationResult>>()
 const remotePreparationListeners = new Map<string, Set<WebContents>>()
@@ -226,8 +245,14 @@ export function countRunningTerminalSessions(): number {
 
 /** Close every terminal and stop the daemon so an installer can replace the app. */
 export async function stopTerminalDaemonForUpdate(): Promise<void> {
+  stopTerminalProcessActivityMonitor()
   await persistentTerminalSessions.shutdown()
   await stopTerminalDaemon({ directory: TERMINAL_DAEMON_DIRECTORY, timeoutMs: 3_000 })
+}
+
+export function stopTerminalProcessActivityMonitor(): void {
+  terminalProcessActivityMonitor?.stop()
+  disposeProcessLister()
 }
 
 export function destroyWorkspaceTerminalSessions(workspaceId: string): Promise<void> {
@@ -334,6 +359,10 @@ export function setAgentAlertsEnabled(enabled: boolean): void {
 }
 
 export function registerTerminalIPC(): void {
+  const processActivityMonitor = getTerminalProcessActivityMonitor()
+  ipcMain.handle('terminal:processActivity:snapshot', () => processActivityMonitor.snapshot())
+  processActivityMonitor.start()
+
   ipcMain.handle('shellProfiles:list', async () => profiles)
   ipcMain.handle('terminal:sshAvailable', async () => sshClient !== null)
 

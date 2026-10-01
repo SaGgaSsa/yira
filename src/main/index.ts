@@ -12,6 +12,7 @@ import {
   shutdownTerminalSessions,
   destroyWorkspaceTerminalSessions,
   stopTerminalDaemonForUpdate,
+  stopTerminalProcessActivityMonitor,
   countRunningTerminalSessions,
 } from './ipc/terminal'
 import { getEnabledAgentProviders, loadStoredUserSettings, registerSettingsIPC } from './ipc/settings'
@@ -146,7 +147,10 @@ async function requestApplicationQuit(): Promise<void> {
 }
 
 app.on('before-quit', (event) => {
-  if (closePreparationApproved) return
+  if (closePreparationApproved) {
+    stopTerminalProcessActivityMonitor()
+    return
+  }
   event.preventDefault()
   void requestApplicationQuit()
 })
