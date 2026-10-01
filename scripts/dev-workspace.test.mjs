@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -8,6 +8,7 @@ import {
   createDevDataDirectory,
   getDefaultDevDataDirectory,
   seedDevDataDirectory,
+  stopProfileTerminalDaemon,
 } from './dev-workspace.mjs'
 
 test('uses a persistent isolated data directory for default development data', () => {
@@ -107,6 +108,22 @@ test('seeds a markdown file opened in a files tile under the workspace root fold
     assert.equal(config.workspaces.find((workspace) => workspace.id === 'dev-development').config.rootFolderPath, workspaceDirectory)
     assert.equal(fileTile.filePath, 'PRUEBA.md')
     assert.match(await readFile(join(workspaceDirectory, 'PRUEBA.md'), 'utf8'), /^# Archivo de prueba/)
+  } finally {
+    await rm(dataDirectory, { recursive: true, force: true })
+  }
+})
+
+test('stops the terminal daemon recorded in a profile before it is deleted', async () => {
+  const dataDirectory = await mkdtemp(join(tmpdir(), 'yira-dev-daemon-test-'))
+  const killed = []
+
+  try {
+    assert.equal(await stopProfileTerminalDaemon(dataDirectory, { kill: async (pid) => { killed.push(pid) } }), false)
+
+    await mkdir(join(dataDirectory, 'terminal-runtime'))
+    await writeFile(join(dataDirectory, 'terminal-runtime', 'endpoint.json'), JSON.stringify({ pid: 424242 }))
+    assert.equal(await stopProfileTerminalDaemon(dataDirectory, { kill: async (pid) => { killed.push(pid) } }), true)
+    assert.deepEqual(killed, [424242])
   } finally {
     await rm(dataDirectory, { recursive: true, force: true })
   }

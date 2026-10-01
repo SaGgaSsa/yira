@@ -1,5 +1,5 @@
-import { spawn } from 'node:child_process'
-import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { execFile, spawn } from 'node:child_process'
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -287,6 +287,38 @@ export async function seedDevDataDirectory(dataDirectory, platform = process.pla
   return true
 }
 
+function killProcessTree(pid, platform = process.platform) {
+  if (platform !== 'win32') {
+    process.kill(pid, 'SIGTERM')
+    return Promise.resolve()
+  }
+  return new Promise((resolveKill) => {
+    execFile('taskkill', ['/PID', String(pid), '/T', '/F'], { windowsHide: true }, () => resolveKill())
+  })
+}
+
+/**
+ * The terminal daemon outlives the app by design. A temporary profile must
+ * stop its daemon before deletion, or the daemon and its shells stay orphaned.
+ */
+export async function stopProfileTerminalDaemon(dataDirectory, { kill = killProcessTree } = {}) {
+  let endpoint
+  try {
+    endpoint = JSON.parse(await readFile(join(dataDirectory, 'terminal-runtime', 'endpoint.json'), 'utf8'))
+  } catch {
+    return false
+  }
+  const pid = endpoint?.pid
+  if (!Number.isSafeInteger(pid) || pid <= 0 || pid === process.pid) return false
+
+  try {
+    await kill(pid)
+  } catch {
+    return false
+  }
+  return true
+}
+
 async function runDevServer() {
   const workspace = await createDevDataDirectory(process.env, { temporary: process.argv.includes('--temp') })
   const seeded = await seedDevDataDirectory(workspace.dataDirectory)
@@ -313,6 +345,7 @@ async function runDevServer() {
   child.once('close', async (code) => {
     process.exitCode = code ?? 1
     if (workspace.temporary && !process.env.YIRA_KEEP_TEST_PROFILE) {
+      await stopProfileTerminalDaemon(workspace.dataDirectory)
       await rm(workspace.dataDirectory, { recursive: true, force: true, maxRetries: 5 }).catch(() => undefined)
     }
   })
