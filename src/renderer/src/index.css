@@ -99,7 +99,7 @@
   --font-lg: min(30px, calc(var(--font-base) * 1.125));
   --font-xl: min(34px, calc(var(--font-base) * 1.25));
   --font-5xl: min(64px, calc(var(--font-base) * 3));
-  --font-note-title: min(48px, calc(var(--font-base) * 2.1));
+  --font-note-title: min(36px, calc(var(--font-base) * 1.75));
   --font-label: max(9px, calc(var(--font-base) * 0.6875));
   --font-caption: max(10px, calc(var(--font-base) * 0.75));
   --font-display: 'Doto', 'IBM Plex Mono', monospace;
@@ -254,10 +254,16 @@ textarea {
 
 .yira-note-editor .bn-editor {
   min-height: 420px;
-  padding: 0 10px 40px;
+  padding: 0 0 40px;
   background: transparent;
   color: var(--text-primary);
   font-family: var(--font-body);
+  caret-color: var(--note-accent, var(--text-secondary));
+}
+
+.yira-note-editor input[type='checkbox'],
+.yira-note-editor [data-content-type='checkListItem'] input {
+  accent-color: var(--note-accent, var(--text-secondary));
 }
 
 .yira-note-editor .bn-block-content {
@@ -388,7 +394,7 @@ textarea {
   --font-lg: min(30px, calc(var(--font-base) * 1.125));
   --font-xl: min(34px, calc(var(--font-base) * 1.25));
   --font-5xl: min(64px, calc(var(--font-base) * 3));
-  --font-note-title: min(48px, calc(var(--font-base) * 2.1));
+  --font-note-title: min(36px, calc(var(--font-base) * 1.75));
   --font-label: max(9px, calc(var(--font-base) * 0.6875));
   --font-caption: max(10px, calc(var(--font-base) * 0.75));
   font-size: var(--font-base);

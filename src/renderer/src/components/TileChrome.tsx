@@ -266,14 +266,9 @@ export function TileChrome({
               ? '1px solid var(--text-display)'
               : isSelected
                 ? '1px solid var(--border-visible)'
-              : tile.type === 'note'
-                ? '1px solid var(--border-visible)'
-                : '1px solid var(--border)',
+              : '1px solid var(--border)',
           borderRadius: 0,
           transition: 'border-color 0.15s ease, background 0.15s ease',
-          boxShadow: tile.type === 'note' && tile.noteColor
-            ? `inset 0 3px 0 ${NOTE_COLORS[tile.noteColor]?.bg || 'var(--border-visible)'}`
-            : 'none',
         }}
       >
         {/* Title bar */}
@@ -349,10 +344,9 @@ export function TileChrome({
             {/* Note: color indicator */}
             {tile.type === 'note' && tile.noteColor && (
               <span
-                className="w-4 h-4 rounded-full shrink-0 border"
+                className="h-2 w-2 shrink-0 rounded-full"
                 style={{
-                  background: NOTE_COLORS[tile.noteColor]?.bg || '#fef3c7',
-                  borderColor: 'var(--border-visible)',
+                  background: NOTE_COLORS[tile.noteColor]?.accent || 'var(--text-secondary)',
                 }}
               />
             )}

@@ -18,6 +18,7 @@ function noteDataPath(tileId: string): string {
 
 export interface NoteData {
   title?: string
+  updatedAt?: number
   blocks?: NoteBlocks
   color?: string
   font?: string

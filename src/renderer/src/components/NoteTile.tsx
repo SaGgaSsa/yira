@@ -13,6 +13,7 @@ import { getMarkdownEditorKey } from '@/utils/markdownEditor'
 import { MARKDOWN_NOTE_SOURCE_PATH } from '@/utils/markdownImage'
 import { safeMarkdownPreviewOptions } from '@/utils/markdownPlugins'
 import { safeMarkdownUrl } from '@/utils/markdownPreview'
+import { useNoteDocument, type NoteDocumentData } from '@/hooks/useNoteDocument'
 import { createMarkdownComponents } from './MarkdownImage'
 import { MarkdownPreviewPane } from './MarkdownPreviewPane'
 
@@ -23,8 +24,19 @@ interface NoteTileProps {
   workspaceRootPath?: string
 }
 
-type NoteData = {
-  title?: string
+interface RichNoteFields {
+  title: string
+  blocks: NoteBlocks | null
+  summary: string
+}
+
+interface MarkdownNoteFields {
+  title: string
+  markdown: string
+  viewMode: MarkdownViewMode
+}
+
+type NoteData = NoteDocumentData & {
   blocks?: NoteBlocks
   content?: string
   color?: string
@@ -47,6 +59,23 @@ const noteSchema = BlockNoteSchema.create({
   },
 })
 
+const MARKDOWN_COMMANDS = [
+  commands.bold,
+  commands.italic,
+  commands.strikethrough,
+  commands.divider,
+  commands.title1,
+  commands.title2,
+  commands.divider,
+  commands.link,
+  commands.image,
+  commands.quote,
+  commands.code,
+  commands.codeBlock,
+  commands.unorderedListCommand,
+  commands.orderedListCommand,
+]
+
 function isBlockArray(value: unknown): value is NoteBlocks {
   return Array.isArray(value)
 }
@@ -61,18 +90,6 @@ function legacyContentToBlocks(content: string | undefined): PartialBlock[] {
   }))
 }
 
-function titleFromTile(tile: TileState): string {
-  return tile.label ?? ''
-}
-
-function titleFromData(data: NoteData | null, tile: TileState): string {
-  if (data && Object.prototype.hasOwnProperty.call(data, 'title')) {
-    return data.title ?? ''
-  }
-
-  return titleFromTile(tile)
-}
-
 function labelFromTitle(title: string): string | undefined {
   return title.trim() || undefined
 }
@@ -83,6 +100,28 @@ function blocksToSummary(editor: ReturnType<typeof useCreateBlockNote>): string 
   } catch {
     return ''
   }
+}
+
+function countWords(text: string): number {
+  return text.trim().split(/\s+/).filter(Boolean).length
+}
+
+function relativeTime(updatedAt: number | undefined, language: string, now: number): string | undefined {
+  if (updatedAt == null) return undefined
+
+  const seconds = Math.round((updatedAt - now) / 1000)
+  const units: Array<[Intl.RelativeTimeFormatUnit, number]> = [
+    ['year', 31_536_000],
+    ['month', 2_592_000],
+    ['week', 604_800],
+    ['day', 86_400],
+    ['hour', 3_600],
+    ['minute', 60],
+    ['second', 1],
+  ]
+  const [unit, size] = units.find(([, unitSize]) => Math.abs(seconds) >= unitSize) ?? units[units.length - 1]
+
+  return new Intl.RelativeTimeFormat(language || 'en', { numeric: 'auto' }).format(Math.round(seconds / size), unit)
 }
 
 function RichNoteEditor({
@@ -104,6 +143,7 @@ function RichNoteEditor({
       headers: true,
     },
   })
+
   const handleCopy = useCallback((event: React.ClipboardEvent<HTMLDivElement>) => {
     const view = editor.prosemirrorView
     if (view.state.selection.empty) return
@@ -131,169 +171,153 @@ function RichNoteEditor({
       editor={editor}
       theme="dark"
       onCopy={handleCopy}
-      onChange={() => {
-        onChange(editor.document as NoteBlocks, blocksToSummary(editor))
-      }}
+      onChange={() => onChange(editor.document as NoteBlocks, blocksToSummary(editor))}
     />
+  )
+}
+
+function NotePageHeader({
+  title,
+  accent,
+  updatedAt,
+  wordCount,
+  rightSlot,
+  onTitleChange,
+  onTitleBlur,
+}: {
+  title: string
+  accent: string
+  updatedAt?: number
+  wordCount: number
+  rightSlot?: React.ReactNode
+  onTitleChange: (event: React.ChangeEvent<HTMLInputElement>) => void
+  onTitleBlur: () => void
+}): React.ReactElement {
+  const { t, i18n } = useTranslation()
+  const [now, setNow] = useState(Date.now())
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000)
+    return () => clearInterval(timer)
+  }, [])
+
+  const time = relativeTime(updatedAt, i18n.language, now)
+
+  return (
+    <header className="mx-auto w-full px-6 pt-10 sm:px-10">
+      <div className="flex items-center gap-3">
+        <span
+          aria-hidden="true"
+          className="h-[10px] w-[10px] shrink-0 rounded-full"
+          style={{ backgroundColor: accent }}
+        />
+        <input
+          className={
+            'note-title-text min-w-0 flex-1 bg-transparent font-body font-semibold leading-tight text-text-display outline-none placeholder:text-text-disabled'
+          }
+          value={title}
+          onChange={onTitleChange}
+          onBlur={onTitleBlur}
+          placeholder={t('ui.noteUntitled')}
+          spellCheck={false}
+        />
+      </div>
+
+      <div
+        className="mt-2 flex min-h-6 items-center justify-between gap-3 text-text-secondary"
+        style={{ fontSize: 'var(--font-caption)' }}
+      >
+        <span className="truncate">
+          {time ? <>{t('ui.noteEdited', { time })} · </> : null}
+          {t('ui.noteWordCount', { count: wordCount })}
+        </span>
+        {rightSlot}
+      </div>
+    </header>
   )
 }
 
 function RichNoteTile({ tile, autoFocus, onUpdate }: NoteTileProps): React.ReactElement {
   const { t } = useTranslation()
-  const [title, setTitle] = useState(titleFromTile(tile))
-  const [blocks, setBlocks] = useState<PartialBlock[] | null>(null)
-  const [revision, setRevision] = useState(0)
-  const onUpdateRef = useRef(onUpdate)
-  const latestTitleRef = useRef(title)
-  const latestBlocksRef = useRef<NoteBlocks>(legacyContentToBlocks(tile.noteContent) as NoteBlocks)
-  const latestSummaryRef = useRef(tile.noteContent ?? '')
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const hasUnsavedChangesRef = useRef(false)
-  const hasEditedSinceLoadRef = useRef(false)
-  const loadRequestIdRef = useRef(0)
 
-  const accentColor = useMemo(() => {
-    if (!tile.noteColor) return 'var(--border-visible)'
-    return NOTE_COLORS[tile.noteColor]?.bg || 'var(--border-visible)'
-  }, [tile.noteColor])
+  const applyLoaded = useCallback((raw: NoteDocumentData | null, currentTile: TileState) => {
+    const data = raw as NoteData | null
+    const title = data && Object.prototype.hasOwnProperty.call(data, 'title')
+      ? data.title ?? ''
+      : currentTile.label ?? ''
+    const blocks = isBlockArray(data?.blocks)
+      ? data.blocks
+      : legacyContentToBlocks(data?.content ?? currentTile.noteContent)
+    const summary = data?.content ?? currentTile.noteContent ?? ''
+    const patch: Partial<TileState> = {}
 
-  useEffect(() => {
-    onUpdateRef.current = onUpdate
-  }, [onUpdate])
+    if (data?.color) patch.noteColor = data.color as NoteColor
+    if (data?.font) patch.noteFont = data.font as NoteFont
+    if (summary !== currentTile.noteContent) patch.noteContent = summary
+    if (labelFromTitle(title) !== currentTile.label) patch.label = labelFromTitle(title)
 
-  useEffect(() => {
-    latestTitleRef.current = title
-  }, [title])
+    const migration = data && !data.blocks && data.content != null
+      ? { ...data, title, blocks: blocks as NoteBlocks, content: summary }
+      : undefined
 
-  useEffect(() => {
-    const nextTitle = titleFromTile(tile)
-    if (nextTitle === latestTitleRef.current) return
-    latestTitleRef.current = nextTitle
-    setTitle(nextTitle)
-  }, [tile.label])
-
-  const saveNow = useCallback((data?: { title?: string; blocks?: NoteBlocks; summary?: string }) => {
-    if (!hasUnsavedChangesRef.current && !data) return
-
-    if (saveTimerRef.current) {
-      clearTimeout(saveTimerRef.current)
-      saveTimerRef.current = null
+    return {
+      fields: { title, blocks, summary },
+      patch,
+      updatedAt: data?.updatedAt,
+      migration,
     }
+  }, [])
 
-    const titleToSave = data?.title ?? latestTitleRef.current
-    const blocksToSave = data?.blocks ?? latestBlocksRef.current
-    const summary = data?.summary ?? latestSummaryRef.current
-    hasUnsavedChangesRef.current = false
-    latestTitleRef.current = titleToSave
-    latestBlocksRef.current = blocksToSave
-    latestSummaryRef.current = summary
-
-    void window.electron.note.save(tile.id, {
-      title: titleToSave,
-      blocks: blocksToSave,
-      content: summary,
+  const note = useNoteDocument<RichNoteFields>({
+    tile,
+    onUpdate,
+    initialFields: {
+      title: tile.label ?? '',
+      blocks: null,
+      summary: tile.noteContent ?? '',
+    },
+    buildPayload: useCallback((fields: RichNoteFields, updatedAt: number) => ({
+      title: fields.title,
+      blocks: fields.blocks ?? legacyContentToBlocks(fields.summary) as NoteBlocks,
+      content: fields.summary,
       color: tile.noteColor ?? 'white',
       font: tile.noteFont ?? 'sans',
-    })
-  }, [tile.id, tile.noteColor, tile.noteFont])
+      updatedAt,
+    }), [tile.noteColor, tile.noteFont]),
+    applyLoaded,
+  })
 
-  const scheduleSave = useCallback((data?: { title?: string; blocks?: NoteBlocks; summary?: string }) => {
-    hasUnsavedChangesRef.current = true
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-    saveTimerRef.current = setTimeout(() => {
-      saveNow(data)
-    }, 500)
-  }, [saveNow])
+  const accent = tile.noteColor ? NOTE_COLORS[tile.noteColor]?.accent : undefined
 
-  useEffect(() => {
-    const loadRequestId = loadRequestIdRef.current + 1
-    loadRequestIdRef.current = loadRequestId
-    hasEditedSinceLoadRef.current = false
-    setBlocks(null)
+  const handleTitleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    note.updateField('title', event.target.value, { label: labelFromTitle(event.target.value) })
+  }
 
-    window.electron.note.load(tile.id).then((data: NoteData | null) => {
-      if (loadRequestIdRef.current !== loadRequestId) return
-      if (hasEditedSinceLoadRef.current) return
-
-      const loadedTitle = titleFromData(data, tile)
-      const loadedLabel = labelFromTitle(loadedTitle)
-      const loadedBlocks = isBlockArray(data?.blocks)
-        ? data.blocks
-        : legacyContentToBlocks(data?.content ?? tile.noteContent)
-      const summary = data?.content ?? tile.noteContent ?? ''
-      const patch: Partial<TileState> = {}
-
-      if (data?.color) patch.noteColor = data.color as NoteColor
-      if (data?.font) patch.noteFont = data.font as NoteFont
-      if (summary !== tile.noteContent) patch.noteContent = summary
-      if (loadedLabel !== tile.label) patch.label = loadedLabel
-
-      latestTitleRef.current = loadedTitle
-      latestBlocksRef.current = loadedBlocks as NoteBlocks
-      latestSummaryRef.current = summary
-      setTitle(loadedTitle)
-      setBlocks(loadedBlocks)
-      setRevision((value) => value + 1)
-
-      if (Object.keys(patch).length > 0) onUpdateRef.current(patch)
-
-      if (data && !data.blocks && data.content != null) {
-        void window.electron.note.save(tile.id, {
-          ...data,
-          title: loadedTitle,
-          blocks: loadedBlocks as NoteBlocks,
-          content: summary,
-        })
-      }
-    })
-  }, [tile.id])
-
-  useEffect(() => {
-    return () => {
-      saveNow()
-    }
-  }, [saveNow])
-
-  const handleTitleChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    const nextTitle = event.target.value
-    const nextLabel = labelFromTitle(nextTitle)
-    hasEditedSinceLoadRef.current = true
-    latestTitleRef.current = nextTitle
-    setTitle(nextTitle)
-    onUpdate({ label: nextLabel })
-    scheduleSave({ title: nextTitle })
-  }, [onUpdate, scheduleSave])
-
-  const handleBlocksChange = useCallback((nextBlocks: NoteBlocks, summary: string) => {
-    hasEditedSinceLoadRef.current = true
-    latestBlocksRef.current = nextBlocks
-    latestSummaryRef.current = summary
+  const handleBlocksChange = (nextBlocks: NoteBlocks, summary: string) => {
+    note.scheduleSave({ blocks: nextBlocks, summary })
     onUpdate({ noteContent: summary })
-    scheduleSave({ blocks: nextBlocks, summary })
-  }, [onUpdate, scheduleSave])
+  }
 
   return (
-    <div className="h-full w-full overflow-auto bg-bg-secondary">
-      <div
-        className="mx-auto flex min-h-full w-full max-w-[760px] flex-col border border-border-visible bg-bg-secondary shadow-[0_18px_60px_rgba(0,0,0,0.26)]"
-        style={{ borderTopColor: accentColor, borderTopWidth: 4 }}
-      >
-        <div className="border-b border-border px-10 pb-5 pt-8">
-          <input
-            className="note-title-text w-full bg-transparent font-display leading-tight text-text-display outline-none placeholder:text-text-disabled"
-            value={title}
-            onChange={handleTitleChange}
-            onBlur={() => saveNow()}
-            placeholder=""
-            spellCheck={false}
-          />
-        </div>
+    <div
+      className="h-full w-full overflow-auto bg-bg-elevated"
+      style={{ '--note-accent': accent ?? 'var(--text-secondary)' } as React.CSSProperties}
+    >
+      <div className="mx-auto flex min-h-full w-full max-w-[720px] flex-col">
+        <NotePageHeader
+          title={note.fields.title}
+          accent="var(--note-accent)"
+          updatedAt={note.updatedAt}
+          wordCount={countWords(note.fields.summary)}
+          onTitleChange={handleTitleChange}
+          onTitleBlur={() => note.saveNow()}
+        />
 
-        <div className="min-h-0 flex-1 px-6 py-6">
-          {blocks ? (
+        <div className="min-h-0 flex-1 px-6 py-8 sm:px-10">
+          {note.fields.blocks ? (
             <RichNoteEditor
-              key={`${tile.id}:${revision}`}
-              initialBlocks={blocks}
+              key={tile.id}
+              initialBlocks={note.fields.blocks}
               autoFocus={autoFocus}
               onChange={handleBlocksChange}
             />
@@ -306,53 +330,69 @@ function RichNoteTile({ tile, autoFocus, onUpdate }: NoteTileProps): React.React
   )
 }
 
-const MARKDOWN_COMMANDS = [
-  commands.bold,
-  commands.italic,
-  commands.strikethrough,
-  commands.divider,
-  commands.title1,
-  commands.title2,
-  commands.divider,
-  commands.link,
-  commands.image,
-  commands.quote,
-  commands.code,
-  commands.codeBlock,
-  commands.unorderedListCommand,
-  commands.orderedListCommand,
-]
-
-function MarkdownNoteTile({ tile, autoFocus = false, onUpdate, workspaceRootPath = '' }: NoteTileProps): React.ReactElement {
+function MarkdownNoteTile({
+  tile,
+  autoFocus = false,
+  onUpdate,
+  workspaceRootPath = '',
+}: NoteTileProps): React.ReactElement {
   const { t } = useTranslation()
+  const editorRef = useRef<HTMLDivElement>(null)
   const markdownViewOptions: Array<{ mode: MarkdownViewMode; label: string }> = [
     { mode: 'edit', label: t('ui.noteEditMode') },
     { mode: 'preview', label: t('ui.notePreviewMode') },
     { mode: 'live', label: t('ui.noteSplitMode') },
   ]
-  const [title, setTitle] = useState(titleFromTile(tile))
-  const [markdown, setMarkdown] = useState(tile.markdown ?? '')
-  const [viewMode, setViewMode] = useState<MarkdownViewMode>(normalizeMarkdownViewMode(tile.markdownView))
-  const onUpdateRef = useRef(onUpdate)
-  const latestTitleRef = useRef(title)
-  const latestMarkdownRef = useRef(markdown)
-  const latestViewModeRef = useRef(viewMode)
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const hasUnsavedChangesRef = useRef(false)
-  const hasEditedSinceLoadRef = useRef(false)
-  const loadRequestIdRef = useRef(0)
-  const editorRef = useRef<HTMLDivElement>(null)
 
-  const accentColor = useMemo(() => {
-    if (!tile.noteColor) return 'var(--border-visible)'
-    return NOTE_COLORS[tile.noteColor]?.bg || 'var(--border-visible)'
-  }, [tile.noteColor])
+  const applyLoaded = useCallback((raw: NoteDocumentData | null, currentTile: TileState) => {
+    const data = raw as NoteData | null
+    const title = data && Object.prototype.hasOwnProperty.call(data, 'title')
+      ? data.title ?? ''
+      : currentTile.label ?? ''
+    const markdown = typeof data?.markdown === 'string' ? data.markdown : currentTile.markdown ?? ''
+    const viewMode = normalizeMarkdownViewMode(data?.markdownView ?? currentTile.markdownView)
+    const patch: Partial<TileState> = {
+      noteKind: 'markdown',
+      markdown,
+      markdownView: viewMode,
+    }
 
+    if (data?.color) patch.noteColor = data.color as NoteColor
+    if (data?.font) patch.noteFont = data.font as NoteFont
+    if (labelFromTitle(title) !== currentTile.label) patch.label = labelFromTitle(title)
+
+    return {
+      fields: { title, markdown, viewMode },
+      patch,
+      updatedAt: data?.updatedAt,
+    }
+  }, [])
+
+  const note = useNoteDocument<MarkdownNoteFields>({
+    tile,
+    onUpdate,
+    initialFields: {
+      title: tile.label ?? '',
+      markdown: tile.markdown ?? '',
+      viewMode: normalizeMarkdownViewMode(tile.markdownView),
+    },
+    buildPayload: useCallback((fields: MarkdownNoteFields, updatedAt: number) => ({
+      title: fields.title,
+      noteKind: 'markdown',
+      markdown: fields.markdown,
+      markdownView: fields.viewMode,
+      color: tile.noteColor ?? 'white',
+      font: tile.noteFont ?? 'sans',
+      updatedAt,
+    }), [tile.noteColor, tile.noteFont]),
+    applyLoaded,
+  })
+
+  const accent = tile.noteColor ? NOTE_COLORS[tile.noteColor]?.accent : undefined
   const markdownComponents = useMemo(() => createMarkdownComponents({
     sourcePath: MARKDOWN_NOTE_SOURCE_PATH,
     rootPath: workspaceRootPath,
   }), [workspaceRootPath])
-
   const markdownPreviewOptions = useMemo(() => ({
     ...safeMarkdownPreviewOptions,
     urlTransform: safeMarkdownUrl,
@@ -360,172 +400,70 @@ function MarkdownNoteTile({ tile, autoFocus = false, onUpdate, workspaceRootPath
   }), [markdownComponents])
 
   useEffect(() => {
-    onUpdateRef.current = onUpdate
-  }, [onUpdate])
-
-  useEffect(() => {
-    latestTitleRef.current = title
-  }, [title])
-
-  useEffect(() => {
-    const nextTitle = titleFromTile(tile)
-    if (nextTitle === latestTitleRef.current) return
-    latestTitleRef.current = nextTitle
-    setTitle(nextTitle)
-  }, [tile.label])
-
-  useEffect(() => {
-    if (!autoFocus) return
-    editorRef.current?.querySelector<HTMLTextAreaElement>('textarea')?.focus()
+    if (autoFocus) editorRef.current?.querySelector<HTMLTextAreaElement>('textarea')?.focus()
   }, [autoFocus])
 
-  const saveNow = useCallback((data?: {
-    title?: string
-    markdown?: string
-    markdownView?: MarkdownViewMode
-  }) => {
-    if (!hasUnsavedChangesRef.current && !data) return
+  const handleTitleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    note.updateField('title', event.target.value, { label: labelFromTitle(event.target.value) })
+  }
 
-    if (saveTimerRef.current) {
-      clearTimeout(saveTimerRef.current)
-      saveTimerRef.current = null
-    }
+  const handleMarkdownChange = (markdown: string) => {
+    note.updateField('markdown', markdown, { markdown })
+  }
 
-    const titleToSave = data?.title ?? latestTitleRef.current
-    const markdownToSave = data?.markdown ?? latestMarkdownRef.current
-    const markdownViewToSave = data?.markdownView ?? latestViewModeRef.current
-    hasUnsavedChangesRef.current = false
-    latestTitleRef.current = titleToSave
-    latestMarkdownRef.current = markdownToSave
-    latestViewModeRef.current = markdownViewToSave
+  const handleViewModeChange = (viewMode: MarkdownViewMode) => {
+    note.updateField('viewMode', viewMode, { markdownView: viewMode })
+  }
 
-    void window.electron.note.save(tile.id, {
-      title: titleToSave,
-      noteKind: 'markdown',
-      markdown: markdownToSave,
-      markdownView: markdownViewToSave,
-      color: tile.noteColor ?? 'white',
-      font: tile.noteFont ?? 'sans',
-    })
-  }, [tile.id, tile.noteColor, tile.noteFont])
-
-  const scheduleSave = useCallback((data?: {
-    title?: string
-    markdown?: string
-    markdownView?: MarkdownViewMode
-  }) => {
-    hasUnsavedChangesRef.current = true
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-    saveTimerRef.current = setTimeout(() => {
-      saveNow(data)
-    }, 500)
-  }, [saveNow])
-
-  useEffect(() => {
-    const loadRequestId = loadRequestIdRef.current + 1
-    loadRequestIdRef.current = loadRequestId
-    hasEditedSinceLoadRef.current = false
-
-    window.electron.note.load(tile.id).then((data: NoteData | null) => {
-      if (loadRequestIdRef.current !== loadRequestId || hasEditedSinceLoadRef.current) return
-
-      const loadedTitle = titleFromData(data, tile)
-      const loadedLabel = labelFromTitle(loadedTitle)
-      const loadedMarkdown = typeof data?.markdown === 'string' ? data.markdown : tile.markdown ?? ''
-      const loadedViewMode = normalizeMarkdownViewMode(data?.markdownView ?? tile.markdownView)
-      const patch: Partial<TileState> = {
-        noteKind: 'markdown',
-        markdown: loadedMarkdown,
-        markdownView: loadedViewMode,
-      }
-
-      if (data?.color) patch.noteColor = data.color as NoteColor
-      if (data?.font) patch.noteFont = data.font as NoteFont
-      if (loadedLabel !== tile.label) patch.label = loadedLabel
-
-      latestTitleRef.current = loadedTitle
-      latestMarkdownRef.current = loadedMarkdown
-      latestViewModeRef.current = loadedViewMode
-      setTitle(loadedTitle)
-      setMarkdown(loadedMarkdown)
-      setViewMode(loadedViewMode)
-      onUpdateRef.current(patch)
-    })
-  }, [tile.id])
-
-  useEffect(() => () => {
-    saveNow()
-  }, [saveNow])
-
-  const handleTitleChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    const nextTitle = event.target.value
-    hasEditedSinceLoadRef.current = true
-    latestTitleRef.current = nextTitle
-    setTitle(nextTitle)
-    onUpdate({ label: labelFromTitle(nextTitle) })
-    scheduleSave({ title: nextTitle })
-  }, [onUpdate, scheduleSave])
-
-  const handleMarkdownChange = useCallback((nextMarkdown: string) => {
-    hasEditedSinceLoadRef.current = true
-    latestMarkdownRef.current = nextMarkdown
-    setMarkdown(nextMarkdown)
-    onUpdate({ markdown: nextMarkdown })
-    scheduleSave({ markdown: nextMarkdown })
-  }, [onUpdate, scheduleSave])
-
-  const handleViewModeChange = useCallback((nextViewMode: MarkdownViewMode) => {
-    hasEditedSinceLoadRef.current = true
-    latestViewModeRef.current = nextViewMode
-    setViewMode(nextViewMode)
-    onUpdate({ markdownView: nextViewMode })
-    scheduleSave({ markdownView: nextViewMode })
-  }, [onUpdate, scheduleSave])
+  const modeButtons = (
+    <div className="flex shrink-0 items-center gap-1">
+      {markdownViewOptions.map(({ mode, label }) => (
+        <button
+          key={mode}
+          className={`rounded-md px-2 py-1 text-xs transition-colors ${
+            note.fields.viewMode === mode
+              ? 'bg-hover-bg text-text-display'
+              : 'text-text-secondary hover:text-text-display'
+          }`}
+          onClick={() => handleViewModeChange(mode)}
+          type="button"
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  )
 
   return (
-    <div className="h-full w-full overflow-auto bg-bg-secondary">
-      <div
-        className="mx-auto flex min-h-full w-full max-w-[960px] flex-col border border-border-visible bg-bg-secondary shadow-[0_18px_60px_rgba(0,0,0,0.26)]"
-        style={{ borderTopColor: accentColor, borderTopWidth: 4 }}
-      >
-        <div className="border-b border-border px-10 pb-5 pt-8">
-          <input
-            className="note-title-text w-full bg-transparent font-display leading-tight text-text-display outline-none placeholder:text-text-disabled"
-            value={title}
-            onChange={handleTitleChange}
-            onBlur={() => saveNow()}
-            placeholder=""
-            spellCheck={false}
-          />
-        </div>
+    <div
+      className="h-full w-full overflow-auto bg-bg-elevated"
+      style={{ '--note-accent': accent ?? 'var(--text-secondary)' } as React.CSSProperties}
+    >
+      <div className="mx-auto flex min-h-full w-full max-w-[960px] flex-col">
+        <NotePageHeader
+          title={note.fields.title}
+          accent="var(--note-accent)"
+          updatedAt={note.updatedAt}
+          wordCount={countWords(note.fields.markdown)}
+          rightSlot={modeButtons}
+          onTitleChange={handleTitleChange}
+          onTitleBlur={() => note.saveNow()}
+        />
 
-        <div className="flex items-center justify-end gap-1 border-b border-border px-6 py-2">
-          {markdownViewOptions.map(({ mode, label }) => (
-            <button
-              key={mode}
-              className={`rounded-md px-2 py-1 text-xs transition-colors ${viewMode === mode ? 'bg-hover-bg text-text-display' : 'text-text-secondary hover:text-text-display'}`}
-              onClick={() => handleViewModeChange(mode)}
-              type="button"
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        <div ref={editorRef} className="yira-markdown-editor min-h-[480px] flex-1 px-6 py-5">
-          {viewMode === 'preview' ? (
+        <div ref={editorRef} className="yira-markdown-editor min-h-[480px] flex-1 px-6 py-8 sm:px-10">
+          {note.fields.viewMode === 'preview' ? (
             <MarkdownPreviewPane
-              source={markdown}
+              source={note.fields.markdown}
               colorMode={document.documentElement.classList.contains('light') ? 'light' : 'dark'}
               rootPath={workspaceRootPath}
               imageSourcePath={MARKDOWN_NOTE_SOURCE_PATH}
             />
           ) : (
             <MDEditor
-              key={getMarkdownEditorKey(tile.id, viewMode)}
-              value={markdown}
+              key={getMarkdownEditorKey(tile.id, note.fields.viewMode)}
+              value={note.fields.markdown}
               onChange={(value) => handleMarkdownChange(value ?? '')}
-              preview={viewMode}
+              preview={note.fields.viewMode}
               commands={MARKDOWN_COMMANDS}
               extraCommands={[]}
               visibleDragbar={false}
@@ -540,8 +478,26 @@ function MarkdownNoteTile({ tile, autoFocus = false, onUpdate, workspaceRootPath
   )
 }
 
-export function NoteTile({ tile, autoFocus = false, onUpdate, workspaceRootPath = '' }: NoteTileProps): React.ReactElement {
+export function NoteTile({
+  tile,
+  autoFocus = false,
+  onUpdate,
+  workspaceRootPath = '',
+}: NoteTileProps): React.ReactElement {
   return tile.noteKind === 'markdown'
-    ? <MarkdownNoteTile tile={tile} autoFocus={autoFocus} onUpdate={onUpdate} workspaceRootPath={workspaceRootPath} />
-    : <RichNoteTile tile={tile} autoFocus={autoFocus} onUpdate={onUpdate} />
+    ? (
+      <MarkdownNoteTile
+        tile={tile}
+        autoFocus={autoFocus}
+        onUpdate={onUpdate}
+        workspaceRootPath={workspaceRootPath}
+      />
+    )
+    : (
+      <RichNoteTile
+        tile={tile}
+        autoFocus={autoFocus}
+        onUpdate={onUpdate}
+      />
+    )
 }
