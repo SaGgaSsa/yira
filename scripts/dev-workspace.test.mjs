@@ -93,3 +93,21 @@ test('seeds terminal tiles with the platform default shell', async () => {
     }
   }
 })
+
+test('seeds a markdown file opened in a files tile under the workspace root folder', async () => {
+  const dataDirectory = await mkdtemp(join(tmpdir(), 'yira-dev-files-'))
+  try {
+    await seedDevDataDirectory(dataDirectory)
+
+    const workspaceDirectory = join(dataDirectory, 'workspaces', 'dev-development')
+    const config = JSON.parse(await readFile(join(dataDirectory, 'config.json'), 'utf8'))
+    const canvas = JSON.parse(await readFile(join(workspaceDirectory, '.yira', 'canvas-state.json'), 'utf8'))
+    const fileTile = canvas.tiles.find((tile) => tile.type === 'files')
+
+    assert.equal(config.workspaces.find((workspace) => workspace.id === 'dev-development').config.rootFolderPath, workspaceDirectory)
+    assert.equal(fileTile.filePath, 'PRUEBA.md')
+    assert.match(await readFile(join(workspaceDirectory, 'PRUEBA.md'), 'utf8'), /^# Archivo de prueba/)
+  } finally {
+    await rm(dataDirectory, { recursive: true, force: true })
+  }
+})

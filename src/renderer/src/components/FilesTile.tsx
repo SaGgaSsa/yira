@@ -98,7 +98,6 @@ export function FilesTile(props: FilesTileProps): React.ReactElement {
         key={`${props.rootPath}\u0000${filePath}`}
         rootPath={props.rootPath}
         relativePath={filePath}
-        filePreview={props.tile.filePreview}
         isVisible={props.isVisible}
       />
     )
@@ -353,9 +352,6 @@ function TextFileTile({ tile, rootPath, isFocused, isVisible, onUpdate, onOpenFi
     <div className="flex h-full min-h-0 flex-col bg-bg-secondary">
       <div className="flex min-h-11 shrink-0 items-center gap-2 border-b border-border px-3 py-2">
         <span className="min-w-0 flex-1 truncate font-mono text-xs text-text-secondary" title={filePath}>{filePath}</span>
-        {tile.filePreview && (
-          <span className="nd-caption rounded-full border border-border-visible px-2 py-1 text-text-secondary">{t('files.temporary')}</span>
-        )}
         {isMarkdown && (
           <div className="flex items-center gap-0.5 rounded-md border border-border-visible bg-bg-tertiary p-0.5">
             {([
@@ -441,6 +437,8 @@ function TextFileTile({ tile, rootPath, isFocused, isVisible, onUpdate, onOpenFi
                 fontFamily: "'IBM Plex Mono', 'Consolas', monospace",
                 fontSize: tileFontSizePx,
                 minimap: { enabled: false },
+                overviewRulerBorder: false,
+                wordWrap: isMarkdown ? 'on' : 'off',
                 padding: { top: 12, bottom: 12 },
                 scrollBeyondLastLine: false,
                 smoothScrolling: true,

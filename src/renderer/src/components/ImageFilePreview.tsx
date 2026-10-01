@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next'
 interface ImageFilePreviewProps {
   rootPath: string
   relativePath: string
-  filePreview?: boolean
   isVisible?: boolean
 }
 
@@ -18,7 +17,7 @@ type ImagePreviewState =
 
 const initialState: ImagePreviewState = { status: 'loading' }
 
-export function ImageFilePreview({ rootPath, relativePath, filePreview = false, isVisible = true }: ImageFilePreviewProps): React.ReactElement {
+export function ImageFilePreview({ rootPath, relativePath, isVisible = true }: ImageFilePreviewProps): React.ReactElement {
   const { t } = useTranslation()
   const identity = `${rootPath}\u0000${relativePath}`
   const identityRef = useRef(identity)
@@ -105,9 +104,6 @@ export function ImageFilePreview({ rootPath, relativePath, filePreview = false, 
     <div className="flex h-full min-h-0 flex-col bg-bg-secondary">
       <div className="flex min-h-11 shrink-0 items-center gap-2 border-b border-border px-3 py-2">
         <span className="min-w-0 flex-1 truncate font-mono text-xs text-text-secondary" title={relativePath}>{relativePath}</span>
-        {filePreview && (
-          <span className="nd-caption rounded-full border border-border-visible px-2 py-1 text-text-secondary">{t('files.temporary')}</span>
-        )}
         <button
           type="button"
           className="inline-flex items-center gap-2 rounded-full border border-border-visible px-3 py-1.5 text-xs text-text-display hover:bg-hover-bg disabled:cursor-not-allowed disabled:opacity-40"
