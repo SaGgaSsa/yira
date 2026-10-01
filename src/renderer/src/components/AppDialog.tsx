@@ -21,6 +21,8 @@ export interface ConfirmDialogOptions {
   cancelLabel?: string
   hideCancel?: boolean
   danger?: boolean
+  /** Replaces the default danger banner text. */
+  warning?: string
 }
 
 export type AppDialogRequest =
@@ -122,7 +124,7 @@ export function AppDialog({ request, onCancel, onConfirm }: AppDialogProps): Rea
           {request.mode === 'confirm' && request.danger && (
             <div className="flex items-center gap-3 rounded-[20px] border border-danger/40 bg-danger/10 px-4 py-3 text-danger">
               <AlertTriangle size={16} className="shrink-0" />
-              <span className="text-sm">{t('dialogs.persistedStateWarning')}</span>
+              <span className="text-sm">{request.warning ?? t('dialogs.persistedStateWarning')}</span>
             </div>
           )}
 
