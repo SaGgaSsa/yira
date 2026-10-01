@@ -958,6 +958,7 @@ function AppContent(): React.ReactElement {
         title: t('workspace.deactivateConfirmTitle', { name: workspace.name }),
         message: t('workspace.deactivateConfirmMessage'),
         confirmLabel: t('workspace.deactivateConfirm'),
+        warning: t('workspace.deactivateWarning'),
         danger: true,
       })
       if (!confirmed) return
