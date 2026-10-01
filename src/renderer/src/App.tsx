@@ -21,6 +21,7 @@ import { WorkspaceManagementDialog } from './components/WorkspaceManagementDialo
 import { WorkspaceListItem } from './components/WorkspaceListItem'
 import { WorkspaceActivityView } from './components/WorkspaceActivityView'
 import { useWorkspaceTerminalCounts } from './hooks/useWorkspaceTerminalCounts'
+import { useTerminalProcessActivity } from './hooks/useTerminalProcessActivity'
 import { buildWorkspaceActivityCards, resolveActivationFocusTarget } from './utils/workspaceActivity'
 import { TileEditorDialog, type TileEditorRequest, type TileEditorValue } from './components/TileEditorDialog'
 import { useCanvasStore } from './store/canvasStore'
@@ -279,6 +280,7 @@ function isPromptDialog(dialog: PromptDialogState | ConfirmDialogState): dialog 
 }
 
 function AppContent(): React.ReactElement {
+  const terminalProcessActivity = useTerminalProcessActivity()
   const {
     registry,
     workspaceAttentionCounts,
@@ -1025,6 +1027,7 @@ function AppContent(): React.ReactElement {
     activeWorkspaceId,
     activeWorkspaceAttentionByTile,
     recentOutputCounts,
+    processActivity: terminalProcessActivity.terminals,
   }), [
     workspaceMetadata,
     sessionActiveWorkspaceIds,
@@ -1033,6 +1036,7 @@ function AppContent(): React.ReactElement {
     activeWorkspaceId,
     activeWorkspaceAttentionByTile,
     recentOutputCounts,
+    terminalProcessActivity.terminals,
   ])
 
   useEffect(() => {

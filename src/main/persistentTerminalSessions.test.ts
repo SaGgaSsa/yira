@@ -137,6 +137,28 @@ test('reattach checks attach before the builder and runs launch preparation once
   assert.equal(transport.requestCount('create'), 0)
 })
 
+test('lists attached terminal sessions with valid process ids', async () => {
+  const transport = new FakeTransport()
+  transport.setHandler('attach', () => snapshot({ pid: 1234 }))
+  const sessions = createSessions(transport)
+
+  await sessions.attach(target)
+
+  assert.deepEqual(sessions.listRunningTerminalProcesses(), [
+    { workspaceId: identity.workspaceId, tileId: identity.tileId, pid: 1234 },
+  ])
+})
+
+test('does not list attached terminal sessions without a valid process id', async () => {
+  const transport = new FakeTransport()
+  transport.setHandler('attach', () => snapshot({ pid: 0 }))
+  const sessions = createSessions(transport)
+
+  await sessions.attach(target)
+
+  assert.deepEqual(sessions.listRunningTerminalProcesses(), [])
+})
+
 test('rendererAttach captures interleaved events and sends them as live IPC', async () => {
   const transport = new FakeTransport()
   transport.setHandler('attach', () => snapshot())

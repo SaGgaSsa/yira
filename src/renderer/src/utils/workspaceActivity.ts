@@ -1,4 +1,5 @@
 import type { WorkspaceMetadata } from '@shared/types'
+import type { TerminalProcessActivity } from '@shared/terminalProcessActivity'
 import { getWorkspaceSidebarOrder } from './workspaceOrdering'
 
 export type WorkspaceActivityStatus = 'active' | 'unread' | 'idle'
@@ -71,6 +72,7 @@ export interface BuildWorkspaceActivityCardsOptions {
   activeWorkspaceAttentionByTile?: Readonly<Record<string, number>>
   /** Terminals with PTY output inside the recent window, keyed by workspace. */
   recentOutputCounts?: Readonly<Record<string, number>>
+  processActivity?: readonly TerminalProcessActivity[]
 }
 
 /** Cards for workspaces visited this session, kept in the same order as the left sidebar. */
@@ -82,6 +84,7 @@ export function buildWorkspaceActivityCards({
   activeWorkspaceId,
   activeWorkspaceAttentionByTile,
   recentOutputCounts = {},
+  processActivity = [],
 }: BuildWorkspaceActivityCardsOptions): WorkspaceActivityCardData[] {
   const cards: WorkspaceActivityCardData[] = []
 
@@ -89,7 +92,12 @@ export function buildWorkspaceActivityCards({
     if (!sessionActiveIds.has(workspace.id)) continue
     const attentionCount = attentionCounts[workspace.id] ?? 0
     const recentOutput = recentOutputCounts[workspace.id] ?? 0
-    const status: WorkspaceActivityStatus = recentOutput > 0 ? 'active' : attentionCount > 0 ? 'unread' : 'idle'
+    const processWorking = processActivity.some((activity) => (
+      activity.workspaceId === workspace.id && activity.state === 'working'
+    ))
+    const status: WorkspaceActivityStatus = recentOutput > 0 || processWorking
+      ? 'active'
+      : attentionCount > 0 ? 'unread' : 'idle'
     cards.push({
       workspace,
       status,

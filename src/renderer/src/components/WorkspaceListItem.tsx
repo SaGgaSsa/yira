@@ -1,6 +1,7 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAgentSessionSnapshot } from '@/hooks/useAgentSessionSnapshot'
+import { useTerminalProcessActivity } from '@/hooks/useTerminalProcessActivity'
 import { summarizeTerminalActivity } from '@/utils/terminalActivity'
 import { TerminalActivityIcon } from './TerminalActivityIcon'
 import type { WorkspaceMetadata } from '@shared/types'
@@ -37,7 +38,15 @@ export function WorkspaceListItem({
 }: WorkspaceListItemProps): React.ReactElement {
   const { t } = useTranslation()
   const { sessions } = useAgentSessionSnapshot()
-  const activity = summarizeTerminalActivity(sessions, workspace.id, attentionCount, undefined, recentOutputCount)
+  const processActivity = useTerminalProcessActivity()
+  const activity = summarizeTerminalActivity(
+    sessions,
+    workspace.id,
+    attentionCount,
+    undefined,
+    recentOutputCount,
+    processActivity.terminals,
+  )
   const hasWorkspaceGitDiff = canReadWorkspaceGitDiff(
     workspace.config.rootFolderPath,
   )

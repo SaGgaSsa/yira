@@ -56,6 +56,7 @@ import type {
   MarkdownViewMode,
   NoteKind,
 } from '@shared/types'
+import type { TerminalProcessActivitySnapshot } from '@shared/terminalProcessActivity'
 import type { TerminalSessionIdentity, TerminalSessionTarget } from '@shared/terminalSessionIdentity'
 
 type NoteData = {
@@ -154,6 +155,8 @@ interface ElectronWorld {
     save: (workspaceId: string, state: unknown, workspaceType?: string) => Promise<void>
   }
   terminal: {
+    getProcessActivity: () => Promise<TerminalProcessActivitySnapshot>
+    onProcessActivityChanged: (callback: (snapshot: TerminalProcessActivitySnapshot) => void) => () => void
     prepareRemote: (workspaceId: string) => Promise<RemotePreparationResult>
     onPreparationProgress: (workspaceId: string, callback: (status: RemotePreparationStatus) => void) => () => void
     create: (target: TerminalSessionTarget, options: TerminalCreateOptions) => Promise<TerminalCreateResult>

@@ -16,6 +16,7 @@ import {
 import type { TerminalCreateResult } from '@shared/types'
 import { agentSessionRegistry, type AgentSessionRegistry } from './agents/registry'
 import { isTerminalProtocolReply } from './agents/terminal'
+import type { TerminalProcessRoot } from './terminalProcessActivity'
 
 /** The small transport surface used by the integration and by its tests. */
 export interface PersistentTerminalTransport {
@@ -193,6 +194,17 @@ export class PersistentTerminalSessions {
       if (!record.exited) count += 1
     }
     return count
+  }
+
+  /** List running terminal roots with valid process ids. */
+  listRunningTerminalProcesses(): TerminalProcessRoot[] {
+    const roots: TerminalProcessRoot[] = []
+    for (const record of this.sessions.values()) {
+      const pid = record.snapshot?.pid
+      if (record.exited || typeof pid !== 'number' || !Number.isInteger(pid) || pid <= 0) continue
+      roots.push({ workspaceId: record.identity.workspaceId, tileId: record.identity.tileId, pid })
+    }
+    return roots
   }
 
   /** Clear a transport-loss gate only when the caller explicitly recovered. */
