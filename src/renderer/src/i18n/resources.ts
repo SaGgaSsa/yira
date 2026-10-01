@@ -467,7 +467,6 @@ type TranslationResources = {
     type: string
     editor: string
     preview: string
-    temporary: string
     markdownEdit: string
     markdownSplit: string
     markdownPreview: string
@@ -1183,7 +1182,6 @@ const en: TranslationResources = {
     type: 'Type',
     editor: 'Editor',
     preview: 'Preview',
-    temporary: 'Temporary',
     markdownEdit: 'Edit Markdown',
     markdownSplit: 'Edit and preview Markdown',
     markdownPreview: 'View rendered Markdown',
@@ -1899,7 +1897,6 @@ const es: TranslationResources = {
     type: 'Tipo',
     editor: 'Editor',
     preview: 'Vista previa',
-    temporary: 'Temporal',
     markdownEdit: 'Editar Markdown',
     markdownSplit: 'Editar y previsualizar Markdown',
     markdownPreview: 'Ver Markdown renderizado',

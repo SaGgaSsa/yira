@@ -26,6 +26,44 @@ function createCanvasState(tiles, focusedTileId) {
   }
 }
 
+// Long lines, tables and code blocks exercise wrapping and preview layout in the file editor.
+const DEV_MARKDOWN_FILE = `# Archivo de prueba
+
+Este archivo existe para probar el tile de archivos con Markdown. Esta primera línea es deliberadamente larga para comprobar que el editor la corta en el ancho del tile y que ninguna barra ni regla vertical se superpone al texto mientras se escribe.
+
+## Listas
+
+- Un elemento corto
+- Un elemento muy largo que sigue y sigue para ver cómo se comporta el ajuste de línea dentro de una lista con viñetas en el editor y en la vista previa
+  - Un subelemento con \`código en línea\` y un [enlace](https://example.com)
+1. Primer paso
+2. Segundo paso con **negrita**, *cursiva* y ~~tachado~~
+
+- [ ] Tarea pendiente
+- [x] Tarea hecha
+
+## Tabla
+
+| Columna | Descripción | Estado |
+| --- | --- | --- |
+| Editor | Una descripción larga que debería ajustarse dentro de la celda de la tabla en la vista previa | OK |
+| Vista previa | Corta | Pendiente |
+
+## Código
+
+\`\`\`ts
+export function sumar(a: number, b: number): number {
+  return a + b // una línea de código muy larga para ver el scroll horizontal dentro del bloque de código en la vista previa
+}
+\`\`\`
+
+> Una cita larga para verificar el ajuste de línea en bloques de cita, tanto en el editor de texto como en la vista previa renderizada del archivo.
+
+---
+
+Fin del archivo.
+`
+
 const DEV_WORKSPACE_SEEDS = [
   {
     id: 'dev-development',
@@ -56,7 +94,23 @@ const DEV_WORKSPACE_SEEDS = [
         markdown: '# Desarrollo\n\nUsá este espacio para probar terminales, notas y la disposición del canvas.',
         markdownView: 'live',
       },
+      {
+        id: 'dev-markdown-file',
+        type: 'files',
+        x: 0,
+        y: 440,
+        width: 900,
+        height: 520,
+        zIndex: 3,
+        label: 'PRUEBA.md',
+        filePath: 'PRUEBA.md',
+        fileMarkdownView: 'edit',
+      },
     ], 'dev-terminal'),
+    // Files are written under the workspace folder, which becomes its root folder.
+    files: {
+      'PRUEBA.md': DEV_MARKDOWN_FILE,
+    },
   },
   {
     id: 'dev-quick-tasks',
@@ -205,17 +259,24 @@ export async function seedDevDataDirectory(dataDirectory, platform = process.pla
   if (await fileExists(configPath)) return false
 
   const workspacesDirectory = join(dataDirectory, 'workspaces')
-  const workspaces = DEV_WORKSPACE_SEEDS.map(({ id, name, config }) => ({
-    id,
-    name,
-    path: join(workspacesDirectory, id),
-    config,
-  }))
+  const workspaces = DEV_WORKSPACE_SEEDS.map(({ id, name, config, files }) => {
+    const path = join(workspacesDirectory, id)
+    return {
+      id,
+      name,
+      path,
+      config: files ? { ...config, rootFolderPath: path } : config,
+    }
+  })
 
-  await Promise.all(DEV_WORKSPACE_SEEDS.map(async ({ id, stateFilename, state }) => {
-    const stateDirectory = join(workspacesDirectory, id, '.yira')
+  await Promise.all(DEV_WORKSPACE_SEEDS.map(async ({ id, stateFilename, state, files = {} }) => {
+    const workspaceDirectory = join(workspacesDirectory, id)
+    const stateDirectory = join(workspaceDirectory, '.yira')
     await mkdir(stateDirectory, { recursive: true })
     await writeFile(join(stateDirectory, stateFilename), JSON.stringify(withDevTerminalShell(state, shellProfileId), null, 2))
+    await Promise.all(Object.entries(files).map(([relativePath, content]) => (
+      writeFile(join(workspaceDirectory, relativePath), content)
+    )))
   }))
   await writeFile(configPath, JSON.stringify({
     workspaces,
