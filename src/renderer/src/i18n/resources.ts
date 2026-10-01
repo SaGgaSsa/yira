@@ -563,6 +563,10 @@ type TranslationResources = {
     lockGroup: string
     lockGroupDescription: string
     loadingNote: string
+    noteUntitled: string
+    noteEdited: string
+    noteWordCount_one: string
+    noteWordCount_other: string
     rawState: string
     applyJson: string
     noItemsOpen: string
@@ -1275,6 +1279,10 @@ const en: TranslationResources = {
     lockGroup: 'Lock group',
     lockGroupDescription: 'Prevent moving or resizing the group and its tiles.',
     loadingNote: 'Loading note...',
+    noteUntitled: 'Untitled',
+    noteEdited: 'Edited {{time}}',
+    noteWordCount_one: '{{count}} word',
+    noteWordCount_other: '{{count}} words',
     rawState: 'Raw State',
     applyJson: 'Apply JSON',
     noItemsOpen: 'No items open',
@@ -1987,6 +1995,10 @@ const es: TranslationResources = {
     lockGroup: 'Bloquear grupo',
     lockGroupDescription: 'Evita mover o cambiar el tamaño del grupo y sus paneles.',
     loadingNote: 'Cargando nota...',
+    noteUntitled: 'Sin título',
+    noteEdited: 'Editado {{time}}',
+    noteWordCount_one: '{{count}} palabra',
+    noteWordCount_other: '{{count}} palabras',
     rawState: 'Estado sin procesar',
     applyJson: 'Aplicar JSON',
     noItemsOpen: 'No hay elementos abiertos',

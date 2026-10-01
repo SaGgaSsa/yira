@@ -755,15 +755,15 @@ export interface FileTileOpenOptions {
   diff?: { repositoryPath: string; path: string; originalPath?: string; staged: boolean }
 }
 
-export const NOTE_COLORS: Record<NoteColor, { bg: string; text: string }> = {
-  yellow: { bg: '#fef3c7', text: '#78350f' },
-  green:  { bg: '#dcfce7', text: '#166534' },
-  blue:   { bg: '#dbeafe', text: '#1e40af' },
-  pink:   { bg: '#fce7f3', text: '#9d174d' },
-  purple: { bg: '#f3e8ff', text: '#6b21a8' },
-  orange: { bg: '#ffedd5', text: '#9a3412' },
-  white:  { bg: '#f8f8f8', text: '#333333' },
-  dark:   { bg: '#3a3a3a', text: '#e5e5e5' },
+export const NOTE_COLORS: Record<NoteColor, { bg: string; text: string; accent: string }> = {
+  yellow: { bg: '#fef3c7', text: '#78350f', accent: '#e3b341' },
+  green:  { bg: '#dcfce7', text: '#166534', accent: '#5bb974' },
+  blue:   { bg: '#dbeafe', text: '#1e40af', accent: '#5b9bf6' },
+  pink:   { bg: '#fce7f3', text: '#9d174d', accent: '#f472b6' },
+  purple: { bg: '#f3e8ff', text: '#6b21a8', accent: '#a78bfa' },
+  orange: { bg: '#ffedd5', text: '#9a3412', accent: '#f59e42' },
+  white:  { bg: '#f8f8f8', text: '#333333', accent: '#d4d4d4' },
+  dark:   { bg: '#3a3a3a', text: '#e5e5e5', accent: '#777777' },
 }
 
 export const NOTE_FONTS: Record<NoteFont, string> = {
