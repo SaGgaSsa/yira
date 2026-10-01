@@ -123,11 +123,11 @@ test('keeps the sidebar order even when activity states and counters differ', ()
 
   assert.deepEqual(
     cards.map((entry) => entry.workspace.id),
-    ['pinned-blocked', 'pinned-idle', 'busy', 'unread-old', 'no-stamp'],
+    ['busy', 'pinned-blocked', 'pinned-idle', 'unread-old', 'no-stamp'],
   )
   assert.deepEqual(
     cards.map((entry) => entry.status),
-    ['unread', 'idle', 'active', 'unread', 'idle'],
+    ['active', 'unread', 'idle', 'unread', 'idle'],
   )
 
   const busy = cards.find((entry) => entry.workspace.id === 'busy')

@@ -421,6 +421,15 @@ export class PersistentTerminalSessions {
 
   /** Block new creates for the workspace while the daemon removes all generations. */
   destroyWorkspace(workspaceId: string): Promise<void> {
+    return this.removeWorkspaceSessions(workspaceId, true)
+  }
+
+  /** Close all workspace terminals while allowing the workspace to reopen. */
+  closeWorkspace(workspaceId: string): Promise<void> {
+    return this.removeWorkspaceSessions(workspaceId, false)
+  }
+
+  private removeWorkspaceSessions(workspaceId: string, permanent: boolean): Promise<void> {
     this.recoverConnection()
     const current = this.workspaceDestructions.get(workspaceId)
     if (current) return current
@@ -429,7 +438,7 @@ export class PersistentTerminalSessions {
       await this.waitForWorkspaceOperations(workspaceId)
       const client = await this.ensureClient()
       await client.request('destroyWorkspace', { workspaceId })
-      this.destroyedWorkspaces.add(workspaceId)
+      if (permanent) this.destroyedWorkspaces.add(workspaceId)
       for (const record of [...this.sessions.values()]) {
         if (record.identity.workspaceId === workspaceId) {
           this.markDestroyed(record.identity)

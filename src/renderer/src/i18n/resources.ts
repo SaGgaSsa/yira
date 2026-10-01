@@ -355,8 +355,10 @@ type TranslationResources = {
     discardDraft: string
     configure: string
     focus: string
-    pin: string
-    unpin: string
+    deactivate: string
+    deactivateConfirmTitle: string
+    deactivateConfirmMessage: string
+    deactivateConfirm: string
     attention_one: string
     attention_other: string
     gitDiffTooltip: string
@@ -1070,8 +1072,10 @@ const en: TranslationResources = {
     discardDraft: 'Discard draft',
     configure: 'Configure workspace',
     focus: 'Focus workspace',
-    pin: 'Pin workspace',
-    unpin: 'Unpin workspace',
+    deactivate: 'Deactivate workspace',
+    deactivateConfirmTitle: 'Deactivate {{name}}?',
+    deactivateConfirmMessage: 'All terminals in this workspace will be closed, including running Claude or Codex sessions and any process started in them. Unsaved terminal work will be lost. The workspace stays in the list and you can open it again.',
+    deactivateConfirm: 'Deactivate',
     attention_one: '{{count}} terminal output event in this workspace',
     attention_other: '{{count}} terminal output events in this workspace',
     gitDiffTooltip: 'Includes repositories at the workspace root, in its direct child folders, and those selected in settings. Net diff of pending commits and uncommitted changes since the common ancestor with the known remote reference (+{{additions}} −{{deletions}}). It may not represent the latest push.',
@@ -1785,8 +1789,10 @@ const es: TranslationResources = {
     discardDraft: 'Descartar borrador',
     configure: 'Configurar espacio de trabajo',
     focus: 'Enfocar espacio de trabajo',
-    pin: 'Fijar espacio de trabajo',
-    unpin: 'Desfijar espacio de trabajo',
+    deactivate: 'Desactivar espacio de trabajo',
+    deactivateConfirmTitle: '¿Desactivar {{name}}?',
+    deactivateConfirmMessage: 'Se cerrarán todas las terminales de este espacio de trabajo, incluidas las sesiones de Claude o Codex en curso y cualquier proceso iniciado en ellas. Se perderá el trabajo no guardado en las terminales. El espacio de trabajo sigue en la lista y puedes abrirlo de nuevo.',
+    deactivateConfirm: 'Desactivar',
     attention_one: '{{count}} evento de salida de terminal en este espacio de trabajo',
     attention_other: '{{count}} eventos de salida de terminal en este espacio de trabajo',
     gitDiffTooltip: 'Incluye los repositorios de la raíz, de las carpetas hijas directas y los seleccionados en la configuración. Diff neto de commits pendientes y cambios sin commit desde el ancestro común con la referencia remota conocida (+{{additions}} −{{deletions}}). Puede no representar el último push.',

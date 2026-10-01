@@ -23,8 +23,8 @@ for (const [key, expected] of [
   ['workspace.repository', 'Repositorio'],
   ['workspace.selectRepositories', 'Seleccionar repositorios'],
   ['workspace.noRepositoriesConfigured', 'No hay repositorios configurados'],
-  ['workspace.pin', 'Fijar espacio de trabajo'],
-  ['workspace.unpin', 'Desfijar espacio de trabajo'],
+  ['workspace.deactivate', 'Desactivar espacio de trabajo'],
+  ['workspace.deactivateConfirm', 'Desactivar'],
 ] as const) {
   if (i18n.t(key) !== expected) throw new Error(`Spanish source control copy must translate ${key}`)
 }
@@ -35,8 +35,8 @@ for (const [key, expected] of [
   ['workspace.repository', 'Repository'],
   ['workspace.selectRepositories', 'Select repositories'],
   ['workspace.noRepositoriesConfigured', 'No repositories configured'],
-  ['workspace.pin', 'Pin workspace'],
-  ['workspace.unpin', 'Unpin workspace'],
+  ['workspace.deactivate', 'Deactivate workspace'],
+  ['workspace.deactivateConfirm', 'Deactivate'],
 ] as const) {
   if (i18n.t(key) !== expected) throw new Error(`English source control copy must translate ${key}`)
 }

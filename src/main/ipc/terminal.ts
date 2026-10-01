@@ -407,6 +407,13 @@ export function registerTerminalIPC(): void {
     await persistentTerminalSessions.destroyCurrent(normalizeTerminalSessionTarget(target, false))
   })
 
+  ipcMain.handle('terminal:closeWorkspace', async (_, workspaceId: string) => {
+    if (typeof workspaceId !== 'string' || !workspaceId.trim()) {
+      throw new Error('Invalid workspace id')
+    }
+    await persistentTerminalSessions.closeWorkspace(workspaceId)
+  })
+
   ipcMain.handle('terminal:detach', async (event, identity: TerminalSessionIdentity) => {
     await persistentTerminalSessions.rendererDetach(
       normalizeTerminalSessionIdentity(identity),
