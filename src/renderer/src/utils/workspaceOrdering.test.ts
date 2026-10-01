@@ -12,12 +12,12 @@ const managerOrder = [
   { id: 'unpinned-same', name: 'Unpinned same', pinned: false, lastSelectedAt: 30 },
 ] as WorkspaceMetadata[]
 
-test('orders pinned workspaces first and selection timestamps newest first', () => {
+test('orders by selection timestamps newest first and ignores pinned state', () => {
   const sidebarOrder = getWorkspaceSidebarOrder(managerOrder)
 
   assert.deepEqual(
     sidebarOrder.map((workspace) => workspace.id),
-    ['pinned-new', 'pinned-old', 'pinned-legacy', 'unpinned-new', 'unpinned-same', 'legacy-unpinned'],
+    ['pinned-new', 'unpinned-new', 'unpinned-same', 'pinned-old', 'legacy-unpinned', 'pinned-legacy'],
   )
 })
 

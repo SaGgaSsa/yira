@@ -6,15 +6,11 @@ function getSelectionTimestamp(workspace: WorkspaceMetadata): number | undefined
   return timestamp
 }
 
-/** Order workspaces by pin state and explicit selection recency. */
+/** Order workspaces by explicit selection recency, keeping original order for ties. */
 export function getWorkspaceSidebarOrder(workspaces: readonly WorkspaceMetadata[]): WorkspaceMetadata[] {
   return workspaces
     .map((workspace, index) => ({ workspace, index, timestamp: getSelectionTimestamp(workspace) }))
     .sort((a, b) => {
-      const aPinned = a.workspace.pinned === true
-      const bPinned = b.workspace.pinned === true
-      if (aPinned !== bPinned) return aPinned ? -1 : 1
-
       if (a.timestamp !== undefined && b.timestamp !== undefined && a.timestamp !== b.timestamp) {
         return a.timestamp > b.timestamp ? -1 : 1
       }

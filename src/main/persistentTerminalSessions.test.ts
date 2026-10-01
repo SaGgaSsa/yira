@@ -307,6 +307,30 @@ test('workspace deletion waits for an in-flight create and blocks a later create
   assert.equal(transport.requestCount('destroyWorkspace'), 1)
 })
 
+test('closing workspace terminals allows creating them again', async () => {
+  const transport = new FakeTransport()
+  transport.setHandler('attach', () => null)
+  transport.setHandler('create', () => snapshot())
+  transport.setHandler('destroyWorkspace', () => null)
+  const sessions = createSessions(transport)
+
+  await sessions.closeWorkspace(identity.workspaceId)
+  const created = await sessions.create(target, () => ({
+    target,
+    executable: '/bin/sh',
+    args: [],
+    cwd: '/tmp',
+    env: {},
+    cols: 80,
+    rows: 24,
+    local: true,
+  }))
+
+  assert.deepEqual(created.identity, identity)
+  assert.equal(transport.requestCount('destroyWorkspace'), 1)
+  assert.equal(transport.requestCount('create'), 1)
+})
+
 test('shutdown disconnects transport without destroying daemon sessions', async () => {
   const transport = new FakeTransport()
   transport.setHandler('attach', () => snapshot())

@@ -162,6 +162,7 @@ interface ElectronWorld {
     resize: (identity: TerminalSessionIdentity, cols: number, rows: number) => Promise<void>
     destroy: (identity: TerminalSessionIdentity) => Promise<void>
     destroyCurrent: (target: TerminalSessionTarget) => Promise<void>
+    closeWorkspace: (workspaceId: string) => Promise<void>
     detach: (identity: TerminalSessionIdentity) => Promise<void>
     acknowledgeAgentAlert: (identity: TerminalSessionIdentity) => Promise<void>
     setAgentAlertsEnabled: (enabled: boolean) => Promise<void>

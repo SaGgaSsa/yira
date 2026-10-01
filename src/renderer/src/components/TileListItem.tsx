@@ -1,7 +1,7 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import type { LucideIcon } from 'lucide-react'
-import { Maximize2, PanelBottomClose, PanelTopOpen, Pin, Settings, X } from 'lucide-react'
+import { Maximize2, PanelBottomClose, PanelTopOpen, Power, Settings, X } from 'lucide-react'
 import type { TileState } from '@shared/types'
 import { formatTerminalAttentionCount } from '@/utils/terminalAttention'
 import { getTileTypeLabel, TILE_META } from './TileContent'
@@ -21,16 +21,14 @@ export interface ListRowProps {
   onDoubleClick?: () => void
   onConfigure?: (event: React.MouseEvent<HTMLButtonElement>) => void
   onFocus?: () => void
-  onPin?: () => void
-  pinned?: boolean
-  pinDisabled?: boolean
+  onDeactivate?: () => void
+  deactivateDisabled?: boolean
   onDetach?: () => void
   detached?: boolean
   onClose?: () => void
   configureTitle?: string
   focusTitle?: string
-  pinTitle?: string
-  unpinTitle?: string
+  deactivateTitle?: string
   detachTitle?: string
   attachTitle?: string
   closeTitle?: string
@@ -85,16 +83,14 @@ export function ListRow({
   onDoubleClick,
   onConfigure,
   onFocus,
-  onPin,
-  pinned = false,
-  pinDisabled = false,
+  onDeactivate,
+  deactivateDisabled = false,
   onDetach,
   detached = false,
   onClose,
   configureTitle = 'Configure',
   focusTitle = 'Focus',
-  pinTitle = 'Pin',
-  unpinTitle = 'Unpin',
+  deactivateTitle = 'Deactivate workspace',
   detachTitle = 'Detach',
   attachTitle = 'Attach',
   closeTitle = 'Close',
@@ -106,7 +102,7 @@ export function ListRow({
   className = '',
 }: ListRowProps): React.ReactElement {
   const attentionLabel = formatTerminalAttentionCount(attentionCount)
-  const actionCount = [onConfigure, onFocus, onPin, onDetach, onClose].filter(Boolean).length
+  const actionCount = [onConfigure, onFocus, onDeactivate, onDetach, onClose].filter(Boolean).length
   const isWorkspace = variant === 'workspace'
   const hasWorkspaceDiff = isWorkspace && Boolean(workspaceDiff)
   const workspaceIsActive = isWorkspace && (active || sessionActive)
@@ -187,15 +183,14 @@ export function ListRow({
               <Maximize2 size={13} />
             </ListRowActionButton>
           )}
-          {onPin && (
+          {onDeactivate && (
             <ListRowActionButton
-              title={pinned ? unpinTitle : pinTitle}
-              onClick={() => onPin()}
-              pressed={pinned}
-              disabled={pinDisabled}
+              title={deactivateTitle}
+              onClick={() => onDeactivate()}
+              disabled={deactivateDisabled}
               workspaceVariant={isWorkspace}
             >
-              <Pin size={13} className={pinned ? `fill-current ${isWorkspace && !workspaceIsActive ? 'text-text-secondary' : 'text-text-display'}` : undefined} aria-hidden="true" />
+              <Power size={13} aria-hidden="true" />
             </ListRowActionButton>
           )}
           {onDetach && (

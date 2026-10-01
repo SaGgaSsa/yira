@@ -55,7 +55,7 @@ import {
 } from './utils/workspaceAttention'
 import { getTileTypeLabel } from './components/TileContent'
 import { resolveWorkspaceFocusTarget } from './utils/workspaceFocus'
-import { mergeWorkspaceSelectionResult, setWorkspacePinnedOptimistically } from './utils/workspaceSelectionActions'
+import { mergeWorkspaceSelectionResult } from './utils/workspaceSelectionActions'
 import { getWorkspaceSidebarOrder } from './utils/workspaceOrdering'
 import { getInitialWorkspaceDialogCopy, getWorkspaceDialogCopy } from './utils/workspaceDialogCopy'
 import { buildTileConfigurationMenuItems } from './components/tileConfigurationMenu'
@@ -413,8 +413,7 @@ function AppContent(): React.ReactElement {
   const [showWorkspaceManager, setShowWorkspaceManager] = useState(false)
   const [workspaceMetadata, setWorkspaceMetadata] = useState<WorkspaceMetadata[]>([])
   const [sessionActiveWorkspaceIds, setSessionActiveWorkspaceIds] = useState<Set<string>>(new Set())
-  const pendingWorkspacePinsRef = useRef(new Set<string>())
-  const [pendingWorkspacePinIds, setPendingWorkspacePinIds] = useState<Set<string>>(new Set())
+  const [pendingWorkspaceDeactivationIds, setPendingWorkspaceDeactivationIds] = useState<Set<string>>(new Set())
   const [boardState, setBoardState] = useState<BoardState>(EMPTY_BOARD_STATE)
   const [showSettings, setShowSettings] = useState(false)
   const [settingsSection, setSettingsSection] = useState<SettingsSectionId>('appearance')
@@ -574,6 +573,16 @@ function AppContent(): React.ReactElement {
     })
   }, [])
 
+  const unmarkWorkspaceSessionActive = useCallback((workspaceId: string) => {
+    setSessionActiveWorkspaceIds((current) => {
+      if (!current.has(workspaceId)) return current
+
+      const next = new Set(current)
+      next.delete(workspaceId)
+      return next
+    })
+  }, [])
+
   const pruneSessionActiveWorkspaceIds = useCallback((workspaceIds: readonly string[]) => {
     const remainingWorkspaceIds = new Set(workspaceIds)
     setSessionActiveWorkspaceIds((current) => {
@@ -691,34 +700,6 @@ function AppContent(): React.ReactElement {
       })
       .catch((error) => {
         console.error('[App] Failed to record workspace selection:', error)
-      })
-  }, [])
-
-  const toggleWorkspacePinned = useCallback((workspaceId: string, currentPinned: boolean) => {
-    if (pendingWorkspacePinsRef.current.has(workspaceId)) return
-
-    const desiredPinned = !currentPinned
-    pendingWorkspacePinsRef.current.add(workspaceId)
-    setPendingWorkspacePinIds((current) => new Set(current).add(workspaceId))
-    setWorkspaceMetadata((current) => setWorkspacePinnedOptimistically(current, workspaceId, desiredPinned))
-
-    void window.electron.workspace.setPinned(workspaceId, desiredPinned)
-      .then((updatedWorkspace) => {
-        setWorkspaceMetadata((current) => updatedWorkspace && updatedWorkspace.id === workspaceId
-          ? mergeWorkspaceSelectionResult(current, updatedWorkspace, 'pinned')
-          : setWorkspacePinnedOptimistically(current, workspaceId, currentPinned))
-      })
-      .catch((error) => {
-        console.error('[App] Failed to update workspace pin:', error)
-        setWorkspaceMetadata((current) => setWorkspacePinnedOptimistically(current, workspaceId, currentPinned))
-      })
-      .finally(() => {
-        pendingWorkspacePinsRef.current.delete(workspaceId)
-        setPendingWorkspacePinIds((current) => {
-          const next = new Set(current)
-          next.delete(workspaceId)
-          return next
-        })
       })
   }, [])
 
@@ -969,6 +950,47 @@ function AppContent(): React.ReactElement {
     () => getWorkspaceSidebarOrder(workspaceMetadata),
     [workspaceMetadata],
   )
+  const deactivateWorkspace = useCallback(async (workspace: WorkspaceMetadata) => {
+    if (pendingWorkspaceDeactivationIds.has(workspace.id)) return
+
+    try {
+      const confirmed = await requestConfirm({
+        title: t('workspace.deactivateConfirmTitle', { name: workspace.name }),
+        message: t('workspace.deactivateConfirmMessage'),
+        confirmLabel: t('workspace.deactivateConfirm'),
+        danger: true,
+      })
+      if (!confirmed) return
+
+      setPendingWorkspaceDeactivationIds((current) => new Set(current).add(workspace.id))
+
+      if (workspace.id === activeWorkspaceId) {
+        const nextWorkspace = sidebarWorkspaces.find((entry) => (
+          entry.id !== workspace.id && sessionActiveWorkspaceIds.has(entry.id)
+        )) ?? sidebarWorkspaces.find((entry) => entry.id !== workspace.id)
+
+        if (!nextWorkspace) return
+
+        recordWorkspaceSelection(nextWorkspace.id)
+        await activateWorkspace(nextWorkspace)
+      }
+
+      await registry.destroyWorkspace(workspace.id)
+      await window.electron.terminal.closeWorkspace(workspace.id)
+      unmarkWorkspaceSessionActive(workspace.id)
+      clearWorkspaceAttentionCount(workspace.id)
+    } catch (error) {
+      console.error('[App] Failed to deactivate workspace:', error)
+    } finally {
+      setPendingWorkspaceDeactivationIds((current) => {
+        if (!current.has(workspace.id)) return current
+
+        const next = new Set(current)
+        next.delete(workspace.id)
+        return next
+      })
+    }
+  }, [activeWorkspaceId, activateWorkspace, clearWorkspaceAttentionCount, pendingWorkspaceDeactivationIds, recordWorkspaceSelection, registry, requestConfirm, sessionActiveWorkspaceIds, sidebarWorkspaces, t, unmarkWorkspaceSessionActive])
   const terminalAttentionCounts = useMemo(() => {
     if (!terminalAttentionEnabled) return {}
 
@@ -2307,8 +2329,8 @@ function AppContent(): React.ReactElement {
                       recordWorkspaceSelection(workspace.id)
                       void activateWorkspace(workspace, { activationMode: 'focus-last' })
                     }}
-                    onTogglePinned={() => toggleWorkspacePinned(workspace.id, workspace.pinned === true)}
-                    pinPending={pendingWorkspacePinIds.has(workspace.id)}
+                    onDeactivate={() => void deactivateWorkspace(workspace)}
+                    deactivatePending={pendingWorkspaceDeactivationIds.has(workspace.id) || sidebarWorkspaces.length < 2}
                   />
                 ))}
               </div>

@@ -163,6 +163,7 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.invoke('terminal:resize', identity, cols, rows),
     destroy: (identity: TerminalSessionIdentity) => ipcRenderer.invoke('terminal:destroy', identity),
     destroyCurrent: (target: TerminalSessionTarget) => ipcRenderer.invoke('terminal:destroyCurrent', target),
+    closeWorkspace: (workspaceId: string) => ipcRenderer.invoke('terminal:closeWorkspace', workspaceId) as Promise<void>,
     detach: (identity: TerminalSessionIdentity) => ipcRenderer.invoke('terminal:detach', identity),
     acknowledgeAgentAlert: (identity: TerminalSessionIdentity) => ipcRenderer.invoke('terminal:acknowledgeAgentAlert', identity),
     setAgentAlertsEnabled: (enabled: boolean) => ipcRenderer.invoke('terminal:setAgentAlertsEnabled', enabled),
