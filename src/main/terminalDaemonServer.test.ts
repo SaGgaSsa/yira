@@ -212,6 +212,52 @@ test('starts the idle timer after publishing the endpoint', async (t) => {
   assert.equal(idleCalls, 1)
 })
 
+test('advertises truecolor and Yira as the terminal program to spawned PTYs', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'yira-daemon-'))
+  const ptyFactory = new FakePtyFactory()
+  const handle = await startTerminalDaemon({ directory, ptyFactory, token: 'color-token', idleMs: 5_000 })
+  t.after(() => handle.close())
+  const client = await connectClient(handle.endpoint.port)
+  t.after(() => client.socket.destroy())
+
+  snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    1,
+    'create',
+    spawnParams({ workspaceId: 'workspace-a', tileId: 'tile-plain' }),
+  ))
+  snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    2,
+    'create',
+    spawnParams({ workspaceId: 'workspace-a', tileId: 'tile-inherited' }, {
+      env: { COLORTERM: '24bit', TERM_PROGRAM: 'vscode', TERM_PROGRAM_VERSION: '1.0.0', TEST_ENV: 'yes' },
+    }),
+  ))
+  snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    3,
+    'create',
+    spawnParams({ workspaceId: 'workspace-a', tileId: 'tile-empty' }, { env: { COLORTERM: '' } }),
+  ))
+
+  for (const pty of ptyFactory.instances) {
+    assert.equal(pty.options.name, 'xterm-256color')
+    assert.equal(pty.options.env.COLORTERM, 'truecolor')
+    assert.equal(pty.options.env.TERM_PROGRAM, 'yira')
+    assert.equal(pty.options.env.TERM_PROGRAM_VERSION, undefined)
+  }
+  assert.equal(ptyFactory.instances.length, 3)
+  assert.equal(ptyFactory.instances[0].options.env.ELECTRON_RUN_AS_NODE, undefined)
+  assert.equal(ptyFactory.instances[0].options.env.TEST_ENV, 'yes')
+})
+
 test('writes an atomic private endpoint and reattaches parsed screen output after disconnect', async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'yira-daemon-'))
   const ptyFactory = new FakePtyFactory()
