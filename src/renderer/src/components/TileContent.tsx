@@ -31,12 +31,14 @@ interface TileContentProps {
   autoFocus?: boolean
   onFocus: () => void
   onUpdate: (patch: Partial<TileState>) => void | Promise<void>
+  /** Asks the user to close the tile, as the tile's close button does. */
+  onDelete?: () => void
   onOpenBrowserTile?: (url: string) => void
   onOpenFileTile?: (relativePath: string, options?: FileTileOpenOptions) => void | Promise<void>
   workspaceRootPath?: string
 }
 
-export function TileContent({ tile, workspaceId, workspaceConfig, isFocused, edgeToEdge = false, isVisible = true, autoFocus = false, onFocus, onUpdate, onOpenBrowserTile, onOpenFileTile, workspaceRootPath = '' }: TileContentProps): React.ReactElement {
+export function TileContent({ tile, workspaceId, workspaceConfig, isFocused, edgeToEdge = false, isVisible = true, autoFocus = false, onFocus, onUpdate, onDelete, onOpenBrowserTile, onOpenFileTile, workspaceRootPath = '' }: TileContentProps): React.ReactElement {
   const { t } = useTranslation()
   if (tile.type === 'terminal') {
     return (
@@ -50,7 +52,7 @@ export function TileContent({ tile, workspaceId, workspaceConfig, isFocused, edg
         autoFocus={autoFocus}
         onFocus={onFocus}
         onUpdate={onUpdate}
-        onDelete={() => {}}
+        onDelete={onDelete}
         onOpenBrowserTile={onOpenBrowserTile}
         onOpenFileTile={onOpenFileTile}
       />
