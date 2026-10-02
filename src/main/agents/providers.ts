@@ -19,6 +19,11 @@ export interface AgentCommand {
   args: string[]
 }
 
+export interface AgentCommandOptions {
+  /** Start a new conversation under `resumeId` instead of resuming it. */
+  newSession?: boolean
+}
+
 export interface InstalledCommandOptions {
   env?: NodeJS.ProcessEnv
   platform?: NodeJS.Platform
@@ -27,7 +32,7 @@ export interface InstalledCommandOptions {
 export interface AgentProviderAdapter {
   readonly provider: AgentProvider
   readonly command: string
-  buildCommand(config: unknown, resumeId?: unknown): AgentCommand
+  buildCommand(config: unknown, resumeId?: unknown, options?: AgentCommandOptions): AgentCommand
   transcriptRoot(homeDirectory?: string): string
   isAvailable(options?: InstalledCommandOptions): Promise<boolean>
 }
@@ -97,6 +102,7 @@ function buildFixedProviderCommand(
   provider: AgentProvider,
   configValue: unknown,
   resumeValue?: unknown,
+  options: AgentCommandOptions = {},
 ): AgentCommand {
   const config = normalizeAgentProviderConfig(configValue)
   const args = [...config.args]
@@ -105,7 +111,11 @@ function buildFixedProviderCommand(
 
   // Claude's documented resume option is a flag; Codex uses the `resume`
   // subcommand. Configured args stay data-only and are never shell-joined.
-  if (resumeId) {
+  // Claude can also start a new conversation with a preset ID, which lets a
+  // tile resume it later. Codex has no equivalent, so it starts without one.
+  if (resumeId && options.newSession) {
+    if (provider === 'claude') args.push('--session-id', resumeId)
+  } else if (resumeId) {
     if (provider === 'claude') args.push('--resume', resumeId)
     else args.push('resume', resumeId)
   }
@@ -124,8 +134,8 @@ class FixedAgentProviderAdapter implements AgentProviderAdapter {
     this.command = AGENT_PROVIDER_COMMANDS[provider]
   }
 
-  buildCommand(config: unknown, resumeId?: unknown): AgentCommand {
-    return buildFixedProviderCommand(this.provider, config, resumeId)
+  buildCommand(config: unknown, resumeId?: unknown, options?: AgentCommandOptions): AgentCommand {
+    return buildFixedProviderCommand(this.provider, config, resumeId, options)
   }
 
   transcriptRoot(homeDirectory = homedir()): string {
@@ -150,8 +160,41 @@ export function buildAgentCommand(
   provider: AgentProvider,
   config: AgentProviderConfig | unknown,
   resumeId?: unknown,
+  options?: AgentCommandOptions,
 ): AgentCommand {
-  return getAgentProviderAdapter(provider).buildCommand(config, resumeId)
+  return getAgentProviderAdapter(provider).buildCommand(config, resumeId, options)
+}
+
+/**
+ * True when the provider has a saved conversation for this ID. Claude writes
+ * `projects/<project>/<id>.jsonl` only after the first message; Codex IDs only
+ * come from its own history, so they are assumed to exist.
+ */
+export async function agentSessionExists(
+  provider: AgentProvider,
+  sessionId: string,
+  homeDirectory = homedir(),
+): Promise<boolean> {
+  if (provider !== 'claude') return true
+  const id = normalizeResumeId(sessionId)
+  if (!id) return false
+
+  const root = providerRoot(provider, homeDirectory)
+  let projects: string[]
+  try {
+    projects = await fs.readdir(root)
+  } catch {
+    return false
+  }
+  for (const project of projects) {
+    try {
+      await fs.access(join(root, project, `${id}.jsonl`))
+      return true
+    } catch {
+      // Not in this project directory.
+    }
+  }
+  return false
 }
 
 export async function detectInstalledAgentProviders(

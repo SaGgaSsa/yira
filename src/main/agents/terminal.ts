@@ -21,6 +21,8 @@ export interface AgentTerminalLaunchInput {
   workspaceRoot?: string
   /** Fallback shell cwd when the workspace has no configured project root. */
   fallbackCwd: string
+  /** The agent's session ID has no saved conversation yet; start it instead of resuming. */
+  newSession?: boolean
 }
 
 export interface AgentTerminalLaunch {
@@ -115,7 +117,7 @@ export function buildAgentTerminalLaunch(input: AgentTerminalLaunchInput): Agent
     ? input.workspaceRoot
     : input.fallbackCwd
   const cwd = resolveAgentCwd(workspaceRoot, agent.cwd)
-  const command = buildAgentCommand(agent.provider, config, agent.sessionId)
+  const command = buildAgentCommand(agent.provider, config, agent.sessionId, { newSession: input.newSession })
 
   return {
     provider: command.provider,

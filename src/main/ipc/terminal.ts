@@ -31,7 +31,7 @@ import { getEnabledAgentProviders } from './settings'
 import { agentSessionRegistry } from '../agents/registry'
 import { normalizeAgentOpaqueId } from '../agents/query'
 import { buildAgentTerminalLaunch, type AgentTerminalLaunch } from '../agents/terminal'
-import { buildAgentCommand, normalizeResumeId } from '../agents/providers'
+import { agentSessionExists, buildAgentCommand, normalizeResumeId } from '../agents/providers'
 import {
   buildAgentShellCommand,
   resolveAgentShellProfile,
@@ -415,6 +415,7 @@ async function buildTerminalDaemonSpawn(
   let agentLaunch: AgentTerminalLaunch | null = null
   let agentShellCommand: ReturnType<typeof buildAgentShellCommand> | null = null
   if (isAgent) {
+    const agentSessionId = options.agent!.sessionId
     agentLaunch = buildAgentTerminalLaunch({
       tileId: runtimeTarget.tileId,
       workspaceId: runtimeTarget.workspaceId,
@@ -422,6 +423,8 @@ async function buildTerminalDaemonSpawn(
       providerConfig: options.agentProviderConfig,
       workspaceRoot: workspaceRootFolderPath ?? options.workspaceDir,
       fallbackCwd: terminalRoot?.cwd ?? process.cwd(),
+      newSession: agentSessionId !== undefined
+        && !(await agentSessionExists(options.agent!.provider, agentSessionId)),
     })
     agentShellCommand = buildAgentShellCommand({
       shellProfileId: agentShellProfile!.id,

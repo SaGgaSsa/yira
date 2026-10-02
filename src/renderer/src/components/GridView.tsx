@@ -34,7 +34,7 @@ interface GridViewProps {
   onConfigureTile: (tile: TileState, trigger: HTMLElement) => void
   onFocusTileInView: (tile: TileState) => void
   onDetachTile: (tile: TileState) => void
-  onCloseTile: (tileId: string) => void
+  onCloseTile: (tileId: string) => void | Promise<boolean>
   onOpenBrowserTile: (url: string) => void
   onOpenFileTile: (relativePath: string, options?: FileTileOpenOptions) => void | Promise<void>
   tileCreationSelectorProps: TileCreationSelectorProps
@@ -332,7 +332,9 @@ export function GridView({
               onConfigure={(event) => onConfigureTile(tile, event.currentTarget)}
               onFocus={() => onFocusTileInView(tile)}
               onDetach={() => onDetachTile(tile)}
-              onClose={() => onCloseTile(tile.id)}
+              onClose={() => {
+                void onCloseTile(tile.id)
+              }}
             />
           </div>
           <div className={`min-h-0 flex-1 ${isDraggedTile ? 'opacity-40 blur-[1px]' : ''}`}>
