@@ -73,9 +73,12 @@ function getUpdater(): AppUpdater {
   return autoUpdater
 }
 
-/** True when quitting now runs the Windows installer, which needs every app process closed. */
-export function isWindowsUpdateInstallPending(): boolean {
-  return process.platform === 'win32' && updateState.status === 'downloaded' && getUpdater().autoInstallOnAppQuit
+/**
+ * True when quitting now installs the downloaded update. The terminal daemon
+ * must stop too, or it keeps running the previous version's code.
+ */
+export function isUpdateInstallPending(): boolean {
+  return updateState.status === 'downloaded' && getUpdater().autoInstallOnAppQuit
 }
 
 export function shouldUseLinuxDebUpdateLauncher(
