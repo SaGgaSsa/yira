@@ -12,6 +12,7 @@ export interface TerminalHistorySetup {
   historyDir: string
   env: Record<string, string>
   prependCommand?: string
+  shellArgs?: string[]
 }
 
 function quotePowerShellString(value: string): string {
@@ -26,11 +27,12 @@ export function buildTerminalHistorySetup(input: TerminalHistorySetupInput): Ter
   if (input.shellProfileId === 'bash') {
     return {
       historyDir,
+      // Bash reads BASHOPTS at startup and inherits PROMPT_COMMAND, avoiding PTY-visible setup.
       env: {
         HISTFILE: join(historyDir, 'bash_history'),
+        BASHOPTS: 'histappend',
+        PROMPT_COMMAND: 'history -a',
       },
-      // The leading space keeps the setup line out of history when HISTCONTROL ignores spaces.
-      prependCommand: ' shopt -s histappend; PROMPT_COMMAND="history -a${PROMPT_COMMAND:+; $PROMPT_COMMAND}"',
     }
   }
 
@@ -46,15 +48,16 @@ export function buildTerminalHistorySetup(input: TerminalHistorySetupInput): Ter
 
   if (input.shellProfileId === 'powershell') {
     const historyPath = join(historyDir, 'powershell_history.txt')
+    const command = [
+      'if (Get-Module -ListAvailable PSReadLine) {',
+      'Import-Module PSReadLine;',
+      `Set-PSReadLineOption -HistorySavePath ${quotePowerShellString(historyPath)}`,
+      '}',
+    ].join(' ')
     return {
       historyDir,
       env: {},
-      prependCommand: [
-        'if (Get-Module -ListAvailable PSReadLine) {',
-        'Import-Module PSReadLine;',
-        `Set-PSReadLineOption -HistorySavePath ${quotePowerShellString(historyPath)}`,
-        '}',
-      ].join(' '),
+      shellArgs: ['-NoExit', '-Command', command],
     }
   }
 

@@ -1,5 +1,5 @@
 import { normalizeAppThemeId } from './appThemes'
-import type { UserSettings } from './types'
+import type { ConfigurableTileCreationType, UserSettings } from './types'
 import { DEFAULT_USER_SETTINGS } from './types'
 import { normalizeTerminalThemeId } from './terminalThemes'
 
@@ -42,7 +42,10 @@ export function normalizeUserSettings(raw: RawUserSettings = {}): UserSettings {
   const { fontSize: _legacyFontSize, updateDiagnosticsEnabled, updateDiagnosticsMigrationComplete, ...settings } = raw
   const diagnosticsMigrationComplete = updateDiagnosticsMigrationComplete === true
   const rawCreationAvailability = raw.tiles?.creationAvailability as Record<string, unknown> | undefined
-  const { files: _legacyFiles, ...creationAvailability } = rawCreationAvailability ?? {}
+  const getCreationAvailability = (type: ConfigurableTileCreationType) => {
+    const value = rawCreationAvailability?.[type]
+    return typeof value === 'boolean' ? value : DEFAULT_USER_SETTINGS.tiles.creationAvailability[type]
+  }
 
   return {
     ...DEFAULT_USER_SETTINGS,
@@ -77,8 +80,10 @@ export function normalizeUserSettings(raw: RawUserSettings = {}): UserSettings {
       ...DEFAULT_USER_SETTINGS.tiles,
       ...(raw.tiles ?? {}),
       creationAvailability: {
-        ...DEFAULT_USER_SETTINGS.tiles.creationAvailability,
-        ...creationAvailability,
+        agent: getCreationAvailability('agent'),
+        note: getCreationAvailability('note'),
+        browser: getCreationAvailability('browser'),
+        timer: getCreationAvailability('timer'),
       },
     },
     groups: {
