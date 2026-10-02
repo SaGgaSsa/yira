@@ -78,9 +78,9 @@ export interface AgentActiveSession {
   /** Missing values from older daemons are interpreted as 'tile'. */
   surface?: AgentSessionSurface
   title?: string
-  worktreePath?: string
+  worktreeRoot?: string
   worktreeBranch?: string
-  worktreeBaseSha?: string
+  worktrees?: Array<{ path: string; baseSha: string }>
 }
 
 export type ActiveAgentSession = AgentActiveSession
@@ -167,6 +167,7 @@ export interface AgentSessionCloseInput {
 
 export interface AgentSessionCloseResult {
   worktree: 'none' | 'removed' | 'kept' | 'missing'
+  worktreeRoot?: string
 }
 
 export interface AgentSessionCapabilities {

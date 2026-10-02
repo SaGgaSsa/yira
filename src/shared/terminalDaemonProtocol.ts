@@ -18,9 +18,9 @@ export interface TerminalDaemonAgent {
   /** Missing values from older daemons are interpreted as 'tile'. */
   surface?: AgentSessionSurface
   title?: string
-  worktreePath?: string
+  worktreeRoot?: string
   worktreeBranch?: string
-  worktreeBaseSha?: string
+  worktrees?: Array<{ path: string; baseSha: string }>
 }
 
 export interface TerminalDaemonAlert {

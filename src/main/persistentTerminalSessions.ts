@@ -550,9 +550,9 @@ export class PersistentTerminalSessions {
         startedAt: snapshot.agent.startedAt,
         ...(snapshot.agent.surface !== undefined ? { surface: snapshot.agent.surface } : {}),
         ...(snapshot.agent.title !== undefined ? { title: snapshot.agent.title } : {}),
-        ...(snapshot.agent.worktreePath !== undefined ? { worktreePath: snapshot.agent.worktreePath } : {}),
+        ...(snapshot.agent.worktreeRoot !== undefined ? { worktreeRoot: snapshot.agent.worktreeRoot } : {}),
         ...(snapshot.agent.worktreeBranch !== undefined ? { worktreeBranch: snapshot.agent.worktreeBranch } : {}),
-        ...(snapshot.agent.worktreeBaseSha !== undefined ? { worktreeBaseSha: snapshot.agent.worktreeBaseSha } : {}),
+        ...(snapshot.agent.worktrees !== undefined ? { worktrees: snapshot.agent.worktrees } : {}),
       })
       record.agentRegistered = true
     }

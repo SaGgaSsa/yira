@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { access, mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import test from 'node:test'
 
 import { execGitCommand, type GitCommandExecutor, type GitCommandResult } from '../git/runner'
 import {
-  canCreateAgentWorktree,
-  createAgentWorktree,
+  createAgentWorkspaceWorktrees,
   removeAgentWorktreeIfClean,
+  resolveWorkspaceWorktreeRepositories,
 } from './worktree'
 
 const baseSha = 'a'.repeat(40)
@@ -33,55 +33,119 @@ async function makeTempDirectory(): Promise<string> {
   return mkdtemp(join(tmpdir(), 'yira-agent-worktree-'))
 }
 
-test('allows a worktree only when Git can resolve a repository and committed HEAD', async () => {
-  const repositoryRoot = resolve('temporary-repository')
-  const { executor } = fakeGit((args) => {
-    if (args.at(-1) === '--show-toplevel') return result(`${repositoryRoot}\n`)
-    if (args.includes('HEAD^{commit}')) return result(`${baseSha}\n`)
-    throw new Error('unexpected Git command')
-  })
+async function initializeRepository(root: string, commit = true): Promise<void> {
+  await mkdir(root, { recursive: true })
+  await execGitCommand('git', ['-C', root, 'init', '--quiet'])
+  await execGitCommand('git', ['-C', root, 'config', 'user.name', 'Yira Test'])
+  await execGitCommand('git', ['-C', root, 'config', 'user.email', 'yira-test@example.invalid'])
+  if (!commit) return
+  await writeFile(join(root, 'README.md'), 'temporary repository\n')
+  await execGitCommand('git', ['-C', root, 'add', 'README.md'])
+  await execGitCommand('git', ['-C', root, 'commit', '--quiet', '-m', 'initial commit'])
+}
 
-  assert.equal(await canCreateAgentWorktree(repositoryRoot, executor), true)
-
-  const noCommit = fakeGit((args) => {
-    if (args.at(-1) === '--show-toplevel') return result(`${repositoryRoot}\n`)
-    throw new Error('HEAD is missing')
-  })
-  assert.equal(await canCreateAgentWorktree(repositoryRoot, noCommit.executor), false)
-  assert.equal(await canCreateAgentWorktree('', executor), false)
-})
-
-test('creates a branch with a collision suffix and preserves a workspace subdirectory as cwd', async (t) => {
+test('resolves committed child repositories in a non-Git workspace and creates their worktrees', async (t) => {
   const temporaryDirectory = await makeTempDirectory()
   t.after(() => rm(temporaryDirectory, { recursive: true, force: true }))
 
-  const repositoryRoot = join(temporaryDirectory, 'sample-repo')
-  const workspaceRoot = join(repositoryRoot, 'packages', 'app')
-  const baseDirectory = join(temporaryDirectory, 'agent-worktrees')
-  await mkdir(workspaceRoot, { recursive: true })
-  let branchLookups = 0
-  const { executor, calls } = fakeGit((args) => {
-    if (args.at(-1) === '--show-toplevel') return result(`${repositoryRoot}\n`)
-    if (args.includes('HEAD^{commit}')) return result(`${baseSha}\n`)
-    if (args.includes('--format=%(refname:short)')) {
-      branchLookups += 1
-      return result(branchLookups === 1 ? 'yira/agent-12345678\n' : '')
-    }
-    return result()
+  const rootPath = join(temporaryDirectory, 'workspace')
+  const alphaPath = join(rootPath, 'alpha')
+  const zetaPath = join(rootPath, 'zeta')
+  await mkdir(rootPath)
+  await initializeRepository(alphaPath)
+  await initializeRepository(zetaPath)
+  await initializeRepository(join(rootPath, 'unborn'), false)
+  await execGitCommand('git', ['-C', zetaPath, 'branch', 'yira/agent-12345678'])
+
+  const repositories = await resolveWorkspaceWorktreeRepositories({
+    rootPath,
+    configuredRepositoryPaths: ['alpha'],
   })
+  assert.deepEqual(repositories.map(({ relativePath }) => relativePath), ['alpha', 'zeta'])
+  assert.deepEqual(repositories.map(({ absolutePath }) => absolutePath), [alphaPath, zetaPath])
 
-  const worktree = await createAgentWorktree({
-    rootPath: workspaceRoot,
-    sessionId: 'agent-12345678-rest',
+  const baseDirectory = join(temporaryDirectory, 'agent-worktrees')
+  const worktree = await createAgentWorkspaceWorktrees({
+    rootPath,
+    repositories,
+    sessionId: 'agent-12345678-extra',
     baseDirectory,
-  }, executor)
-
-  assert.equal(worktree.path, join(baseDirectory, 'sample-repo-12345678'))
-  assert.equal(worktree.cwd, join(worktree.path, 'packages', 'app'))
+  })
+  assert.equal(worktree.root, join(baseDirectory, 'workspace-12345678'))
   assert.equal(worktree.branch, 'yira/agent-12345678-1')
-  assert.equal(worktree.baseSha, baseSha)
-  assert.ok(calls.some((args) => args.includes('check-ref-format')))
-  assert.ok(calls.some((args) => args.includes('worktree') && args.includes('add')))
+  assert.deepEqual(worktree.worktrees.map(({ repositoryPath }) => repositoryPath), ['alpha', 'zeta'])
+  assert.deepEqual(worktree.worktrees.map(({ path }) => path), [
+    join(worktree.root, 'alpha'),
+    join(worktree.root, 'zeta'),
+  ])
+  for (const entry of worktree.worktrees) {
+    assert.equal((await execGitCommand('git', ['-C', entry.path, 'branch', '--show-current'])).stdout.trim(), worktree.branch)
+    assert.match(entry.baseSha, /^[a-f\d]{40}$/i)
+  }
+
+  for (const entry of [...worktree.worktrees].reverse()) {
+    assert.equal(await removeAgentWorktreeIfClean({ ...entry, branch: worktree.branch }), 'removed')
+  }
+  await rm(worktree.root, { recursive: true, force: true })
+})
+
+test('creates the root repository first and nests a child repository in its worktree', async (t) => {
+  const temporaryDirectory = await makeTempDirectory()
+  t.after(() => rm(temporaryDirectory, { recursive: true, force: true }))
+
+  const rootPath = join(temporaryDirectory, 'monorepo')
+  const childPath = join(rootPath, 'child')
+  await initializeRepository(rootPath)
+  await initializeRepository(childPath)
+
+  const repositories = await resolveWorkspaceWorktreeRepositories({ rootPath, configuredRepositoryPaths: [] })
+  assert.deepEqual(repositories.map(({ relativePath }) => relativePath), ['.', 'child'])
+
+  const worktree = await createAgentWorkspaceWorktrees({
+    rootPath,
+    repositories,
+    sessionId: 'agent-root1234',
+    baseDirectory: join(temporaryDirectory, 'worktrees'),
+  })
+  assert.deepEqual(worktree.worktrees.map(({ repositoryPath }) => repositoryPath), ['.', 'child'])
+  assert.equal(worktree.worktrees[0].path, worktree.root)
+  assert.equal(worktree.worktrees[1].path, join(worktree.root, 'child'))
+
+  for (const entry of [...worktree.worktrees].reverse()) {
+    assert.equal(await removeAgentWorktreeIfClean({ ...entry, branch: worktree.branch }), 'removed')
+  }
+})
+
+test('rolls back already-created worktrees in reverse order when a later repository fails', async (t) => {
+  const temporaryDirectory = await makeTempDirectory()
+  t.after(() => rm(temporaryDirectory, { recursive: true, force: true }))
+
+  const rootPath = join(temporaryDirectory, 'workspace')
+  const alphaPath = join(rootPath, 'alpha')
+  const zetaPath = join(rootPath, 'zeta')
+  await mkdir(rootPath)
+  await initializeRepository(alphaPath)
+  await initializeRepository(zetaPath)
+  const repositories = await resolveWorkspaceWorktreeRepositories({ rootPath, configuredRepositoryPaths: [] })
+  const baseDirectory = join(temporaryDirectory, 'worktrees')
+  const originalError = new Error('second repository failed')
+  const cleanupPaths: string[] = []
+  const executor: GitCommandExecutor = async (command, args) => {
+    if (args.includes('worktree') && args.includes('add') && args.includes(zetaPath)) throw originalError
+    if (args.includes('worktree') && args.includes('remove')) cleanupPaths.push(args.at(-1) ?? '')
+    return execGitCommand(command, args)
+  }
+
+  await assert.rejects(() => createAgentWorkspaceWorktrees({
+    rootPath,
+    repositories,
+    sessionId: 'agent-rollback',
+    baseDirectory,
+  }, executor), (error: unknown) => error === originalError)
+
+  assert.deepEqual(cleanupPaths, [join(baseDirectory, 'workspace-rollback', 'alpha')])
+  await assert.rejects(() => access(join(baseDirectory, 'workspace-rollback', 'alpha')))
+  assert.equal((await execGitCommand('git', ['-C', alphaPath, 'branch', '--list', 'yira/agent-rollback'])).stdout.trim(), '')
 })
 
 test('keeps dirty worktrees and worktrees with commits after the base', async (t) => {
@@ -138,32 +202,6 @@ test('removes clean worktrees without force and deletes their branch from the co
   assert.ok(calls.every((args) => !args.includes('--force') && !args.includes('-f')))
 })
 
-test('prunes metadata best-effort when a created worktree directory is missing', async (t) => {
-  const temporaryDirectory = await makeTempDirectory()
-  t.after(() => rm(temporaryDirectory, { recursive: true, force: true }))
-  const repositoryRoot = join(temporaryDirectory, 'sample-repo')
-  const baseDirectory = join(temporaryDirectory, 'agent-worktrees')
-  const { executor, calls } = fakeGit((args) => {
-    if (args.at(-1) === '--show-toplevel') return result(`${repositoryRoot}\n`)
-    if (args.includes('HEAD^{commit}')) return result(`${baseSha}\n`)
-    if (args.includes('--format=%(refname:short)')) return result()
-    return result()
-  })
-  await mkdir(repositoryRoot)
-  const worktree = await createAgentWorktree({
-    rootPath: repositoryRoot,
-    sessionId: 'agent-abcd1234',
-    baseDirectory,
-  }, executor)
-
-  assert.equal(await removeAgentWorktreeIfClean({
-    path: worktree.path,
-    branch: worktree.branch,
-    baseSha: worktree.baseSha,
-  }, executor), 'missing')
-  assert.ok(calls.some((args) => args.includes('worktree') && args.includes('prune')))
-})
-
 test('rejects unsafe worktree branch names before invoking Git', async () => {
   const { executor, calls } = fakeGit(() => result())
   await assert.rejects(() => removeAgentWorktreeIfClean({
@@ -172,34 +210,4 @@ test('rejects unsafe worktree branch names before invoking Git', async () => {
     baseSha,
   }, executor), /Invalid agent worktree branch/)
   assert.equal(calls.length, 0)
-})
-
-test('creates and removes a clean worktree in a temporary Git repository', async (t) => {
-  const temporaryDirectory = await makeTempDirectory()
-  t.after(() => rm(temporaryDirectory, { recursive: true, force: true }))
-
-  const repositoryRoot = join(temporaryDirectory, 'project')
-  const workspaceRoot = join(repositoryRoot, 'packages', 'app')
-  const baseDirectory = join(temporaryDirectory, 'worktrees')
-  await mkdir(workspaceRoot, { recursive: true })
-  await writeFile(join(repositoryRoot, 'README.md'), 'temporary repository\n')
-  await execGitCommand('git', ['-C', repositoryRoot, 'init'])
-  await execGitCommand('git', ['-C', repositoryRoot, 'config', 'user.name', 'Yira Test'])
-  await execGitCommand('git', ['-C', repositoryRoot, 'config', 'user.email', 'yira-test@example.invalid'])
-  await execGitCommand('git', ['-C', repositoryRoot, 'add', 'README.md'])
-  await execGitCommand('git', ['-C', repositoryRoot, 'commit', '-m', 'initial commit'])
-
-  const worktree = await createAgentWorktree({
-    rootPath: workspaceRoot,
-    sessionId: 'agent-fedcba98',
-    baseDirectory,
-  })
-
-  assert.equal(await canCreateAgentWorktree(workspaceRoot), true)
-  assert.equal(worktree.cwd, join(worktree.path, 'packages', 'app'))
-  assert.equal(await removeAgentWorktreeIfClean({
-    path: worktree.path,
-    branch: worktree.branch,
-    baseSha: worktree.baseSha,
-  }), 'removed')
 })

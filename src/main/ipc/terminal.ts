@@ -119,7 +119,11 @@ export interface AgentsViewLaunchSpec {
   resumeSessionId?: string
   cwd: string
   title?: string
-  worktree?: { path: string; branch: string; baseSha: string }
+  worktree?: {
+    root: string
+    branch: string
+    worktrees: Array<{ path: string; baseSha: string }>
+  }
 }
 
 let terminalProcessActivityMonitor: TerminalProcessActivityMonitor | null = null
@@ -325,9 +329,9 @@ export async function createAgentsViewSession(
       surface: 'agents-view' as const,
       ...(spec.title !== undefined ? { title: spec.title } : {}),
       ...(spec.worktree ? {
-        worktreePath: spec.worktree.path,
+        worktreeRoot: spec.worktree.root,
         worktreeBranch: spec.worktree.branch,
-        worktreeBaseSha: spec.worktree.baseSha,
+        worktrees: spec.worktree.worktrees.map(({ path, baseSha }) => ({ path, baseSha })),
       } : {}),
     }
 

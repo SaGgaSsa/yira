@@ -104,7 +104,7 @@ function AgentSessionCard({
         <span className="nd-caption shrink-0 text-text-disabled">{t('agentsView.agentSession')}</span>
         <span className="min-w-0 flex-1 truncate text-xs text-text-display" title={title}>{title}</span>
         {session.worktreeBranch && (
-          <span className="max-w-28 shrink-0 truncate rounded-full border border-border-visible px-2 py-0.5 font-mono text-[10px] text-text-secondary" title={session.worktreeBranch}>
+          <span className="max-w-28 shrink-0 truncate rounded-full border border-border-visible px-2 py-0.5 font-mono text-[10px] text-text-secondary" title={`${session.worktreeBranch} · ${session.worktrees?.length ?? 0} repos`}>
             {session.worktreeBranch}
           </span>
         )}

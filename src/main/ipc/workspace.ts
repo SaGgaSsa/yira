@@ -160,13 +160,14 @@ export async function getWorkspaceGitConfigById(workspaceId: string): Promise<Pi
 }
 
 /** Returns only the workspace settings needed to launch an agent session. */
-export async function getWorkspaceAgentConfigById(workspaceId: string): Promise<Pick<WorkspaceConfig, 'rootFolderPath' | 'agentProvider' | 'agentProviders'> | null> {
+export async function getWorkspaceAgentConfigById(workspaceId: string): Promise<Pick<WorkspaceConfig, 'rootFolderPath' | 'sourceControlRepositoryPaths' | 'agentProvider' | 'agentProviders'> | null> {
   const config = await readConfig()
   const workspace = config.workspaces.find(w => w.id === workspaceId)
   if (!workspace) return null
 
   return {
     rootFolderPath: workspace.config.rootFolderPath,
+    sourceControlRepositoryPaths: workspace.config.sourceControlRepositoryPaths,
     agentProvider: workspace.config.agentProvider,
     agentProviders: workspace.config.agentProviders,
   }

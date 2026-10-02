@@ -17,9 +17,9 @@ export interface AgentSessionRegistration {
   startedAt?: string
   surface?: AgentSessionSurface
   title?: string
-  worktreePath?: string
+  worktreeRoot?: string
   worktreeBranch?: string
-  worktreeBaseSha?: string
+  worktrees?: Array<{ path: string; baseSha: string }>
 }
 
 export interface AgentSessionRegistryOptions {
@@ -30,7 +30,10 @@ export interface AgentSessionRegistryOptions {
 export type AgentSessionSnapshotSubscriber = (snapshot: AgentActiveSessionSnapshot) => void
 
 function cloneSession(session: AgentActiveSession): AgentActiveSession {
-  return { ...session }
+  return {
+    ...session,
+    ...(session.worktrees !== undefined ? { worktrees: session.worktrees.map((worktree) => ({ ...worktree })) } : {}),
+  }
 }
 
 function cloneSnapshot(snapshot: AgentActiveSessionSnapshot): AgentActiveSessionSnapshot {
@@ -76,9 +79,23 @@ function normalizeRegistration(input: AgentSessionRegistration): AgentSessionReg
     throw new Error('Invalid agent surface')
   }
   const title = normalizeMetadataString(input.title, 'title', 200)
-  const worktreePath = normalizeMetadataString(input.worktreePath, 'worktree path', 4_096)
+  const worktreeRoot = normalizeMetadataString(input.worktreeRoot, 'worktree root', 4_096)
   const worktreeBranch = normalizeMetadataString(input.worktreeBranch, 'worktree branch', 256)
-  const worktreeBaseSha = normalizeMetadataString(input.worktreeBaseSha, 'worktree base sha', 256)
+  let worktrees: Array<{ path: string; baseSha: string }> | undefined
+  if (input.worktrees !== undefined) {
+    if (!Array.isArray(input.worktrees) || input.worktrees.length > 32) {
+      throw new Error('Invalid agent worktrees')
+    }
+    worktrees = input.worktrees.map((worktree) => {
+      if (!worktree || typeof worktree !== 'object' || Array.isArray(worktree)) {
+        throw new Error('Invalid agent worktree')
+      }
+      const path = normalizeMetadataString(worktree.path, 'worktree path', 4_096)
+      const baseSha = normalizeMetadataString(worktree.baseSha, 'worktree base sha', 256)
+      if (!path || !baseSha) throw new Error('Invalid agent worktree metadata')
+      return { path, baseSha }
+    })
+  }
   return {
     sessionId,
     tileId,
@@ -87,9 +104,9 @@ function normalizeRegistration(input: AgentSessionRegistration): AgentSessionReg
     ...(startedAt ? { startedAt } : {}),
     ...(surface !== undefined ? { surface } : {}),
     ...(title !== undefined ? { title } : {}),
-    ...(worktreePath !== undefined ? { worktreePath } : {}),
+    ...(worktreeRoot !== undefined ? { worktreeRoot } : {}),
     ...(worktreeBranch !== undefined ? { worktreeBranch } : {}),
-    ...(worktreeBaseSha !== undefined ? { worktreeBaseSha } : {}),
+    ...(worktrees !== undefined ? { worktrees } : {}),
   }
 }
 
@@ -125,9 +142,9 @@ export class AgentSessionRegistry {
       lastActivityAt: currentTime,
       ...(normalized.surface !== undefined ? { surface: normalized.surface } : {}),
       ...(normalized.title !== undefined ? { title: normalized.title } : {}),
-      ...(normalized.worktreePath !== undefined ? { worktreePath: normalized.worktreePath } : {}),
+      ...(normalized.worktreeRoot !== undefined ? { worktreeRoot: normalized.worktreeRoot } : {}),
       ...(normalized.worktreeBranch !== undefined ? { worktreeBranch: normalized.worktreeBranch } : {}),
-      ...(normalized.worktreeBaseSha !== undefined ? { worktreeBaseSha: normalized.worktreeBaseSha } : {}),
+      ...(normalized.worktrees !== undefined ? { worktrees: normalized.worktrees } : {}),
     }
     this.sessions.set(key, session)
     this.emit()

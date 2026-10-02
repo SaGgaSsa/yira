@@ -1,12 +1,16 @@
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
-import { readFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 import test from 'node:test'
 import type { AgentActiveSessionSnapshot } from '@shared/types'
 import { AgentSessionRegistry } from '../agents/registry'
+import { createAgentWorkspaceWorktrees, resolveWorkspaceWorktreeRepositories } from '../agents/worktree'
+import { execGitCommand } from '../git/runner'
 import type { AgentsViewLaunchSpec } from './terminal'
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
@@ -181,6 +185,7 @@ test('keeps the replacement session subscription after a late stale unsubscribe'
 function workspaceAgentConfig() {
   return {
     rootFolderPath: 'C:\\workspace',
+    sourceControlRepositoryPaths: [],
     agentProvider: 'claude' as const,
     agentProviders: {
       claude: { enabled: true, args: [] },
@@ -196,8 +201,8 @@ test('reports no effective provider when user settings have not enabled the work
     enabledProviders: async () => [],
     workspaceAgentConfig: async () => workspaceAgentConfig(),
     worktrees: {
-      canCreateAgentWorktree: async () => true,
-      createAgentWorktree: async () => { throw new Error('not used') },
+      resolveWorkspaceWorktreeRepositories: async () => [{ relativePath: '.', absolutePath: 'C:\\workspace' }],
+      createAgentWorkspaceWorktrees: async () => { throw new Error('not used') },
       removeAgentWorktreeIfClean: async () => 'missing',
     },
   })
@@ -242,12 +247,14 @@ test('ignores legacy overrides when launching a resumed session from its worktre
     workspaceAgentConfig: async () => workspaceAgentConfig(),
     createSession: async (target, spec) => { launch = { target, spec } },
     worktrees: {
-      canCreateAgentWorktree: async () => true,
-      createAgentWorktree: async () => ({
-        path: 'C:\\worktrees\\sample-repo',
-        cwd: 'C:\\worktrees\\sample-repo',
+      resolveWorkspaceWorktreeRepositories: async () => [{ relativePath: '.', absolutePath: 'C:\\workspace' }],
+      createAgentWorkspaceWorktrees: async () => ({
+        root: 'C:\\worktrees\\sample-workspace',
         branch: 'yira/agent-12345678',
-        baseSha: 'a'.repeat(40),
+        worktrees: [
+          { path: 'C:\\worktrees\\sample-workspace', repositoryPath: '.', baseSha: 'a'.repeat(40) },
+          { path: 'C:\\worktrees\\sample-workspace\\packages\\app', repositoryPath: 'packages/app', baseSha: 'b'.repeat(40) },
+        ],
       }),
       removeAgentWorktreeIfClean: async () => 'removed',
     },
@@ -267,14 +274,17 @@ test('ignores legacy overrides when launching a resumed session from its worktre
     provider: 'claude',
   })
   assert.match(launch?.target.tileId ?? '', /^agent-[0-9a-f-]+$/)
-  assert.equal(launch?.spec.cwd, 'C:\\worktrees\\sample-repo\\packages\\app')
+  assert.equal(launch?.spec.cwd, 'C:\\worktrees\\sample-workspace')
   assert.equal(launch?.spec.title, 'Resume history-')
   assert.equal(launch?.spec.resumeSessionId, 'history-123')
   assert.equal('overrides' in (launch?.spec ?? {}), false)
   assert.deepEqual(launch?.spec.worktree, {
-    path: 'C:\\worktrees\\sample-repo',
+    root: 'C:\\worktrees\\sample-workspace',
     branch: 'yira/agent-12345678',
-    baseSha: 'a'.repeat(40),
+    worktrees: [
+      { path: 'C:\\worktrees\\sample-workspace', baseSha: 'a'.repeat(40) },
+      { path: 'C:\\worktrees\\sample-workspace\\packages\\app', baseSha: 'b'.repeat(40) },
+    ],
   })
 })
 
@@ -288,12 +298,14 @@ test('cleans up a newly created worktree when the terminal launch fails', async 
     workspaceAgentConfig: async () => workspaceAgentConfig(),
     createSession: async () => { throw launchError },
     worktrees: {
-      canCreateAgentWorktree: async () => true,
-      createAgentWorktree: async () => ({
-        path: 'C:\\worktrees\\sample-repo',
-        cwd: 'C:\\worktrees\\sample-repo',
+      resolveWorkspaceWorktreeRepositories: async () => [{ relativePath: '.', absolutePath: 'C:\\workspace' }],
+      createAgentWorkspaceWorktrees: async () => ({
+        root: 'C:\\worktrees\\sample-workspace',
         branch: 'yira/agent-12345678',
-        baseSha: 'a'.repeat(40),
+        worktrees: [
+          { path: 'C:\\worktrees\\sample-workspace', repositoryPath: '.', baseSha: 'a'.repeat(40) },
+          { path: 'C:\\worktrees\\sample-workspace\\packages\\app', repositoryPath: 'packages/app', baseSha: 'b'.repeat(40) },
+        ],
       }),
       removeAgentWorktreeIfClean: async ({ path }) => {
         removed.push(path)
@@ -310,7 +322,10 @@ test('cleans up a newly created worktree when the terminal launch fails', async 
     }) as Promise<unknown>,
     (error: unknown) => error === launchError,
   )
-  assert.deepEqual(removed, ['C:\\worktrees\\sample-repo'])
+  assert.deepEqual(removed, [
+    'C:\\worktrees\\sample-workspace\\packages\\app',
+    'C:\\worktrees\\sample-workspace',
+  ])
 })
 
 test('rejects closing a persistent tile session from Agents View', async () => {
@@ -352,8 +367,8 @@ test('closes Agents View sessions and reports whether their worktrees were kept 
       registry,
       destroySession: async ({ tileId }) => { destroyed.push(tileId) },
       worktrees: {
-        canCreateAgentWorktree: async () => true,
-        createAgentWorktree: async () => { throw new Error('not used') },
+        resolveWorkspaceWorktreeRepositories: async () => [{ relativePath: '.', absolutePath: 'C:\\workspace' }],
+        createAgentWorkspaceWorktrees: async () => { throw new Error('not used') },
         removeAgentWorktreeIfClean: async ({ path }) => {
           removed.push(path)
           return worktreeResult
@@ -367,17 +382,79 @@ test('closes Agents View sessions and reports whether their worktrees were kept 
       workspaceId: 'workspace-a',
       provider: 'codex',
       surface: 'agents-view',
-      worktreePath: `C:\\worktrees\\${worktreeResult}`,
+      worktreeRoot: `C:\\worktrees\\${worktreeResult}`,
       worktreeBranch: 'yira/agent-12345678',
-      worktreeBaseSha: 'a'.repeat(40),
+      worktrees: [
+        { path: `C:\\worktrees\\${worktreeResult}`, baseSha: 'a'.repeat(40) },
+        { path: `C:\\worktrees\\${worktreeResult}\\packages\\repo`, baseSha: 'b'.repeat(40) },
+      ],
     })
 
     assert.deepEqual(await ipcMain.call('agents:sessions:close', new FakeWebContents(55), {
       workspaceId: 'workspace-a',
       tileId,
-    }), { worktree: worktreeResult })
+    }), worktreeResult === 'kept'
+      ? { worktree: 'kept', worktreeRoot: `C:\\worktrees\\${worktreeResult}` }
+      : { worktree: 'removed' })
     assert.deepEqual(destroyed, [tileId])
-    assert.deepEqual(removed, [`C:\\worktrees\\${worktreeResult}`])
+    assert.deepEqual(removed, worktreeResult === 'kept'
+      ? [`C:\\worktrees\\${worktreeResult}\\packages\\repo`]
+      : [
+          `C:\\worktrees\\${worktreeResult}\\packages\\repo`,
+          `C:\\worktrees\\${worktreeResult}`,
+        ])
     assert.equal(registry.get('workspace-a', tileId), null)
   }
+})
+
+test('keeps the root worktree when a real child worktree has uncommitted changes', async (t) => {
+  const temporaryDirectory = await mkdtemp(join(tmpdir(), 'yira-agent-close-worktree-'))
+  t.after(() => rm(temporaryDirectory, { recursive: true, force: true }))
+  const rootPath = join(temporaryDirectory, 'workspace')
+  const childPath = join(rootPath, 'child')
+
+  const initializeRepository = async (repositoryPath: string, fileName: string) => {
+    await mkdir(repositoryPath, { recursive: true })
+    await execGitCommand('git', ['-C', repositoryPath, 'init', '--quiet'])
+    await execGitCommand('git', ['-C', repositoryPath, 'config', 'user.name', 'Yira Test'])
+    await execGitCommand('git', ['-C', repositoryPath, 'config', 'user.email', 'yira-test@example.invalid'])
+    await writeFile(join(repositoryPath, fileName), 'initial\n')
+    await execGitCommand('git', ['-C', repositoryPath, 'add', fileName])
+    await execGitCommand('git', ['-C', repositoryPath, 'commit', '--quiet', '-m', 'initial commit'])
+  }
+
+  await initializeRepository(rootPath, 'README.md')
+  await initializeRepository(childPath, 'README.md')
+  const repositories = await resolveWorkspaceWorktreeRepositories({ rootPath, configuredRepositoryPaths: [] })
+  const worktree = await createAgentWorkspaceWorktrees({
+    rootPath,
+    repositories,
+    sessionId: 'agent-dirtychild',
+    baseDirectory: join(temporaryDirectory, 'worktrees'),
+  })
+  const childWorktree = worktree.worktrees[1]
+  await writeFile(join(childWorktree.path, 'README.md'), 'changed\n')
+
+  const ipcMain = new FakeIpcMain()
+  const { registerAgentsIPC } = loadAgentsIPC(ipcMain)
+  const registry = new AgentSessionRegistry()
+  registerAgentsIPC({ registry, destroySession: async () => undefined })
+  registry.register({
+    sessionId: 'session-dirtychild',
+    tileId: 'agent-dirtychild',
+    workspaceId: 'workspace-a',
+    provider: 'claude',
+    surface: 'agents-view',
+    worktreeRoot: worktree.root,
+    worktreeBranch: worktree.branch,
+    worktrees: worktree.worktrees.map(({ path, baseSha }) => ({ path, baseSha })),
+  })
+
+  assert.deepEqual(await ipcMain.call('agents:sessions:close', new FakeWebContents(58), {
+    workspaceId: 'workspace-a',
+    tileId: 'agent-dirtychild',
+  }), { worktree: 'kept', worktreeRoot: worktree.root })
+  await access(worktree.root)
+  await access(worktree.worktrees[0].path)
+  await access(childWorktree.path)
 })
