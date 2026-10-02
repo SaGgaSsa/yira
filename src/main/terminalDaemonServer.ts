@@ -28,8 +28,14 @@ const daemonRequire = createRequire(import.meta.url)
 const { SerializeAddon } = daemonRequire('@xterm/addon-serialize') as {
   SerializeAddon: new () => SerializeAddonType
 }
+const { Unicode11Addon } = daemonRequire('@xterm/addon-unicode11') as {
+  Unicode11Addon: new () => unknown
+}
 const { Terminal: HeadlessTerminal } = daemonRequire('@xterm/headless') as {
-  Terminal: new (options: Record<string, unknown>) => unknown
+  Terminal: new (options: Record<string, unknown>) => {
+    loadAddon(addon: unknown): void
+    unicode: { activeVersion: string }
+  }
 }
 
 /**
@@ -408,13 +414,17 @@ function randomGenerationBase(): number {
   return 1 + (random % limit)
 }
 
-function defaultTerminalFactory(options: TerminalDaemonTerminalFactoryOptions): TerminalDaemonTerminal {
+export function defaultTerminalFactory(options: TerminalDaemonTerminalFactoryOptions): TerminalDaemonTerminal {
   const terminal = new HeadlessTerminal({
     allowProposedApi: true,
     cols: options.cols,
     rows: options.rows,
     scrollback: options.scrollback,
   })
+  // Use the same Unicode 11 widths as the renderer so restored snapshots and
+  // TUI cursor movement agree on wide characters such as emoji.
+  terminal.loadAddon(new Unicode11Addon())
+  terminal.unicode.activeVersion = '11'
   return terminal as unknown as TerminalDaemonTerminal
 }
 
