@@ -10,7 +10,6 @@ import type {
   AgentSessionCapabilities,
   AgentSessionCloseResult,
   AgentSessionCreateResult,
-  AgentSessionLaunchOverrides,
   AgentSessionHistoryResult,
   AgentActiveSessionSnapshot,
   AgentUsageSnapshot,
@@ -25,7 +24,6 @@ import type { AgentUsageDetailsService } from '../agentUsageDetails'
 import type { AgentUsageIndex } from '../agentUsageIndex'
 import { hasManagedAgentHooks } from '../agentHookConfiguration'
 import {
-  buildAgentOverrideArgs,
   getAgentHomeDirectory,
   getAgentProviderAvailability,
   normalizeResumeId,
@@ -94,7 +92,6 @@ interface NormalizedAgentSessionCreateInput {
   resumeSessionId?: string
   resumeCwd?: string
   worktree: boolean
-  overrides?: AgentSessionLaunchOverrides
 }
 
 const defaultWorktrees: AgentIPCWorktrees = {
@@ -168,22 +165,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
-function normalizeLaunchOverrides(value: unknown): AgentSessionLaunchOverrides | undefined {
-  if (value === undefined) return undefined
-  if (!isRecord(value)) throw new Error('Invalid agent launch overrides')
-
-  const overrides: AgentSessionLaunchOverrides = {}
-  if (value.model !== undefined) {
-    if (typeof value.model !== 'string') throw new Error('Invalid agent model override')
-    overrides.model = value.model
-  }
-  if (value.permissionMode !== undefined) {
-    if (typeof value.permissionMode !== 'string') throw new Error('Invalid agent permission mode')
-    overrides.permissionMode = value.permissionMode
-  }
-  return overrides
-}
-
 function normalizeCreateInput(value: unknown): NormalizedAgentSessionCreateInput {
   if (!isRecord(value)) throw new Error('Invalid agent session input')
 
@@ -223,7 +204,6 @@ function normalizeCreateInput(value: unknown): NormalizedAgentSessionCreateInput
     ...(resumeSessionId ? { resumeSessionId } : {}),
     ...(resumeCwd !== undefined ? { resumeCwd } : {}),
     worktree: value.worktree === true,
-    overrides: normalizeLaunchOverrides(value.overrides),
   }
 }
 
@@ -342,7 +322,6 @@ export function registerAgentsIPC(options: AgentIPCOptions = {}): void {
     if (!provider || !config) throw new Error('This workspace has no enabled agent')
 
     const providerConfig: AgentProviderConfig = config.agentProviders[provider]
-    buildAgentOverrideArgs(provider, input.overrides)
 
     const workspaceRoot = typeof config.rootFolderPath === 'string' && config.rootFolderPath.trim()
       ? config.rootFolderPath
@@ -369,7 +348,6 @@ export function registerAgentsIPC(options: AgentIPCOptions = {}): void {
     const spec: AgentsViewLaunchSpec = {
       provider,
       providerConfig,
-      ...(input.overrides ? { overrides: input.overrides } : {}),
       ...(!input.resumeSessionId && input.prompt !== undefined ? { prompt: input.prompt } : {}),
       ...(input.resumeSessionId ? { resumeSessionId: input.resumeSessionId } : {}),
       cwd,

@@ -233,7 +233,7 @@ test('rejects an empty prompt before attempting to launch', async () => {
   assert.equal(launches, 0)
 })
 
-test('launches a resumed session from its worktree cwd with session metadata', async () => {
+test('ignores legacy overrides when launching a resumed session from its worktree cwd', async () => {
   const ipcMain = new FakeIpcMain()
   const { registerAgentsIPC } = loadAgentsIPC(ipcMain)
   let launch: { target: { workspaceId: string; tileId: string }; spec: AgentsViewLaunchSpec } | undefined
@@ -258,6 +258,7 @@ test('launches a resumed session from its worktree cwd with session metadata', a
     resumeSessionId: 'history-123',
     resumeCwd: 'packages/app',
     worktree: true,
+    overrides: { model: '-unsafe' },
   })
 
   assert.deepEqual(result, {
@@ -269,6 +270,7 @@ test('launches a resumed session from its worktree cwd with session metadata', a
   assert.equal(launch?.spec.cwd, 'C:\\worktrees\\sample-repo\\packages\\app')
   assert.equal(launch?.spec.title, 'Resume history-')
   assert.equal(launch?.spec.resumeSessionId, 'history-123')
+  assert.equal('overrides' in (launch?.spec ?? {}), false)
   assert.deepEqual(launch?.spec.worktree, {
     path: 'C:\\worktrees\\sample-repo',
     branch: 'yira/agent-12345678',

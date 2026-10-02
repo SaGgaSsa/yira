@@ -131,11 +131,6 @@ const translationCopy: Record<string, string> = {
   'agentsView.promptPlaceholder': 'Enter starts the session',
   'agentsView.worktree': 'Run in a git worktree',
   'agentsView.worktreeUnavailable': 'Git worktrees are unavailable for this workspace.',
-  'agentsView.options': 'Options',
-  'agentsView.model': 'Model',
-  'agentsView.modelPlaceholder': 'Workspace default',
-  'agentsView.permissions': 'Permission mode',
-  'agentsView.workspaceDefault': 'Workspace default',
   'agentsView.createSession': 'Create session',
   'agentsView.creatingSession': 'Creating session…',
   'common.cancel': 'Cancel',
@@ -149,10 +144,7 @@ require.cache[reactI18nextPath] = {
   id: reactI18nextPath,
   loaded: true,
 } as NodeModule
-const {
-  AgentSessionDialog,
-  buildAgentSessionLaunchOverrides,
-} = loadWithJiti<typeof import('./AgentSessionDialog')>('./AgentSessionDialog.tsx')
+const { AgentSessionDialog } = loadWithJiti<typeof import('./AgentSessionDialog')>('./AgentSessionDialog.tsx')
 
 const createdResult = { workspaceId: 'workspace-a', tileId: 'agent-a', provider: 'claude' as const }
 let payloads: AgentSessionCreateInput[] = []
@@ -223,39 +215,8 @@ test('sends on Enter, keeps Shift+Enter from sending, and leaves worktree off by
       prompt: 'Summarize this repository',
       worktree: false,
     })
-    assert.equal('overrides' in payloads[0], false)
     assert.equal(createdCount, 1)
     assert.equal(closeCount, 1)
-  } finally {
-    root.unmount()
-  }
-})
-
-test('builds overrides only from completed model and permission options', async () => {
-  assert.equal(buildAgentSessionLaunchOverrides('', ''), undefined)
-  assert.deepEqual(
-    buildAgentSessionLaunchOverrides('  claude-sonnet-custom  ', 'plan'),
-    { model: 'claude-sonnet-custom', permissionMode: 'plan' },
-  )
-
-  const { container, root } = renderDialog()
-
-  try {
-    await settle()
-    const buttons = container.getElementsByTagName('button')
-    let optionsButton: any = null
-    for (let index = 0; index < buttons.length; index += 1) {
-      if (buttons[index].textContent.includes('Options')) optionsButton = buttons[index]
-    }
-    assert.ok(optionsButton)
-    assert.equal(optionsButton.getAttribute('aria-expanded'), 'false')
-    const prompt = findElement(container, 'textarea')
-    prompt.value = 'Review the patch'
-
-    dispatch(prompt, 'keydown', { key: 'Enter', shiftKey: false })
-    await settle()
-    assert.equal(payloads.length, 1)
-    assert.equal('overrides' in payloads[0], false)
   } finally {
     root.unmount()
   }

@@ -1,12 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { ChevronDown, ChevronUp, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { CLAUDE_PERMISSION_MODES, CODEX_SANDBOX_MODES } from '@shared/types'
-import type {
-  AgentProvider,
-  AgentSessionCreateResult,
-  AgentSessionLaunchOverrides,
-} from '@shared/types'
+import type { AgentProvider, AgentSessionCreateResult } from '@shared/types'
 
 export interface AgentSessionDialogProps {
   open: boolean
@@ -21,17 +16,6 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-export function buildAgentSessionLaunchOverrides(
-  model: string,
-  permissionMode: string,
-): AgentSessionLaunchOverrides | undefined {
-  const overrides: AgentSessionLaunchOverrides = {}
-  const trimmedModel = model.trim()
-  if (trimmedModel) overrides.model = trimmedModel
-  if (permissionMode) overrides.permissionMode = permissionMode
-  return Object.keys(overrides).length > 0 ? overrides : undefined
-}
-
 export function AgentSessionDialog({
   open,
   workspaceId,
@@ -44,9 +28,6 @@ export function AgentSessionDialog({
   const promptRef = useRef<HTMLTextAreaElement | null>(null)
   const [prompt, setPrompt] = useState('')
   const [worktree, setWorktree] = useState(false)
-  const [optionsOpen, setOptionsOpen] = useState(false)
-  const [model, setModel] = useState('')
-  const [permissionMode, setPermissionMode] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -54,9 +35,6 @@ export function AgentSessionDialog({
     if (!open) return
     setPrompt('')
     setWorktree(false)
-    setOptionsOpen(false)
-    setModel('')
-    setPermissionMode('')
     setError(null)
     setIsSubmitting(false)
     promptRef.current?.focus()
@@ -76,15 +54,10 @@ export function AgentSessionDialog({
   if (!open) return null
 
   const providerLabel = provider === 'claude' ? 'Claude' : 'Codex'
-  const permissionModes: readonly string[] = provider === 'claude'
-    ? CLAUDE_PERMISSION_MODES
-    : CODEX_SANDBOX_MODES
 
   const createSession = async (promptValue = prompt): Promise<void> => {
     const trimmedPrompt = promptValue.trim()
     if (!trimmedPrompt || isSubmitting) return
-
-    const overrides = buildAgentSessionLaunchOverrides(model, permissionMode)
 
     setIsSubmitting(true)
     setError(null)
@@ -94,7 +67,6 @@ export function AgentSessionDialog({
         workspaceId,
         prompt: trimmedPrompt,
         worktree: worktreeAvailable && worktree,
-        ...(overrides ? { overrides } : {}),
       })
     } catch (submitError) {
       setError(getErrorMessage(submitError))
@@ -170,44 +142,6 @@ export function AgentSessionDialog({
               </label>
               {!worktreeAvailable && <p className="pl-6 text-xs text-text-secondary">{t('agentsView.worktreeUnavailable')}</p>}
             </div>
-
-            <section className="rounded-xl border border-border-visible">
-              <button
-                type="button"
-                className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm text-text-secondary hover:text-text-display"
-                aria-expanded={optionsOpen}
-                onClick={() => setOptionsOpen((value) => !value)}
-              >
-                {optionsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                {t('agentsView.options')}
-              </button>
-              {optionsOpen && (
-                <div className="grid gap-4 border-t border-border px-4 py-4 sm:grid-cols-2">
-                  <label className="block">
-                    <span className="nd-caption mb-1.5 block text-text-secondary">{t('agentsView.model')}</span>
-                    <input
-                      className="w-full rounded-lg border border-border-visible bg-bg-primary px-3 py-2 text-sm text-text-primary outline-none focus:border-text-secondary"
-                      value={model}
-                      onChange={(event) => setModel(event.target.value)}
-                      placeholder={t('agentsView.modelPlaceholder')}
-                      disabled={isSubmitting}
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="nd-caption mb-1.5 block text-text-secondary">{t('agentsView.permissions')}</span>
-                    <select
-                      className="w-full rounded-lg border border-border-visible bg-bg-primary px-3 py-2 text-sm text-text-primary outline-none focus:border-text-secondary"
-                      value={permissionMode}
-                      onChange={(event) => setPermissionMode(event.target.value)}
-                      disabled={isSubmitting}
-                    >
-                      <option value="">{t('agentsView.workspaceDefault')}</option>
-                      {permissionModes.map((mode) => <option value={mode} key={mode}>{mode}</option>)}
-                    </select>
-                  </label>
-                </div>
-              )}
-            </section>
 
             {error && <p role="alert" className="rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
           </div>

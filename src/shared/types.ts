@@ -9,26 +9,6 @@ export type AgentProvider = 'claude' | 'codex'
 
 export type AgentSessionSurface = 'tile' | 'agents-view'
 
-export type ClaudePermissionMode = 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions'
-export const CLAUDE_PERMISSION_MODES: readonly ClaudePermissionMode[] = [
-  'default',
-  'acceptEdits',
-  'plan',
-  'bypassPermissions',
-]
-
-export type CodexSandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access'
-export const CODEX_SANDBOX_MODES: readonly CodexSandboxMode[] = [
-  'read-only',
-  'workspace-write',
-  'danger-full-access',
-]
-
-export interface AgentSessionLaunchOverrides {
-  model?: string
-  permissionMode?: string
-}
-
 export type ClaudeStatusLineStateStatus = 'active' | 'inactive' | 'chainable' | 'outdated' | 'malformed' | 'unsupported'
 export type ClaudeStatusLineMutationStatus = 'installed' | 'already-installed' | 'uninstalled' | 'already-uninstalled' | 'malformed' | 'unsupported' | 'invalid' | 'conflict'
 
@@ -172,7 +152,6 @@ export interface AgentSessionCreateInput {
   resumeSessionId?: string
   resumeCwd?: string
   worktree?: boolean
-  overrides?: AgentSessionLaunchOverrides
 }
 
 export interface AgentSessionCreateResult {

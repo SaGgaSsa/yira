@@ -5,7 +5,6 @@ import test from 'node:test'
 
 import {
   buildAgentCommand,
-  buildAgentOverrideArgs,
   detectInstalledAgentProviders,
   normalizeResumeId,
 } from './providers'
@@ -35,22 +34,6 @@ test('rejects resume identifiers that could be interpreted as paths or options',
   for (const value of ['', '   ', '../secret', '/tmp/session', '-help', 'session id', 'session\\id', 'session\u0000id', 'a'.repeat(257), 42, null]) {
     assert.equal(normalizeResumeId(value), null, `expected ${String(value)} to be rejected`)
   }
-})
-
-test('builds validated provider override arguments in the provider option format', () => {
-  assert.deepEqual(buildAgentOverrideArgs('claude', {
-    model: 'claude-sonnet-4.5',
-    permissionMode: 'acceptEdits',
-  }), ['--model', 'claude-sonnet-4.5', '--permission-mode', 'acceptEdits'])
-  assert.deepEqual(buildAgentOverrideArgs('claude', { permissionMode: 'default' }), [])
-  assert.deepEqual(buildAgentOverrideArgs('codex', {
-    model: 'gpt-5-codex',
-    permissionMode: 'workspace-write',
-  }), ['--model', 'gpt-5-codex', '--sandbox', 'workspace-write'])
-
-  assert.throws(() => buildAgentOverrideArgs('claude', { model: '-unsafe' }), /invalid agent model/i)
-  assert.throws(() => buildAgentOverrideArgs('claude', { permissionMode: 'workspace-write' }), /invalid Claude permission/i)
-  assert.throws(() => buildAgentOverrideArgs('codex', { permissionMode: 'acceptEdits' }), /invalid Codex sandbox/i)
 })
 
 test('detects provider executables from PATH without invoking either provider', async () => {
