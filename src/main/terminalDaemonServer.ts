@@ -111,6 +111,8 @@ const ENDPOINT_DIRECTORY_MODE = 0o700
 const ENDPOINT_FILE_MODE = 0o600
 const DEFAULT_IDLE_MS = 30_000
 const MAX_ID_LENGTH = 256
+const MAX_AGENT_TITLE_LENGTH = 200
+const MAX_WORKTREE_PATH_LENGTH = 4_096
 const MAX_EXECUTABLE_LENGTH = 4_096
 const MAX_ARGUMENT_LENGTH = 64 * 1024
 const MAX_ARGUMENTS = 4_096
@@ -244,10 +246,33 @@ function normalizeAgent(value: unknown): TerminalDaemonAgent | undefined {
   if (!isRecord(value)) throw new Error('Invalid terminal agent metadata')
   const provider = value.provider
   if (provider !== 'codex' && provider !== 'claude') throw new Error('Invalid terminal agent provider')
+  const surface = value.surface
+  if (surface !== undefined && surface !== 'tile' && surface !== 'agents-view') {
+    throw new Error('Invalid terminal agent surface')
+  }
+
+  const normalizeMetadataString = (field: string, maxLength: number): string | undefined => {
+    const entry = value[field]
+    if (entry === undefined) return undefined
+    if (typeof entry !== 'string' || entry.length > maxLength || /[\u0000-\u001f\u007f-\u009f]/.test(entry)) {
+      throw new Error(`Invalid terminal agent ${field}`)
+    }
+    return entry
+  }
+
+  const title = normalizeMetadataString('title', MAX_AGENT_TITLE_LENGTH)
+  const worktreePath = normalizeMetadataString('worktreePath', MAX_WORKTREE_PATH_LENGTH)
+  const worktreeBranch = normalizeMetadataString('worktreeBranch', MAX_ID_LENGTH)
+  const worktreeBaseSha = normalizeMetadataString('worktreeBaseSha', MAX_ID_LENGTH)
   return {
     provider,
     sessionId: normalizeString(value.sessionId, 'terminal agent session id', MAX_ID_LENGTH),
     startedAt: normalizeString(value.startedAt, 'terminal agent start time', MAX_ID_LENGTH),
+    ...(surface !== undefined ? { surface } : {}),
+    ...(title !== undefined ? { title } : {}),
+    ...(worktreePath !== undefined ? { worktreePath } : {}),
+    ...(worktreeBranch !== undefined ? { worktreeBranch } : {}),
+    ...(worktreeBaseSha !== undefined ? { worktreeBaseSha } : {}),
   }
 }
 

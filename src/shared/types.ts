@@ -7,6 +7,28 @@ import type { TerminalSessionIdentity } from './terminalSessionIdentity'
 /** Providers supported by Yira's agent terminal integration. */
 export type AgentProvider = 'claude' | 'codex'
 
+export type AgentSessionSurface = 'tile' | 'agents-view'
+
+export type ClaudePermissionMode = 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions'
+export const CLAUDE_PERMISSION_MODES: readonly ClaudePermissionMode[] = [
+  'default',
+  'acceptEdits',
+  'plan',
+  'bypassPermissions',
+]
+
+export type CodexSandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access'
+export const CODEX_SANDBOX_MODES: readonly CodexSandboxMode[] = [
+  'read-only',
+  'workspace-write',
+  'danger-full-access',
+]
+
+export interface AgentSessionLaunchOverrides {
+  model?: string
+  permissionMode?: string
+}
+
 export type ClaudeStatusLineStateStatus = 'active' | 'inactive' | 'chainable' | 'outdated' | 'malformed' | 'unsupported'
 export type ClaudeStatusLineMutationStatus = 'installed' | 'already-installed' | 'uninstalled' | 'already-uninstalled' | 'malformed' | 'unsupported' | 'invalid' | 'conflict'
 
@@ -58,6 +80,8 @@ export interface TerminalAgentMetadata {
   sessionId?: string
   /** Workspace-relative directory used when resuming a history session. */
   cwd?: string
+  /** Agents View requests may only attach to an already-running runtime target. */
+  surface?: AgentSessionSurface
 }
 
 /** Backwards-compatible name for consumers that call this agent terminal metadata. */
@@ -71,6 +95,12 @@ export interface AgentActiveSession {
   status: AgentSessionStatus
   startedAt: string
   lastActivityAt: string
+  /** Missing values from older daemons are interpreted as 'tile'. */
+  surface?: AgentSessionSurface
+  title?: string
+  worktreePath?: string
+  worktreeBranch?: string
+  worktreeBaseSha?: string
 }
 
 export type ActiveAgentSession = AgentActiveSession

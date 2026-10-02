@@ -548,6 +548,11 @@ export class PersistentTerminalSessions {
         workspaceId: snapshot.identity.workspaceId,
         provider: snapshot.agent.provider,
         startedAt: snapshot.agent.startedAt,
+        ...(snapshot.agent.surface !== undefined ? { surface: snapshot.agent.surface } : {}),
+        ...(snapshot.agent.title !== undefined ? { title: snapshot.agent.title } : {}),
+        ...(snapshot.agent.worktreePath !== undefined ? { worktreePath: snapshot.agent.worktreePath } : {}),
+        ...(snapshot.agent.worktreeBranch !== undefined ? { worktreeBranch: snapshot.agent.worktreeBranch } : {}),
+        ...(snapshot.agent.worktreeBaseSha !== undefined ? { worktreeBaseSha: snapshot.agent.worktreeBaseSha } : {}),
       })
       record.agentRegistered = true
     }

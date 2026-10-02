@@ -3,15 +3,20 @@ import { promises as fs } from 'fs'
 import { dirname, join } from 'path'
 
 import type {
+  AgentProvider,
+  AgentProviderConfig,
+  AgentSessionLaunchOverrides,
   RemotePreparationResult,
   RemotePreparationStatus,
   RemoteTerminalConfig,
   ShellProfile,
   TerminalCreateOptions,
+  TerminalCreateResult,
 } from '@shared/types'
 import type { TerminalSessionIdentity, TerminalSessionTarget } from '@shared/terminalSessionIdentity'
 import type { TerminalDaemonSpawn } from '@shared/terminalDaemonProtocol'
 import type { TerminalProcessActivitySnapshot } from '@shared/terminalProcessActivity'
+import { normalizeAgentProviderConfig } from '@shared/workspaceConfig'
 import { detectShellProfiles, detectSshClient } from '../shell-profiles'
 import { buildTerminalHistorySetup } from '../terminal-history'
 import { resolveTerminalWorkspaceRoot } from '../workspace-root'
@@ -27,6 +32,11 @@ import { getEnabledAgentProviders } from './settings'
 import { agentSessionRegistry } from '../agents/registry'
 import { normalizeAgentOpaqueId } from '../agents/query'
 import { buildAgentTerminalLaunch, type AgentTerminalLaunch } from '../agents/terminal'
+import { buildAgentOverrideArgs, buildAgentCommand, normalizeResumeId } from '../agents/providers'
+import {
+  buildAgentShellCommand,
+  resolveAgentShellProfile,
+} from '../agents/shellLaunch'
 import { connectTerminalDaemon, stopTerminalDaemon } from '../terminalDaemonClient'
 import { YIRA_HOME } from '../paths'
 import { disposeProcessLister } from '../processTree'
@@ -102,6 +112,17 @@ const persistentTerminalSessions = new PersistentTerminalSessions({
   onAgentExit: (identity) => agentAlerts.clearOnDestroy(identity.tileId),
   onAgentDestroyed: (identity) => agentAlerts.clearOnDestroy(identity.tileId),
 })
+
+export interface AgentsViewLaunchSpec {
+  provider: AgentProvider
+  providerConfig: AgentProviderConfig
+  overrides?: AgentSessionLaunchOverrides
+  prompt?: string
+  resumeSessionId?: string
+  cwd: string
+  title?: string
+  worktree?: { path: string; branch: string; baseSha: string }
+}
 
 let terminalProcessActivityMonitor: TerminalProcessActivityMonitor | null = null
 
@@ -259,6 +280,81 @@ export function destroyWorkspaceTerminalSessions(workspaceId: string): Promise<v
   return persistentTerminalSessions.destroyWorkspace(workspaceId)
 }
 
+export async function createAgentsViewSession(
+  target: TerminalSessionTarget,
+  spec: AgentsViewLaunchSpec,
+): Promise<TerminalCreateResult> {
+  const runtimeTarget = normalizeTerminalSessionTarget(target, true)
+  if (spec.provider !== 'claude' && spec.provider !== 'codex') {
+    throw new Error('Invalid agent provider')
+  }
+  const providerConfig = normalizeAgentProviderConfig(spec.providerConfig)
+  if (!providerConfig.enabled) throw new Error(`Agent provider "${spec.provider}" is disabled`)
+  const resumeSessionId = spec.resumeSessionId === undefined
+    ? undefined
+    : normalizeResumeId(spec.resumeSessionId)
+  if (spec.resumeSessionId !== undefined && !resumeSessionId) {
+    throw new Error('Invalid agent resume id')
+  }
+  const overrideArgs = buildAgentOverrideArgs(spec.provider, spec.overrides)
+
+  const snapshot = await persistentTerminalSessions.create(runtimeTarget, async () => {
+    const shellProfile = resolveAgentShellProfile(profiles, process.platform, process.env.SHELL)
+    if (!shellProfile) throw new Error('No compatible shell is available for agent sessions')
+    if (shellProfile.id !== 'powershell' && shellProfile.id !== 'bash'
+      && shellProfile.id !== 'zsh' && shellProfile.id !== 'fish') {
+      throw new Error('No compatible shell is available for agent sessions')
+    }
+
+    const providerCommand = buildAgentCommand(spec.provider, providerConfig)
+    const args = [...providerCommand.args, ...overrideArgs]
+    if (resumeSessionId) {
+      args.push(...(spec.provider === 'claude'
+        ? ['--resume', resumeSessionId]
+        : ['resume', resumeSessionId]))
+    }
+
+    const launch = buildAgentShellCommand({
+      shellProfileId: shellProfile.id,
+      command: providerCommand.command,
+      args,
+      ...(!resumeSessionId && spec.prompt !== undefined ? { prompt: spec.prompt } : {}),
+      platform: process.platform,
+    })
+    const startedAt = new Date().toISOString()
+    const agent = {
+      provider: spec.provider,
+      sessionId: resumeSessionId ?? runtimeTarget.tileId,
+      startedAt,
+      surface: 'agents-view' as const,
+      ...(spec.title !== undefined ? { title: spec.title } : {}),
+      ...(spec.worktree ? {
+        worktreePath: spec.worktree.path,
+        worktreeBranch: spec.worktree.branch,
+        worktreeBaseSha: spec.worktree.baseSha,
+      } : {}),
+    }
+
+    return {
+      target: { ...runtimeTarget },
+      executable: shellProfile.shell,
+      args: [...shellProfile.args],
+      cwd: spec.cwd,
+      env: { ...daemonSpawnEnvironment(), ...launch.env },
+      cols: 80,
+      rows: 24,
+      local: true,
+      agent,
+      initialCommand: launch.initialCommand,
+    }
+  })
+  return terminalResultFromSnapshot(snapshot)
+}
+
+export function destroyAgentsViewSession(target: TerminalSessionTarget): Promise<void> {
+  return persistentTerminalSessions.destroyCurrent(normalizeTerminalSessionTarget(target, true))
+}
+
 async function buildTerminalDaemonSpawn(
   runtimeTarget: TerminalSessionTarget,
   options: TerminalCreateOptions,
@@ -396,6 +492,13 @@ export function registerTerminalIPC(): void {
   ipcMain.handle('terminal:create', async (_event, target: TerminalSessionTarget, options: TerminalCreateOptions) => {
     const isAgent = options?.agent !== undefined
     const runtimeTarget = normalizeTerminalSessionTarget(target, isAgent)
+    if (options?.agent?.surface === 'agents-view') {
+      const existing = await persistentTerminalSessions.attach(runtimeTarget)
+      if (!existing || existing.exitEvent || existing.agent?.surface !== 'agents-view') {
+        throw new Error('Agent session is no longer running')
+      }
+      return terminalResultFromSnapshot(existing)
+    }
     const snapshot = await persistentTerminalSessions.create(
       runtimeTarget,
       () => buildTerminalDaemonSpawn(runtimeTarget, options),

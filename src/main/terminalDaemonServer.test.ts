@@ -594,7 +594,16 @@ test('authenticates every request and retains local semantic alerts without clie
     'create',
     spawnParams({ workspaceId: 'w', tileId: 'agent' }, {
       local: true,
-      agent: { provider: 'codex', sessionId: 'session-1', startedAt: '2026-01-01T00:00:00.000Z' },
+      agent: {
+        provider: 'codex',
+        sessionId: 'session-1',
+        startedAt: '2026-01-01T00:00:00.000Z',
+        surface: 'agents-view',
+        title: 'Review the migration',
+        worktreePath: '/tmp/worktrees/agent-1',
+        worktreeBranch: 'agents/migration-review',
+        worktreeBaseSha: 'abcdef123456',
+      },
     }),
   ))
   const pty = ptyFactory.instances[0]
@@ -603,6 +612,11 @@ test('authenticates every request and retains local semantic alerts without clie
   const endpointUrl = new URL(pty.options.env.YIRA_AGENT_BRIDGE_URL)
   const bridgeToken = pty.options.env.YIRA_AGENT_BRIDGE_TOKEN
   assert.equal(created.agent?.provider, 'codex')
+  assert.equal(created.agent?.surface, 'agents-view')
+  assert.equal(created.agent?.title, 'Review the migration')
+  assert.equal(created.agent?.worktreePath, '/tmp/worktrees/agent-1')
+  assert.equal(created.agent?.worktreeBranch, 'agents/migration-review')
+  assert.equal(created.agent?.worktreeBaseSha, 'abcdef123456')
 
   const unauthorized = await request(client.socket, client.messages, 'wrong-token', 2, 'list')
   assert.match(unauthorized.error ?? '', /unauthorized/i)
@@ -613,6 +627,43 @@ test('authenticates every request and retains local semantic alerts without clie
     event: 'completed',
     tileId: 'agent',
   }), 202)
+})
+
+test('rejects invalid Agents View metadata at daemon spawn validation', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'yira-daemon-agent-metadata-'))
+  const ptyFactory = new FakePtyFactory()
+  const handle = await startTerminalDaemon({ directory, ptyFactory, token: 'metadata-token', idleMs: 5_000 })
+  t.after(() => handle.close())
+  const client = await connectClient(handle.endpoint.port)
+
+  const invalidAgents = [
+    { surface: 'other' },
+    { title: 'x'.repeat(201) },
+    { title: 'bad\ntitle' },
+    { worktreePath: 'x'.repeat(4_097) },
+    { worktreeBranch: 42 },
+    { worktreeBaseSha: 'bad\u007fsha' },
+  ]
+  for (let index = 0; index < invalidAgents.length; index += 1) {
+    const response = await request(
+      client.socket,
+      client.messages,
+      handle.endpoint.token,
+      index + 1,
+      'create',
+      spawnParams({ workspaceId: 'w', tileId: `agent-${index}` }, {
+        agent: {
+          provider: 'claude',
+          sessionId: 'session-1',
+          startedAt: '2026-01-01T00:00:00.000Z',
+          ...invalidAgents[index],
+        },
+      }),
+    )
+    assert.match(response.error ?? '', /invalid terminal agent/i)
+  }
+  assert.equal(ptyFactory.instances.length, 0)
+  client.socket.destroy()
 })
 
 test('keeps VT queries with the daemon until a renderer is ready', async (t) => {

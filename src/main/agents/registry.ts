@@ -2,6 +2,7 @@ import type {
   AgentActiveSession,
   AgentActiveSessionSnapshot,
   AgentProvider,
+  AgentSessionSurface,
   AgentSessionStatus,
 } from '@shared/types'
 import { normalizeAgentAlert, SemanticAgentAlertState, type AgentAlert } from '../agentAlerts'
@@ -14,6 +15,11 @@ export interface AgentSessionRegistration {
   workspaceId: string
   provider: AgentProvider
   startedAt?: string
+  surface?: AgentSessionSurface
+  title?: string
+  worktreePath?: string
+  worktreeBranch?: string
+  worktreeBaseSha?: string
 }
 
 export interface AgentSessionRegistryOptions {
@@ -49,6 +55,14 @@ function requireSessionValue(value: unknown, label: string): string {
   return normalized
 }
 
+function normalizeMetadataString(value: unknown, label: string, maxLength: number): string | undefined {
+  if (value === undefined) return undefined
+  if (typeof value !== 'string' || value.length > maxLength || /[\u0000-\u001f\u007f-\u009f]/.test(value)) {
+    throw new Error(`Invalid agent ${label}`)
+  }
+  return value
+}
+
 function normalizeRegistration(input: AgentSessionRegistration): AgentSessionRegistration {
   const sessionId = requireSessionValue(input?.sessionId, 'session id')
   const tileId = requireSessionValue(input?.tileId, 'tile id')
@@ -57,7 +71,26 @@ function normalizeRegistration(input: AgentSessionRegistration): AgentSessionReg
   const startedAt = typeof input.startedAt === 'string' && !Number.isNaN(new Date(input.startedAt).valueOf())
     ? new Date(input.startedAt).toISOString()
     : undefined
-  return { sessionId, tileId, workspaceId, provider: input.provider, ...(startedAt ? { startedAt } : {}) }
+  const surface = input.surface
+  if (surface !== undefined && surface !== 'tile' && surface !== 'agents-view') {
+    throw new Error('Invalid agent surface')
+  }
+  const title = normalizeMetadataString(input.title, 'title', 200)
+  const worktreePath = normalizeMetadataString(input.worktreePath, 'worktree path', 4_096)
+  const worktreeBranch = normalizeMetadataString(input.worktreeBranch, 'worktree branch', 256)
+  const worktreeBaseSha = normalizeMetadataString(input.worktreeBaseSha, 'worktree base sha', 256)
+  return {
+    sessionId,
+    tileId,
+    workspaceId,
+    provider: input.provider,
+    ...(startedAt ? { startedAt } : {}),
+    ...(surface !== undefined ? { surface } : {}),
+    ...(title !== undefined ? { title } : {}),
+    ...(worktreePath !== undefined ? { worktreePath } : {}),
+    ...(worktreeBranch !== undefined ? { worktreeBranch } : {}),
+    ...(worktreeBaseSha !== undefined ? { worktreeBaseSha } : {}),
+  }
 }
 
 /**
@@ -90,6 +123,11 @@ export class AgentSessionRegistry {
       status: 'working',
       startedAt: normalized.startedAt ?? currentTime,
       lastActivityAt: currentTime,
+      ...(normalized.surface !== undefined ? { surface: normalized.surface } : {}),
+      ...(normalized.title !== undefined ? { title: normalized.title } : {}),
+      ...(normalized.worktreePath !== undefined ? { worktreePath: normalized.worktreePath } : {}),
+      ...(normalized.worktreeBranch !== undefined ? { worktreeBranch: normalized.worktreeBranch } : {}),
+      ...(normalized.worktreeBaseSha !== undefined ? { worktreeBaseSha: normalized.worktreeBaseSha } : {}),
     }
     this.sessions.set(key, session)
     this.emit()

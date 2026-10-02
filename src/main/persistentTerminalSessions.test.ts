@@ -247,7 +247,16 @@ test('a destroyed second sender does not detach a live first renderer', async ()
 test('hydrate restores agent metadata and maps alert and exit state', async () => {
   const transport = new FakeTransport()
   const registry = new AgentSessionRegistry({ now: () => 1_700_000_000_000 })
-  const agent = { provider: 'codex' as const, sessionId: 'resume-1', startedAt: '2024-01-01T00:00:00.000Z' }
+  const agent = {
+    provider: 'codex' as const,
+    sessionId: 'resume-1',
+    startedAt: '2024-01-01T00:00:00.000Z',
+    surface: 'agents-view' as const,
+    title: 'Restore this task',
+    worktreePath: '/tmp/worktrees/agent-1',
+    worktreeBranch: 'agents/restore',
+    worktreeBaseSha: 'abcdef123456',
+  }
   const alert: TerminalDaemonAlert = { provider: 'codex', event: 'permission', tileId: identity.tileId }
   transport.setHandler('list', () => [snapshot({ agent, alert, exitEvent: { exitCode: 0 } })])
   transport.setHandler('attach', () => snapshot({ agent, alert, exitEvent: { exitCode: 0 } }))
@@ -262,6 +271,11 @@ test('hydrate restores agent metadata and maps alert and exit state', async () =
   const restored = registry.get(identity.workspaceId, identity.tileId)
   assert.equal(restored?.sessionId, agent.sessionId)
   assert.equal(restored?.startedAt, agent.startedAt)
+  assert.equal(restored?.surface, agent.surface)
+  assert.equal(restored?.title, agent.title)
+  assert.equal(restored?.worktreePath, agent.worktreePath)
+  assert.equal(restored?.worktreeBranch, agent.worktreeBranch)
+  assert.equal(restored?.worktreeBaseSha, agent.worktreeBaseSha)
   assert.equal(restored?.status, 'exited')
   assert.equal(alerts.length, 1)
   assert.deepEqual(alerts[0], alert)
