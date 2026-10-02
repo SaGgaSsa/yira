@@ -155,11 +155,10 @@ export function TopBar({
                 aria-pressed={agentsViewOpen}
               >
                 <Bot size={14} aria-hidden="true" />
-                <span>{t('agentsView.topBarAgents')}</span>
                 <span className="font-mono text-[10px]">{agentSessionCount}</span>
                 {agentAttentionCount > 0 && (
                   <span
-                    className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-warning"
+                    className="absolute -right-1 -top-1 size-2.5 rounded-full border-2 border-bg-primary bg-warning"
                     title={t('agentsView.needsAttention', { count: agentAttentionCount })}
                     aria-hidden="true"
                   />
