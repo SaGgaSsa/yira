@@ -149,7 +149,6 @@ type TranslationResources = {
   }
   agentsView: {
     title: string
-    topBarAgents: string
     openAgentsView: string
     needsAttention: string
     worktreeKeptTitle: string
@@ -913,7 +912,6 @@ const en: TranslationResources = {
   },
   agentsView: {
     title: 'Agents',
-    topBarAgents: 'Agents',
     openAgentsView: 'Open Agents View ({{count}} sessions)',
     needsAttention: '{{count}} sessions need attention',
     worktreeKeptTitle: 'Worktree kept',
@@ -1651,7 +1649,6 @@ const es: TranslationResources = {
   },
   agentsView: {
     title: 'Agentes',
-    topBarAgents: 'Agentes',
     openAgentsView: 'Abrir vista de agentes ({{count}} sesiones)',
     needsAttention: '{{count}} sesiones requieren atención',
     worktreeKeptTitle: 'Worktree conservado',
