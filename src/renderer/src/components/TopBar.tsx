@@ -1,5 +1,5 @@
 import React from 'react'
-import { Settings, Grid3X3, LayoutGrid, Columns, PanelLeft, PanelRight, SplitSquareHorizontal, SplitSquareVertical, ClipboardList, Activity } from 'lucide-react'
+import { Settings, Grid3X3, LayoutGrid, Columns, PanelLeft, PanelRight, SplitSquareHorizontal, SplitSquareVertical, ClipboardList, Activity, Bot } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { AgentProvider, AgentUsageSnapshot, SplitOrientation, ViewMode, WorkspaceType } from '@shared/types'
 import { AgentUsageIndicator } from './AgentUsageIndicator'
@@ -19,6 +19,11 @@ interface TopBarProps {
   onToggleSidebar: () => void
   activityOpen: boolean
   onToggleActivity: () => void
+  agentsViewAvailable: boolean
+  agentsViewOpen: boolean
+  agentSessionCount: number
+  agentAttentionCount: number
+  onToggleAgentsView: () => void
   agentProvider?: AgentProvider
   agentUsage: AgentUsageSnapshot | null
   hasWorkspacePanel: boolean
@@ -88,6 +93,11 @@ export function TopBar({
   onToggleSidebar,
   activityOpen,
   onToggleActivity,
+  agentsViewAvailable,
+  agentsViewOpen,
+  agentSessionCount,
+  agentAttentionCount,
+  onToggleAgentsView,
   agentProvider,
   agentUsage,
   hasWorkspacePanel,
@@ -130,6 +140,32 @@ export function TopBar({
             >
               <Activity size={14} />
             </button>
+            {agentsViewAvailable && (
+              <button
+                className={`relative inline-flex h-7 items-center gap-1.5 rounded-md px-1.5 text-xs transition-colors ${
+                  agentsViewOpen
+                    ? 'bg-text-primary text-text-inverse'
+                    : 'text-text-secondary hover:bg-hover-bg hover:text-text-primary'
+                }`}
+                onClick={onToggleAgentsView}
+                title={agentAttentionCount > 0
+                  ? `${t('agentsView.openAgentsView', { count: agentSessionCount })} · ${t('agentsView.needsAttention', { count: agentAttentionCount })}`
+                  : t('agentsView.openAgentsView', { count: agentSessionCount })}
+                aria-label={t('agentsView.openAgentsView', { count: agentSessionCount })}
+                aria-pressed={agentsViewOpen}
+              >
+                <Bot size={14} aria-hidden="true" />
+                <span>{t('agentsView.topBarAgents')}</span>
+                <span className="font-mono text-[10px]">{agentSessionCount}</span>
+                {agentAttentionCount > 0 && (
+                  <span
+                    className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-warning"
+                    title={t('agentsView.needsAttention', { count: agentAttentionCount })}
+                    aria-hidden="true"
+                  />
+                )}
+              </button>
+            )}
             {agentProvider && agents[agentProvider]?.enabled && <AgentUsageIndicator provider={agentProvider} snapshot={agentUsage?.[agentProvider]} />}
           </div>
 
@@ -177,7 +213,7 @@ export function TopBar({
           </div>
 
           <div className="ml-auto flex items-center justify-end gap-1">
-            {!isGridWorkspace && !activityOpen && (
+            {!isGridWorkspace && !activityOpen && !agentsViewOpen && (
               <>
                 <button
                   className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
@@ -198,7 +234,7 @@ export function TopBar({
               </>
             )}
 
-            {hasWorkspacePanel && !activityOpen && (
+            {hasWorkspacePanel && !activityOpen && !agentsViewOpen && (
               <button
                 className={`inline-flex h-7 w-7 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display ${workspacePanelOpen ? 'text-text-display' : ''}`}
                 onClick={onToggleWorkspacePanel}

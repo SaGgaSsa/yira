@@ -14,6 +14,7 @@ test('createUserSettingsDraft isolates nested changes from the active settings',
       creationAvailability: { ...DEFAULT_USER_SETTINGS.tiles.creationAvailability },
     },
     groups: { ...DEFAULT_USER_SETTINGS.groups },
+    shortcuts: { ...DEFAULT_USER_SETTINGS.shortcuts },
   }
 
   const draft = createUserSettingsDraft(active)
@@ -22,12 +23,14 @@ test('createUserSettingsDraft isolates nested changes from the active settings',
   draft.notifications.attentionDelayEnabled = false
   draft.tiles.creationAvailability.note = false
   draft.groups.enabled = true
+  draft.shortcuts.newAgentSession = 'Alt+K'
 
   assert.equal(active.browser.homeUrl, 'about:blank')
   assert.equal(active.terminal.attentionEnabled, true)
   assert.equal(active.notifications.attentionDelayEnabled, true)
   assert.equal(active.tiles.creationAvailability.note, true)
   assert.equal(active.groups.enabled, false)
+  assert.equal(active.shortcuts.newAgentSession, 'Ctrl+N')
 })
 
 test('applySettings persists the complete draft before replacing the active settings', async () => {
@@ -103,6 +106,7 @@ test('applySettings persists the complete draft before replacing the active sett
         },
       },
       groups: { enabled: true },
+      shortcuts: { newAgentSession: 'Alt+K' },
     }
 
     const applying = useSettingsStore.getState().applySettings(draft)
@@ -134,6 +138,7 @@ test('applySettings persists the complete draft before replacing the active sett
     assert.deepEqual(state.notifications, draft.notifications)
     assert.deepEqual(state.tiles, draft.tiles)
     assert.deepEqual(state.groups, draft.groups)
+    assert.deepEqual(state.shortcuts, draft.shortcuts)
   } finally {
     Object.defineProperty(globalThis, 'window', {
       configurable: true,

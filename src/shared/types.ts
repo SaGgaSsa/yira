@@ -513,6 +513,9 @@ export interface UserSettings {
   groups: {
     enabled: boolean
   }
+  shortcuts: {
+    newAgentSession: string
+  }
 }
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
@@ -548,6 +551,9 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   },
   groups: {
     enabled: false,
+  },
+  shortcuts: {
+    newAgentSession: 'Ctrl+N',
   },
 }
 

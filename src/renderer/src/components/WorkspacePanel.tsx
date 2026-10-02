@@ -2,9 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   AgentProvider,
   AgentProvidersConfig,
-  ShellProfileId,
   SourceControlViewMode,
-  TerminalAgentMetadata,
   TileState,
   Workspace,
   FileTileOpenOptions,
@@ -30,11 +28,10 @@ interface WorkspacePanelProps {
   onOpenDiff: (repositoryPath: string, change: GitFileChange, staged: boolean) => void
   agentProvider?: AgentProvider
   agentProviders: AgentProvidersConfig
-  availableProfiles: Array<{ id: ShellProfileId; label: string; available: boolean }>
   tiles: TileState[]
   terminalTitles: Record<string, string>
-  addTerminal: (profileId: ShellProfileId, agent?: TerminalAgentMetadata) => string | null
   onFocusTile: (tileId: string) => void
+  onOpenAgentsSession: (tileId: string) => void
   onOpenWorkspaceSettings: (initialTab?: 'sourceControl') => void
 }
 
@@ -49,11 +46,10 @@ export function WorkspacePanel({
   onOpenDiff,
   agentProvider,
   agentProviders,
-  availableProfiles,
   tiles,
   terminalTitles,
-  addTerminal,
   onFocusTile,
+  onOpenAgentsSession,
   onOpenWorkspaceSettings,
 }: WorkspacePanelProps): React.ReactElement {
   const agents = useSettingsStore((state) => state.agents)
@@ -122,11 +118,10 @@ export function WorkspacePanel({
             workspaceId={workspaceId}
             selectedProvider={effectiveAgentProvider}
             agentProviders={agentProviders}
-            availableProfiles={availableProfiles}
             tiles={tiles}
             terminalTitles={terminalTitles}
-            addTerminal={addTerminal}
             onFocusTile={onFocusTile}
+            onOpenAgentsSession={onOpenAgentsSession}
             onOpenWorkspaceSettings={onOpenWorkspaceSettings}
           />
         )}

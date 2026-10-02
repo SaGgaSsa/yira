@@ -177,6 +177,23 @@ test('suspends tile navigation while the activity view is open but keeps picker 
   assert.deepEqual(escapeCalls, ['closePicker'])
 })
 
+test('suspends tile navigation while Agents View is open and closes it on Escape', () => {
+  const calls: string[] = []
+  handleKeyboardShortcut(keyboardEvent({ key: 'Tab', ctrlKey: true, preventDefault: () => calls.push('preventDefault') }), createDeps({
+    agentsViewOpen: true,
+    focusTile: () => calls.push('focusTile'),
+    selectTiles: () => calls.push('selectTiles'),
+  }))
+  assert.deepEqual(calls, [])
+
+  let closed = false
+  handleKeyboardShortcut(keyboardEvent(), createDeps({
+    agentsViewOpen: true,
+    onCloseAgentsView: () => { closed = true },
+  }))
+  assert.equal(closed, true)
+})
+
 test('keeps editable controls out of tab navigation', () => {
   const previousHTMLElement = globalThis.HTMLElement
 

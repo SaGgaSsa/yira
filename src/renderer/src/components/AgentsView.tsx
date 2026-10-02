@@ -22,6 +22,7 @@ export interface AgentsViewProps {
   onFocusSession: (tileId: string) => void
   onCloseSession: (session: AgentActiveSession) => void
   onNewSession: () => void
+  shortcutLabel?: string
   onOpenBrowserTile?: (url: string) => void
   onOpenFileTile?: (relativePath: string, options?: FileTileOpenOptions) => void | Promise<void>
 }
@@ -160,6 +161,7 @@ export function AgentsView({
   onFocusSession,
   onCloseSession,
   onNewSession,
+  shortcutLabel = 'Ctrl+N',
   onOpenBrowserTile,
   onOpenFileTile,
 }: AgentsViewProps): React.ReactElement {
@@ -232,7 +234,7 @@ export function AgentsView({
             >
               <Plus size={15} aria-hidden="true" />
               {t('agentsView.newAgentSession')}
-              <kbd className="rounded border border-border-visible px-1.5 py-0.5 font-mono text-[10px] text-text-secondary">Ctrl+N</kbd>
+              <kbd className="rounded border border-border-visible px-1.5 py-0.5 font-mono text-[10px] text-text-secondary">{shortcutLabel}</kbd>
             </button>
           </div>
         ) : (

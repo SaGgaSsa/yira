@@ -189,7 +189,11 @@ function session(overrides: Partial<AgentActiveSession> = {}): AgentActiveSessio
 
 function createView(
   sessions: AgentActiveSession[],
-  callbacks: { onCloseSession?: (value: AgentActiveSession) => void; onFocusSession?: (id: string) => void } = {},
+  callbacks: {
+    onCloseSession?: (value: AgentActiveSession) => void
+    onFocusSession?: (id: string) => void
+    shortcutLabel?: string
+  } = {},
 ): { container: any; root: { unmount: () => void } } {
   const container = document.createElement('div')
   const root = ReactDOM.createRoot(container)
@@ -203,10 +207,22 @@ function createView(
       onFocusSession={callbacks.onFocusSession ?? (() => undefined)}
       onCloseSession={callbacks.onCloseSession ?? (() => undefined)}
       onNewSession={() => undefined}
+      shortcutLabel={callbacks.shortcutLabel}
     />,
   )
   return { container, root }
 }
+
+test('uses the configured shortcut label in the Agents View empty state', async () => {
+  const { container, root } = createView([], { shortcutLabel: 'Alt+K' })
+  try {
+    await settle()
+    assert.match(container.textContent, /Alt\+K/)
+    assert.doesNotMatch(container.textContent, /Ctrl\+N/)
+  } finally {
+    root.unmount()
+  }
+})
 
 function findButton(container: any, ariaLabel: string): any {
   const buttons = container.getElementsByTagName('button')

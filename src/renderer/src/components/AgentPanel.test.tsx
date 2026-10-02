@@ -23,11 +23,10 @@ function renderConfiguredAgentPanel(): string {
       workspaceId="workspace-1"
       selectedProvider="claude"
       agentProviders={configuredAgentProviders}
-      availableProfiles={[{ id: 'bash', label: 'Bash', available: true }]}
       tiles={[]}
       terminalTitles={{}}
-      addTerminal={() => null}
       onFocusTile={() => undefined}
+      onOpenAgentsSession={() => undefined}
       onOpenWorkspaceSettings={() => undefined}
     />,
   )
@@ -82,8 +81,14 @@ if (!source.includes('shouldRequestAgentData')) throw new Error('agent data requ
 if (!source.includes('filterAgentSessions')) throw new Error('session snapshots must use a testable provider filter')
 if (!source.includes('sanitizeAgentCwd')) throw new Error('history cwd must be sanitized before display and resume')
 if (!source.includes('useAgentSessionSnapshot(shouldRequestAgentData(selectedProvider))')) throw new Error('running sessions must share the live subscription and retain provider gating')
-if (!source.includes('onFocusTile(session.tileId)')) throw new Error('running cards must focus their terminal tile')
-if (!source.includes('canResume(item.provider)')) throw new Error('resume must gate the selected provider before creating a tile')
+if (!source.includes("session.surface === 'agents-view'")) throw new Error('Agents View sessions must open and focus Agents View from the running list')
+if (!source.includes('onFocusTile(session.tileId)')) throw new Error('running legacy tile sessions must keep focusing their terminal tile')
+if (!source.includes('canResume(item.provider)')) throw new Error('resume must gate the selected provider before creating a session')
+if (!source.includes('window.electron.agents.createSession({')) throw new Error('history resume must create an Agents View session')
+if (!source.includes('resumeSessionId: item.identifier')) throw new Error('history resume must pass its provider session identifier')
+if (!source.includes('resumeCwd: sanitizeAgentCwd(item.cwd) ?? undefined')) throw new Error('history resume must pass a sanitized workspace-relative cwd')
+if (!source.includes('onOpenAgentsSession(result.tileId)')) throw new Error('resumed sessions must open and focus Agents View')
+if (source.includes('addTerminal(availableProfile.id')) throw new Error('history resume must not create a terminal tile')
 if (!source.includes('resumeDisabled={!canResume(item.provider)}')) throw new Error('unavailable providers must disable resume actions')
 if (!source.includes('}, [historySearch, workspaceId, selectedProvider])')) throw new Error('search changes must invalidate in-flight history requests')
 if (!workspacePanelSource.includes('key={`${workspaceId}:${effectiveAgentProvider ?? \'none\'}`}')) throw new Error('Agents panel must remount when its workspace provider scope changes')

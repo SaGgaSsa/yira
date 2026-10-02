@@ -6,6 +6,7 @@ import { homedir } from 'os'
 import { is } from '@electron-toolkit/utils'
 import { YIRA_HOME } from '../paths'
 import type { AgentProvider, ClaudeStatusLineMutationResult, ClaudeStatusLineState, UserSettings } from '@shared/types'
+import { DEFAULT_USER_SETTINGS } from '@shared/types'
 import { normalizeUserSettings } from '@shared/userSettings'
 import { resolveSupportedLanguage } from '@shared/language'
 import { installClaudeHookConfiguration, installCodexHookConfiguration, uninstallClaudeHookConfiguration, uninstallCodexHookConfiguration, type AgentHookProvider } from '../agentHookConfiguration'
@@ -15,6 +16,68 @@ import { getAgentHomeDirectory } from '../agents/providers'
 
 const SETTINGS_PATH = join(YIRA_HOME, 'settings.json')
 let currentSettings: UserSettings | null = null
+
+const SHORTCUT_KEY_ALIASES: Record<string, string> = {
+  esc: 'Escape',
+  del: 'Delete',
+  spacebar: 'Space',
+  left: 'ArrowLeft',
+  right: 'ArrowRight',
+  up: 'ArrowUp',
+  down: 'ArrowDown',
+}
+
+function normalizeAgentSessionShortcut(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const parts = value.split('+').map((part) => part.trim())
+  if (parts.length < 2 || parts.some((part) => !part)) return null
+
+  const modifierAliases: Record<string, string> = {
+    ctrl: 'Ctrl',
+    control: 'Ctrl',
+    cmd: 'Cmd',
+    command: 'Cmd',
+    meta: 'Cmd',
+    alt: 'Alt',
+    option: 'Alt',
+    shift: 'Shift',
+  }
+  const modifiers: string[] = []
+  for (const part of parts.slice(0, -1)) {
+    const modifier = modifierAliases[part.toLowerCase()]
+    if (!modifier || modifiers.includes(modifier)) return null
+    modifiers.push(modifier)
+  }
+  if (!modifiers.some((modifier) => modifier !== 'Shift')) return null
+  if (modifiers.includes('Ctrl') && modifiers.includes('Cmd')) return null
+
+  const rawKey = parts[parts.length - 1]
+  const key = SHORTCUT_KEY_ALIASES[rawKey.toLowerCase()] ?? rawKey
+  const validNamedKeys = new Set([
+    'Backspace', 'Delete', 'End', 'Enter', 'Escape', 'Home', 'Insert', 'PageDown', 'PageUp',
+    'Space', 'Tab', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowUp',
+  ])
+  if (!/^[a-z0-9]$/i.test(key) && !/^F(?:[1-9]|1\d|2[0-4])$/i.test(key) && !validNamedKeys.has(key)) {
+    return null
+  }
+  const normalizedKey = /^[a-z]$/i.test(key) || /^F/i.test(key) ? key.toUpperCase() : key
+  const orderedModifiers = ['Ctrl', 'Cmd', 'Alt', 'Shift'].filter((modifier) => modifiers.includes(modifier))
+  return [...orderedModifiers, normalizedKey].join('+')
+}
+
+function normalizeSettings(raw: unknown): UserSettings {
+  const rawSettings = raw && typeof raw === 'object' && !Array.isArray(raw)
+    ? raw as Partial<UserSettings>
+    : {}
+  const normalized = normalizeUserSettings(rawSettings)
+  return {
+    ...normalized,
+    shortcuts: {
+      newAgentSession: normalizeAgentSessionShortcut(rawSettings.shortcuts?.newAgentSession)
+        ?? DEFAULT_USER_SETTINGS.shortcuts.newAgentSession,
+    },
+  }
+}
 
 export function getEnabledAgentProviders(): AgentProvider[] {
   const settings = currentSettings
@@ -112,7 +175,7 @@ export async function loadStoredUserSettings(): Promise<UserSettings | null> {
     const raw = await fs.readFile(SETTINGS_PATH, 'utf8')
     const parsed = JSON.parse(raw)
     const hasLanguage = Object.prototype.hasOwnProperty.call(parsed, 'language')
-    const normalized = normalizeUserSettings({
+    const normalized = normalizeSettings({
       ...parsed,
       ...(!Object.prototype.hasOwnProperty.call(parsed, 'agents') ? { agents: {
         claude: { enabled: existsSync(getAgentHomeDirectory('claude')) },
@@ -139,6 +202,7 @@ export async function loadStoredUserSettings(): Promise<UserSettings | null> {
       parsed?.terminal?.themeId !== normalized.terminal.themeId ||
       parsed.windowBackgroundMaterial !== normalized.windowBackgroundMaterial
       || !Object.prototype.hasOwnProperty.call(parsed, 'agents')
+      || parsed?.shortcuts?.newAgentSession !== normalized.shortcuts.newAgentSession
     ) {
       await fs.writeFile(SETTINGS_PATH, JSON.stringify(normalized, null, 2))
     }
@@ -146,7 +210,7 @@ export async function loadStoredUserSettings(): Promise<UserSettings | null> {
     return normalized
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      const defaults = normalizeUserSettings({ language: resolveSupportedLanguage(app.getLocale()) })
+      const defaults = normalizeSettings({ language: resolveSupportedLanguage(app.getLocale()) })
       defaults.agents.claude.enabled = existsSync(getAgentHomeDirectory('claude'))
       defaults.agents.codex.enabled = existsSync(getAgentHomeDirectory('codex'))
       currentSettings = defaults
@@ -166,7 +230,7 @@ export function registerSettingsIPC(options: { onSave?: () => void } = {}): void
   })
 
   ipcMain.handle('settings:save', async (_, settings: UserSettings): Promise<void> => {
-    const normalized = normalizeUserSettings(settings)
+    const normalized = normalizeSettings(settings)
     setMainLanguage(normalized.language)
     currentSettings = normalized
 

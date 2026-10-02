@@ -25,6 +25,9 @@ interface UseKeyboardShortcutsDeps {
   onClosePicker?: () => void
   /** Suspend tile-management actions while the global activity view covers the workspace. */
   activityOpen?: boolean
+  /** Suspend tile-management actions while the session-only Agents View covers the workspace. */
+  agentsViewOpen?: boolean
+  onCloseAgentsView?: () => void
 }
 
 function isEditableShortcutTarget(target: EventTarget | null): boolean {
@@ -60,10 +63,17 @@ export function handleKeyboardShortcut(e: KeyboardEvent, deps: UseKeyboardShortc
     setSplitViewState,
     onClosePicker,
     activityOpen = false,
+    agentsViewOpen = false,
+    onCloseAgentsView,
   } = deps
 
   if (isTerminalShortcutTarget(e.target)) return
   if (isDialogShortcutTarget(e.target)) return
+
+  if (agentsViewOpen) {
+    if (e.key === 'Escape') onCloseAgentsView?.()
+    return
+  }
 
   if (activityOpen) {
     if (e.key === 'Escape') onClosePicker?.()
@@ -147,6 +157,8 @@ export function useKeyboardShortcuts(deps: UseKeyboardShortcutsDeps) {
     setSplitViewState,
     onClosePicker,
     activityOpen = false,
+    agentsViewOpen = false,
+    onCloseAgentsView,
   } = deps
 
   useEffect(() => {
@@ -163,6 +175,8 @@ export function useKeyboardShortcuts(deps: UseKeyboardShortcutsDeps) {
       setSplitViewState,
       onClosePicker,
       activityOpen,
+      agentsViewOpen,
+      onCloseAgentsView,
     })
 
     window.addEventListener('keydown', onKeyDown)
@@ -180,5 +194,7 @@ export function useKeyboardShortcuts(deps: UseKeyboardShortcutsDeps) {
     setSplitViewState,
     onClosePicker,
     activityOpen,
+    agentsViewOpen,
+    onCloseAgentsView,
   ])
 }
