@@ -44,6 +44,7 @@ const {
   prepareRemoteTerminal,
   subscribeToRemotePreparationProgress,
   attachTerminalRuntimeHost,
+  shouldCloseExitedAgentTile,
 } = loadWithJiti<typeof import('./TerminalTile')>('./TerminalTile.tsx')
 
 const preparationMessageCases = [
@@ -567,3 +568,14 @@ if (timerCopy.label !== 'settings.timerNativeAttention') {
 if (timerCopy.description !== 'settings.timerNativeAttentionDescription') {
   throw new Error('timer editor copy must explain timer native attention')
 }
+
+test('agent tiles close only when the user exits the agent', () => {
+  const agentTile = { agent: { provider: 'claude' as const } }
+  assert.equal(shouldCloseExitedAgentTile(agentTile, null), false)
+  assert.equal(shouldCloseExitedAgentTile(agentTile, { exitCode: 0 }), true)
+  assert.equal(shouldCloseExitedAgentTile(agentTile, { exitCode: 130 }), true)
+  assert.equal(shouldCloseExitedAgentTile(agentTile, { exitCode: 0xC000013A }), true)
+  assert.equal(shouldCloseExitedAgentTile(agentTile, { exitCode: 1 }), false)
+  assert.equal(shouldCloseExitedAgentTile({}, { exitCode: 0 }), false)
+  assert.equal(shouldCloseExitedAgentTile({ ...agentTile, terminalConnection: 'remote-ssh' }, { exitCode: 0 }), false)
+})
