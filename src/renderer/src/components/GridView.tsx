@@ -345,6 +345,7 @@ export function GridView({
               edgeToEdge
               onFocus={() => onFocusTile(tile.id)}
               onUpdate={(patch) => onUpdateTile(tile.id, patch)}
+              onDelete={() => onCloseTile(tile.id)}
               onOpenBrowserTile={onOpenBrowserTile}
               onOpenFileTile={onOpenFileTile}
               workspaceRootPath={workspaceRootPath}

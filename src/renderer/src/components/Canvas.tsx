@@ -745,6 +745,9 @@ export function Canvas({
                     if (!isFixedView) bringToFront(tile.id)
                   }}
                   onUpdate={(patch) => updateTile(tile.id, patch)}
+                  onDelete={() => {
+                    void onDeleteTile(tile.id)
+                  }}
                   onOpenBrowserTile={onOpenBrowserTile}
                   onOpenFileTile={onOpenFileTile}
                   workspaceRootPath={workspaceRootPath}

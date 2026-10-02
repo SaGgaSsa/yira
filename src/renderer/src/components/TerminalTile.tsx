@@ -32,7 +32,8 @@ interface Props {
   autoFocus?: boolean
   onFocus: () => void
   onUpdate: (patch: Partial<TileState>) => void
-  onDelete: () => void
+  /** Asks the user to close the tile, as the tile's close button does. */
+  onDelete?: () => void
   onOpenBrowserTile?: (url: string) => void
   onOpenFileTile?: (relativePath: string, options?: FileTileOpenOptions) => void | Promise<void>
 }
@@ -316,7 +317,7 @@ export function TerminalTileWrapper({
   autoFocus = false,
   onFocus,
   onUpdate,
-  onDelete: _onDelete,
+  onDelete,
   onOpenBrowserTile,
   onOpenFileTile,
 }: Props): React.ReactElement {
@@ -454,13 +455,22 @@ export function TerminalTileWrapper({
   }, [acquireError, activeRuntime, pendingSnapshot, reconnectPending, runtimeSnapshot])
 
   const closeOnAgentExit = shouldCloseExitedAgentTile(tile, snapshot.exitEvent)
+  const onDeleteRef = useRef(onDelete)
+  onDeleteRef.current = onDelete
+  const isAgentsViewSession = tile.agent?.surface === 'agents-view'
   useEffect(() => {
     if (!closeOnAgentExit) return
     // Parked tiles of another workspace close once their workspace is active again.
     if (useCanvasStore.getState().activeWorkspaceId !== workspaceId) return
+    // Canvas tiles stay in the workspace, so confirm before removing them.
+    const requestClose = onDeleteRef.current
+    if (requestClose && !isAgentsViewSession) {
+      requestClose()
+      return
+    }
     void destroyTerminalRuntime(registry, target, true, window.electron.terminal.destroyCurrent)
       .finally(() => useCanvasStore.getState().removeTile(tile.id))
-  }, [closeOnAgentExit, registry, target, tile.id, workspaceId])
+  }, [closeOnAgentExit, isAgentsViewSession, registry, target, tile.id, workspaceId])
 
   const clearAttentionIfAttended = useCallback(() => {
     const terminalInput = activeRuntimeRef.current?.terminal?.textarea
