@@ -8,7 +8,8 @@ export interface ShortcutCatalogGroup {
   items: ShortcutCatalogItem[]
 }
 
-export const SHORTCUT_CATALOG: ShortcutCatalogGroup[] = [
+export function getShortcutCatalog(newAgentSessionShortcut = 'Ctrl+N'): ShortcutCatalogGroup[] {
+  return [
   {
     label: 'Navigation',
     items: [
@@ -25,10 +26,19 @@ export const SHORTCUT_CATALOG: ShortcutCatalogGroup[] = [
     ],
   },
   {
+    label: 'Agents',
+    items: [
+      { label: 'New agent session', keys: newAgentSessionShortcut },
+    ],
+  },
+  {
     label: 'Contextual',
     items: [
       { label: 'Close panels or clear selection', keys: 'Esc' },
       { label: 'Confirm dialog action', keys: 'Enter' },
     ],
   },
-]
+  ]
+}
+
+export const SHORTCUT_CATALOG: ShortcutCatalogGroup[] = getShortcutCatalog()

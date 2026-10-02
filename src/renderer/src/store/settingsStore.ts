@@ -5,6 +5,7 @@ import type { TerminalThemeId } from '@shared/terminalThemes'
 import { clampFontSizePx, normalizeUserSettings } from '@shared/userSettings'
 import type { SupportedLanguage } from '@shared/language'
 import { i18n } from '@/i18n'
+import { normalizeAccelerator } from '@/utils/shortcutResolver'
 
 export interface SettingsState extends UserSettings {
   loaded: boolean
@@ -28,6 +29,7 @@ export interface SettingsState extends UserSettings {
   setNotificationAttentionDelayEnabled: (enabled: boolean) => void
   setTileCreationAvailable: (type: ConfigurableTileCreationType, available: boolean) => void
   setGroupsEnabled: (enabled: boolean) => void
+  setNewAgentSessionShortcut: (shortcut: string) => void
   applySettings: (settings: UserSettings) => Promise<void>
   loadSettings: () => Promise<void>
   saveSettings: () => void
@@ -56,6 +58,7 @@ export function createUserSettingsDraft(settings: UserSettings): UserSettings {
       creationAvailability: { ...settings.tiles.creationAvailability },
     },
     groups: { ...settings.groups },
+    shortcuts: { ...settings.shortcuts },
   }
 }
 
@@ -90,6 +93,7 @@ function scheduleSave() {
         },
       },
       groups: { enabled: state.groups.enabled },
+      shortcuts: { ...state.shortcuts },
     }
     window.electron.settings.save(settings)
   }, 500)
@@ -192,9 +196,19 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     scheduleSave()
   },
 
+  setNewAgentSessionShortcut: (shortcut) => {
+    const normalized = normalizeAccelerator(shortcut) ?? DEFAULT_USER_SETTINGS.shortcuts.newAgentSession
+    set((state) => ({ shortcuts: { ...state.shortcuts, newAgentSession: normalized } }))
+    scheduleSave()
+  },
+
   applySettings: async (settings) => {
+    const newAgentSessionShortcut = normalizeAccelerator(settings.shortcuts?.newAgentSession)
     const normalized = normalizeUserSettings({
       ...settings,
+      shortcuts: {
+        newAgentSession: newAgentSessionShortcut ?? DEFAULT_USER_SETTINGS.shortcuts.newAgentSession,
+      },
       browser: {
         homeUrl: settings.browser.homeUrl.trim() || DEFAULT_USER_SETTINGS.browser.homeUrl,
       },
@@ -210,6 +224,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         creationAvailability: { ...normalized.tiles.creationAvailability },
       },
       groups: { ...normalized.groups },
+      shortcuts: { ...normalized.shortcuts },
     })
     await i18n.changeLanguage(normalized.language)
     void window.electron.terminal.setAgentAlertsEnabled(normalized.terminal.agentAlertsEnabled)
@@ -224,7 +239,13 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     try {
       const settings = await window.electron.settings.load()
       if (settings) {
-        const normalized = normalizeUserSettings(settings)
+        const newAgentSessionShortcut = normalizeAccelerator(settings.shortcuts?.newAgentSession)
+        const normalized = normalizeUserSettings({
+          ...settings,
+          shortcuts: {
+            newAgentSession: newAgentSessionShortcut ?? DEFAULT_USER_SETTINGS.shortcuts.newAgentSession,
+          },
+        })
         const materialState = await window.electron.window.setBackgroundMaterial(normalized.windowBackgroundMaterial)
         set({
           agents: { claude: { ...normalized.agents.claude }, codex: { ...normalized.agents.codex } },
@@ -261,6 +282,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           groups: {
             enabled: normalized.groups.enabled,
           },
+          shortcuts: { ...normalized.shortcuts },
           loaded: true,
         })
         void window.electron.terminal.setAgentAlertsEnabled(normalized.terminal.agentAlertsEnabled)
@@ -307,6 +329,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         },
       },
       groups: { enabled: state.groups.enabled },
+      shortcuts: { ...state.shortcuts },
     }
     window.electron.settings.save(settings)
   },

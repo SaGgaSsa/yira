@@ -20,6 +20,8 @@ import { WorkspaceDialog, type WorkspaceDialogRequest, type WorkspaceDialogValue
 import { WorkspaceManagementDialog } from './components/WorkspaceManagementDialog'
 import { WorkspaceListItem } from './components/WorkspaceListItem'
 import { WorkspaceActivityView } from './components/WorkspaceActivityView'
+import { AgentsView } from './components/AgentsView'
+import { AgentSessionDialog } from './components/AgentSessionDialog'
 import { useWorkspaceTerminalCounts } from './hooks/useWorkspaceTerminalCounts'
 import { useTerminalProcessActivity } from './hooks/useTerminalProcessActivity'
 import { buildWorkspaceActivityCards, resolveActivationFocusTarget } from './utils/workspaceActivity'
@@ -28,12 +30,13 @@ import { useCanvasStore } from './store/canvasStore'
 import { useSettingsStore } from './store/settingsStore'
 import { useCanvasActions } from './hooks/useCanvasActions'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
+import { useAgentsView } from './hooks/useAgentsView'
 import { useTheme } from './hooks/useTheme'
 import { useFontSize } from './hooks/useFontSize'
 import { resolveSidebarCollapsedForActivity } from './utils/emptyWorkspaceView'
 import { useUpdateStore } from './store/updateStore'
 import { findMergeTargetGroup, getGroupingBlockedReason } from './utils/grouping'
-import { GRID_MAX_TILES, GROUP_COLOR_ORDER, getDefaultTileSize, type AgentUsageSnapshot, type BoardState, type BoardTask, type FileTileOpenOptions, type TileState, type CanvasState, type GridWorkspaceState, type Workspace, type WorkspaceMetadata, type TileGroup, type ViewMode, type SplitPanelId, type SplitViewState, type WorkspaceManagementEntry, type WorkspaceType } from '@shared/types'
+import { GRID_MAX_TILES, GROUP_COLOR_ORDER, getDefaultTileSize, type AgentActiveSession, type AgentUsageSnapshot, type BoardState, type BoardTask, type FileTileOpenOptions, type TileState, type CanvasState, type GridWorkspaceState, type Workspace, type WorkspaceMetadata, type TileGroup, type ViewMode, type SplitPanelId, type SplitViewState, type WorkspaceManagementEntry, type WorkspaceType } from '@shared/types'
 import { createDefaultAgentProvidersConfig } from '@shared/workspaceConfig'
 import { createEmptyGridWorkspaceState, normalizeGridWorkspaceState } from '@shared/gridWorkspaceState'
 import {
@@ -41,6 +44,7 @@ import {
   reconcileGridStateWithSharedTiles,
 } from '@shared/workspaceTypeSwitch'
 import { getBoardReviewCount } from '@shared/board'
+import { countAgentsViewAttention } from './utils/agentsViewSessions'
 import { getAttachedTiles, isTileDetached, selectFloatingTileWindowOpenRequests } from '@shared/floatingTiles'
 import { refreshGridTileContent } from './utils/gridTileRefresh'
 import { DEFAULT_SPLIT_ORIENTATION, toggleSplitOrientation } from './utils/splitViewState'
@@ -305,6 +309,7 @@ function AppContent(): React.ReactElement {
   const updateMessage = useUpdateStore((s) => s.message)
   const installUpdate = useUpdateStore((s) => s.installUpdate)
   const agentSettings = useSettingsStore((s) => s.agents)
+  const newAgentSessionShortcut = useSettingsStore((s) => s.shortcuts.newAgentSession)
   const groupsEnabled = useSettingsStore((s) => s.groups.enabled)
   const terminalAttentionEnabled = useSettingsStore((s) => s.terminal.attentionEnabled)
   const tileCreationAvailability = useSettingsStore((s) => s.tiles.creationAvailability)
@@ -353,6 +358,12 @@ function AppContent(): React.ReactElement {
   const clearTerminalTitle = useCanvasStore((s) => s.clearTerminalTitle)
   const clearAllTerminalAttention = useCanvasStore((s) => s.clearAllTerminalAttention)
   const activeWorkspaceType: WorkspaceType = activeWorkspaceConfig.type
+  const agentsView = useAgentsView({
+    workspaceId: activeWorkspaceId,
+    workspaceConfig: activeWorkspaceConfig,
+    agents: agentSettings,
+    newSessionShortcut: newAgentSessionShortcut,
+  })
 
   useEffect(() => {
     let active = true
@@ -399,6 +410,34 @@ function AppContent(): React.ReactElement {
     })
   }, [])
 
+  const closeAgentsSession = useCallback(async (session: AgentActiveSession): Promise<void> => {
+    try {
+      const result = await window.electron.agents.closeSession({
+        workspaceId: session.workspaceId,
+        tileId: session.tileId,
+      })
+      // The IPC close already stopped the daemon PTY; dispose the renderer runtime without issuing a second PTY destroy.
+      await registry.destroy({ workspaceId: session.workspaceId, tileId: session.tileId }, false)
+      if (result.worktree === 'kept') {
+        void requestConfirm({
+          title: t('agentsView.worktreeKeptTitle'),
+          message: t('agentsView.worktreeKeptMessage', {
+            path: session.worktreePath ?? t('agentsView.worktreePathUnavailable'),
+          }),
+          confirmLabel: t('common.close'),
+          hideCancel: true,
+        })
+      }
+    } catch (error) {
+      void requestConfirm({
+        title: t('agentsView.closeSessionErrorTitle'),
+        message: error instanceof Error ? error.message : String(error),
+        confirmLabel: t('common.close'),
+        hideCancel: true,
+      })
+    }
+  }, [registry, requestConfirm, t])
+
   const destroyTerminalRuntimeForTile = useCallback(async (target: TerminalSessionTarget): Promise<void> => {
     await destroyTerminalRuntime(registry, target, true, window.electron.terminal.destroyCurrent)
   }, [registry])
@@ -422,6 +461,9 @@ function AppContent(): React.ReactElement {
   const [showJsonEditor, setShowJsonEditor] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [activityOpen, setActivityOpen] = useState(false)
+  useEffect(() => {
+    if (agentsView.sessionDialogOpen) setActivityOpen(false)
+  }, [agentsView.sessionDialogOpen])
   const sidebarBeforeActivityRef = useRef(false)
   const previousActivityOpenRef = useRef(false)
   const [groupEditor, setGroupEditor] = useState<GroupEditorState>(null)
@@ -678,7 +720,18 @@ function AppContent(): React.ReactElement {
     }
 
     markWorkspaceSessionActive(workspace.id)
-    await pruneWorkspaceTerminalRuntimes(registry, workspace.id, restoredState.tiles)
+    const retainedAgentSessionTiles = agentsView.snapshot.sessions
+      .filter((session) => session.workspaceId === workspace.id && session.surface === 'agents-view')
+      .map((session) => ({ id: session.tileId, type: 'terminal' as const }))
+    // Snapshot IDs protect announced sessions; the registry prefix fallback protects sessions created before the next snapshot arrives.
+    const pendingAgentRuntimeTiles = registry.listTargets()
+      .filter((target) => target.workspaceId === workspace.id && target.tileId.startsWith('agent-'))
+      .map((target) => ({ id: target.tileId, type: 'terminal' as const }))
+    await pruneWorkspaceTerminalRuntimes(registry, workspace.id, [
+      ...restoredState.tiles,
+      ...retainedAgentSessionTiles,
+      ...pendingAgentRuntimeTiles,
+    ])
     if (transitionId !== workspaceTransitionRef.current) return
 
     if (options?.activationMode === 'focus-last') {
@@ -692,7 +745,7 @@ function AppContent(): React.ReactElement {
     }
 
     clearWorkspaceAttentionCount(workspace.id)
-  }, [clearWorkspaceAttentionCount, focusTile, markWorkspaceSessionActive, registry, restoreGridWorkspaceState, restoreWorkspaceState, saveToDisk, selectTiles, setFullviewActiveTileId, setViewMode, updateWorkspaceAttentionCount])
+  }, [agentsView.snapshot, clearWorkspaceAttentionCount, focusTile, markWorkspaceSessionActive, registry, restoreGridWorkspaceState, restoreWorkspaceState, saveToDisk, selectTiles, setFullviewActiveTileId, setViewMode, updateWorkspaceAttentionCount])
 
   const recordWorkspaceSelection = useCallback((workspaceId: string) => {
     void window.electron.workspace.recordSelection(workspaceId)
@@ -931,6 +984,8 @@ function AppContent(): React.ReactElement {
     setFullviewActiveTileId,
     setSplitViewState,
     activityOpen,
+    agentsViewOpen: agentsView.isOpen,
+    onCloseAgentsView: agentsView.close,
     onClosePicker: () => {
       setShowProfilePicker(false)
       setShowWorkspaceManager(false)
@@ -1560,11 +1615,13 @@ function AppContent(): React.ReactElement {
   }, [focusTileInFullview])
 
   const openActivityWorkspace = useCallback((workspace: WorkspaceMetadata) => {
+    agentsView.close()
     setActivityOpen(false)
     switchWorkspace(workspace)
-  }, [switchWorkspace])
+  }, [agentsView.close, switchWorkspace])
 
   const goToWorkspaceTerminal = useCallback((workspace: WorkspaceMetadata, tileId: string | null) => {
+    agentsView.close()
     setActivityOpen(false)
     void (async () => {
       try {
@@ -1594,7 +1651,7 @@ function AppContent(): React.ReactElement {
         console.error('[App] Failed to navigate to workspace terminal:', error)
       }
     })()
-  }, [activateWorkspace, focusTile, focusTileInFullview, recordWorkspaceSelection, selectTiles, setFullviewActiveTileId])
+  }, [activateWorkspace, agentsView.close, focusTile, focusTileInFullview, recordWorkspaceSelection, selectTiles, setFullviewActiveTileId])
 
   const detachTile = useCallback((tile: TileState) => {
     if (!activeWorkspaceId || isTileDetached(tile)) return
@@ -2185,13 +2242,25 @@ function AppContent(): React.ReactElement {
         sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={() => setSidebarCollapsed(c => !c)}
         activityOpen={activityOpen}
-        onToggleActivity={() => setActivityOpen((value) => !value)}
+        onToggleActivity={() => {
+          agentsView.close()
+          setActivityOpen((value) => !value)
+        }}
+        agentsViewAvailable={Boolean(activeWorkspaceId && agentsView.effectiveProvider)}
+        agentsViewOpen={agentsView.isOpen}
+        agentSessionCount={agentsView.sessions.length}
+        agentAttentionCount={countAgentsViewAttention(agentsView.sessions)}
+        onToggleAgentsView={() => {
+          setActivityOpen(false)
+          agentsView.toggle()
+        }}
         agentProvider={activeWorkspaceConfig.agentProvider}
         agentUsage={agentUsage}
         hasWorkspacePanel={hasWorkspacePanel}
         workspacePanelOpen={activeWorkspaceConfig.workspacePanelOpen}
         onToggleWorkspacePanel={toggleWorkspacePanel}
         onSetViewMode={(mode) => {
+          agentsView.close()
           setActivityOpen(false)
           handleSetViewMode(mode)
         }}
@@ -2325,11 +2394,13 @@ function AppContent(): React.ReactElement {
                     recentOutputCount={recentOutputCounts[workspace.id] ?? 0}
                     className="w-full transition-colors"
                     onClick={() => {
+                      agentsView.close()
                       setActivityOpen(false)
                       switchWorkspace(workspace)
                     }}
                     onConfigure={() => openWorkspaceEditor(workspace)}
                     onFocus={() => {
+                      agentsView.close()
                       setActivityOpen(false)
                       recordWorkspaceSelection(workspace.id)
                       void activateWorkspace(workspace, { activationMode: 'focus-last' })
@@ -2384,9 +2455,9 @@ function AppContent(): React.ReactElement {
             <div className="flex min-h-0 flex-1 overflow-hidden">
               <div
                 className="min-w-0 flex-1 overflow-hidden"
-                hidden={activityOpen}
-                aria-hidden={activityOpen}
-                inert={activityOpen}
+                hidden={activityOpen || agentsView.isOpen}
+                aria-hidden={activityOpen || agentsView.isOpen}
+                inert={activityOpen || agentsView.isOpen}
               >
               <div className="flex h-full min-h-0 overflow-hidden">
               <div className="relative min-w-0 flex flex-1 flex-col overflow-hidden">
@@ -2512,19 +2583,18 @@ function AppContent(): React.ReactElement {
                       console.error('[App] Failed to open Git diff tile:', error)
                     })
                   }}
-                  agentProvider={activeWorkspaceConfig.agentProvider}
+                  agentProvider={agentsView.effectiveProvider}
                   agentProviders={activeWorkspaceConfig.agentProviders}
-                  availableProfiles={availableProfiles}
                   tiles={tiles}
                   terminalTitles={terminalTitles}
-                  addTerminal={addTerminal}
                   onFocusTile={focusAgentTile}
+                  onOpenAgentsSession={agentsView.openForSession}
                   onOpenWorkspaceSettings={openActiveWorkspaceEditor}
                 />
               )}
               </div>
               </div>
-              {activityOpen && (
+              {activityOpen ? (
                 <WorkspaceActivityView
                   cards={activityCards}
                   agentUsage={agentUsage}
@@ -2534,7 +2604,21 @@ function AppContent(): React.ReactElement {
                   onOpenSettings={openSettings}
                   agents={agentSettings}
                 />
-              )}
+              ) : agentsView.isOpen && agentsView.effectiveProvider ? (
+                <AgentsView
+                  workspaceId={activeWorkspaceId}
+                  workspaceConfig={activeWorkspaceConfig}
+                  provider={agentsView.effectiveProvider}
+                  sessions={agentsView.sessions}
+                  focusedSessionId={agentsView.focusedSessionId}
+                  onFocusSession={agentsView.openForSession}
+                  onCloseSession={(session) => { void closeAgentsSession(session) }}
+                  onNewSession={agentsView.openNewSessionDialog}
+                  shortcutLabel={newAgentSessionShortcut}
+                  onOpenBrowserTile={(url) => addBrowser(url)}
+                  onOpenFileTile={openFileTile}
+                />
+              ) : null}
             </div>
           ) : activityOpen ? (
             <WorkspaceActivityView
@@ -2562,6 +2646,16 @@ function AppContent(): React.ReactElement {
           setShowJsonEditor(true)
         }}
       />
+      {activeWorkspaceId && agentsView.effectiveProvider && (
+        <AgentSessionDialog
+          open={agentsView.sessionDialogOpen}
+          workspaceId={activeWorkspaceId}
+          provider={agentsView.effectiveProvider}
+          worktreeAvailable={agentsView.worktreeAvailable}
+          onClose={agentsView.closeSessionDialog}
+          onCreated={agentsView.onSessionCreated}
+        />
+      )}
       <RawJsonEditor
         open={showJsonEditor}
         workspaceId={activeWorkspaceId}

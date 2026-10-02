@@ -1,5 +1,5 @@
 import type { TerminalSessionIdentity, TerminalSessionTarget } from './terminalSessionIdentity'
-import type { AgentProvider, TerminalExitEvent } from './types'
+import type { AgentProvider, AgentSessionSurface, TerminalExitEvent } from './types'
 
 export const TERMINAL_DAEMON_PROTOCOL_VERSION = 1
 export const TERMINAL_DAEMON_MAX_FRAME_BYTES = 16 * 1024 * 1024
@@ -15,6 +15,12 @@ export interface TerminalDaemonAgent {
   provider: AgentProvider
   sessionId: string
   startedAt: string
+  /** Missing values from older daemons are interpreted as 'tile'. */
+  surface?: AgentSessionSurface
+  title?: string
+  worktreePath?: string
+  worktreeBranch?: string
+  worktreeBaseSha?: string
 }
 
 export interface TerminalDaemonAlert {

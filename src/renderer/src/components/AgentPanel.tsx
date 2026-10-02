@@ -9,8 +9,6 @@ import type {
   AgentProvidersConfig,
   AgentSessionHistoryItem,
   AgentSessionStatus,
-  ShellProfileId,
-  TerminalAgentMetadata,
   TileState,
 } from '@shared/types'
 import {
@@ -25,21 +23,14 @@ import {
   shouldRequestAgentData,
 } from '@/utils/agentPanel'
 
-interface AgentPanelProfile {
-  id: ShellProfileId
-  label: string
-  available: boolean
-}
-
 export interface AgentPanelProps {
   workspaceId: string
   selectedProvider?: AgentProvider
   agentProviders: AgentProvidersConfig
-  availableProfiles: AgentPanelProfile[]
   tiles: TileState[]
   terminalTitles: Record<string, string>
-  addTerminal: (profileId: ShellProfileId, agent?: TerminalAgentMetadata) => string | null
   onFocusTile: (tileId: string) => void
+  onOpenAgentsSession: (tileId: string) => void
   onOpenWorkspaceSettings: () => void
 }
 
@@ -95,12 +86,14 @@ function RunningSessionCard({
   tile,
   terminalTitles,
   onFocusTile,
+  onOpenAgentsSession,
   fallbackTitle,
 }: {
   session: AgentActiveSession
   tile: TileState | undefined
   terminalTitles: Record<string, string>
   onFocusTile: (tileId: string) => void
+  onOpenAgentsSession: (tileId: string) => void
   fallbackTitle: string
 }): React.ReactElement {
   const { t } = useTranslation()
@@ -109,7 +102,9 @@ function RunningSessionCard({
     <button
       type="button"
       className="w-full rounded-[18px] border border-border-visible bg-bg-primary px-3 py-3 text-left transition-colors hover:border-text-secondary hover:bg-hover-bg"
-      onClick={() => onFocusTile(session.tileId)}
+      onClick={() => session.surface === 'agents-view'
+        ? onOpenAgentsSession(session.tileId)
+        : onFocusTile(session.tileId)}
       title={`${t('shortcuts.focus')} ${title}`}
     >
       <div className="flex min-w-0 items-center gap-2">
@@ -192,11 +187,10 @@ export function AgentPanel({
   workspaceId,
   selectedProvider,
   agentProviders,
-  availableProfiles,
   tiles,
   terminalTitles,
-  addTerminal,
   onFocusTile,
+  onOpenAgentsSession,
   onOpenWorkspaceSettings,
 }: AgentPanelProps): React.ReactElement {
   const { t } = useTranslation()
@@ -205,14 +199,10 @@ export function AgentPanel({
   const sessions = useMemo(() => filterAgentSessions(sessionSnapshot, workspaceId, selectedProvider), [sessionSnapshot, workspaceId, selectedProvider])
   const [historySearch, setHistorySearch] = useState('')
   const [historyState, setHistoryState] = useState<HistoryState>({ status: 'idle', items: [], hasMore: false })
+  const [resumeError, setResumeError] = useState<string | null>(null)
   const historyRequestRef = useRef(0)
   const historyRefreshSchedulerRef = useRef(createAgentHistoryRefreshScheduler())
   const availabilityRequestRef = useRef(0)
-
-  const availableProfile = useMemo(
-    () => availableProfiles.find((profile) => profile.available),
-    [availableProfiles],
-  )
 
   useEffect(() => {
     const requestId = ++availabilityRequestRef.current
@@ -231,8 +221,9 @@ export function AgentPanel({
   }, [selectedProvider])
 
   const canResume = useCallback((provider: AgentProvider): boolean => {
-    return canResumeAgent(provider, selectedProvider, agentProviders, availability, Boolean(availableProfile))
-  }, [agentProviders, availability, availableProfile, selectedProvider])
+    // Agents View sessions use the daemon terminal runtime directly; they do not need a shell profile.
+    return canResumeAgent(provider, selectedProvider, agentProviders, availability, true)
+  }, [agentProviders, availability, selectedProvider])
 
   const loadHistory = useCallback(async () => {
     if (!shouldRequestAgentData(selectedProvider)) return
@@ -266,17 +257,20 @@ export function AgentPanel({
     }
   }, [historySearch, loadHistory, selectedProvider, workspaceId])
 
-  const resumeAgent = useCallback((item: AgentSessionHistoryItem) => {
-    if (!canResume(item.provider) || !availableProfile) return
-    const cwd = sanitizeAgentCwd(item.cwd)
-    const metadata: TerminalAgentMetadata = {
-      provider: item.provider,
-      sessionId: item.identifier,
-      ...(cwd ? { cwd } : {}),
+  const resumeAgent = useCallback(async (item: AgentSessionHistoryItem) => {
+    if (!canResume(item.provider)) return
+    setResumeError(null)
+    try {
+      const result = await window.electron.agents.createSession({
+        workspaceId,
+        resumeSessionId: item.identifier,
+        resumeCwd: sanitizeAgentCwd(item.cwd) ?? undefined,
+      })
+      onOpenAgentsSession(result.tileId)
+    } catch (error) {
+      setResumeError(error instanceof Error ? error.message : String(error))
     }
-    const tileId = addTerminal(availableProfile.id, metadata)
-    if (tileId) onFocusTile(tileId)
-  }, [addTerminal, availableProfile, canResume, onFocusTile])
+  }, [canResume, onOpenAgentsSession, workspaceId])
 
   const tileById = useMemo(() => new Map(tiles.map((tile) => [tile.id, tile])), [tiles])
 
@@ -292,6 +286,7 @@ export function AgentPanel({
     idleHistory: t('agents.idleHistory', 'History is loaded on demand.'),
     loadingHistory: t('agents.loadingHistory', 'Loading local history…'),
     historyError: t('agents.historyError', 'Unable to load local history.'),
+    resumeError: t('agents.resumeError', 'Unable to resume this agent session.'),
     noHistory: t('agents.noHistory', 'No agent history found.'),
     noSearchResults: t('agents.noSearchResults', 'No history matches this search.'),
     historyMore: t('agents.historyMore', 'More local sessions are available.'),
@@ -341,6 +336,7 @@ export function AgentPanel({
                 tile={tileById.get(session.tileId)}
                 terminalTitles={terminalTitles}
                 onFocusTile={onFocusTile}
+                onOpenAgentsSession={onOpenAgentsSession}
                 fallbackTitle={t('ui.providerAgent', { provider: providerLabel(session.provider) })}
               />
             ))}
@@ -380,6 +376,7 @@ export function AgentPanel({
           </div>
 
           <div className="mt-3 space-y-2">
+            {resumeError && <p role="alert" className="rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">{copy.resumeError}: {resumeError}</p>}
             {historyState.status === 'idle' && <p className="py-1 text-xs text-text-disabled">{copy.idleHistory}</p>}
             {historyState.status === 'loading' && <p className="py-1 text-xs text-text-disabled">{copy.loadingHistory}</p>}
             {historyState.status === 'error' && (

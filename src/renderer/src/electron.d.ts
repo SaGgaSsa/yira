@@ -46,6 +46,11 @@ import type {
   AgentActiveSessionSnapshot,
   AgentProviderAvailabilitySnapshot,
   AgentDetectionSnapshot,
+  AgentSessionCapabilities,
+  AgentSessionCloseInput,
+  AgentSessionCloseResult,
+  AgentSessionCreateInput,
+  AgentSessionCreateResult,
   AgentSessionHistoryQuery,
   AgentSessionHistoryResult,
   AgentUsageSnapshot,
@@ -89,6 +94,9 @@ interface ElectronWorld {
     availability: () => Promise<AgentProviderAvailabilitySnapshot>
     getAvailability: () => Promise<AgentProviderAvailabilitySnapshot>
     detect: () => Promise<AgentDetectionSnapshot>
+    sessionCapabilities: (workspaceId: string) => Promise<AgentSessionCapabilities>
+    createSession: (input: AgentSessionCreateInput) => Promise<AgentSessionCreateResult>
+    closeSession: (input: AgentSessionCloseInput) => Promise<AgentSessionCloseResult>
     sessionsSnapshot: (workspaceId?: string) => Promise<AgentActiveSessionSnapshot>
     getSessions: (workspaceId?: string) => Promise<AgentActiveSessionSnapshot>
     subscribeSessions: (workspaceId?: string) => Promise<string | false>

@@ -10,7 +10,8 @@ import {
 } from 'lucide-react'
 import { createUserSettingsDraft, useSettingsStore } from '@/store/settingsStore'
 import { useUpdateStore } from '@/store/updateStore'
-import { SHORTCUT_CATALOG } from '@/utils/shortcutCatalog'
+import { getShortcutCatalog } from '@/utils/shortcutCatalog'
+import { normalizeAccelerator } from '@/utils/shortcutResolver'
 import type { AgentDetectionSnapshot, AgentProvider, UpdateState, UserSettings, WindowBackgroundMaterial } from '@shared/types'
 import { DEFAULT_USER_SETTINGS } from '@shared/types'
 import type { TerminalThemeId } from '@shared/terminalThemes'
@@ -95,6 +96,7 @@ function getUpdateStatusLabel(t: TFunction, status: UpdateState['status']): stri
 function getShortcutGroupLabel(t: TFunction, label: string): string {
   if (label === 'Navigation') return t('settings.shortcutNavigation')
   if (label === 'Window') return t('settings.shortcutWindow')
+  if (label === 'Agents') return t('settings.agents')
   return t('settings.shortcutContextual')
 }
 
@@ -105,6 +107,7 @@ function getShortcutItemLabel(t: TFunction, label: string): string {
     case 'Previous tab': return t('settings.shortcutPreviousTab')
     case 'Next tab': return t('settings.shortcutNextTab')
     case 'Toggle fullscreen': return t('settings.shortcutToggleFullscreen')
+    case 'New agent session': return t('settings.shortcutNewAgentSession')
     case 'Close panels or clear selection': return t('settings.shortcutClosePanelsOrClearSelection')
     default: return t('settings.shortcutConfirmDialogAction')
   }
@@ -131,6 +134,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
   const [agentHookMessages, setAgentHookMessages] = useState<Partial<Record<AgentProvider, string>>>({})
   const [agentDetection, setAgentDetection] = useState<AgentDetectionSnapshot | null>(null)
   const [draft, setDraft] = useState<UserSettings>(() => createUserSettingsDraft(useSettingsStore.getState()))
+  const [capturingAgentShortcut, setCapturingAgentShortcut] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [supportLinkFailed, setSupportLinkFailed] = useState(false)
@@ -199,6 +203,31 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
     },
   }))
   const setGroupsEnabled = (enabled: boolean) => setDraft((current) => ({ ...current, groups: { enabled } }))
+  const handleAgentShortcutCapture = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    if (event.key === 'Escape') {
+      setCapturingAgentShortcut(false)
+      return
+    }
+    if (['Control', 'Meta', 'Alt', 'Shift'].includes(event.key)) return
+    if (!event.ctrlKey && !event.metaKey && !event.altKey) return
+
+    const modifiers = [
+      ...(event.ctrlKey ? ['Ctrl'] : []),
+      ...(event.metaKey ? ['Cmd'] : []),
+      ...(event.altKey ? ['Alt'] : []),
+      ...(event.shiftKey ? ['Shift'] : []),
+    ]
+    const pressedKey = event.key === ' ' ? 'Space' : event.key
+    const shortcut = normalizeAccelerator([...modifiers, pressedKey].join('+'))
+    if (!shortcut) return
+    setDraft((current) => ({
+      ...current,
+      shortcuts: { ...current.shortcuts, newAgentSession: shortcut },
+    }))
+    setCapturingAgentShortcut(false)
+  }
   const currentVersion = useUpdateStore((s) => s.currentVersion)
   const availableVersion = useUpdateStore((s) => s.availableVersion)
   const updateStatus = useUpdateStore((s) => s.status)
@@ -489,6 +518,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
     }
 
     if (activeSection === 'agents') {
+      const newAgentShortcut = draft.shortcuts?.newAgentSession ?? DEFAULT_USER_SETTINGS.shortcuts.newAgentSession
       return (
         <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
           <div className="mb-5 flex items-center gap-3">
@@ -603,6 +633,41 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
                 </article>
               )
             })}
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-3 rounded-[20px] border border-border-visible bg-bg-primary px-4 py-4">
+            <div className="min-w-0 flex-1">
+              <label htmlFor="new-agent-session-shortcut" className="nd-label block text-text-display">
+                {t('settings.newAgentSessionShortcut')}
+              </label>
+              <span className="mt-2 block text-sm leading-6 text-text-secondary">
+                {capturingAgentShortcut ? t('settings.pressShortcut') : t('settings.newAgentSessionShortcutDescription')}
+              </span>
+            </div>
+            <input
+              id="new-agent-session-shortcut"
+              data-agent-shortcut-capture="new-agent-session"
+              className="w-40 rounded-full border border-border-visible bg-bg-secondary px-4 py-2 text-center font-mono text-sm text-text-display outline-none focus:border-text-secondary"
+              aria-label={t('settings.newAgentSessionShortcut')}
+              aria-live="polite"
+              readOnly
+              value={capturingAgentShortcut ? t('settings.pressShortcut') : newAgentShortcut}
+              onFocus={() => setCapturingAgentShortcut(true)}
+              onBlur={() => setCapturingAgentShortcut(false)}
+              onKeyDown={handleAgentShortcutCapture}
+            />
+            <button
+              type="button"
+              className="rounded-full border border-border-visible px-3 py-2 text-xs text-text-secondary transition-colors hover:text-text-display"
+              onClick={() => {
+                setDraft((current) => ({
+                  ...current,
+                  shortcuts: { ...current.shortcuts, newAgentSession: DEFAULT_USER_SETTINGS.shortcuts.newAgentSession },
+                }))
+                setCapturingAgentShortcut(false)
+              }}
+            >
+              {t('settings.resetToDefault')}
+            </button>
           </div>
         </section>
       )
@@ -797,7 +862,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
           </div>
 
           <div className="space-y-4">
-            {SHORTCUT_CATALOG.map((group) => (
+            {getShortcutCatalog(draft.shortcuts?.newAgentSession ?? DEFAULT_USER_SETTINGS.shortcuts.newAgentSession).map((group) => (
               <div key={group.label} className="rounded-[20px] border border-border-visible bg-bg-primary px-4 py-4">
                 <div className="nd-label text-text-display">{getShortcutGroupLabel(t, group.label)}</div>
                 <div className="mt-3 divide-y divide-border">

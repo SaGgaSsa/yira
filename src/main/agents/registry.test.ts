@@ -92,3 +92,31 @@ test('contains subscriber failures so registry lifecycle calls remain safe', () 
   assert.doesNotThrow(() => registry.subscribe(() => { throw new Error('renderer teardown') }))
   assert.doesNotThrow(() => registry.register(session))
 })
+
+test('retains Agents View and worktree metadata in runtime snapshots', () => {
+  const registry = new AgentSessionRegistry()
+  const created = registry.register({
+    ...session,
+    surface: 'agents-view',
+    title: 'Fix the login flow',
+    worktreePath: 'C:\\worktrees\\agent-1',
+    worktreeBranch: 'agents/fix-login',
+    worktreeBaseSha: '0123456789abcdef',
+  })
+
+  assert.deepEqual({
+    surface: created.surface,
+    title: created.title,
+    worktreePath: created.worktreePath,
+    worktreeBranch: created.worktreeBranch,
+    worktreeBaseSha: created.worktreeBaseSha,
+  }, {
+    surface: 'agents-view',
+    title: 'Fix the login flow',
+    worktreePath: 'C:\\worktrees\\agent-1',
+    worktreeBranch: 'agents/fix-login',
+    worktreeBaseSha: '0123456789abcdef',
+  })
+  assert.throws(() => registry.register({ ...session, title: 'bad\ntitle' }), /invalid agent title/i)
+  assert.throws(() => registry.register({ ...session, worktreePath: 'x'.repeat(4_097) }), /invalid agent worktree path/i)
+})

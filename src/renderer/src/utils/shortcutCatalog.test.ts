@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { SHORTCUT_CATALOG } from './shortcutCatalog'
+import { getShortcutCatalog, SHORTCUT_CATALOG } from './shortcutCatalog'
 
 function navigationShortcut(label: string): string {
   const navigation = SHORTCUT_CATALOG.find((group) => group.label === 'Navigation')
@@ -32,4 +32,14 @@ test('retains fullscreen and contextual shortcuts', () => {
   assert.ok(items.some((item) => item.keys === 'F11'))
   assert.ok(items.some((item) => item.keys === 'Esc'))
   assert.ok(items.some((item) => item.keys === 'Enter'))
+})
+
+test('shows the configured new-agent shortcut and defaults to Ctrl+N', () => {
+  const defaultItem = SHORTCUT_CATALOG.flatMap((group) => group.items)
+    .find((item) => item.label === 'New agent session')
+  const configuredItem = getShortcutCatalog('Alt+K').flatMap((group) => group.items)
+    .find((item) => item.label === 'New agent session')
+
+  assert.equal(defaultItem?.keys, 'Ctrl+N')
+  assert.equal(configuredItem?.keys, 'Alt+K')
 })

@@ -138,6 +138,7 @@ type TranslationResources = {
     noSearchResults: string
     historyMore: string
     resume: string
+    resumeError: string
     unknownTitle: string
     unknownDate: string
     cwdUnavailable: string
@@ -145,6 +146,45 @@ type TranslationResources = {
     messages: string
     started: string
     lastActivity: string
+  }
+  agentsView: {
+    title: string
+    topBarAgents: string
+    openAgentsView: string
+    needsAttention: string
+    worktreeKeptTitle: string
+    worktreeKeptMessage: string
+    worktreePathUnavailable: string
+    closeSessionErrorTitle: string
+    sessionCount: string
+    newSession: string
+    emptyTitle: string
+    emptyDescription: string
+    newAgentSession: string
+    agentSession: string
+    unknownTitle: string
+    closeSession: string
+    maximizeSession: string
+    restoreSession: string
+    statusWorking: string
+    statusNeedsInput: string
+    statusDone: string
+    statusExited: string
+    exitedMessage: string
+    provider: string
+    closeDialog: string
+    prompt: string
+    promptPlaceholder: string
+    worktree: string
+    worktreeUnavailable: string
+    options: string
+    model: string
+    modelPlaceholder: string
+    permissions: string
+    workspaceDefault: string
+    createSession: string
+    creatingSession: string
+    shortcutLabel: string
   }
   settings: {
     active: string
@@ -215,6 +255,10 @@ type TranslationResources = {
     homeUrl: string
     interfaceFontSize: string
     keyboardShortcutCatalog: string
+    newAgentSessionShortcut: string
+    newAgentSessionShortcutDescription: string
+    pressShortcut: string
+    resetToDefault: string
     latestFound: string
     notificationsAndCreation: string
     openRawCanvasJson: string
@@ -229,6 +273,7 @@ type TranslationResources = {
     shortcutFocusRightSplitPanel: string
     shortcutNavigation: string
     shortcutNextTab: string
+    shortcutNewAgentSession: string
     shortcutPreviousTab: string
     shortcutContextual: string
     shortcutToggleFullscreen: string
@@ -857,6 +902,7 @@ const en: TranslationResources = {
     noSearchResults: 'No history matches this search.',
     historyMore: 'More local sessions are available.',
     resume: 'Resume',
+    resumeError: 'Unable to resume this agent session.',
     unknownTitle: 'Untitled session',
     unknownDate: 'Unknown date',
     cwdUnavailable: 'cwd unavailable',
@@ -864,6 +910,45 @@ const en: TranslationResources = {
     messages: 'Messages',
     started: 'Started',
     lastActivity: 'Last activity',
+  },
+  agentsView: {
+    title: 'Agents',
+    topBarAgents: 'Agents',
+    openAgentsView: 'Open Agents View ({{count}} sessions)',
+    needsAttention: '{{count}} sessions need attention',
+    worktreeKeptTitle: 'Worktree kept',
+    worktreeKeptMessage: 'The worktree has changes and was kept at {{path}}.',
+    worktreePathUnavailable: 'an unknown path',
+    closeSessionErrorTitle: 'Could not close agent session',
+    sessionCount: '{{count}} sessions',
+    newSession: 'New session',
+    emptyTitle: 'No agent sessions in this view',
+    emptyDescription: 'Start a session to see its live terminal here.',
+    newAgentSession: 'New agent session',
+    agentSession: 'Agent Session',
+    unknownTitle: 'Untitled session',
+    closeSession: 'Close session',
+    maximizeSession: 'Maximize session',
+    restoreSession: 'Restore session',
+    statusWorking: 'Working',
+    statusNeedsInput: 'Needs input',
+    statusDone: 'Done',
+    statusExited: 'Exited',
+    exitedMessage: 'Session exited',
+    provider: 'Provider',
+    closeDialog: 'Close dialog',
+    prompt: 'Prompt',
+    promptPlaceholder: 'Describe what you want the agent to do. Enter starts the session; Shift+Enter adds a line.',
+    worktree: 'Run in a git worktree',
+    worktreeUnavailable: 'Git worktrees are unavailable for this workspace.',
+    options: 'Options',
+    model: 'Model',
+    modelPlaceholder: 'Workspace default',
+    permissions: 'Permission mode',
+    workspaceDefault: 'Workspace default',
+    createSession: 'Create session',
+    creatingSession: 'Creating session…',
+    shortcutLabel: 'Shortcut: {{shortcut}}',
   },
   settings: {
     active: 'ACTIVE',
@@ -934,6 +1019,10 @@ const en: TranslationResources = {
     homeUrl: 'Home URL',
     interfaceFontSize: 'Interface font size',
     keyboardShortcutCatalog: 'Keyboard Shortcut catalog',
+    newAgentSessionShortcut: 'New agent session shortcut',
+    newAgentSessionShortcutDescription: 'Press a key combination that includes Ctrl, Cmd, or Alt to set the shortcut.',
+    pressShortcut: 'Press a shortcut…',
+    resetToDefault: 'Reset to default',
     latestFound: 'Latest found: v{{version}}',
     notificationsAndCreation: 'Notifications and creation',
     openRawCanvasJson: 'Open raw canvas JSON',
@@ -948,6 +1037,7 @@ const en: TranslationResources = {
     shortcutFocusRightSplitPanel: 'Focus right split panel',
     shortcutNavigation: 'Navigation',
     shortcutNextTab: 'Next tab',
+    shortcutNewAgentSession: 'New agent session',
     shortcutPreviousTab: 'Previous tab',
     shortcutContextual: 'Contextual',
     shortcutToggleFullscreen: 'Toggle fullscreen',
@@ -1559,6 +1649,45 @@ const es: TranslationResources = {
     exited: 'Finalizada',
     summary: '{{working}} trabajando; {{needsInput}} requieren intervención; {{done}} finalizados; {{unread}} eventos de salida sin revisar; {{recentOutput}} terminales con salida reciente; {{background}} en segundo plano',
   },
+  agentsView: {
+    title: 'Agentes',
+    topBarAgents: 'Agentes',
+    openAgentsView: 'Abrir vista de agentes ({{count}} sesiones)',
+    needsAttention: '{{count}} sesiones requieren atención',
+    worktreeKeptTitle: 'Worktree conservado',
+    worktreeKeptMessage: 'El worktree tiene cambios y se conservó en {{path}}.',
+    worktreePathUnavailable: 'una ruta desconocida',
+    closeSessionErrorTitle: 'No se pudo cerrar la sesión del agente',
+    sessionCount: '{{count}} sesiones',
+    newSession: 'Nueva sesión',
+    emptyTitle: 'No hay sesiones de agentes en esta vista',
+    emptyDescription: 'Inicia una sesión para ver aquí su terminal en vivo.',
+    newAgentSession: 'Nueva sesión de agente',
+    agentSession: 'Sesión de agente',
+    unknownTitle: 'Sesión sin título',
+    closeSession: 'Cerrar sesión',
+    maximizeSession: 'Maximizar sesión',
+    restoreSession: 'Restaurar sesión',
+    statusWorking: 'Trabajando',
+    statusNeedsInput: 'Requiere intervención',
+    statusDone: 'Terminada',
+    statusExited: 'Finalizada',
+    exitedMessage: 'La sesión terminó',
+    provider: 'Proveedor',
+    closeDialog: 'Cerrar diálogo',
+    prompt: 'Instrucción',
+    promptPlaceholder: 'Describe qué quieres que haga el agente. Enter inicia la sesión; Shift+Enter agrega una línea.',
+    worktree: 'Ejecutar en un worktree de Git',
+    worktreeUnavailable: 'Los worktrees de Git no están disponibles en este espacio de trabajo.',
+    options: 'Opciones',
+    model: 'Modelo',
+    modelPlaceholder: 'Valor predeterminado del espacio de trabajo',
+    permissions: 'Modo de permisos',
+    workspaceDefault: 'Valor predeterminado del espacio de trabajo',
+    createSession: 'Crear sesión',
+    creatingSession: 'Creando sesión…',
+    shortcutLabel: 'Atajo: {{shortcut}}',
+  },
   agents: {
     title: 'Agentes',
     unconfigured: 'Elige un proveedor de agente en este espacio de trabajo para ver sus sesiones e historial.',
@@ -1576,6 +1705,7 @@ const es: TranslationResources = {
     noSearchResults: 'Ningún historial coincide con esta búsqueda.',
     historyMore: 'Hay más sesiones locales disponibles.',
     resume: 'Reanudar',
+    resumeError: 'No se pudo reanudar esta sesión de agente.',
     unknownTitle: 'Sesión sin título',
     unknownDate: 'Fecha desconocida',
     cwdUnavailable: 'cwd no disponible',
@@ -1653,6 +1783,10 @@ const es: TranslationResources = {
     homeUrl: 'URL de inicio',
     interfaceFontSize: 'Tamaño de fuente de la interfaz',
     keyboardShortcutCatalog: 'Catálogo de atajos de teclado',
+    newAgentSessionShortcut: 'Atajo para nueva sesión de agente',
+    newAgentSessionShortcutDescription: 'Pulsa una combinación que incluya Ctrl, Cmd o Alt para definir el atajo.',
+    pressShortcut: 'Pulsa un atajo…',
+    resetToDefault: 'Restablecer valor predeterminado',
     latestFound: 'Última encontrada: v{{version}}',
     notificationsAndCreation: 'Notificaciones y creación',
     openRawCanvasJson: 'Abrir JSON sin procesar del lienzo',
@@ -1667,6 +1801,7 @@ const es: TranslationResources = {
     shortcutFocusRightSplitPanel: 'Enfocar panel dividido derecho',
     shortcutNavigation: 'Navegación',
     shortcutNextTab: 'Pestaña siguiente',
+    shortcutNewAgentSession: 'Nueva sesión de agente',
     shortcutPreviousTab: 'Pestaña anterior',
     shortcutContextual: 'Contextual',
     shortcutToggleFullscreen: 'Alternar pantalla completa',

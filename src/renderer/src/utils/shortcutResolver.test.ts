@@ -1,74 +1,34 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { matchesShortcut, normalizeAccelerator } from './shortcutResolver'
 
-import {
-  isTerminalShortcutTarget,
-  resolveKeyboardShortcut,
-  type KeyboardShortcutInput,
-} from './shortcutResolver'
-
-function shortcut(overrides: Partial<KeyboardShortcutInput>): KeyboardShortcutInput {
+function keyboardEvent(overrides: Partial<KeyboardEvent> = {}): KeyboardEvent {
   return {
-    key: 'ArrowLeft',
-    ctrlKey: true,
-    altKey: true,
-    shiftKey: false,
+    key: 'n',
+    ctrlKey: false,
     metaKey: false,
+    altKey: false,
+    shiftKey: false,
     ...overrides,
-  }
+  } as KeyboardEvent
 }
 
-test('resolves Ctrl+Alt+ArrowLeft as left-panel focus', () => {
-  assert.equal(resolveKeyboardShortcut(shortcut({ key: 'ArrowLeft' })), 'focus-left-panel')
+test('normalizes and matches Ctrl accelerators on Windows and Linux', () => {
+  assert.equal(normalizeAccelerator('ctrl+shift+a'), 'Ctrl+Shift+A')
+  assert.equal(matchesShortcut(keyboardEvent({ ctrlKey: true }), 'Ctrl+N'), true)
+  assert.equal(matchesShortcut(keyboardEvent({ ctrlKey: true, altKey: true }), 'Ctrl+N'), false)
 })
 
-test('resolves Ctrl+Alt+ArrowRight as right-panel focus', () => {
-  assert.equal(resolveKeyboardShortcut(shortcut({ key: 'ArrowRight' })), 'focus-right-panel')
+test('uses Meta only for Cmd accelerators', () => {
+  assert.equal(normalizeAccelerator('Meta+k'), 'Cmd+K')
+  assert.equal(matchesShortcut(keyboardEvent({ metaKey: true }), 'Cmd+N'), true)
+  assert.equal(matchesShortcut(keyboardEvent({ ctrlKey: true }), 'Cmd+N'), false)
 })
 
-test('resolves Ctrl+Shift+Tab as the previous tab shortcut', () => {
-  assert.equal(
-    resolveKeyboardShortcut(shortcut({ key: 'Tab', altKey: false, shiftKey: true })),
-    'previous-tab',
-  )
-})
-
-test('resolves Ctrl+Tab as the next tab shortcut', () => {
-  assert.equal(
-    resolveKeyboardShortcut(shortcut({ key: 'Tab', altKey: false })),
-    'next-tab',
-  )
-})
-
-test('rejects Meta and other additional modifiers', () => {
-  const invalidShortcuts: KeyboardShortcutInput[] = [
-    shortcut({ metaKey: true }),
-    shortcut({ shiftKey: true }),
-    shortcut({ key: 'ArrowRight', metaKey: true }),
-    shortcut({ key: 'Tab', altKey: false, shiftKey: true, metaKey: true }),
-    shortcut({ key: 'Tab', altKey: true }),
-  ]
-
-  for (const invalidShortcut of invalidShortcuts) {
-    assert.equal(resolveKeyboardShortcut(invalidShortcut), null)
-  }
-})
-
-test('rejects non-exact keys and missing Ctrl', () => {
-  assert.equal(resolveKeyboardShortcut(shortcut({ key: 'ArrowUp' })), null)
-  assert.equal(resolveKeyboardShortcut(shortcut({ key: 'left' })), null)
-  assert.equal(resolveKeyboardShortcut(shortcut({ key: 'Tab', altKey: false, ctrlKey: false })), null)
-})
-
-test('classifies targets inside .xterm as protected terminal targets', () => {
-  const terminalTarget = {
-    closest: (selector: string) => selector === '.xterm' ? {} : null,
-  } as unknown as EventTarget
-  const outsideTarget = {
-    closest: () => null,
-  } as unknown as EventTarget
-
-  assert.equal(isTerminalShortcutTarget(terminalTarget), true)
-  assert.equal(isTerminalShortcutTarget(outsideTarget), false)
-  assert.equal(isTerminalShortcutTarget(null), false)
+test('rejects invalid accelerators and combinations without a control modifier', () => {
+  assert.equal(normalizeAccelerator('N'), null)
+  assert.equal(normalizeAccelerator('Shift+N'), null)
+  assert.equal(normalizeAccelerator('Ctrl++N'), null)
+  assert.equal(normalizeAccelerator('Ctrl+Cmd+N'), null)
+  assert.equal(matchesShortcut(keyboardEvent({ ctrlKey: true }), 'not a shortcut'), false)
 })

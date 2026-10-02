@@ -96,6 +96,14 @@ _Avoid_: File explorer without workspace
 A tile that provides a shell for the workspace.
 _Avoid_: File explorer, command runner
 
+**Agents View**:
+A session-only workspace view for live Agent Sessions. It covers the workspace layout while open and does not persist as Canvas or Grid state.
+_Avoid_: Agent Tile, persisted view mode
+
+**Agent Session**:
+A live provider session shown in Agents View, identified by a synthetic runtime target rather than a workspace Tile. Its optional Git worktree is off by default.
+_Avoid_: Tile, Terminal Tile
+
 **Terminal Attention**:
 Session-only runtime state for a Terminal Tile that receives new output while it is not being attended.
 _Avoid_: Unread Output, Needs Attention
@@ -139,6 +147,10 @@ _Avoid_: Workspace initial command
 - A **Files Tile** requires its **Workspace** to have a root folder
 - A **Terminal Tile** can exist without a root folder
 - A **Terminal Tile** runs the **Workspace Initial Command** before its **Terminal Startup Command**
+- An **Agents View** requires an effective agent provider enabled for its **Workspace**
+- An **Agents View** is session-only and does not persist layout state
+- An **Agent Session** is not a **Tile**
+- An **Agent Session** can use an optional Git worktree, disabled by default
 - **Terminal Attention** is session-only and is not persisted in a **Workspace**
 - **Terminal Attention** is cleared when its **Terminal Tile** is attended
 - **Workspace Terminal History** belongs to **Workspace Configuration**

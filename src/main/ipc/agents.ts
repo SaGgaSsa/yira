@@ -6,6 +6,11 @@ import { BrowserWindow, ipcMain, type WebContents } from 'electron'
 import type {
   AgentProviderAvailabilitySnapshot,
   AgentProvider,
+  AgentProviderConfig,
+  AgentSessionCapabilities,
+  AgentSessionCloseResult,
+  AgentSessionCreateResult,
+  AgentSessionLaunchOverrides,
   AgentSessionHistoryResult,
   AgentActiveSessionSnapshot,
   AgentUsageSnapshot,
@@ -13,21 +18,40 @@ import type {
   AgentUsageHistoryRequest,
   AgentUsageHistorySnapshot,
   AgentDetectionSnapshot,
+  WorkspaceConfig,
 } from '@shared/types'
 import type { AgentUsageService } from '../agentUsage'
 import type { AgentUsageDetailsService } from '../agentUsageDetails'
 import type { AgentUsageIndex } from '../agentUsageIndex'
 import { hasManagedAgentHooks } from '../agentHookConfiguration'
-import { getAgentHomeDirectory } from '../agents/providers'
+import {
+  buildAgentOverrideArgs,
+  getAgentHomeDirectory,
+  getAgentProviderAvailability,
+  normalizeResumeId,
+} from '../agents/providers'
 import { agentSessionRegistry, type AgentSessionRegistry } from '../agents/registry'
 import { readAgentSessionHistory } from '../agents/history'
-import { getAgentProviderAvailability } from '../agents/providers'
+import {
+  canCreateAgentWorktree,
+  createAgentWorktree,
+  removeAgentWorktreeIfClean,
+  type AgentWorktree,
+  type AgentWorktreeCleanupInput,
+  type AgentWorktreeCreateInput,
+  type AgentWorktreeRemovalResult,
+} from '../agents/worktree'
+import { resolveAgentCwd } from '../agents/terminal'
 import {
   isSafeAgentHistoryQueryInput,
+  isAgentProvider,
   normalizeAgentHistoryQuery,
   normalizeAgentOpaqueId,
 } from '../agents/query'
-import { getWorkspaceRootFolderById } from './workspace'
+import { YIRA_HOME } from '../paths'
+import { getWorkspaceAgentConfigById, getWorkspaceRootFolderById } from './workspace'
+import type { AgentsViewLaunchSpec } from './terminal'
+import type { TerminalSessionTarget } from '@shared/terminalSessionIdentity'
 
 export const AGENT_SESSIONS_CHANGED_CHANNEL = 'agents:sessions:changed'
 export const AGENT_USAGE_CHANGED_CHANNEL = 'agents:usage:changed'
@@ -52,6 +76,31 @@ export interface AgentIPCOptions {
   usageIndex?: Pick<AgentUsageIndex, 'getHistory'>
   enabledProviders?: () => Promise<AgentProvider[]>
   workspaces?: () => Promise<Array<{ id: string; rootFolderPath: string }>>
+  createSession?: (target: TerminalSessionTarget, spec: AgentsViewLaunchSpec) => Promise<unknown>
+  destroySession?: (target: TerminalSessionTarget) => Promise<void>
+  workspaceAgentConfig?: (workspaceId: string) => Promise<Pick<WorkspaceConfig, 'rootFolderPath' | 'agentProvider' | 'agentProviders'> | null>
+  worktrees?: AgentIPCWorktrees
+}
+
+export interface AgentIPCWorktrees {
+  canCreateAgentWorktree: (rootPath: string) => Promise<boolean>
+  createAgentWorktree: (input: AgentWorktreeCreateInput) => Promise<AgentWorktree>
+  removeAgentWorktreeIfClean: (input: AgentWorktreeCleanupInput) => Promise<AgentWorktreeRemovalResult>
+}
+
+interface NormalizedAgentSessionCreateInput {
+  workspaceId: string
+  prompt?: string
+  resumeSessionId?: string
+  resumeCwd?: string
+  worktree: boolean
+  overrides?: AgentSessionLaunchOverrides
+}
+
+const defaultWorktrees: AgentIPCWorktrees = {
+  canCreateAgentWorktree,
+  createAgentWorktree,
+  removeAgentWorktreeIfClean,
 }
 
 const subscriptions = new Map<number, AgentSubscription>()
@@ -115,6 +164,114 @@ async function historyForQuery(input: unknown, readHistory: AgentIPCOptions['his
   })
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function normalizeLaunchOverrides(value: unknown): AgentSessionLaunchOverrides | undefined {
+  if (value === undefined) return undefined
+  if (!isRecord(value)) throw new Error('Invalid agent launch overrides')
+
+  const overrides: AgentSessionLaunchOverrides = {}
+  if (value.model !== undefined) {
+    if (typeof value.model !== 'string') throw new Error('Invalid agent model override')
+    overrides.model = value.model
+  }
+  if (value.permissionMode !== undefined) {
+    if (typeof value.permissionMode !== 'string') throw new Error('Invalid agent permission mode')
+    overrides.permissionMode = value.permissionMode
+  }
+  return overrides
+}
+
+function normalizeCreateInput(value: unknown): NormalizedAgentSessionCreateInput {
+  if (!isRecord(value)) throw new Error('Invalid agent session input')
+
+  const workspaceId = normalizeAgentOpaqueId(value.workspaceId)
+  if (!workspaceId) throw new Error('Invalid agent workspace id')
+
+  let resumeSessionId: string | undefined
+  if (value.resumeSessionId !== undefined) {
+    const normalizedId = normalizeAgentOpaqueId(value.resumeSessionId)
+    resumeSessionId = normalizedId && normalizeResumeId(normalizedId) ? normalizedId : undefined
+    if (!resumeSessionId) throw new Error('Invalid agent resume id')
+  }
+
+  let prompt: string | undefined
+  if (value.prompt !== undefined) {
+    if (typeof value.prompt !== 'string' || value.prompt.length > 20_000
+      || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/.test(value.prompt)) {
+      throw new Error('Invalid agent prompt')
+    }
+    prompt = value.prompt
+  }
+  if (!resumeSessionId && (!prompt || !prompt.trim())) throw new Error('Agent prompt is required')
+
+  let resumeCwd: string | undefined
+  if (value.resumeCwd !== undefined) {
+    if (typeof value.resumeCwd !== 'string') throw new Error('Invalid agent cwd')
+    resumeCwd = value.resumeCwd
+  }
+
+  if (value.worktree !== undefined && typeof value.worktree !== 'boolean') {
+    throw new Error('Invalid agent worktree option')
+  }
+
+  return {
+    workspaceId,
+    ...(prompt !== undefined ? { prompt } : {}),
+    ...(resumeSessionId ? { resumeSessionId } : {}),
+    ...(resumeCwd !== undefined ? { resumeCwd } : {}),
+    worktree: value.worktree === true,
+    overrides: normalizeLaunchOverrides(value.overrides),
+  }
+}
+
+async function enabledProviders(options: AgentIPCOptions): Promise<AgentProvider[]> {
+  if (options.enabledProviders) return options.enabledProviders()
+  const settings = await import('./settings')
+  return settings.getEnabledAgentProviders()
+}
+
+function effectiveWorkspaceProvider(
+  config: Pick<WorkspaceConfig, 'agentProvider' | 'agentProviders'> | null,
+  enabled: AgentProvider[],
+): AgentProvider | null {
+  const provider = config?.agentProvider
+  if (!isAgentProvider(provider) || !enabled.includes(provider)) return null
+  return config && config.agentProviders?.[provider]?.enabled === true ? provider : null
+}
+
+function sessionTitle(prompt: string | undefined, resumeSessionId: string | undefined): string {
+  if (resumeSessionId) {
+    const shortId = resumeSessionId.replace(/^agent-/, '').slice(0, 8)
+    return `Resume ${shortId}`
+  }
+  return (prompt ?? '').split(/\r\n|\n|\r/, 1)[0].trim().slice(0, 80)
+}
+
+async function launchAgentSession(
+  options: AgentIPCOptions,
+  target: TerminalSessionTarget,
+  spec: AgentsViewLaunchSpec,
+): Promise<void> {
+  if (options.createSession) {
+    await options.createSession(target, spec)
+    return
+  }
+  const terminal = await import('./terminal')
+  await terminal.createAgentsViewSession(target, spec)
+}
+
+async function destroyAgentSession(options: AgentIPCOptions, target: TerminalSessionTarget): Promise<void> {
+  if (options.destroySession) {
+    await options.destroySession(target)
+    return
+  }
+  const terminal = await import('./terminal')
+  await terminal.destroyAgentsViewSession(target)
+}
+
 /** Register all renderer-facing agent operations with validated, data-only inputs. */
 export function registerAgentsIPC(options: AgentIPCOptions = {}): void {
   const registry = options.registry ?? agentSessionRegistry
@@ -160,6 +317,116 @@ export function registerAgentsIPC(options: AgentIPCOptions = {}): void {
     } catch { return null }
   })
   usageService?.subscribe(broadcastUsageSnapshot)
+
+  const workspaceAgentConfig = options.workspaceAgentConfig ?? getWorkspaceAgentConfigById
+  const worktrees = options.worktrees ?? defaultWorktrees
+
+  ipcMain.handle('agents:sessions:capabilities', async (_event, workspaceId: unknown): Promise<AgentSessionCapabilities> => {
+    const normalizedWorkspaceId = normalizeAgentOpaqueId(workspaceId)
+    if (!normalizedWorkspaceId) throw new Error('Invalid agent workspace id')
+    const config = await workspaceAgentConfig(normalizedWorkspaceId)
+    const enabled = await enabledProviders(options)
+    const provider = effectiveWorkspaceProvider(config, enabled)
+    const rootPath = config?.rootFolderPath
+    const worktreeAvailable = typeof rootPath === 'string' && rootPath.trim().length > 0
+      ? await worktrees.canCreateAgentWorktree(rootPath)
+      : false
+    return { provider, worktreeAvailable }
+  })
+
+  ipcMain.handle('agents:sessions:create', async (_event, rawInput: unknown): Promise<AgentSessionCreateResult> => {
+    const input = normalizeCreateInput(rawInput)
+    const config = await workspaceAgentConfig(input.workspaceId)
+    const enabled = await enabledProviders(options)
+    const provider = effectiveWorkspaceProvider(config, enabled)
+    if (!provider || !config) throw new Error('This workspace has no enabled agent')
+
+    const providerConfig: AgentProviderConfig = config.agentProviders[provider]
+    buildAgentOverrideArgs(provider, input.overrides)
+
+    const workspaceRoot = typeof config.rootFolderPath === 'string' && config.rootFolderPath.trim()
+      ? config.rootFolderPath
+      : homedir()
+    let cwd = resolveAgentCwd(workspaceRoot, input.resumeCwd)
+    const tileId = `agent-${randomUUID()}`
+    const title = sessionTitle(input.prompt, input.resumeSessionId)
+    let worktree: AgentWorktree | undefined
+
+    if (input.worktree) {
+      if (!config.rootFolderPath) throw new Error('Agent worktree requires a workspace folder')
+      if (!(await worktrees.canCreateAgentWorktree(config.rootFolderPath))) {
+        throw new Error('Agent worktrees require a Git repository with at least one commit')
+      }
+      worktree = await worktrees.createAgentWorktree({
+        rootPath: config.rootFolderPath,
+        sessionId: tileId,
+        baseDirectory: join(YIRA_HOME, 'worktrees'),
+      })
+      cwd = resolveAgentCwd(worktree.cwd, input.resumeCwd)
+    }
+
+    const target = { workspaceId: input.workspaceId, tileId }
+    const spec: AgentsViewLaunchSpec = {
+      provider,
+      providerConfig,
+      ...(input.overrides ? { overrides: input.overrides } : {}),
+      ...(!input.resumeSessionId && input.prompt !== undefined ? { prompt: input.prompt } : {}),
+      ...(input.resumeSessionId ? { resumeSessionId: input.resumeSessionId } : {}),
+      cwd,
+      title,
+      ...(worktree ? { worktree: { path: worktree.path, branch: worktree.branch, baseSha: worktree.baseSha } } : {}),
+    }
+
+    try {
+      await launchAgentSession(options, target, spec)
+    } catch (error) {
+      if (worktree) {
+        try {
+          await worktrees.removeAgentWorktreeIfClean({
+            path: worktree.path,
+            branch: worktree.branch,
+            baseSha: worktree.baseSha,
+          })
+        } catch {
+          // Preserve the launch failure while still attempting safe cleanup.
+        }
+      }
+      throw error
+    }
+
+    return { workspaceId: input.workspaceId, tileId, provider }
+  })
+
+  ipcMain.handle('agents:sessions:close', async (_event, rawInput: unknown): Promise<AgentSessionCloseResult> => {
+    if (!isRecord(rawInput)) throw new Error('Invalid agent session input')
+    const workspaceId = normalizeAgentOpaqueId(rawInput.workspaceId)
+    const tileId = normalizeAgentOpaqueId(rawInput.tileId)
+    if (!workspaceId || !tileId) throw new Error('Invalid agent session id')
+
+    const session = registry.get(workspaceId, tileId)
+    if (!session) throw new Error('Agent session not found')
+    if (session.surface !== 'agents-view') throw new Error('Only Agents View sessions can be closed here')
+
+    const target = { workspaceId, tileId }
+    await destroyAgentSession(options, target)
+    registry.remove(workspaceId, tileId)
+
+    let worktreeResult: AgentSessionCloseResult['worktree'] = 'none'
+    if (session.worktreePath && session.worktreeBranch && session.worktreeBaseSha) {
+      try {
+        worktreeResult = await worktrees.removeAgentWorktreeIfClean({
+          path: session.worktreePath,
+          branch: session.worktreeBranch,
+          baseSha: session.worktreeBaseSha,
+        })
+      } catch {
+        // The session is already closed. A worktree Git refuses to remove
+        // (for example, files still locked on Windows) stays in place.
+        worktreeResult = 'kept'
+      }
+    }
+    return { worktree: worktreeResult }
+  })
 
   ipcMain.handle('agents:sessions:snapshot', (_event, workspaceId: unknown): AgentActiveSessionSnapshot => {
     const normalized = normalizedWorkspaceId(workspaceId)
