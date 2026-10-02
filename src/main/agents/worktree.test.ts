@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { access, mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { access, mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -30,7 +30,9 @@ function fakeGit(handler: (args: string[]) => GitCommandResult | Promise<GitComm
 }
 
 async function makeTempDirectory(): Promise<string> {
-  return mkdtemp(join(tmpdir(), 'yira-agent-worktree-'))
+  // Windows CI reports tmpdir() with 8.3 short names (RUNNER~1); Git and
+  // realpath return the long form, so compare against the canonical path.
+  return realpath(await mkdtemp(join(tmpdir(), 'yira-agent-worktree-')))
 }
 
 async function initializeRepository(root: string, commit = true): Promise<void> {
