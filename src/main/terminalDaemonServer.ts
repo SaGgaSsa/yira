@@ -1334,6 +1334,11 @@ export class TerminalDaemonServer {
       const environment = { ...spawn.env }
       for (const key of BRIDGE_ENV_KEYS) delete environment[key]
       delete environment.ELECTRON_RUN_AS_NODE
+      // xterm.js always renders these PTYs, so advertise its capabilities
+      // instead of whatever terminal launched the app.
+      environment.COLORTERM = 'truecolor'
+      environment.TERM_PROGRAM = 'yira'
+      delete environment.TERM_PROGRAM_VERSION
       if (spawn.local) {
         await this.ensureAgentAlertBridgeStarted()
         Object.assign(environment, this.registerLocalAlertTarget(spawn.target))
