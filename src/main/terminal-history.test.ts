@@ -9,8 +9,9 @@ const bash = buildTerminalHistorySetup({
 })
 if (!bash) throw new Error('bash must receive workspace history setup')
 if (bash.env.HISTFILE !== join('/tmp/yira/workspaces/ws-alpha', '.yira', 'terminal-history', 'bash_history')) throw new Error('bash HISTFILE must use workspace-scoped path')
-if (!bash.prependCommand?.includes('history -a')) throw new Error('bash setup must save history after each command')
-if (!bash.prependCommand.includes('shopt -s histappend')) throw new Error('bash setup must append to the history file')
+if (bash.env.BASHOPTS !== 'histappend') throw new Error('bash setup must append to the history file')
+if (bash.env.PROMPT_COMMAND !== 'history -a') throw new Error('bash setup must save history after each command')
+if (bash.prependCommand !== undefined) throw new Error('bash setup must not print commands in the terminal')
 
 const zsh = buildTerminalHistorySetup({
   shellProfileId: 'zsh',
@@ -29,8 +30,10 @@ const powershell = buildTerminalHistorySetup({
   enabled: true,
 })
 if (!powershell) throw new Error('PowerShell must receive workspace history setup')
-if (!powershell.prependCommand?.includes('Set-PSReadLineOption -HistorySavePath')) throw new Error('PowerShell setup must configure PSReadLine history path')
-if (!powershell.prependCommand?.includes('powershell_history.txt')) throw new Error('PowerShell history path must use its workspace history file')
+if (powershell.shellArgs?.[0] !== '-NoExit' || powershell.shellArgs[1] !== '-Command') throw new Error('PowerShell setup must keep the configured session interactive')
+if (!powershell.shellArgs[2]?.includes('Set-PSReadLineOption -HistorySavePath')) throw new Error('PowerShell setup must configure PSReadLine history path')
+if (!powershell.shellArgs[2]?.includes('powershell_history.txt')) throw new Error('PowerShell history path must use its workspace history file')
+if (powershell.prependCommand !== undefined) throw new Error('PowerShell setup must not print commands in the terminal')
 
 const fish = buildTerminalHistorySetup({
   shellProfileId: 'fish',
