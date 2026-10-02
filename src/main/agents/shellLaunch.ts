@@ -10,6 +10,7 @@ export interface AgentShellCommandInput {
   args: string[]
   prompt?: string
   platform: NodeJS.Platform
+  exitWithAgent?: boolean
 }
 
 const POSIX_SHELLS: readonly AgentShellProfileId[] = ['bash', 'zsh', 'fish']
@@ -62,7 +63,8 @@ function validatePowerShellArguments(args: string[]): void {
 }
 
 export function buildAgentShellCommand(input: AgentShellCommandInput): {
-  initialCommand: string
+  initialCommand?: string
+  shellArgs?: string[]
   env: Record<string, string>
 } {
   if (!input || typeof input.command !== 'string' || !input.command) {
@@ -98,5 +100,16 @@ export function buildAgentShellCommand(input: AgentShellCommandInput): {
     commandParts.push(promptReference)
   }
 
-  return { initialCommand: commandParts.join(' '), env }
+  const command = commandParts.join(' ')
+  if (input.exitWithAgent && input.shellProfileId === 'powershell') {
+    return {
+      shellArgs: ['-Command', `${command}; exit $LASTEXITCODE`],
+      env,
+    }
+  }
+
+  return {
+    initialCommand: input.exitWithAgent ? `exec ${command}` : command,
+    env,
+  }
 }

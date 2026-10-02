@@ -364,6 +364,10 @@ function AppContent(): React.ReactElement {
     agents: agentSettings,
     newSessionShortcut: newAgentSessionShortcut,
   })
+  // Read through a ref so activateWorkspace stays stable while sessions change;
+  // a new identity would rerun the startup load and drop unsaved tiles.
+  const agentSessionSnapshotRef = useRef(agentsView.snapshot)
+  agentSessionSnapshotRef.current = agentsView.snapshot
 
   useEffect(() => {
     let active = true
@@ -720,7 +724,7 @@ function AppContent(): React.ReactElement {
     }
 
     markWorkspaceSessionActive(workspace.id)
-    const retainedAgentSessionTiles = agentsView.snapshot.sessions
+    const retainedAgentSessionTiles = agentSessionSnapshotRef.current.sessions
       .filter((session) => session.workspaceId === workspace.id && session.surface === 'agents-view')
       .map((session) => ({ id: session.tileId, type: 'terminal' as const }))
     // Snapshot IDs protect announced sessions; the registry prefix fallback protects sessions created before the next snapshot arrives.
@@ -745,7 +749,7 @@ function AppContent(): React.ReactElement {
     }
 
     clearWorkspaceAttentionCount(workspace.id)
-  }, [agentsView.snapshot, clearWorkspaceAttentionCount, focusTile, markWorkspaceSessionActive, registry, restoreGridWorkspaceState, restoreWorkspaceState, saveToDisk, selectTiles, setFullviewActiveTileId, setViewMode, updateWorkspaceAttentionCount])
+  }, [clearWorkspaceAttentionCount, focusTile, markWorkspaceSessionActive, registry, restoreGridWorkspaceState, restoreWorkspaceState, saveToDisk, selectTiles, setFullviewActiveTileId, setViewMode, updateWorkspaceAttentionCount])
 
   const recordWorkspaceSelection = useCallback((workspaceId: string) => {
     void window.electron.workspace.recordSelection(workspaceId)
@@ -2199,7 +2203,7 @@ function AppContent(): React.ReactElement {
 
   const agentTileProvider = activeWorkspaceId ? agentsView.effectiveProvider : null
   const tileCreationSelectorProps: TileCreationSelectorProps = {
-    canCreateAgent: Boolean(agentTileProvider && defaultProfile),
+    canCreateAgent: Boolean(tileCreationAvailability.agent && agentTileProvider && defaultProfile),
     canCreateNote,
     canCreateBrowser,
     canCreateTimer,
@@ -2208,6 +2212,7 @@ function AppContent(): React.ReactElement {
     boardVisible,
     onCreateTerminal: createTerminalFromSidebar,
     onCreateAgent: () => {
+      if (!tileCreationAvailability.agent) return
       setShowProfilePicker(false)
       setShowNotePicker(false)
       if (agentTileProvider && defaultProfile) addTerminal(defaultProfile.id, { provider: agentTileProvider })

@@ -56,10 +56,36 @@ test('keeps remote preparation and WOL progress handlers in the main process', a
 test('passes startup and history commands only to a new local regular shell', async () => {
   const text = await source('src/main/ipc/terminal.ts')
 
-  assert.match(text, /initialCommand = !isRemoteSsh && !isAgent && options\.initialCommand\?\.trim\(\)/)
+  assert.match(text, /const initialCommand = agentShellCommand\?\.initialCommand\s*\?\?\s*\(!isRemoteSsh && !isAgent && options\.initialCommand\?\.trim\(\)/)
   assert.match(text, /historySetup = profile && !isAgent/)
   assert.match(text, /prependCommand: historySetup\.prependCommand/)
   assert.match(text, /local: !isRemoteSsh/)
+})
+
+test('launches agent tiles through the compatible shell and exits with the agent', async () => {
+  const text = await source('src/main/ipc/terminal.ts')
+
+  assert.match(text, /const agentShellProfile = isAgent \? resolveCompatibleAgentShellProfile\(\) : undefined/)
+  assert.match(text, /shellProfileId: agentShellProfile!\.id[\s\S]*?exitWithAgent: true/)
+  assert.match(text, /executable: isRemoteSsh \? sshClient! : agentShellProfile \? agentShellProfile\.shell : profile!\.shell/)
+  assert.match(text, /: agentShellProfile\s+\? \[\.\.\.agentShellProfile\.args, \.\.\.\(agentShellCommand\?\.shellArgs \?\? \[\]\)\]/)
+  assert.match(text, /env: agentShellCommand \? \{ \.\.\.spawnEnv, \.\.\.agentShellCommand\.env \} : spawnEnv/)
+  assert.match(text, /initialCommand = agentShellCommand\?\.initialCommand/)
+  assert.match(text, /cwd: agentLaunch\?\.cwd \?\? terminalRoot\?\.cwd \?\? process\.cwd\(\)/)
+  assert.match(text, /if \(terminalRoot && !agentLaunch\) args\.push\(\.\.\.terminalRoot\.spawnArgs\)/)
+  assert.match(text, /historySetup = profile && !isAgent/)
+})
+
+test('launches Agents view sessions with exit behavior and PowerShell startup args', async () => {
+  const text = await source('src/main/ipc/terminal.ts')
+  const start = text.indexOf('export async function createAgentsViewSession')
+  const end = text.indexOf('export function destroyAgentsViewSession', start)
+  const agentsViewSession = text.slice(start, end)
+
+  assert.ok(start >= 0 && end > start)
+  assert.match(agentsViewSession, /platform: process\.platform,[\s\S]*?exitWithAgent: true,/)
+  assert.match(agentsViewSession, /args: \[\.\.\.shellProfile\.args, \.\.\.\(launch\.shellArgs \?\? \[\]\)\]/)
+  assert.match(agentsViewSession, /\.\.\.\(launch\.initialCommand !== undefined \? \{ initialCommand: launch\.initialCommand \} : \{\}\)/)
 })
 
 test('writes a startup command once after shell output becomes quiet', async () => {

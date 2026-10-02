@@ -35,13 +35,45 @@ test('quotes fixed POSIX arguments and carries prompts only through the environm
 
   assert.equal(result.initialCommand, "'claude' '--label' 'two words' 'it'\\''s fixed' \"$YIRA_AGENT_PROMPT\"")
   assert.deepEqual(result.env, { YIRA_AGENT_PROMPT: prompt })
-  assert.equal(result.initialCommand.includes(prompt), false)
+  assert.equal(result.initialCommand?.includes(prompt), false)
   assert.equal(buildAgentShellCommand({
     shellProfileId: 'zsh',
     command: 'codex',
     args: [],
     platform: 'linux',
   }).initialCommand, "'codex'")
+})
+
+test('POSIX agent commands replace the shell only when requested', () => {
+  for (const shellProfileId of ['bash', 'zsh', 'fish'] as const) {
+    const input = {
+      shellProfileId,
+      command: 'claude',
+      args: ['--resume', 'session-1'],
+      platform: 'linux' as const,
+    }
+
+    assert.equal(
+      buildAgentShellCommand(input).initialCommand,
+      "'claude' '--resume' 'session-1'",
+    )
+    assert.equal(
+      buildAgentShellCommand({ ...input, exitWithAgent: true }).initialCommand,
+      "exec 'claude' '--resume' 'session-1'",
+    )
+
+    const promptedInput = { ...input, prompt: 'Continue this task' }
+    assert.equal(
+      buildAgentShellCommand(promptedInput).initialCommand,
+      "'claude' '--resume' 'session-1' \"$YIRA_AGENT_PROMPT\"",
+    )
+    const promptedExit = buildAgentShellCommand({ ...promptedInput, exitWithAgent: true })
+    assert.equal(
+      promptedExit.initialCommand,
+      "exec 'claude' '--resume' 'session-1' \"$YIRA_AGENT_PROMPT\"",
+    )
+    assert.deepEqual(promptedExit.env, { YIRA_AGENT_PROMPT: 'Continue this task' })
+  }
 })
 
 test('uses fish quoting for backslashes and single quotes', () => {
@@ -66,6 +98,30 @@ test('invokes PowerShell commands with the call operator and normalizes Windows 
 
   assert.equal(result.initialCommand, "& 'codex' 'resume' 'session-1' \"$env:YIRA_AGENT_PROMPT\"")
   assert.deepEqual(result.env, { YIRA_AGENT_PROMPT: "Use 'quotes' then newline then carriage return" })
+})
+
+test('PowerShell exits with the agent status only when requested, including prompts', () => {
+  const input = {
+    shellProfileId: 'powershell' as const,
+    command: 'codex',
+    args: ['resume', 'session-1'],
+    prompt: 'Continue this task',
+    platform: 'win32' as const,
+  }
+  const expectedCommand = '& \'codex\' \'resume\' \'session-1\' "$env:YIRA_AGENT_PROMPT"'
+
+  const withoutExit = buildAgentShellCommand(input)
+  assert.equal(withoutExit.initialCommand, expectedCommand)
+  assert.equal(withoutExit.shellArgs, undefined)
+  assert.deepEqual(withoutExit.env, { YIRA_AGENT_PROMPT: 'Continue this task' })
+
+  const withExit = buildAgentShellCommand({ ...input, exitWithAgent: true })
+  assert.equal(withExit.initialCommand, undefined)
+  assert.deepEqual(withExit.shellArgs, [
+    '-Command',
+    `${expectedCommand}; exit $LASTEXITCODE`,
+  ])
+  assert.deepEqual(withExit.env, { YIRA_AGENT_PROMPT: 'Continue this task' })
 })
 
 test('rejects PowerShell arguments with quote, percent, or line break characters', () => {

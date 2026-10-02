@@ -35,6 +35,7 @@ import { buildAgentCommand, normalizeResumeId } from '../agents/providers'
 import {
   buildAgentShellCommand,
   resolveAgentShellProfile,
+  type AgentShellProfileId,
 } from '../agents/shellLaunch'
 import { connectTerminalDaemon, stopTerminalDaemon } from '../terminalDaemonClient'
 import { YIRA_HOME } from '../paths'
@@ -155,6 +156,15 @@ function toPersistentSubscriber(sender: WebContents): PersistentTerminalSubscrib
 
 function resolveProfile(shellProfileId: string): ShellProfile | undefined {
   return profiles.find(profile => profile.id === shellProfileId)
+}
+
+function resolveCompatibleAgentShellProfile(): ShellProfile & { id: AgentShellProfileId } {
+  const shellProfile = resolveAgentShellProfile(profiles, process.platform, process.env.SHELL)
+  if (!shellProfile || (shellProfile.id !== 'powershell' && shellProfile.id !== 'bash'
+    && shellProfile.id !== 'zsh' && shellProfile.id !== 'fish')) {
+    throw new Error('No compatible shell is available for agent sessions')
+  }
+  return shellProfile as ShellProfile & { id: AgentShellProfileId }
 }
 
 function remotePreparationKey(workspaceId: string, remoteTerminal: RemoteTerminalConfig): string {
@@ -299,12 +309,7 @@ export async function createAgentsViewSession(
     throw new Error('Invalid agent resume id')
   }
   const snapshot = await persistentTerminalSessions.create(runtimeTarget, async () => {
-    const shellProfile = resolveAgentShellProfile(profiles, process.platform, process.env.SHELL)
-    if (!shellProfile) throw new Error('No compatible shell is available for agent sessions')
-    if (shellProfile.id !== 'powershell' && shellProfile.id !== 'bash'
-      && shellProfile.id !== 'zsh' && shellProfile.id !== 'fish') {
-      throw new Error('No compatible shell is available for agent sessions')
-    }
+    const shellProfile = resolveCompatibleAgentShellProfile()
 
     const providerCommand = buildAgentCommand(spec.provider, providerConfig)
     const args = [...providerCommand.args]
@@ -320,6 +325,7 @@ export async function createAgentsViewSession(
       args,
       ...(!resumeSessionId && spec.prompt !== undefined ? { prompt: spec.prompt } : {}),
       platform: process.platform,
+      exitWithAgent: true,
     })
     const startedAt = new Date().toISOString()
     const agent = {
@@ -338,14 +344,14 @@ export async function createAgentsViewSession(
     return {
       target: { ...runtimeTarget },
       executable: shellProfile.shell,
-      args: [...shellProfile.args],
+      args: [...shellProfile.args, ...(launch.shellArgs ?? [])],
       cwd: spec.cwd,
       env: { ...daemonSpawnEnvironment(), ...launch.env },
       cols: 80,
       rows: 24,
       local: true,
       agent,
-      initialCommand: launch.initialCommand,
+      ...(launch.initialCommand !== undefined ? { initialCommand: launch.initialCommand } : {}),
     }
   })
   return terminalResultFromSnapshot(snapshot)
@@ -373,6 +379,7 @@ async function buildTerminalDaemonSpawn(
   if (isRemoteSsh && !sshClient) {
     throw new Error('OpenSSH client is not available on this computer')
   }
+  const agentShellProfile = isAgent ? resolveCompatibleAgentShellProfile() : undefined
 
   const spawnEnv = daemonSpawnEnvironment()
   let workspacePath: string | null = null
@@ -406,6 +413,7 @@ async function buildTerminalDaemonSpawn(
   }
 
   let agentLaunch: AgentTerminalLaunch | null = null
+  let agentShellCommand: ReturnType<typeof buildAgentShellCommand> | null = null
   if (isAgent) {
     agentLaunch = buildAgentTerminalLaunch({
       tileId: runtimeTarget.tileId,
@@ -415,14 +423,22 @@ async function buildTerminalDaemonSpawn(
       workspaceRoot: workspaceRootFolderPath ?? options.workspaceDir,
       fallbackCwd: terminalRoot?.cwd ?? process.cwd(),
     })
+    agentShellCommand = buildAgentShellCommand({
+      shellProfileId: agentShellProfile!.id,
+      command: agentLaunch.command,
+      args: agentLaunch.args,
+      platform: process.platform,
+      exitWithAgent: true,
+    })
   }
 
   const args = isRemoteSsh
     ? buildRemoteSshLaunch(options.remoteTerminal!, options.remoteStartupCommand).args
-    : agentLaunch
-      ? [...agentLaunch.args]
+    : agentShellProfile
+      ? [...agentShellProfile.args, ...(agentShellCommand?.shellArgs ?? [])]
       : [...profile!.args]
   if (terminalRoot && !agentLaunch) args.push(...terminalRoot.spawnArgs)
+  if (historySetup?.shellArgs && !isAgent && !isRemoteSsh) args.push(...historySetup.shellArgs)
 
   const agent = agentLaunch
     ? {
@@ -431,16 +447,15 @@ async function buildTerminalDaemonSpawn(
         startedAt: new Date().toISOString(),
       }
     : undefined
-  const initialCommand = !isRemoteSsh && !isAgent && options.initialCommand?.trim()
-    ? options.initialCommand
-    : undefined
+  const initialCommand = agentShellCommand?.initialCommand
+    ?? (!isRemoteSsh && !isAgent && options.initialCommand?.trim() ? options.initialCommand : undefined)
 
   return {
     target: { ...runtimeTarget },
-    executable: isRemoteSsh ? sshClient! : agentLaunch?.command ?? profile!.shell,
+    executable: isRemoteSsh ? sshClient! : agentShellProfile ? agentShellProfile.shell : profile!.shell,
     args,
     cwd: agentLaunch?.cwd ?? terminalRoot?.cwd ?? process.cwd(),
-    env: spawnEnv,
+    env: agentShellCommand ? { ...spawnEnv, ...agentShellCommand.env } : spawnEnv,
     cols: 80,
     rows: 24,
     local: !isRemoteSsh,
