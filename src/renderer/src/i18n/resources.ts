@@ -146,6 +146,37 @@ type TranslationResources = {
     started: string
     lastActivity: string
   }
+  agentsView: {
+    title: string
+    sessionCount: string
+    newSession: string
+    emptyTitle: string
+    emptyDescription: string
+    newAgentSession: string
+    agentSession: string
+    unknownTitle: string
+    closeSession: string
+    maximizeSession: string
+    restoreSession: string
+    statusWorking: string
+    statusNeedsInput: string
+    statusDone: string
+    statusExited: string
+    exitedMessage: string
+    provider: string
+    closeDialog: string
+    prompt: string
+    promptPlaceholder: string
+    worktree: string
+    worktreeUnavailable: string
+    options: string
+    model: string
+    modelPlaceholder: string
+    permissions: string
+    workspaceDefault: string
+    createSession: string
+    creatingSession: string
+  }
   settings: {
     active: string
     agentAlerts: string
@@ -865,6 +896,37 @@ const en: TranslationResources = {
     started: 'Started',
     lastActivity: 'Last activity',
   },
+  agentsView: {
+    title: 'Agents',
+    sessionCount: '{{count}} sessions',
+    newSession: 'New session',
+    emptyTitle: 'No agent sessions in this view',
+    emptyDescription: 'Start a session to see its live terminal here.',
+    newAgentSession: 'New agent session',
+    agentSession: 'Agent Session',
+    unknownTitle: 'Untitled session',
+    closeSession: 'Close session',
+    maximizeSession: 'Maximize session',
+    restoreSession: 'Restore session',
+    statusWorking: 'Working',
+    statusNeedsInput: 'Needs input',
+    statusDone: 'Done',
+    statusExited: 'Exited',
+    exitedMessage: 'Session exited',
+    provider: 'Provider',
+    closeDialog: 'Close dialog',
+    prompt: 'Prompt',
+    promptPlaceholder: 'Describe what you want the agent to do. Enter starts the session; Shift+Enter adds a line.',
+    worktree: 'Run in a git worktree',
+    worktreeUnavailable: 'Git worktrees are unavailable for this workspace.',
+    options: 'Options',
+    model: 'Model',
+    modelPlaceholder: 'Workspace default',
+    permissions: 'Permission mode',
+    workspaceDefault: 'Workspace default',
+    createSession: 'Create session',
+    creatingSession: 'Creating session…',
+  },
   settings: {
     active: 'ACTIVE',
     agentAlerts: 'Agent alerts',
@@ -1558,6 +1620,37 @@ const es: TranslationResources = {
     idle: 'Sin actividad detectada',
     exited: 'Finalizada',
     summary: '{{working}} trabajando; {{needsInput}} requieren intervención; {{done}} finalizados; {{unread}} eventos de salida sin revisar; {{recentOutput}} terminales con salida reciente; {{background}} en segundo plano',
+  },
+  agentsView: {
+    title: 'Agentes',
+    sessionCount: '{{count}} sesiones',
+    newSession: 'Nueva sesión',
+    emptyTitle: 'No hay sesiones de agentes en esta vista',
+    emptyDescription: 'Inicia una sesión para ver aquí su terminal en vivo.',
+    newAgentSession: 'Nueva sesión de agente',
+    agentSession: 'Sesión de agente',
+    unknownTitle: 'Sesión sin título',
+    closeSession: 'Cerrar sesión',
+    maximizeSession: 'Maximizar sesión',
+    restoreSession: 'Restaurar sesión',
+    statusWorking: 'Trabajando',
+    statusNeedsInput: 'Requiere intervención',
+    statusDone: 'Terminada',
+    statusExited: 'Finalizada',
+    exitedMessage: 'La sesión terminó',
+    provider: 'Proveedor',
+    closeDialog: 'Cerrar diálogo',
+    prompt: 'Instrucción',
+    promptPlaceholder: 'Describe qué quieres que haga el agente. Enter inicia la sesión; Shift+Enter agrega una línea.',
+    worktree: 'Ejecutar en un worktree de Git',
+    worktreeUnavailable: 'Los worktrees de Git no están disponibles en este espacio de trabajo.',
+    options: 'Opciones',
+    model: 'Modelo',
+    modelPlaceholder: 'Valor predeterminado del espacio de trabajo',
+    permissions: 'Modo de permisos',
+    workspaceDefault: 'Valor predeterminado del espacio de trabajo',
+    createSession: 'Crear sesión',
+    creatingSession: 'Creando sesión…',
   },
   agents: {
     title: 'Agentes',
