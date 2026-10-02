@@ -29,7 +29,7 @@ import { AgentUsageDetailsService } from './agentUsageDetails'
 import { AgentUsageIndex } from './agentUsageIndex'
 import { readClaudeUsageStatusLinePayload } from './claudeUsageStatusLinePayload'
 import { APP_ID, APP_NAME, DEV_APP_NAME, YIRA_HOME } from './paths'
-import { isWindowsUpdateInstallPending, registerUpdateIPC, scheduleStartupUpdateCheck } from './updater'
+import { isUpdateInstallPending, registerUpdateIPC, scheduleStartupUpdateCheck } from './updater'
 import { loadWindowState, saveWindowState } from './windowState'
 import { coordinateWindowClose, type CloseFailureDecision } from './windowCloseCoordinator'
 import { getWindowMaterialOptions, setWindowBackgroundMaterial } from './windowMaterial'
@@ -84,8 +84,9 @@ async function promptClosePreparationFailure(phase: 'flush' | 'persist' | 'termi
 
 async function drainTerminalSessions(): Promise<void> {
   await shutdownTerminalSessions()
-  // The terminal daemon keeps Yira.exe running and would block the installer.
-  if (!isWindowsUpdateInstallPending()) return
+  // The daemon outlives the app. Left running, it would block the Windows
+  // installer and keep the previous version's code on every platform.
+  if (!isUpdateInstallPending()) return
   try {
     await stopTerminalDaemonForUpdate()
   } catch (error) {
@@ -94,7 +95,6 @@ async function drainTerminalSessions(): Promise<void> {
 }
 
 async function confirmUpdateInstall(): Promise<boolean> {
-  if (process.platform !== 'win32') return true
   const count = countRunningTerminalSessions()
   if (count === 0) return true
 
