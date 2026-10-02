@@ -95,28 +95,36 @@ test('contains subscriber failures so registry lifecycle calls remain safe', () 
 
 test('retains Agents View and worktree metadata in runtime snapshots', () => {
   const registry = new AgentSessionRegistry()
+  const worktrees = [
+    { path: 'C:\\worktrees\\agent-1\\repo-a', baseSha: '0'.repeat(40) },
+    { path: 'C:\\worktrees\\agent-1\\repo-b', baseSha: '1'.repeat(40) },
+  ]
   const created = registry.register({
     ...session,
     surface: 'agents-view',
     title: 'Fix the login flow',
-    worktreePath: 'C:\\worktrees\\agent-1',
+    worktreeRoot: 'C:\\worktrees\\agent-1',
     worktreeBranch: 'agents/fix-login',
-    worktreeBaseSha: '0123456789abcdef',
+    worktrees,
   })
 
   assert.deepEqual({
     surface: created.surface,
     title: created.title,
-    worktreePath: created.worktreePath,
+    worktreeRoot: created.worktreeRoot,
     worktreeBranch: created.worktreeBranch,
-    worktreeBaseSha: created.worktreeBaseSha,
+    worktrees: created.worktrees,
   }, {
     surface: 'agents-view',
     title: 'Fix the login flow',
-    worktreePath: 'C:\\worktrees\\agent-1',
+    worktreeRoot: 'C:\\worktrees\\agent-1',
     worktreeBranch: 'agents/fix-login',
-    worktreeBaseSha: '0123456789abcdef',
+    worktrees,
   })
   assert.throws(() => registry.register({ ...session, title: 'bad\ntitle' }), /invalid agent title/i)
-  assert.throws(() => registry.register({ ...session, worktreePath: 'x'.repeat(4_097) }), /invalid agent worktree path/i)
+  assert.throws(() => registry.register({ ...session, worktreeRoot: 'x'.repeat(4_097) }), /invalid agent worktree root/i)
+  assert.throws(() => registry.register({ ...session, worktrees: Array.from({ length: 33 }, () => worktrees[0]) }), /invalid agent worktrees/i)
+
+  created.worktrees![0].path = 'mutated'
+  assert.equal(registry.get('workspace-1', 'tile-1')?.worktrees?.[0].path, worktrees[0].path)
 })

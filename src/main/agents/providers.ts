@@ -5,9 +5,6 @@ import { delimiter, join } from 'node:path'
 import {
   AGENT_PROVIDER_COMMANDS,
   AGENT_PROVIDERS,
-  CLAUDE_PERMISSION_MODES,
-  CODEX_SANDBOX_MODES,
-  type AgentSessionLaunchOverrides,
   type AgentProvider,
   type AgentProviderAvailabilitySnapshot,
   type AgentProviderConfig,
@@ -155,39 +152,6 @@ export function buildAgentCommand(
   resumeId?: unknown,
 ): AgentCommand {
   return getAgentProviderAdapter(provider).buildCommand(config, resumeId)
-}
-
-export function buildAgentOverrideArgs(
-  provider: AgentProvider,
-  overrides?: AgentSessionLaunchOverrides,
-): string[] {
-  if (provider !== 'claude' && provider !== 'codex') throw new Error('Invalid agent provider')
-  if (!overrides) return []
-
-  const args: string[] = []
-  if (overrides.model !== undefined) {
-    if (typeof overrides.model !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:/\[\]-]{0,99}$/.test(overrides.model)) {
-      throw new Error('Invalid agent model override')
-    }
-    args.push('--model', overrides.model)
-  }
-
-  if (overrides.permissionMode === undefined) return args
-  if (provider === 'claude') {
-    if (!(CLAUDE_PERMISSION_MODES as readonly string[]).includes(overrides.permissionMode)) {
-      throw new Error('Invalid Claude permission mode')
-    }
-    if (overrides.permissionMode !== 'default') args.push('--permission-mode', overrides.permissionMode)
-  } else if (provider === 'codex') {
-    if (!(CODEX_SANDBOX_MODES as readonly string[]).includes(overrides.permissionMode)) {
-      throw new Error('Invalid Codex sandbox mode')
-    }
-    args.push('--sandbox', overrides.permissionMode)
-  } else {
-    throw new Error('Invalid agent provider')
-  }
-
-  return args
 }
 
 export async function detectInstalledAgentProviders(

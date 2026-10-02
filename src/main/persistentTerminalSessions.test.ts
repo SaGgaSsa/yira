@@ -253,9 +253,12 @@ test('hydrate restores agent metadata and maps alert and exit state', async () =
     startedAt: '2024-01-01T00:00:00.000Z',
     surface: 'agents-view' as const,
     title: 'Restore this task',
-    worktreePath: '/tmp/worktrees/agent-1',
+    worktreeRoot: '/tmp/worktrees/agent-1',
     worktreeBranch: 'agents/restore',
-    worktreeBaseSha: 'abcdef123456',
+    worktrees: [
+      { path: '/tmp/worktrees/agent-1/repo-a', baseSha: 'abcdef123456' },
+      { path: '/tmp/worktrees/agent-1/repo-b', baseSha: 'fedcba654321' },
+    ],
   }
   const alert: TerminalDaemonAlert = { provider: 'codex', event: 'permission', tileId: identity.tileId }
   transport.setHandler('list', () => [snapshot({ agent, alert, exitEvent: { exitCode: 0 } })])
@@ -273,9 +276,9 @@ test('hydrate restores agent metadata and maps alert and exit state', async () =
   assert.equal(restored?.startedAt, agent.startedAt)
   assert.equal(restored?.surface, agent.surface)
   assert.equal(restored?.title, agent.title)
-  assert.equal(restored?.worktreePath, agent.worktreePath)
+  assert.equal(restored?.worktreeRoot, agent.worktreeRoot)
   assert.equal(restored?.worktreeBranch, agent.worktreeBranch)
-  assert.equal(restored?.worktreeBaseSha, agent.worktreeBaseSha)
+  assert.deepEqual(restored?.worktrees, agent.worktrees)
   assert.equal(restored?.status, 'exited')
   assert.equal(alerts.length, 1)
   assert.deepEqual(alerts[0], alert)

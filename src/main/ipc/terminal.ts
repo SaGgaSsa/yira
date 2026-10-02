@@ -5,7 +5,6 @@ import { dirname, join } from 'path'
 import type {
   AgentProvider,
   AgentProviderConfig,
-  AgentSessionLaunchOverrides,
   RemotePreparationResult,
   RemotePreparationStatus,
   RemoteTerminalConfig,
@@ -32,7 +31,7 @@ import { getEnabledAgentProviders } from './settings'
 import { agentSessionRegistry } from '../agents/registry'
 import { normalizeAgentOpaqueId } from '../agents/query'
 import { buildAgentTerminalLaunch, type AgentTerminalLaunch } from '../agents/terminal'
-import { buildAgentOverrideArgs, buildAgentCommand, normalizeResumeId } from '../agents/providers'
+import { buildAgentCommand, normalizeResumeId } from '../agents/providers'
 import {
   buildAgentShellCommand,
   resolveAgentShellProfile,
@@ -116,12 +115,15 @@ const persistentTerminalSessions = new PersistentTerminalSessions({
 export interface AgentsViewLaunchSpec {
   provider: AgentProvider
   providerConfig: AgentProviderConfig
-  overrides?: AgentSessionLaunchOverrides
   prompt?: string
   resumeSessionId?: string
   cwd: string
   title?: string
-  worktree?: { path: string; branch: string; baseSha: string }
+  worktree?: {
+    root: string
+    branch: string
+    worktrees: Array<{ path: string; baseSha: string }>
+  }
 }
 
 let terminalProcessActivityMonitor: TerminalProcessActivityMonitor | null = null
@@ -296,8 +298,6 @@ export async function createAgentsViewSession(
   if (spec.resumeSessionId !== undefined && !resumeSessionId) {
     throw new Error('Invalid agent resume id')
   }
-  const overrideArgs = buildAgentOverrideArgs(spec.provider, spec.overrides)
-
   const snapshot = await persistentTerminalSessions.create(runtimeTarget, async () => {
     const shellProfile = resolveAgentShellProfile(profiles, process.platform, process.env.SHELL)
     if (!shellProfile) throw new Error('No compatible shell is available for agent sessions')
@@ -307,7 +307,7 @@ export async function createAgentsViewSession(
     }
 
     const providerCommand = buildAgentCommand(spec.provider, providerConfig)
-    const args = [...providerCommand.args, ...overrideArgs]
+    const args = [...providerCommand.args]
     if (resumeSessionId) {
       args.push(...(spec.provider === 'claude'
         ? ['--resume', resumeSessionId]
@@ -329,9 +329,9 @@ export async function createAgentsViewSession(
       surface: 'agents-view' as const,
       ...(spec.title !== undefined ? { title: spec.title } : {}),
       ...(spec.worktree ? {
-        worktreePath: spec.worktree.path,
+        worktreeRoot: spec.worktree.root,
         worktreeBranch: spec.worktree.branch,
-        worktreeBaseSha: spec.worktree.baseSha,
+        worktrees: spec.worktree.worktrees.map(({ path, baseSha }) => ({ path, baseSha })),
       } : {}),
     }
 

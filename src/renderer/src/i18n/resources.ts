@@ -176,11 +176,6 @@ type TranslationResources = {
     promptPlaceholder: string
     worktree: string
     worktreeUnavailable: string
-    options: string
-    model: string
-    modelPlaceholder: string
-    permissions: string
-    workspaceDefault: string
     createSession: string
     creatingSession: string
     shortcutLabel: string
@@ -939,11 +934,6 @@ const en: TranslationResources = {
     promptPlaceholder: 'Describe what you want the agent to do. Enter starts the session; Shift+Enter adds a line.',
     worktree: 'Run in a git worktree',
     worktreeUnavailable: 'Git worktrees are unavailable for this workspace.',
-    options: 'Options',
-    model: 'Model',
-    modelPlaceholder: 'Workspace default',
-    permissions: 'Permission mode',
-    workspaceDefault: 'Workspace default',
     createSession: 'Create session',
     creatingSession: 'Creating session…',
     shortcutLabel: 'Shortcut: {{shortcut}}',
@@ -1676,11 +1666,6 @@ const es: TranslationResources = {
     promptPlaceholder: 'Describe qué quieres que haga el agente. Enter inicia la sesión; Shift+Enter agrega una línea.',
     worktree: 'Ejecutar en un worktree de Git',
     worktreeUnavailable: 'Los worktrees de Git no están disponibles en este espacio de trabajo.',
-    options: 'Opciones',
-    model: 'Modelo',
-    modelPlaceholder: 'Valor predeterminado del espacio de trabajo',
-    permissions: 'Modo de permisos',
-    workspaceDefault: 'Valor predeterminado del espacio de trabajo',
     createSession: 'Crear sesión',
     creatingSession: 'Creando sesión…',
     shortcutLabel: 'Atajo: {{shortcut}}',

@@ -600,9 +600,12 @@ test('authenticates every request and retains local semantic alerts without clie
         startedAt: '2026-01-01T00:00:00.000Z',
         surface: 'agents-view',
         title: 'Review the migration',
-        worktreePath: '/tmp/worktrees/agent-1',
+        worktreeRoot: '/tmp/worktrees/agent-1',
         worktreeBranch: 'agents/migration-review',
-        worktreeBaseSha: 'abcdef123456',
+        worktrees: [
+          { path: '/tmp/worktrees/agent-1/repo-a', baseSha: 'abcdef123456' },
+          { path: '/tmp/worktrees/agent-1/repo-b', baseSha: 'fedcba654321' },
+        ],
       },
     }),
   ))
@@ -614,9 +617,12 @@ test('authenticates every request and retains local semantic alerts without clie
   assert.equal(created.agent?.provider, 'codex')
   assert.equal(created.agent?.surface, 'agents-view')
   assert.equal(created.agent?.title, 'Review the migration')
-  assert.equal(created.agent?.worktreePath, '/tmp/worktrees/agent-1')
+  assert.equal(created.agent?.worktreeRoot, '/tmp/worktrees/agent-1')
   assert.equal(created.agent?.worktreeBranch, 'agents/migration-review')
-  assert.equal(created.agent?.worktreeBaseSha, 'abcdef123456')
+  assert.deepEqual(created.agent?.worktrees, [
+    { path: '/tmp/worktrees/agent-1/repo-a', baseSha: 'abcdef123456' },
+    { path: '/tmp/worktrees/agent-1/repo-b', baseSha: 'fedcba654321' },
+  ])
 
   const unauthorized = await request(client.socket, client.messages, 'wrong-token', 2, 'list')
   assert.match(unauthorized.error ?? '', /unauthorized/i)
@@ -640,9 +646,10 @@ test('rejects invalid Agents View metadata at daemon spawn validation', async (t
     { surface: 'other' },
     { title: 'x'.repeat(201) },
     { title: 'bad\ntitle' },
-    { worktreePath: 'x'.repeat(4_097) },
+    { worktreeRoot: 'x'.repeat(4_097) },
     { worktreeBranch: 42 },
-    { worktreeBaseSha: 'bad\u007fsha' },
+    { worktrees: [{ path: 'safe', baseSha: 'bad\u007fsha' }] },
+    { worktrees: Array.from({ length: 33 }, () => ({ path: 'safe', baseSha: 'abc' })) },
   ]
   for (let index = 0; index < invalidAgents.length; index += 1) {
     const response = await request(

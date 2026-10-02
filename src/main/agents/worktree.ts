@@ -1,19 +1,40 @@
 import { promises as fs } from 'node:fs'
-import { basename, isAbsolute, join, relative, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 
+import { discoverGitRepositories, resolveConfiguredGitRepository } from '../git/repositories'
 import { execGitCommand, type GitCommandExecutor } from '../git/runner'
 
-export interface AgentWorktreeCreateInput {
+export interface AgentWorktreeRepository {
+  relativePath: string
+  absolutePath: string
+}
+
+export interface ResolveWorkspaceWorktreeRepositoriesInput {
   rootPath: string
+  configuredRepositoryPaths: string[]
+}
+
+export interface ResolveWorkspaceWorktreeRepositoriesDependencies {
+  discoverGitRepositories?: typeof discoverGitRepositories
+  resolveConfiguredGitRepository?: typeof resolveConfiguredGitRepository
+  executor?: GitCommandExecutor
+}
+
+export interface AgentWorkspaceWorktreeCreateInput {
+  rootPath: string
+  repositories: AgentWorktreeRepository[]
   sessionId: string
   baseDirectory: string
 }
 
-export interface AgentWorktree {
-  path: string
-  cwd: string
+export interface AgentWorkspaceWorktree {
+  root: string
   branch: string
-  baseSha: string
+  worktrees: Array<{
+    path: string
+    repositoryPath: string
+    baseSha: string
+  }>
 }
 
 export interface AgentWorktreeCleanupInput {
@@ -54,11 +75,20 @@ function normalizeSessionSuffix(sessionId: string): string {
   return normalized.slice(0, 8)
 }
 
-async function resolveRepositoryRoot(rootPath: string, executor: GitCommandExecutor): Promise<string> {
-  const result = await runGitAt(rootPath, ['rev-parse', '--show-toplevel'], executor)
-  const repositoryRoot = outputLine(result.stdout)
-  if (!repositoryRoot) throw new Error('Git repository root could not be resolved')
-  return resolve(repositoryRoot)
+function normalizePathForCompare(path: string): string {
+  return process.platform === 'win32' ? path.toLowerCase() : path
+}
+
+function repositoryDepth(relativePath: string): number {
+  return relativePath === '.' ? 0 : relativePath.split('/').length
+}
+
+function compareRepositories(left: AgentWorktreeRepository, right: AgentWorktreeRepository): number {
+  if (left.relativePath === '.') return right.relativePath === '.' ? 0 : -1
+  if (right.relativePath === '.') return 1
+  return repositoryDepth(left.relativePath) - repositoryDepth(right.relativePath)
+    || basename(left.absolutePath).localeCompare(basename(right.absolutePath))
+    || left.relativePath.localeCompare(right.relativePath)
 }
 
 async function resolveHead(rootPath: string, executor: GitCommandExecutor): Promise<string> {
@@ -68,67 +98,154 @@ async function resolveHead(rootPath: string, executor: GitCommandExecutor): Prom
   return baseSha
 }
 
-/** True only when the selected directory belongs to a repository with a commit. */
-export async function canCreateAgentWorktree(
-  rootPath: string,
-  executor: GitCommandExecutor = execGitCommand,
-): Promise<boolean> {
-  if (typeof rootPath !== 'string' || !rootPath.trim()) return false
-  try {
-    await resolveRepositoryRoot(rootPath, executor)
-    await resolveHead(rootPath, executor)
-    return true
-  } catch {
-    return false
+/** Match Source Control repository selection and retain only repositories with a committed HEAD. */
+export async function resolveWorkspaceWorktreeRepositories(
+  input: ResolveWorkspaceWorktreeRepositoriesInput,
+  dependencies: ResolveWorkspaceWorktreeRepositoriesDependencies = {},
+): Promise<AgentWorktreeRepository[]> {
+  if (!input || typeof input.rootPath !== 'string' || !input.rootPath.trim()) {
+    throw new Error('Agent worktree root path is required')
   }
+
+  const discover = dependencies.discoverGitRepositories ?? discoverGitRepositories
+  const resolveRepository = dependencies.resolveConfiguredGitRepository ?? resolveConfiguredGitRepository
+  const executor = dependencies.executor ?? execGitCommand
+  const discovered = await discover(input.rootPath, 1)
+  const repositoryPaths = [...new Set([
+    ...(Array.isArray(input.configuredRepositoryPaths) ? input.configuredRepositoryPaths : []),
+    ...discovered.map(({ relativePath }) => relativePath),
+  ])]
+  const seenCanonicalPaths = new Set<string>()
+  const repositories: AgentWorktreeRepository[] = []
+
+  for (const repositoryPath of repositoryPaths) {
+    const repository = await resolveRepository(input.rootPath, repositoryPaths, repositoryPath)
+    const canonicalPath = normalizePathForCompare(repository.absolutePath)
+    if (seenCanonicalPaths.has(canonicalPath)) continue
+    seenCanonicalPaths.add(canonicalPath)
+
+    try {
+      await resolveHead(repository.absolutePath, executor)
+    } catch {
+      // Unborn repositories cannot provide a stable worktree base.
+      continue
+    }
+
+    repositories.push({
+      relativePath: repository.relativePath,
+      absolutePath: repository.absolutePath,
+    })
+  }
+
+  return repositories.sort(compareRepositories)
 }
 
-async function nextAvailableBranch(repositoryRoot: string, shortId: string, executor: GitCommandExecutor): Promise<string> {
+async function nextAvailableBranch(
+  repositories: AgentWorktreeRepository[],
+  shortId: string,
+  executor: GitCommandExecutor,
+): Promise<string> {
   const baseBranch = `yira/agent-${shortId}`
   for (let suffix = 0; suffix < 100_000; suffix += 1) {
     const branch = suffix === 0 ? baseBranch : `${baseBranch}-${suffix}`
     validateBranch(branch)
-    await runGitAt(repositoryRoot, ['check-ref-format', '--branch', branch], executor)
-    const existing = await runGitAt(repositoryRoot, ['branch', '--list', '--format=%(refname:short)', branch], executor)
-    if (!existing.stdout.trim()) return branch
+    let isAvailable = true
+
+    for (const repository of repositories) {
+      await runGitAt(repository.absolutePath, ['check-ref-format', '--branch', branch], executor)
+      const existing = await runGitAt(
+        repository.absolutePath,
+        ['branch', '--list', '--format=%(refname:short)', branch],
+        executor,
+      )
+      if (existing.stdout.trim()) {
+        isAvailable = false
+        break
+      }
+    }
+
+    if (isAvailable) return branch
   }
   throw new Error('No available agent worktree branch name')
 }
 
-/** Create a linked worktree while preserving the workspace's subdirectory as cwd. */
-export async function createAgentWorktree(
-  input: AgentWorktreeCreateInput,
+/** Create one shared branch across the selected repositories under a single workspace container. */
+export async function createAgentWorkspaceWorktrees(
+  input: AgentWorkspaceWorktreeCreateInput,
   executor: GitCommandExecutor = execGitCommand,
-): Promise<AgentWorktree> {
+): Promise<AgentWorkspaceWorktree> {
   if (!input || typeof input.rootPath !== 'string' || !input.rootPath.trim()) {
     throw new Error('Agent worktree root path is required')
+  }
+  if (!Array.isArray(input.repositories) || input.repositories.length === 0) {
+    throw new Error('Agent worktree repositories are required')
   }
   if (typeof input.baseDirectory !== 'string' || !input.baseDirectory.trim()) {
     throw new Error('Agent worktree base directory is required')
   }
 
-  const rootPath = await fs.realpath(resolve(input.rootPath))
-  const repositoryRoot = await resolveRepositoryRoot(rootPath, executor)
-  const baseSha = await resolveHead(rootPath, executor)
   const shortId = normalizeSessionSuffix(input.sessionId)
-  const branch = await nextAvailableBranch(repositoryRoot, shortId, executor)
-  const repositoryName = basename(repositoryRoot) || 'repository'
-  const worktreePath = join(resolve(input.baseDirectory), `${repositoryName}-${shortId}`)
-  const workspaceRelativePath = relative(repositoryRoot, rootPath)
-  if (workspaceRelativePath.startsWith('..') || isAbsolute(workspaceRelativePath)) {
-    throw new Error('Agent worktree root is outside its Git repository')
+  const canonicalRoot = await fs.realpath(resolve(input.rootPath))
+  const workspaceName = basename(resolve(input.rootPath)) || 'workspace'
+  const root = join(resolve(input.baseDirectory), `${workspaceName}-${shortId}`)
+  const repositories = [...input.repositories].sort(compareRepositories)
+  const branch = await nextAvailableBranch(repositories, shortId, executor)
+  const baseShas = new Map<string, string>()
+
+  for (const repository of repositories) {
+    const canonicalRepositoryPath = await fs.realpath(repository.absolutePath)
+    const relativeFromRoot = relative(canonicalRoot, canonicalRepositoryPath)
+    if (/^\.\.(?:[\\/]|$)/.test(relativeFromRoot) || isAbsolute(relativeFromRoot)) {
+      throw new Error('Agent worktree repository is outside its workspace')
+    }
+    const relativePath = relativeFromRoot.split(/\\|\//).join('/') || '.'
+    if (relativePath !== repository.relativePath) throw new Error('Agent worktree repository path changed')
+    const sha = await resolveHead(canonicalRepositoryPath, executor)
+    baseShas.set(repository.relativePath, sha)
   }
 
-  await fs.mkdir(input.baseDirectory, { recursive: true })
-  await runGitAt(repositoryRoot, ['worktree', 'add', '-b', branch, '--', worktreePath, baseSha], executor)
-  worktreeRepositories.set(resolve(worktreePath), repositoryRoot)
+  await fs.mkdir(resolve(input.baseDirectory), { recursive: true })
+  const created: AgentWorkspaceWorktree['worktrees'] = []
 
-  return {
-    path: worktreePath,
-    cwd: resolve(worktreePath, workspaceRelativePath),
-    branch,
-    baseSha,
+  try {
+    for (const repository of repositories) {
+      const worktreePath = repository.relativePath === '.'
+        ? root
+        : join(root, ...repository.relativePath.split('/'))
+      const baseSha = baseShas.get(repository.relativePath)
+      if (!baseSha) throw new Error('Agent worktree base commit could not be resolved')
+
+      await fs.mkdir(dirname(worktreePath), { recursive: true })
+      await runGitAt(repository.absolutePath, ['worktree', 'add', '-b', branch, '--', worktreePath, baseSha], executor)
+      worktreeRepositories.set(resolve(worktreePath), repository.absolutePath)
+      created.push({ path: worktreePath, repositoryPath: repository.relativePath, baseSha })
+    }
+  } catch (error) {
+    for (const worktree of [...created].reverse()) {
+      try {
+        await removeAgentWorktreeIfClean({ path: worktree.path, branch, baseSha: worktree.baseSha }, executor)
+      } catch {
+        // Preserve the creation error while attempting every prior worktree rollback.
+      }
+    }
+    const emptyDirectories = new Set<string>()
+    for (const worktree of created) {
+      let directory = dirname(worktree.path)
+      while (directory !== root) {
+        const relativeDirectory = relative(root, directory)
+        if (/^\.\.(?:[\\/]|$)/.test(relativeDirectory) || isAbsolute(relativeDirectory)) break
+        emptyDirectories.add(directory)
+        directory = dirname(directory)
+      }
+    }
+    for (const directory of [...emptyDirectories].sort((left, right) => right.length - left.length)) {
+      try { await fs.rmdir(directory) } catch { /* Keep the original creation failure. */ }
+    }
+    try { await fs.rmdir(root) } catch { /* Keep the original creation failure. */ }
+    throw error
   }
+
+  return { root, branch, worktrees: created }
 }
 
 async function worktreeExists(worktreePath: string): Promise<boolean> {

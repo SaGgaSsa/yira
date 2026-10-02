@@ -261,18 +261,37 @@ function normalizeAgent(value: unknown): TerminalDaemonAgent | undefined {
   }
 
   const title = normalizeMetadataString('title', MAX_AGENT_TITLE_LENGTH)
-  const worktreePath = normalizeMetadataString('worktreePath', MAX_WORKTREE_PATH_LENGTH)
+  const worktreeRoot = normalizeMetadataString('worktreeRoot', MAX_WORKTREE_PATH_LENGTH)
   const worktreeBranch = normalizeMetadataString('worktreeBranch', MAX_ID_LENGTH)
-  const worktreeBaseSha = normalizeMetadataString('worktreeBaseSha', MAX_ID_LENGTH)
+  let worktrees: Array<{ path: string; baseSha: string }> | undefined
+  if (value.worktrees !== undefined) {
+    if (!Array.isArray(value.worktrees) || value.worktrees.length > 32) {
+      throw new Error('Invalid terminal agent worktrees')
+    }
+    worktrees = value.worktrees.map((entry) => {
+      if (!isRecord(entry)) throw new Error('Invalid terminal agent worktree')
+      const path = entry.path
+      const baseSha = entry.baseSha
+      if (typeof path !== 'string' || !path.trim() || path.length > MAX_WORKTREE_PATH_LENGTH
+        || /[\u0000-\u001f\u007f-\u009f]/.test(path)) {
+        throw new Error('Invalid terminal agent worktree path')
+      }
+      if (typeof baseSha !== 'string' || !baseSha.trim() || baseSha.length > MAX_ID_LENGTH
+        || /[\u0000-\u001f\u007f-\u009f]/.test(baseSha)) {
+        throw new Error('Invalid terminal agent worktree base sha')
+      }
+      return { path, baseSha }
+    })
+  }
   return {
     provider,
     sessionId: normalizeString(value.sessionId, 'terminal agent session id', MAX_ID_LENGTH),
     startedAt: normalizeString(value.startedAt, 'terminal agent start time', MAX_ID_LENGTH),
     ...(surface !== undefined ? { surface } : {}),
     ...(title !== undefined ? { title } : {}),
-    ...(worktreePath !== undefined ? { worktreePath } : {}),
+    ...(worktreeRoot !== undefined ? { worktreeRoot } : {}),
     ...(worktreeBranch !== undefined ? { worktreeBranch } : {}),
-    ...(worktreeBaseSha !== undefined ? { worktreeBaseSha } : {}),
+    ...(worktrees !== undefined ? { worktrees } : {}),
   }
 }
 
@@ -1008,7 +1027,10 @@ class DaemonSession {
 }
 
 function cloneAgent(agent: TerminalDaemonAgent): TerminalDaemonAgent {
-  return { ...agent }
+  return {
+    ...agent,
+    ...(agent.worktrees !== undefined ? { worktrees: agent.worktrees.map((worktree) => ({ ...worktree })) } : {}),
+  }
 }
 
 function toDaemonAlert(state: AgentAlertState): NonNullable<TerminalDaemonSnapshot['alert']> {

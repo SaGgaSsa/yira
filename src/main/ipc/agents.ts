@@ -10,7 +10,6 @@ import type {
   AgentSessionCapabilities,
   AgentSessionCloseResult,
   AgentSessionCreateResult,
-  AgentSessionLaunchOverrides,
   AgentSessionHistoryResult,
   AgentActiveSessionSnapshot,
   AgentUsageSnapshot,
@@ -25,7 +24,6 @@ import type { AgentUsageDetailsService } from '../agentUsageDetails'
 import type { AgentUsageIndex } from '../agentUsageIndex'
 import { hasManagedAgentHooks } from '../agentHookConfiguration'
 import {
-  buildAgentOverrideArgs,
   getAgentHomeDirectory,
   getAgentProviderAvailability,
   normalizeResumeId,
@@ -33,13 +31,15 @@ import {
 import { agentSessionRegistry, type AgentSessionRegistry } from '../agents/registry'
 import { readAgentSessionHistory } from '../agents/history'
 import {
-  canCreateAgentWorktree,
-  createAgentWorktree,
+  createAgentWorkspaceWorktrees,
   removeAgentWorktreeIfClean,
-  type AgentWorktree,
+  resolveWorkspaceWorktreeRepositories,
+  type AgentWorkspaceWorktree,
+  type AgentWorkspaceWorktreeCreateInput,
+  type AgentWorktreeRepository,
   type AgentWorktreeCleanupInput,
-  type AgentWorktreeCreateInput,
   type AgentWorktreeRemovalResult,
+  type ResolveWorkspaceWorktreeRepositoriesInput,
 } from '../agents/worktree'
 import { resolveAgentCwd } from '../agents/terminal'
 import {
@@ -78,13 +78,13 @@ export interface AgentIPCOptions {
   workspaces?: () => Promise<Array<{ id: string; rootFolderPath: string }>>
   createSession?: (target: TerminalSessionTarget, spec: AgentsViewLaunchSpec) => Promise<unknown>
   destroySession?: (target: TerminalSessionTarget) => Promise<void>
-  workspaceAgentConfig?: (workspaceId: string) => Promise<Pick<WorkspaceConfig, 'rootFolderPath' | 'agentProvider' | 'agentProviders'> | null>
+  workspaceAgentConfig?: (workspaceId: string) => Promise<Pick<WorkspaceConfig, 'rootFolderPath' | 'sourceControlRepositoryPaths' | 'agentProvider' | 'agentProviders'> | null>
   worktrees?: AgentIPCWorktrees
 }
 
 export interface AgentIPCWorktrees {
-  canCreateAgentWorktree: (rootPath: string) => Promise<boolean>
-  createAgentWorktree: (input: AgentWorktreeCreateInput) => Promise<AgentWorktree>
+  resolveWorkspaceWorktreeRepositories: (input: ResolveWorkspaceWorktreeRepositoriesInput) => Promise<AgentWorktreeRepository[]>
+  createAgentWorkspaceWorktrees: (input: AgentWorkspaceWorktreeCreateInput) => Promise<AgentWorkspaceWorktree>
   removeAgentWorktreeIfClean: (input: AgentWorktreeCleanupInput) => Promise<AgentWorktreeRemovalResult>
 }
 
@@ -94,13 +94,32 @@ interface NormalizedAgentSessionCreateInput {
   resumeSessionId?: string
   resumeCwd?: string
   worktree: boolean
-  overrides?: AgentSessionLaunchOverrides
 }
 
 const defaultWorktrees: AgentIPCWorktrees = {
-  canCreateAgentWorktree,
-  createAgentWorktree,
+  resolveWorkspaceWorktreeRepositories,
+  createAgentWorkspaceWorktrees,
   removeAgentWorktreeIfClean,
+}
+
+async function removeWorkspaceWorktrees(
+  worktree: { branch: string; worktrees: Array<{ path: string; baseSha: string }> },
+  remove: AgentIPCWorktrees['removeAgentWorktreeIfClean'],
+): Promise<boolean> {
+  for (const entry of [...worktree.worktrees].reverse()) {
+    const result = await remove({ path: entry.path, branch: worktree.branch, baseSha: entry.baseSha })
+    if (result === 'kept') return false
+  }
+  return true
+}
+
+async function removeEmptyWorktreeRoot(root: string): Promise<void> {
+  try {
+    await fs.rmdir(root)
+  } catch (error) {
+    const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined
+    if (code !== 'ENOENT' && code !== 'ENOTEMPTY' && code !== 'EEXIST') throw error
+  }
 }
 
 const subscriptions = new Map<number, AgentSubscription>()
@@ -168,22 +187,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
-function normalizeLaunchOverrides(value: unknown): AgentSessionLaunchOverrides | undefined {
-  if (value === undefined) return undefined
-  if (!isRecord(value)) throw new Error('Invalid agent launch overrides')
-
-  const overrides: AgentSessionLaunchOverrides = {}
-  if (value.model !== undefined) {
-    if (typeof value.model !== 'string') throw new Error('Invalid agent model override')
-    overrides.model = value.model
-  }
-  if (value.permissionMode !== undefined) {
-    if (typeof value.permissionMode !== 'string') throw new Error('Invalid agent permission mode')
-    overrides.permissionMode = value.permissionMode
-  }
-  return overrides
-}
-
 function normalizeCreateInput(value: unknown): NormalizedAgentSessionCreateInput {
   if (!isRecord(value)) throw new Error('Invalid agent session input')
 
@@ -223,7 +226,6 @@ function normalizeCreateInput(value: unknown): NormalizedAgentSessionCreateInput
     ...(resumeSessionId ? { resumeSessionId } : {}),
     ...(resumeCwd !== undefined ? { resumeCwd } : {}),
     worktree: value.worktree === true,
-    overrides: normalizeLaunchOverrides(value.overrides),
   }
 }
 
@@ -328,9 +330,18 @@ export function registerAgentsIPC(options: AgentIPCOptions = {}): void {
     const enabled = await enabledProviders(options)
     const provider = effectiveWorkspaceProvider(config, enabled)
     const rootPath = config?.rootFolderPath
-    const worktreeAvailable = typeof rootPath === 'string' && rootPath.trim().length > 0
-      ? await worktrees.canCreateAgentWorktree(rootPath)
-      : false
+    let repositories: AgentWorktreeRepository[] = []
+    if (typeof rootPath === 'string' && rootPath.trim().length > 0) {
+      try {
+        repositories = await worktrees.resolveWorkspaceWorktreeRepositories({
+          rootPath,
+          configuredRepositoryPaths: config?.sourceControlRepositoryPaths ?? [],
+        })
+      } catch {
+        // An inaccessible workspace cannot offer a worktree capability.
+      }
+    }
+    const worktreeAvailable = repositories.length > 0
     return { provider, worktreeAvailable }
   })
 
@@ -342,7 +353,6 @@ export function registerAgentsIPC(options: AgentIPCOptions = {}): void {
     if (!provider || !config) throw new Error('This workspace has no enabled agent')
 
     const providerConfig: AgentProviderConfig = config.agentProviders[provider]
-    buildAgentOverrideArgs(provider, input.overrides)
 
     const workspaceRoot = typeof config.rootFolderPath === 'string' && config.rootFolderPath.trim()
       ? config.rootFolderPath
@@ -350,31 +360,44 @@ export function registerAgentsIPC(options: AgentIPCOptions = {}): void {
     let cwd = resolveAgentCwd(workspaceRoot, input.resumeCwd)
     const tileId = `agent-${randomUUID()}`
     const title = sessionTitle(input.prompt, input.resumeSessionId)
-    let worktree: AgentWorktree | undefined
+    let worktree: AgentWorkspaceWorktree | undefined
 
     if (input.worktree) {
       if (!config.rootFolderPath) throw new Error('Agent worktree requires a workspace folder')
-      if (!(await worktrees.canCreateAgentWorktree(config.rootFolderPath))) {
+      const repositories = await worktrees.resolveWorkspaceWorktreeRepositories({
+        rootPath: config.rootFolderPath,
+        configuredRepositoryPaths: config.sourceControlRepositoryPaths,
+      })
+      if (repositories.length === 0) {
         throw new Error('Agent worktrees require a Git repository with at least one commit')
       }
-      worktree = await worktrees.createAgentWorktree({
+      if (repositories.length > 32) {
+        throw new Error('Agent worktrees support up to 32 repositories')
+      }
+      worktree = await worktrees.createAgentWorkspaceWorktrees({
         rootPath: config.rootFolderPath,
+        repositories,
         sessionId: tileId,
         baseDirectory: join(YIRA_HOME, 'worktrees'),
       })
-      cwd = resolveAgentCwd(worktree.cwd, input.resumeCwd)
+      cwd = worktree.root
     }
 
     const target = { workspaceId: input.workspaceId, tileId }
     const spec: AgentsViewLaunchSpec = {
       provider,
       providerConfig,
-      ...(input.overrides ? { overrides: input.overrides } : {}),
       ...(!input.resumeSessionId && input.prompt !== undefined ? { prompt: input.prompt } : {}),
       ...(input.resumeSessionId ? { resumeSessionId: input.resumeSessionId } : {}),
       cwd,
       title,
-      ...(worktree ? { worktree: { path: worktree.path, branch: worktree.branch, baseSha: worktree.baseSha } } : {}),
+      ...(worktree ? {
+        worktree: {
+          root: worktree.root,
+          branch: worktree.branch,
+          worktrees: worktree.worktrees.map(({ path, baseSha }) => ({ path, baseSha })),
+        },
+      } : {}),
     }
 
     try {
@@ -382,11 +405,8 @@ export function registerAgentsIPC(options: AgentIPCOptions = {}): void {
     } catch (error) {
       if (worktree) {
         try {
-          await worktrees.removeAgentWorktreeIfClean({
-            path: worktree.path,
-            branch: worktree.branch,
-            baseSha: worktree.baseSha,
-          })
+          const removed = await removeWorkspaceWorktrees(worktree, worktrees.removeAgentWorktreeIfClean)
+          if (removed) await removeEmptyWorktreeRoot(worktree.root)
         } catch {
           // Preserve the launch failure while still attempting safe cleanup.
         }
@@ -412,20 +432,28 @@ export function registerAgentsIPC(options: AgentIPCOptions = {}): void {
     registry.remove(workspaceId, tileId)
 
     let worktreeResult: AgentSessionCloseResult['worktree'] = 'none'
-    if (session.worktreePath && session.worktreeBranch && session.worktreeBaseSha) {
+    let worktreeRoot: string | undefined
+    if (session.worktreeRoot && session.worktreeBranch && session.worktrees?.length) {
+      worktreeRoot = session.worktreeRoot
       try {
-        worktreeResult = await worktrees.removeAgentWorktreeIfClean({
-          path: session.worktreePath,
+        const allRemoved = await removeWorkspaceWorktrees({
           branch: session.worktreeBranch,
-          baseSha: session.worktreeBaseSha,
-        })
+          worktrees: session.worktrees,
+        }, worktrees.removeAgentWorktreeIfClean)
+        if (allRemoved) {
+          await removeEmptyWorktreeRoot(session.worktreeRoot)
+          worktreeResult = 'removed'
+          worktreeRoot = undefined
+        } else {
+          worktreeResult = 'kept'
+        }
       } catch {
         // The session is already closed. A worktree Git refuses to remove
         // (for example, files still locked on Windows) stays in place.
         worktreeResult = 'kept'
       }
     }
-    return { worktree: worktreeResult }
+    return { worktree: worktreeResult, ...(worktreeResult === 'kept' && worktreeRoot ? { worktreeRoot } : {}) }
   })
 
   ipcMain.handle('agents:sessions:snapshot', (_event, workspaceId: unknown): AgentActiveSessionSnapshot => {

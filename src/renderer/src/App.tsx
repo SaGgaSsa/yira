@@ -422,7 +422,7 @@ function AppContent(): React.ReactElement {
         void requestConfirm({
           title: t('agentsView.worktreeKeptTitle'),
           message: t('agentsView.worktreeKeptMessage', {
-            path: session.worktreePath ?? t('agentsView.worktreePathUnavailable'),
+            path: result.worktreeRoot ?? t('agentsView.worktreePathUnavailable'),
           }),
           confirmLabel: t('common.close'),
           hideCancel: true,

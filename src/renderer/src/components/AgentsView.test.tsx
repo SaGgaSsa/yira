@@ -239,7 +239,17 @@ async function settle(): Promise<void> {
 test('renders badges for different session states and closes through the callback', async () => {
   const sessions = [
     session(),
-    session({ tileId: 'agent-b', provider: 'codex', status: 'needs-input', worktreeBranch: 'feature/parser' }),
+    session({
+      tileId: 'agent-b',
+      provider: 'codex',
+      status: 'needs-input',
+      worktreeBranch: 'feature/parser',
+      worktrees: [
+        { path: '/worktrees/agent-b/repo-a', baseSha: 'a'.repeat(40) },
+        { path: '/worktrees/agent-b/repo-b', baseSha: 'b'.repeat(40) },
+        { path: '/worktrees/agent-b/repo-c', baseSha: 'c'.repeat(40) },
+      ],
+    }),
     session({ tileId: 'agent-c', status: 'done' }),
     session({ tileId: 'agent-d', status: 'exited' }),
   ]
@@ -253,6 +263,11 @@ test('renders badges for different session states and closes through the callbac
     assert.match(container.textContent, /Done/)
     assert.match(container.textContent, /Exited/)
     assert.match(container.textContent, /feature\/parser/)
+    const spans = container.getElementsByTagName('span')
+    const worktreeChip = Array.from({ length: spans.length }, (_, index) => spans[index])
+      .find((span) => span.getAttribute('title')?.startsWith('feature/parser'))
+    assert.equal(worktreeChip?.textContent, 'feature/parser')
+    assert.ok(worktreeChip?.getAttribute('title')?.endsWith('3 repos'))
     assert.ok(findButton(container, 'Close session'))
 
     findButton(container, 'Close session').dispatchEvent(new TestEvent('click', { bubbles: true, cancelable: true }))
