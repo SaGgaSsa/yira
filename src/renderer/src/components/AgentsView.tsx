@@ -85,7 +85,7 @@ function AgentSessionCard({
   const { t } = useTranslation()
   const title = session.title?.trim() || t('agentsView.unknownTitle')
   const providerLabel = session.provider === 'claude' ? 'Claude' : 'Codex'
-  const providerColor = session.provider === 'claude' ? 'text-accent' : 'text-success'
+  const providerColor = 'text-activity'
   const statusLabel = getStatusLabel(session.status, t)
   const maximizeLabel = isMaximized ? t('agentsView.restoreSession') : t('agentsView.maximizeSession')
 
