@@ -20,6 +20,7 @@ import {
 } from './TerminalRuntimeProvider'
 import type { TerminalRuntime, TerminalRuntimeSnapshot, TerminalRuntimeViewOptions } from '@/utils/terminalRuntime'
 import type { TerminalRuntimeRegistry } from '@/utils/terminalRuntimeRegistry'
+import { destroyTerminalRuntime } from '@/utils/terminalRuntimeCleanup'
 
 interface Props {
   tile: TileState
@@ -88,6 +89,21 @@ export function getRemoteTerminalExitEvent(
   exitEvent: TerminalExitEvent | undefined,
 ): TerminalExitEvent | null {
   return connection === 'remote-ssh' && exitEvent ? exitEvent : null
+}
+
+/** Exit codes from a user-requested agent exit: normal exit, SIGINT, and Windows Ctrl+C. */
+const AGENT_USER_EXIT_CODES = new Set([0, 130, 0xC000013A])
+
+/**
+ * Agent tiles close themselves when the user leaves the agent. Failed launches
+ * keep the tile open so the error output stays visible.
+ */
+export function shouldCloseExitedAgentTile(
+  tile: Pick<TileState, 'agent' | 'terminalConnection'>,
+  exitEvent: TerminalExitEvent | null,
+): boolean {
+  if (!tile.agent || tile.terminalConnection === 'remote-ssh' || !exitEvent) return false
+  return AGENT_USER_EXIT_CODES.has(exitEvent.exitCode)
 }
 
 export interface RemoteTerminalPreparationOptions {
@@ -436,6 +452,15 @@ export function TerminalTileWrapper({
       error: acquireError ?? runtimeSnapshot.error,
     }
   }, [acquireError, activeRuntime, pendingSnapshot, reconnectPending, runtimeSnapshot])
+
+  const closeOnAgentExit = shouldCloseExitedAgentTile(tile, snapshot.exitEvent)
+  useEffect(() => {
+    if (!closeOnAgentExit) return
+    // Parked tiles of another workspace close once their workspace is active again.
+    if (useCanvasStore.getState().activeWorkspaceId !== workspaceId) return
+    void destroyTerminalRuntime(registry, target, true, window.electron.terminal.destroyCurrent)
+      .finally(() => useCanvasStore.getState().removeTile(tile.id))
+  }, [closeOnAgentExit, registry, target, tile.id, workspaceId])
 
   const clearAttentionIfAttended = useCallback(() => {
     const terminalInput = activeRuntimeRef.current?.terminal?.textarea
