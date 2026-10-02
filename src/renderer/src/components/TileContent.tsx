@@ -31,8 +31,8 @@ interface TileContentProps {
   autoFocus?: boolean
   onFocus: () => void
   onUpdate: (patch: Partial<TileState>) => void | Promise<void>
-  /** Asks the user to close the tile, as the tile's close button does. */
-  onDelete?: () => void
+  /** Asks the user to close the tile, as the tile's close button does; resolves whether it closed. */
+  onDelete?: () => void | Promise<boolean>
   onOpenBrowserTile?: (url: string) => void
   onOpenFileTile?: (relativePath: string, options?: FileTileOpenOptions) => void | Promise<void>
   workspaceRootPath?: string

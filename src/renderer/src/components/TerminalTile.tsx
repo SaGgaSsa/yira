@@ -32,8 +32,8 @@ interface Props {
   autoFocus?: boolean
   onFocus: () => void
   onUpdate: (patch: Partial<TileState>) => void
-  /** Asks the user to close the tile, as the tile's close button does. */
-  onDelete?: () => void
+  /** Asks the user to close the tile, as the tile's close button does; resolves whether it closed. */
+  onDelete?: () => void | Promise<boolean>
   onOpenBrowserTile?: (url: string) => void
   onOpenFileTile?: (relativePath: string, options?: FileTileOpenOptions) => void | Promise<void>
 }
@@ -458,19 +458,37 @@ export function TerminalTileWrapper({
   const onDeleteRef = useRef(onDelete)
   onDeleteRef.current = onDelete
   const isAgentsViewSession = tile.agent?.surface === 'agents-view'
+  const restartAgentTerminal = useCallback(async () => {
+    setAcquirePending(true)
+    setAcquireError(null)
+    setAcquireExitEvent(null)
+    setRuntime(null)
+
+    try {
+      await destroyTerminalRuntime(registry, target, true, window.electron.terminal.destroyCurrent)
+      setAcquireGeneration((generation) => generation + 1)
+    } catch (error) {
+      console.error('[TerminalTile] Failed to restart agent terminal:', error)
+      setAcquirePending(false)
+      setAcquireError(getErrorMessage(error))
+    }
+  }, [registry, target])
   useEffect(() => {
     if (!closeOnAgentExit) return
     // Parked tiles of another workspace close once their workspace is active again.
     if (useCanvasStore.getState().activeWorkspaceId !== workspaceId) return
     // Canvas tiles stay in the workspace, so confirm before removing them.
+    // Keeping the tile relaunches the agent, resuming its conversation when one was saved.
     const requestClose = onDeleteRef.current
     if (requestClose && !isAgentsViewSession) {
-      requestClose()
+      void Promise.resolve(requestClose()).then((closed) => {
+        if (closed === false) void restartAgentTerminal()
+      })
       return
     }
     void destroyTerminalRuntime(registry, target, true, window.electron.terminal.destroyCurrent)
       .finally(() => useCanvasStore.getState().removeTile(tile.id))
-  }, [closeOnAgentExit, isAgentsViewSession, registry, target, tile.id, workspaceId])
+  }, [closeOnAgentExit, isAgentsViewSession, registry, restartAgentTerminal, target, tile.id, workspaceId])
 
   const clearAttentionIfAttended = useCallback(() => {
     const terminalInput = activeRuntimeRef.current?.terminal?.textarea

@@ -2215,7 +2215,10 @@ function AppContent(): React.ReactElement {
       if (!tileCreationAvailability.agent) return
       setShowProfilePicker(false)
       setShowNotePicker(false)
-      if (agentTileProvider && defaultProfile) addTerminal(defaultProfile.id, { provider: agentTileProvider })
+      if (!agentTileProvider || !defaultProfile) return
+      // A preset Claude session ID lets the tile resume the conversation after the agent exits.
+      const sessionId = agentTileProvider === 'claude' ? crypto.randomUUID() : undefined
+      addTerminal(defaultProfile.id, { provider: agentTileProvider, ...(sessionId ? { sessionId } : {}) })
     },
     onCreateNote: () => {
       setShowProfilePicker(false)
@@ -2532,9 +2535,7 @@ function AppContent(): React.ReactElement {
                     onConfigureTile={(tile, trigger) => openTileConfigurationMenu(tile.id, trigger)}
                     onFocusTileInView={focusTileInFullview}
                     onDetachTile={detachTile}
-                    onCloseTile={(tileId) => {
-                      void deleteTile(tileId)
-                    }}
+                    onCloseTile={deleteTile}
                     onOpenBrowserTile={(url) => addBrowser(url)}
                     onOpenFileTile={openFileTile}
                     tileCreationSelectorProps={tileCreationSelectorProps}
