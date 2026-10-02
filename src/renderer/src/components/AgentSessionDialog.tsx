@@ -6,6 +6,7 @@ import type { AgentProvider, AgentSessionCreateResult } from '@shared/types'
 export interface AgentSessionDialogProps {
   open: boolean
   workspaceId: string
+  workspaceName: string
   provider: AgentProvider
   worktreeAvailable: boolean
   onClose: () => void
@@ -19,6 +20,7 @@ function getErrorMessage(error: unknown): string {
 export function AgentSessionDialog({
   open,
   workspaceId,
+  workspaceName,
   provider,
   worktreeAvailable,
   onClose,
@@ -91,6 +93,9 @@ export function AgentSessionDialog({
           <div className="min-w-0 flex-1">
             <div className="nd-label text-text-secondary">{t('agentsView.provider')}: {providerLabel}</div>
             <h2 id="agent-session-dialog-title" className="mt-1 text-xl text-text-display">{t('agentsView.newSession')}</h2>
+            <p className="mt-1 truncate text-sm text-text-secondary" title={workspaceName}>
+              {t('agentsView.workspace')}: <span className="text-text-primary">{workspaceName}</span>
+            </p>
           </div>
           <button
             type="button"

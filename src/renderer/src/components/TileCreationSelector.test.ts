@@ -43,3 +43,20 @@ if (openedBoard !== 1 || createdTask !== 0) {
 if (board?.title !== 'Open board') {
   throw new Error('a hidden enabled board action must use the translated open-board title')
 }
+
+let createdAgent = 0
+const withAgent = getTileCreationActions({
+  canCreateAgent: true,
+  canCreateNote: false,
+  canCreateBrowser: false,
+  canCreateTimer: false,
+  boardEnabled: false,
+  onCreateAgent: () => { createdAgent += 1 },
+})
+if (withAgent.map(({ id }) => id).join(',') !== 'terminal,agent,board') {
+  throw new Error('the selector must expose the agent action next to terminal when an agent provider is available')
+}
+withAgent.find(({ id }) => id === 'agent')?.onClick()
+if (createdAgent !== 1) {
+  throw new Error('the selector agent action must create an agent tile')
+}

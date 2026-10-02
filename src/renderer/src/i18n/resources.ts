@@ -171,6 +171,7 @@ type TranslationResources = {
     statusExited: string
     exitedMessage: string
     provider: string
+    workspace: string
     closeDialog: string
     prompt: string
     promptPlaceholder: string
@@ -456,6 +457,7 @@ type TranslationResources = {
   }
   tile: {
     terminal: string
+    agent: string
     note: string
     browser: string
     timer: string
@@ -467,6 +469,7 @@ type TranslationResources = {
     detach: string
     attach: string
     newTerminal: string
+    newAgent: string
     newNote: string
     newBrowser: string
     newTimer: string
@@ -929,6 +932,7 @@ const en: TranslationResources = {
     statusExited: 'Exited',
     exitedMessage: 'Session exited',
     provider: 'Provider',
+    workspace: 'Workspace',
     closeDialog: 'Close dialog',
     prompt: 'Prompt',
     promptPlaceholder: 'Describe what you want the agent to do. Enter starts the session; Shift+Enter adds a line.',
@@ -1214,6 +1218,7 @@ const en: TranslationResources = {
   },
   tile: {
     terminal: 'Terminal',
+    agent: 'Agent',
     note: 'Note',
     browser: 'Browser',
     timer: 'Timer',
@@ -1225,6 +1230,7 @@ const en: TranslationResources = {
     detach: 'Detach tile',
     attach: 'Attach tile',
     newTerminal: 'New terminal',
+    newAgent: 'New agent',
     newNote: 'New note',
     newBrowser: 'New browser',
     newTimer: 'New timer',
@@ -1661,6 +1667,7 @@ const es: TranslationResources = {
     statusExited: 'Finalizada',
     exitedMessage: 'La sesión terminó',
     provider: 'Proveedor',
+    workspace: 'Espacio de trabajo',
     closeDialog: 'Cerrar diálogo',
     prompt: 'Instrucción',
     promptPlaceholder: 'Describe qué quieres que haga el agente. Enter inicia la sesión; Shift+Enter agrega una línea.',
@@ -1972,6 +1979,7 @@ const es: TranslationResources = {
   },
   tile: {
     terminal: 'Terminal',
+    agent: 'Agente',
     note: 'Nota',
     browser: 'Navegador',
     timer: 'Temporizador',
@@ -1983,6 +1991,7 @@ const es: TranslationResources = {
     detach: 'Separar panel',
     attach: 'Acoplar panel',
     newTerminal: 'Nueva terminal',
+    newAgent: 'Nuevo agente',
     newNote: 'Nueva nota',
     newBrowser: 'Nuevo navegador',
     newTimer: 'Nuevo temporizador',
