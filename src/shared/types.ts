@@ -166,6 +166,35 @@ export interface AgentSessionHistoryQuery {
   limit?: number
 }
 
+export interface AgentSessionCreateInput {
+  workspaceId: string
+  prompt?: string
+  resumeSessionId?: string
+  resumeCwd?: string
+  worktree?: boolean
+  overrides?: AgentSessionLaunchOverrides
+}
+
+export interface AgentSessionCreateResult {
+  workspaceId: string
+  tileId: string
+  provider: AgentProvider
+}
+
+export interface AgentSessionCloseInput {
+  workspaceId: string
+  tileId: string
+}
+
+export interface AgentSessionCloseResult {
+  worktree: 'none' | 'removed' | 'kept' | 'missing'
+}
+
+export interface AgentSessionCapabilities {
+  provider: AgentProvider | null
+  worktreeAvailable: boolean
+}
+
 export interface AgentProviderAvailability {
   provider: AgentProvider
   command: string
