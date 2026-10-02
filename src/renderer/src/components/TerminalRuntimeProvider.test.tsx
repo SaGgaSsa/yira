@@ -151,6 +151,7 @@ class FakeTerminal {
   readonly writes: string[] = []
   readonly addons: unknown[] = []
   readonly linkProviders: unknown[] = []
+  readonly unicode = { activeVersion: '6' }
   buffer: AnyRecord = { active: { getLine: () => undefined } }
   private dataListener: ((data: string) => void) | undefined
   private titleListener: ((title: string) => void) | undefined
@@ -214,12 +215,16 @@ class FakeWebLinksAddon {
   }
 }
 
+class FakeUnicode11Addon {}
+
 const xtermModule = require.resolve('@xterm/xterm')
 const fitModule = require.resolve('@xterm/addon-fit')
 const linksModule = require.resolve('@xterm/addon-web-links')
+const unicode11Module = require.resolve('@xterm/addon-unicode11')
 require.cache[xtermModule] = { exports: { Terminal: FakeTerminal }, filename: xtermModule, id: xtermModule, loaded: true } as NodeModule
 require.cache[fitModule] = { exports: { FitAddon: FakeFitAddon }, filename: fitModule, id: fitModule, loaded: true } as NodeModule
 require.cache[linksModule] = { exports: { WebLinksAddon: FakeWebLinksAddon }, filename: linksModule, id: linksModule, loaded: true } as NodeModule
+require.cache[unicode11Module] = { exports: { Unicode11Addon: FakeUnicode11Addon }, filename: unicode11Module, id: unicode11Module, loaded: true } as NodeModule
 
 const ReactDOM = await import('react-dom/client')
 const {
@@ -405,7 +410,10 @@ test('opens web links through the shell only on a primary activation', async () 
 
     const createdRuntime = await currentContext!.createRuntime({ target, createOptions, viewOptions })
     runtime = createdRuntime
-    const webLinksAddon = getWebLinksAddon(createdRuntime.terminal as unknown as FakeTerminal)
+    const fakeTerminal = createdRuntime.terminal as unknown as FakeTerminal
+    assert.ok(fakeTerminal.addons.some((addon) => addon instanceof FakeUnicode11Addon))
+    assert.equal(fakeTerminal.unicode.activeVersion, '11')
+    const webLinksAddon = getWebLinksAddon(fakeTerminal)
     const url = 'https://example.com/docs'
 
     webLinksAddon.activate({ button: 2 }, url)

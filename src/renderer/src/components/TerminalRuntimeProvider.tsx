@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useLayoutEffe
 import { Terminal } from '@xterm/xterm'
 import type { ILinkProvider } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
 import type { TerminalCreateOptions } from '@shared/types'
@@ -225,6 +226,9 @@ export function TerminalRuntimeProvider({
             allowTransparency: true,
             scrollback: 5000,
           })
+          // Match the character widths of modern TUIs and the daemon snapshot.
+          terminal.loadAddon(new Unicode11Addon())
+          terminal.unicode.activeVersion = '11'
 
           const setHoveredLinkTarget = (next: TerminalLinkTarget | undefined): void => {
             const key = terminalRuntimeKey(target)

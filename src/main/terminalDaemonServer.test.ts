@@ -8,6 +8,7 @@ import { connect, type Socket } from 'node:net'
 import test from 'node:test'
 
 import {
+  defaultTerminalFactory,
   startTerminalDaemon,
   type TerminalDaemonPty,
   type TerminalDaemonPtyFactory,
@@ -210,6 +211,18 @@ test('starts the idle timer after publishing the endpoint', async (t) => {
   t.after(() => handle.close())
   await wait(60)
   assert.equal(idleCalls, 1)
+})
+
+test('measures emoji with Unicode 11 widths in the daemon terminal', async (t) => {
+  const terminal = defaultTerminalFactory({ cols: 20, rows: 2, scrollback: 10 }) as unknown as {
+    write(data: string, callback?: () => void): void
+    dispose(): void
+    buffer: { active: { cursorX: number; getLine(y: number): { getCell(x: number): { getChars(): string } | undefined } | undefined } }
+  }
+  t.after(() => terminal.dispose())
+  await new Promise<void>(resolve => terminal.write('a\u{1F9E9}b', resolve))
+  assert.equal(terminal.buffer.active.getLine(0)?.getCell(3)?.getChars(), 'b')
+  assert.equal(terminal.buffer.active.cursorX, 4)
 })
 
 test('advertises truecolor and Yira as the terminal program to spawned PTYs', async (t) => {
