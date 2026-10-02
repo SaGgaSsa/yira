@@ -126,6 +126,7 @@ const ReactDOM = await import('react-dom/client')
 const translationCopy: Record<string, string> = {
   'agentsView.provider': 'Provider',
   'agentsView.newSession': 'New session',
+  'agentsView.workspace': 'Workspace',
   'agentsView.closeDialog': 'Close dialog',
   'agentsView.prompt': 'Prompt',
   'agentsView.promptPlaceholder': 'Enter starts the session',
@@ -172,6 +173,7 @@ function renderDialog(worktreeAvailable = true): { container: any; root: { unmou
     <AgentSessionDialog
       open
       workspaceId="workspace-a"
+      workspaceName="Workspace A"
       provider="claude"
       worktreeAvailable={worktreeAvailable}
       onClose={() => { closeCount += 1 }}

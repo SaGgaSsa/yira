@@ -1,8 +1,9 @@
 import type { LucideIcon } from 'lucide-react'
-import { Terminal, StickyNote, Globe, Clock, ClipboardList } from 'lucide-react'
+import { Terminal, Bot, StickyNote, Globe, Clock, ClipboardList } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 export interface TileCreationAvailability {
+  canCreateAgent?: boolean
   canCreateNote: boolean
   canCreateBrowser: boolean
   canCreateTimer: boolean
@@ -13,6 +14,7 @@ export interface TileCreationAvailability {
 export interface TileCreationSelectorProps extends TileCreationAvailability {
   boardVisible: boolean
   onCreateTerminal: () => void
+  onCreateAgent?: () => void
   onCreateNote: () => void
   onCreateBrowser: () => void
   onCreateTimer: () => void
@@ -24,7 +26,7 @@ export interface TileCreationSelectorProps extends TileCreationAvailability {
 }
 
 export interface TileCreationAction {
-  id: 'terminal' | 'note' | 'browser' | 'timer' | 'board'
+  id: 'terminal' | 'agent' | 'note' | 'browser' | 'timer' | 'board'
   icon: LucideIcon
   label: string
   title: string
@@ -51,6 +53,17 @@ export function getTileCreationActions(input: TileCreationActionInput, translate
       onClick: input.onCreateTerminal ?? noop,
     },
   ]
+
+  if (input.canCreateAgent) {
+    actions.push({
+      id: 'agent',
+      icon: Bot,
+      label: text('tile.agent', 'Agent'),
+      title: text('tile.newAgent', 'New agent'),
+      disabled: false,
+      onClick: input.onCreateAgent ?? noop,
+    })
+  }
 
   if (input.canCreateNote) {
     actions.push({

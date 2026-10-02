@@ -2197,7 +2197,9 @@ function AppContent(): React.ReactElement {
     }
   })()
 
+  const agentTileProvider = activeWorkspaceId ? agentsView.effectiveProvider : null
   const tileCreationSelectorProps: TileCreationSelectorProps = {
+    canCreateAgent: Boolean(agentTileProvider && defaultProfile),
     canCreateNote,
     canCreateBrowser,
     canCreateTimer,
@@ -2205,6 +2207,11 @@ function AppContent(): React.ReactElement {
     boardEnabled,
     boardVisible,
     onCreateTerminal: createTerminalFromSidebar,
+    onCreateAgent: () => {
+      setShowProfilePicker(false)
+      setShowNotePicker(false)
+      if (agentTileProvider && defaultProfile) addTerminal(defaultProfile.id, { provider: agentTileProvider })
+    },
     onCreateNote: () => {
       setShowProfilePicker(false)
       setShowNotePicker((value) => !value)
@@ -2650,6 +2657,7 @@ function AppContent(): React.ReactElement {
         <AgentSessionDialog
           open={agentsView.sessionDialogOpen}
           workspaceId={activeWorkspaceId}
+          workspaceName={activeWorkspaceName}
           provider={agentsView.effectiveProvider}
           worktreeAvailable={agentsView.worktreeAvailable}
           onClose={agentsView.closeSessionDialog}
