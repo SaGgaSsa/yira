@@ -459,7 +459,7 @@ export interface WindowBackgroundMaterialState {
   active: WindowBackgroundMaterial
   requiresRestart: boolean
 }
-export type ConfigurableTileCreationType = 'note' | 'browser' | 'timer'
+export type ConfigurableTileCreationType = 'agent' | 'note' | 'browser' | 'timer'
 
 export type TileCreationAvailability = Record<ConfigurableTileCreationType, boolean>
 
@@ -524,6 +524,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   },
   tiles: {
     creationAvailability: {
+      agent: true,
       note: true,
       browser: true,
       timer: false,

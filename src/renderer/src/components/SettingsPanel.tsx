@@ -742,6 +742,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
             </label>
 
             {([
+              { type: 'agent' as const, label: t('tile.agent') },
               { type: 'note' as const, label: t('tile.note') },
               { type: 'browser' as const, label: t('tile.browser') },
               { type: 'timer' as const, label: t('tile.timer') },

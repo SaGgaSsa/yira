@@ -1,5 +1,6 @@
 import { normalizeUserSettings } from './userSettings'
 import { DEFAULT_TERMINAL_THEME_ID, TERMINAL_THEME_IDS, getTerminalTheme } from './terminalThemes'
+import { DEFAULT_USER_SETTINGS } from './types'
 import type { UserSettings } from './types'
 
 const defaults = normalizeUserSettings({})
@@ -90,6 +91,36 @@ for (const themeId of ['yira-default', 'classic-dark', 'light', 'high-contrast']
 
 const immediateAttention = normalizeUserSettings({ notifications: { attentionDelayEnabled: false } })
 if (immediateAttention.notifications.attentionDelayEnabled !== false) throw new Error('disabled native attention delay must be preserved')
+
+const legacyTileAvailability = normalizeUserSettings({
+  tiles: {
+    creationAvailability: { note: true, browser: false, timer: false } as UserSettings['tiles']['creationAvailability'],
+  },
+})
+if (legacyTileAvailability.tiles.creationAvailability.agent !== true) {
+  throw new Error('agent tile creation must default on for existing settings')
+}
+
+const disabledAgentTile = normalizeUserSettings({
+  tiles: {
+    creationAvailability: { ...DEFAULT_USER_SETTINGS.tiles.creationAvailability, agent: false },
+  },
+})
+if (disabledAgentTile.tiles.creationAvailability.agent !== false) {
+  throw new Error('disabled agent tile creation setting must be preserved')
+}
+
+const invalidAgentTileAvailability = normalizeUserSettings({
+  tiles: {
+    creationAvailability: {
+      ...DEFAULT_USER_SETTINGS.tiles.creationAvailability,
+      agent: 'false',
+    } as unknown as UserSettings['tiles']['creationAvailability'],
+  },
+})
+if (invalidAgentTileAvailability.tiles.creationAvailability.agent !== true) {
+  throw new Error('invalid agent tile creation setting must normalize to the default')
+}
 
 const withoutLegacyFiles = normalizeUserSettings({
   tiles: {

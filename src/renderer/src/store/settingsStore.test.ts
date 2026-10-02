@@ -100,6 +100,7 @@ test('applySettings persists the complete draft before replacing the active sett
       notifications: { attentionDelayEnabled: false },
       tiles: {
         creationAvailability: {
+          agent: true,
           note: false,
           browser: false,
           timer: true,
