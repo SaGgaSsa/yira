@@ -149,6 +149,7 @@ function HistoryCard({
   activeLabel: string
 }): React.ReactElement {
   const cwd = sanitizeAgentCwd(item.cwd)
+  const cwdLine = cwd === '.' ? null : cwd ? `cwd: ${cwd}` : cwdUnavailableLabel
   return (
     <article className="rounded-[18px] border border-border-visible bg-bg-primary px-3 py-3">
       <div className="flex min-w-0 items-start gap-2">
@@ -162,7 +163,7 @@ function HistoryCard({
           </div>
           {item.preview?.trim() && <p className="mt-1 line-clamp-2 text-xs leading-5 text-text-secondary">{item.preview.trim()}</p>}
           <div className="mt-2 grid gap-1 text-[11px] text-text-disabled">
-            <span>{cwd ? `cwd: ${cwd}` : cwdUnavailableLabel}</span>
+            {cwdLine && <span>{cwdLine}</span>}
             {item.model?.trim() && <span>{modelLabel}: {item.model.trim()}</span>}
             <span>{messagesLabel}: {item.messageCount}</span>
             <span>{startedLabel}: {displayDate(item.startedAt, unknownDate)}</span>

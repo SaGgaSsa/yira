@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import test from 'node:test'
 
 import {
+  clearAgentHistoryCache,
   readAgentSessionHistory,
   readClaudeSessionHistory,
   readCodexSessionHistory,
@@ -230,6 +231,213 @@ test('normalizes multiline provider messages while retaining counts and timestam
       preview: 'Codex answer next',
       messageCount: 2,
     }])
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
+test('chooses the newest title at the highest available priority', async () => {
+  const root = await makeFixtureRoot()
+  try {
+    const claudeRoot = join(root, 'claude')
+    await writeJsonLines(join(claudeRoot, 'custom.jsonl'), [
+      { type: 'system', sessionId: 'custom-title-session' },
+      { type: 'user', sessionId: 'custom-title-session', content: 'First prompt' },
+      { type: 'user', sessionId: 'custom-title-session', content: 'Second prompt' },
+      { type: 'ai-title', sessionId: 'custom-title-session', aiTitle: 'Older AI title' },
+      { type: 'ai-title', sessionId: 'custom-title-session', aiTitle: 'Newest AI title' },
+      { type: 'custom-title', sessionId: 'custom-title-session', customTitle: 'Older custom title' },
+      { type: 'custom-title', sessionId: 'custom-title-session', customTitle: 'Newest custom title' },
+      { type: 'summary', sessionId: 'custom-title-session', summary: 'Summary title' },
+    ])
+    await writeJsonLines(join(claudeRoot, 'ai.jsonl'), [
+      { type: 'system', sessionId: 'ai-title-session' },
+      { type: 'user', sessionId: 'ai-title-session', content: 'Prompt title' },
+      { type: 'ai-title', sessionId: 'ai-title-session', aiTitle: 'Older AI title' },
+      { type: 'ai-title', sessionId: 'ai-title-session', aiTitle: 'Newest AI title' },
+    ])
+    await writeJsonLines(join(claudeRoot, 'summary.jsonl'), [
+      { type: 'system', sessionId: 'summary-title-session' },
+      { type: 'user', sessionId: 'summary-title-session', content: 'Prompt title' },
+      { type: 'summary', sessionId: 'summary-title-session', summary: 'Older summary' },
+      { type: 'summary', sessionId: 'summary-title-session', summary: 'Newest summary' },
+    ])
+    await writeJsonLines(join(claudeRoot, 'prompt.jsonl'), [
+      { type: 'system', sessionId: 'prompt-title-session' },
+      { type: 'user', sessionId: 'prompt-title-session', content: 'First prompt' },
+      { type: 'user', sessionId: 'prompt-title-session', content: 'Second prompt' },
+    ])
+
+    const result = await readClaudeSessionHistory({ rootPath: claudeRoot })
+    const titles = Object.fromEntries(result.items.map((item) => [item.identifier, item.title]))
+    assert.deepEqual(titles, {
+      'custom-title-session': 'Newest custom title',
+      'ai-title-session': 'Newest AI title',
+      'summary-title-session': 'Newest summary',
+      'prompt-title-session': 'First prompt',
+    })
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
+test('omits Claude sessions containing only local commands and command notices', async () => {
+  const root = await makeFixtureRoot()
+  try {
+    await writeJsonLines(join(root, 'claude', 'local-only.jsonl'), [
+      { type: 'system', sessionId: 'local-only' },
+      { type: 'user', sessionId: 'local-only', content: '<command-name>/trivia</command-name><command-message>trivia</command-message>' },
+      { type: 'user', sessionId: 'local-only', content: '<local-command-caveat>local command</local-command-caveat>' },
+      { type: 'user', sessionId: 'local-only', content: '<local-command-stdout>done</local-command-stdout>' },
+    ])
+
+    const result = await readClaudeSessionHistory({ rootPath: join(root, 'claude') })
+    assert.deepEqual(result.items, [])
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
+test('uses the first local command as title when a reply makes the session visible', async () => {
+  const root = await makeFixtureRoot()
+  try {
+    await writeJsonLines(join(root, 'claude', 'simplify.jsonl'), [
+      { type: 'system', sessionId: 'simplify-session' },
+      { type: 'user', sessionId: 'simplify-session', content: '<command-name>/simplify</command-name>' },
+      { type: 'assistant', sessionId: 'simplify-session', message: { content: [{ type: 'text', text: 'Simplified response' }] } },
+    ])
+
+    const result = await readClaudeSessionHistory({ rootPath: join(root, 'claude') })
+    assert.equal(result.items.length, 1)
+    assert.equal(result.items[0].title, '/simplify')
+    assert.equal(result.items[0].preview, 'Simplified response')
+    assert.equal(result.items[0].messageCount, 1)
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
+test('history titles and previews exclude local command and system reminder tags', async () => {
+  const root = await makeFixtureRoot()
+  try {
+    await writeJsonLines(join(root, 'claude', 'clean-visible.jsonl'), [
+      { type: 'system', sessionId: 'clean-visible' },
+      { type: 'user', sessionId: 'clean-visible', content: '<command-name>/trivia</command-name>' },
+      {
+        type: 'user',
+        sessionId: 'clean-visible',
+        content: 'Explain this change.\n<system-reminder>internal hint</system-reminder>\nMention risks.',
+      },
+      { type: 'assistant', sessionId: 'clean-visible', message: { content: [{ type: 'text', text: 'Visible answer only' }] } },
+    ])
+
+    const result = await readClaudeSessionHistory({ rootPath: join(root, 'claude') })
+    assert.equal(result.items[0].title, 'Explain this change. Mention risks.')
+    assert.equal(result.items[0].preview, 'Visible answer only')
+    assert.doesNotMatch(`${result.items[0].title} ${result.items[0].preview}`, /<local-command|<command-name|<system-reminder/i)
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
+test('omits Codex exec sessions and uses current UserMessage records for titles', async () => {
+  const root = await makeFixtureRoot()
+  try {
+    const codexRoot = join(root, 'codex')
+    await writeJsonLines(join(codexRoot, 'exec.jsonl'), [
+      { type: 'session_meta', payload: { id: 'exec-session', originator: 'codex_exec', source: 'exec', thread_source: 'user' } },
+      { type: 'event_msg', payload: { type: 'user_message', message: 'Internal exec task' } },
+    ])
+    await writeJsonLines(join(codexRoot, 'current.jsonl'), [
+      { type: 'session_meta', payload: { id: 'current-session', originator: 'codex-tui', source: 'vscode', thread_source: 'user' } },
+      { type: 'response_item', payload: { type: 'message', role: 'developer', content: [{ type: 'input_text', text: 'Injected instructions' }] } },
+      { type: 'response_item', payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Injected environment context' }] } },
+      { type: 'event_msg', payload: { type: 'item_completed', item: { type: 'UserMessage', content: [{ type: 'text', text: 'Real Codex prompt' }] } } },
+      { type: 'response_item', payload: { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Codex reply' }] } },
+    ])
+
+    const result = await readCodexSessionHistory({ rootPath: codexRoot })
+    assert.deepEqual(result.items.map((item) => ({ identifier: item.identifier, title: item.title, messageCount: item.messageCount })), [{
+      identifier: 'current-session',
+      title: 'Real Codex prompt',
+      messageCount: 2,
+    }])
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
+test('streams Codex transcripts larger than 2 MiB', async () => {
+  const root = await makeFixtureRoot()
+  try {
+    const rows = [
+      { type: 'session_meta', payload: { id: 'large-session' } },
+      { type: 'event_msg', payload: { type: 'item_completed', item: { type: 'UserMessage', content: [{ type: 'text', text: 'Large transcript prompt' }] } } },
+      ...Array.from({ length: 1_100 }, () => ({
+        type: 'response_item',
+        payload: { type: 'reasoning', summary: 'x'.repeat(2_048) },
+      })),
+    ]
+    const transcriptPath = join(root, 'codex', 'large.jsonl')
+    await writeJsonLines(transcriptPath, rows)
+    assert.ok((await fs.stat(transcriptPath)).size > 2 * 1024 * 1024)
+
+    const result = await readCodexSessionHistory({ rootPath: join(root, 'codex') })
+    assert.equal(result.items[0].identifier, 'large-session')
+    assert.equal(result.items[0].title, 'Large transcript prompt')
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
+test('reuses cached transcripts and refreshes them when size or mtime changes', async () => {
+  const root = await makeFixtureRoot()
+  const transcriptPath = join(root, 'claude', 'cached.jsonl')
+  const stableMtime = new Date('2026-08-10T17:00:00.000Z')
+  clearAgentHistoryCache()
+  try {
+    const originalRows = [
+      { type: 'system', sessionId: 'cached-session' },
+      { type: 'user', sessionId: 'cached-session', content: 'Original' },
+    ]
+    await writeJsonLines(transcriptPath, originalRows)
+    await fs.utimes(transcriptPath, stableMtime, stableMtime)
+    const initial = await readClaudeSessionHistory({ rootPath: join(root, 'claude') })
+    assert.equal(initial.items[0].title, 'Original')
+
+    await writeJsonLines(transcriptPath, [
+      { type: 'system', sessionId: 'cached-session' },
+      { type: 'user', sessionId: 'cached-session', content: 'Replaced' },
+    ])
+    await fs.utimes(transcriptPath, stableMtime, stableMtime)
+    const reused = await readClaudeSessionHistory({ rootPath: join(root, 'claude') })
+    assert.equal(reused.items[0].title, 'Original')
+
+    await writeJsonLines(transcriptPath, [
+      { type: 'system', sessionId: 'cached-session' },
+      { type: 'user', sessionId: 'cached-session', content: 'Updated prompt with a new size' },
+    ])
+    const refreshed = await readClaudeSessionHistory({ rootPath: join(root, 'claude') })
+    assert.equal(refreshed.items[0].title, 'Updated prompt with a new size')
+  } finally {
+    clearAgentHistoryCache()
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
+test('deduplicates Claude assistant blocks that share a message id', async () => {
+  const root = await makeFixtureRoot()
+  try {
+    await writeJsonLines(join(root, 'claude', 'deduplicated.jsonl'), [
+      { type: 'system', sessionId: 'deduplicated-session' },
+      { type: 'user', sessionId: 'deduplicated-session', content: 'Question' },
+      { type: 'assistant', sessionId: 'deduplicated-session', message: { id: 'reply-id', content: [{ type: 'text', text: 'First block' }] } },
+      { type: 'assistant', sessionId: 'deduplicated-session', message: { id: 'reply-id', content: [{ type: 'text', text: 'Second block' }] } },
+    ])
+
+    const result = await readClaudeSessionHistory({ rootPath: join(root, 'claude') })
+    assert.equal(result.items[0].messageCount, 2)
+    assert.equal(result.items[0].preview, 'Second block')
   } finally {
     await fs.rm(root, { recursive: true, force: true })
   }

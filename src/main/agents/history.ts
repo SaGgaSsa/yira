@@ -1,5 +1,6 @@
-import { promises as fs } from 'node:fs'
+import { createReadStream, promises as fs } from 'node:fs'
 import { extname, isAbsolute, join, relative, resolve, sep, win32 } from 'node:path'
+import { createInterface } from 'node:readline'
 
 import type {
   AgentProvider,
@@ -11,14 +12,21 @@ import {
   DEFAULT_HISTORY_RESULT_LIMIT,
   MAX_HISTORY_RESULT_LIMIT,
 } from './query'
+import {
+  classifyClaudeRecord,
+  classifyCodexRecord,
+  isCodexExecSession,
+  isCodexWorkerSession,
+  type TranscriptEvent,
+  type TranscriptRecordClassification,
+} from './transcriptRecords'
 
-const MAX_TRANSCRIPT_BYTES = 2 * 1024 * 1024
+export const MAX_TRANSCRIPT_BYTES = 64 * 1024 * 1024
 const MAX_TRANSCRIPT_LINE_LENGTH = 256 * 1024
 const MAX_TRANSCRIPT_FILES = 1_000
 const MAX_TRANSCRIPT_DEPTH = 8
 const MAX_TITLE_LENGTH = 120
 const MAX_PREVIEW_LENGTH = 280
-const MAX_CONTENT_DEPTH = 32
 
 export interface AgentHistoryRoots {
   claude?: string
@@ -43,19 +51,31 @@ interface ParsedSession {
   identifier: string
   cwd?: string
   model?: string
-  title?: string
+  customTitle?: string
+  aiTitle?: string
+  summaryTitle?: string
+  firstPrompt?: string
+  firstCommand?: string
   preview?: string
   messageCount: number
   messageTimes: string[]
+  replyIds: Set<string>
 }
 
 interface TranscriptFile {
   path: string
-  modifiedAt: string
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
+interface TranscriptCacheEntry {
+  size: number
+  mtimeMs: number
+  parsed: ParsedSession | null
+}
+
+const transcriptCache = new Map<string, TranscriptCacheEntry>()
+
+export function clearAgentHistoryCache(): void {
+  transcriptCache.clear()
 }
 
 function stringValue(value: unknown, maxLength = 1_024): string | undefined {
@@ -65,52 +85,6 @@ function stringValue(value: unknown, maxLength = 1_024): string | undefined {
   if (typeof value !== 'string' || /[\u0000-\u0008\u000b-\u000c\u000e-\u001f\u007f]/.test(value)) return undefined
   const normalized = value.replace(/\s+/g, ' ').trim()
   return normalized ? normalized.slice(0, maxLength) : undefined
-}
-
-function timestampValue(value: unknown): string | undefined {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    const milliseconds = value < 10_000_000_000 ? value * 1_000 : value
-    const date = new Date(milliseconds)
-    return Number.isNaN(date.valueOf()) ? undefined : date.toISOString()
-  }
-  if (typeof value !== 'string' || !value.trim()) return undefined
-  const date = new Date(value)
-  return Number.isNaN(date.valueOf()) ? undefined : date.toISOString()
-}
-
-function readTimestamp(row: Record<string, unknown>): string | undefined {
-  return timestampValue(row.timestamp)
-    ?? timestampValue(row.createdAt)
-    ?? timestampValue(row.created_at)
-    ?? timestampValue(row.updatedAt)
-    ?? timestampValue(row.updated_at)
-}
-
-function readNestedTimestamp(row: Record<string, unknown>, payload?: Record<string, unknown>): string | undefined {
-  return readTimestamp(row) ?? (payload ? readTimestamp(payload) : undefined)
-}
-
-function textFromContent(value: unknown, depth = 0): string | undefined {
-  if (depth > MAX_CONTENT_DEPTH) return undefined
-  if (typeof value === 'string') return stringValue(value)
-  if (Array.isArray(value)) {
-    const parts = value
-      .map((entry) => {
-        if (!isRecord(entry)) return undefined
-        const type = typeof entry.type === 'string' ? entry.type : ''
-        if (type && type !== 'text' && type !== 'output_text' && type !== 'input_text') return undefined
-        return textFromContent(entry.text ?? entry.content, depth + 1)
-      })
-      .filter((entry): entry is string => Boolean(entry))
-    return stringValue(parts.join(' '))
-  }
-  if (isRecord(value)) return textFromContent(value.text ?? value.content ?? value.message, depth + 1)
-  return undefined
-}
-
-function messageText(row: Record<string, unknown>): string | undefined {
-  const message = isRecord(row.message) ? row.message : undefined
-  return textFromContent(message?.content ?? message?.text ?? row.content ?? row.text ?? row.message)
 }
 
 function normalizedCwd(value: unknown): string | undefined {
@@ -128,112 +102,60 @@ function sessionId(value: unknown): string | undefined {
   return candidate ?? undefined
 }
 
-function firstString(...values: unknown[]): string | undefined {
-  for (const value of values) {
-    const normalized = stringValue(value)
-    if (normalized) return normalized
-  }
-  return undefined
+function createParsedSession(identifier: string): ParsedSession {
+  return { identifier, messageCount: 0, messageTimes: [], replyIds: new Set() }
 }
 
-function addMessage(parsed: ParsedSession, text: string | undefined, timestamp: string | undefined): void {
-  // A role marker without readable content is usually a partial or
-  // provider-internal record. Do not let it make an otherwise incomplete
-  // transcript look like a valid session.
-  if (!text) return
-  parsed.messageCount += 1
-  parsed.title ??= text
-  parsed.preview = text
-  if (timestamp) parsed.messageTimes.push(timestamp)
+function commandTitle(event: Extract<TranscriptEvent, { kind: 'command' }>): string {
+  const name = event.name.startsWith('/') ? event.name : `/${event.name}`
+  return event.args ? `${name} ${event.args}` : name
 }
 
-function parseClaudeRows(rows: unknown[]): ParsedSession | null {
-  let parsed: ParsedSession | null = null
-  for (const value of rows) {
-    if (!isRecord(value)) continue
-    const type = typeof value.type === 'string' ? value.type.toLowerCase() : ''
-    const message = isRecord(value.message) ? value.message : undefined
-    const id = sessionId(value.sessionId ?? value.session_id ?? (type === 'system' ? value.id : undefined))
-    if (id && !parsed) parsed = { identifier: id, messageCount: 0, messageTimes: [] }
-    if (!parsed) continue
-    if (id && parsed.identifier !== id) continue
-
-    const cwd = normalizedCwd(value.cwd)
-    if (cwd && !parsed.cwd) parsed.cwd = cwd
-    const model = firstString(value.model, message?.model)
-    if (model && !parsed.model) parsed.model = model
-
-    if (type === 'user' || type === 'assistant') {
-      const role = stringValue(message?.role ?? value.role)?.toLowerCase()
-      if (role && role !== type) continue
-      addMessage(parsed, messageText(value), readTimestamp(value))
-    } else if (type === 'summary' || type === 'title') {
-      parsed.title ??= firstString(value.summary, value.title, value.text)
-    }
-  }
-
-  return parsed && parsed.messageCount > 0 ? parsed : null
-}
-
-function isCodexWorkerSession(payload: Record<string, unknown> | undefined): boolean {
-  if (payload && Object.prototype.hasOwnProperty.call(payload, 'thread_source')) {
-    return stringValue(payload.thread_source)?.toLowerCase() !== 'user'
-  }
-  return isRecord(payload?.source) && isRecord(payload.source.subagent)
-}
-
-function parseCodexRows(rows: unknown[]): ParsedSession | null {
-  let parsed: ParsedSession | null = null
-  for (const value of rows) {
-    if (!isRecord(value)) continue
-    const type = typeof value.type === 'string' ? value.type.toLowerCase() : ''
-    const payload = isRecord(value.payload) ? value.payload : undefined
-
-    if (type === 'session_meta') {
-      if (isCodexWorkerSession(payload)) return null
-      const id = sessionId(payload?.id ?? payload?.session_id ?? value.sessionId ?? value.session_id)
-      if (id && !parsed) parsed = { identifier: id, messageCount: 0, messageTimes: [] }
-      if (parsed && id && parsed.identifier !== id) continue
-      if (parsed) {
-        const cwd = normalizedCwd(payload?.cwd ?? value.cwd)
-        if (cwd && !parsed.cwd) parsed.cwd = cwd
-        const model = firstString(payload?.model, value.model)
-        if (model && !parsed.model) parsed.model = model
-      }
+function addEvents(parsed: ParsedSession, events: TranscriptEvent[], provider: AgentProvider): void {
+  for (const event of events) {
+    if (event.kind === 'title') {
+      const text = stringValue(event.text)
+      if (!text) continue
+      if (event.source === 'custom') parsed.customTitle = text
+      else if (event.source === 'ai') parsed.aiTitle = text
+      else parsed.summaryTitle = text
       continue
     }
 
-    const id = sessionId(value.sessionId ?? value.session_id ?? payload?.sessionId ?? payload?.session_id)
-    if (id && !parsed) parsed = { identifier: id, messageCount: 0, messageTimes: [] }
-    if (!parsed) continue
-    if (id && parsed.identifier !== id) continue
+    if (event.kind === 'command') {
+      parsed.firstCommand ??= stringValue(commandTitle(event))
+      continue
+    }
 
-    if (type === 'turn_context' && payload) {
-      const cwd = normalizedCwd(payload.cwd)
-      if (cwd && !parsed.cwd) parsed.cwd = cwd
-      const model = firstString(payload.model, payload.model_name)
-      if (model && !parsed.model) parsed.model = model
+    const text = stringValue(event.text)
+    if (!text) continue
+    let shouldCount = true
+    if (event.kind === 'reply' && provider === 'claude' && event.messageId) {
+      if (parsed.replyIds.has(event.messageId)) shouldCount = false
+      else parsed.replyIds.add(event.messageId)
     }
-    if (type === 'event_msg' && payload?.type === 'user_message') {
-      addMessage(parsed, textFromContent(payload.message), readNestedTimestamp(value, payload))
-      continue
-    }
-    if (type === 'response_item' && payload?.type === 'message') {
-      const role = stringValue(payload.role)?.toLowerCase()
-      if (role === 'assistant' || role === 'user') {
-        addMessage(parsed, textFromContent(payload.content ?? payload.message), readNestedTimestamp(value, payload))
-      }
-      continue
-    }
-    if (type === 'message') {
-      const role = stringValue(value.role ?? payload?.role)?.toLowerCase()
-      if (role === 'assistant' || role === 'user') {
-        addMessage(parsed, messageText(value), readNestedTimestamp(value, payload))
-      }
-    }
+    if (event.kind === 'prompt') parsed.firstPrompt ??= text
+    if (shouldCount) parsed.messageCount += 1
+    parsed.preview = text
+    if (event.timestamp) parsed.messageTimes.push(event.timestamp)
   }
+}
 
-  return parsed && parsed.messageCount > 0 ? parsed : null
+function addClassification(
+  provider: AgentProvider,
+  current: ParsedSession | null,
+  classification: TranscriptRecordClassification,
+): ParsedSession | null {
+  const id = sessionId(classification.context.sessionId)
+  const parsed = current ?? (id ? createParsedSession(id) : null)
+  if (!parsed || (id && parsed.identifier !== id)) return current
+
+  const cwd = normalizedCwd(classification.context.cwd)
+  if (cwd && !parsed.cwd) parsed.cwd = cwd
+  const model = stringValue(classification.context.model)
+  if (model && !parsed.model) parsed.model = model
+  addEvents(parsed, classification.events, provider)
+  return parsed
 }
 
 async function listTranscriptFiles(rootPath: string): Promise<TranscriptFile[]> {
@@ -260,7 +182,7 @@ async function listTranscriptFiles(rootPath: string): Promise<TranscriptFile[]> 
       try {
         const stats = await fs.stat(candidate)
         if (!stats.isFile() || stats.size > MAX_TRANSCRIPT_BYTES) continue
-        files.push({ path: candidate, modifiedAt: stats.mtime.toISOString() })
+        files.push({ path: candidate })
       } catch {
         // Files can disappear while a provider is writing them.
       }
@@ -269,6 +191,72 @@ async function listTranscriptFiles(rootPath: string): Promise<TranscriptFile[]> 
 
   await visit(rootPath, 0)
   return files
+}
+
+function cacheTranscript(path: string, size: number, mtimeMs: number, parsed: ParsedSession | null): void {
+  transcriptCache.delete(path)
+  transcriptCache.set(path, { size, mtimeMs, parsed })
+  while (transcriptCache.size > MAX_TRANSCRIPT_FILES) {
+    const oldestPath = transcriptCache.keys().next().value
+    if (!oldestPath) break
+    transcriptCache.delete(oldestPath)
+  }
+}
+
+async function parseTranscriptFile(
+  provider: AgentProvider,
+  path: string,
+): Promise<{ parsed: ParsedSession | null; modifiedAt: string } | null> {
+  const initialStats = await fs.stat(path)
+  if (!initialStats.isFile() || initialStats.size > MAX_TRANSCRIPT_BYTES) return null
+
+  const cached = transcriptCache.get(path)
+  if (cached && cached.size === initialStats.size && cached.mtimeMs === initialStats.mtimeMs) {
+    transcriptCache.delete(path)
+    transcriptCache.set(path, cached)
+    return { parsed: cached.parsed, modifiedAt: initialStats.mtime.toISOString() }
+  }
+
+  const input = createReadStream(path, { encoding: 'utf8' })
+  const lines = createInterface({ input, crlfDelay: Infinity })
+  let parsed: ParsedSession | null = null
+  let excluded = false
+
+  try {
+    for await (const line of lines) {
+      if (!line || line.length > MAX_TRANSCRIPT_LINE_LENGTH) continue
+      let row: unknown
+      try {
+        row = JSON.parse(line)
+      } catch {
+        // Providers may leave a partial final line while writing. Ignore it.
+        continue
+      }
+
+      const classification = provider === 'claude'
+        ? classifyClaudeRecord(row)
+        : classifyCodexRecord(row)
+      if (provider === 'codex' && classification.sessionMeta) {
+        if (isCodexExecSession(classification.sessionMeta) || isCodexWorkerSession(classification.sessionMeta)) {
+          excluded = true
+          input.destroy()
+          lines.close()
+          break
+        }
+      }
+      parsed = addClassification(provider, parsed, classification)
+    }
+  } finally {
+    lines.close()
+    input.destroy()
+  }
+
+  if (excluded || !parsed || parsed.messageCount === 0) parsed = null
+  const finalStats = await fs.stat(path)
+  if (finalStats.size === initialStats.size && finalStats.mtimeMs === initialStats.mtimeMs) {
+    cacheTranscript(path, initialStats.size, initialStats.mtimeMs, parsed)
+  }
+  return { parsed, modifiedAt: initialStats.mtime.toISOString() }
 }
 
 async function canonicalDirectory(value: string | undefined): Promise<string | null> {
@@ -353,13 +341,14 @@ function resultItem(
   const timestamps = parsed.messageTimes
   const startedAt = timestamps[0] ?? modifiedAt
   const lastActivityAt = timestamps.at(-1) ?? startedAt
+  const title = parsed.customTitle ?? parsed.aiTitle ?? parsed.summaryTitle ?? parsed.firstPrompt ?? parsed.firstCommand
   return {
     identifier: parsed.identifier,
     provider,
     ...(presentationCwd ? { cwd: presentationCwd } : {}),
     startedAt,
     lastActivityAt,
-    ...(parsed.title ? { title: parsed.title.slice(0, MAX_TITLE_LENGTH) } : {}),
+    ...(title ? { title: title.slice(0, MAX_TITLE_LENGTH) } : {}),
     ...(parsed.preview ? { preview: parsed.preview.slice(0, MAX_PREVIEW_LENGTH) } : {}),
     ...(parsed.model ? { model: parsed.model.slice(0, 160) } : {}),
     messageCount: parsed.messageCount,
@@ -385,22 +374,13 @@ async function readProviderSessionHistory(
 
   for (const file of files) {
     try {
-      const text = await fs.readFile(file.path, 'utf8')
-      if (Buffer.byteLength(text, 'utf8') > MAX_TRANSCRIPT_BYTES) continue
-      const rows: unknown[] = []
-      for (const line of text.split(/\r?\n/)) {
-        if (!line || line.length > MAX_TRANSCRIPT_LINE_LENGTH) continue
-        try {
-          rows.push(JSON.parse(line))
-        } catch {
-          // Providers may leave a partial final line while writing. Ignore it.
-        }
-      }
-      const parsed = provider === 'claude' ? parseClaudeRows(rows) : parseCodexRows(rows)
+      const transcript = await parseTranscriptFile(provider, file.path)
+      if (!transcript) continue
+      const { parsed } = transcript
       if (!parsed) continue
       const cwd = await canonicalCwd(parsed.cwd)
       if (workspaceRoot && (!cwd || !pathWithinRoot(cwd, workspaceRoot))) continue
-      const item = resultItem(parsed, provider, file.modifiedAt, relativeCwdWithinRoot(cwd, workspaceRoot ?? undefined))
+      const item = resultItem(parsed, provider, transcript.modifiedAt, relativeCwdWithinRoot(cwd, workspaceRoot ?? undefined))
       if (!matchesSearch(item, search)) continue
       const current = sessions.get(item.identifier)
       if (!current || current.lastActivityAt < item.lastActivityAt) sessions.set(item.identifier, item)
@@ -451,4 +431,4 @@ export const readClaudeHistory = readClaudeSessionHistory
 export const readCodexHistory = readCodexSessionHistory
 export const readAgentHistory = readAgentSessionHistory
 
-export { MAX_TRANSCRIPT_BYTES, MAX_TRANSCRIPT_FILES }
+export { MAX_TRANSCRIPT_FILES }
