@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAgentSessionSnapshot } from '@/hooks/useAgentSessionSnapshot'
-import { Bot, Clock3, History, Play, RefreshCw, Search, Settings } from 'lucide-react'
+import { Bot, Clock3, History, MessageSquareText, Play, RefreshCw, Search, Settings } from 'lucide-react'
 import type {
   AgentActiveSession,
   AgentProvider,
@@ -22,6 +22,11 @@ import {
   shouldShowAgentHistoryMore,
   shouldRequestAgentData,
 } from '@/utils/agentPanel'
+
+const AgentTranscriptDialog = React.lazy(async () => {
+  const module = await import('./AgentTranscriptDialog')
+  return { default: module.AgentTranscriptDialog }
+})
 
 export interface AgentPanelProps {
   workspaceId: string
@@ -125,6 +130,7 @@ function RunningSessionCard({
 
 function HistoryCard({
   item,
+  onViewConversation,
   onResume,
   resumeDisabled,
   unknownTitle,
@@ -137,6 +143,7 @@ function HistoryCard({
   activeLabel,
 }: {
   item: AgentSessionHistoryItem
+  onViewConversation: (item: AgentSessionHistoryItem) => void
   onResume: (item: AgentSessionHistoryItem) => void
   resumeDisabled: boolean
   unknownTitle: string
@@ -148,6 +155,7 @@ function HistoryCard({
   startedLabel: string
   activeLabel: string
 }): React.ReactElement {
+  const { t } = useTranslation()
   const cwd = sanitizeAgentCwd(item.cwd)
   const cwdLine = cwd === '.' ? null : cwd ? `cwd: ${cwd}` : cwdUnavailableLabel
   return (
@@ -169,15 +177,25 @@ function HistoryCard({
             <span>{startedLabel}: {displayDate(item.startedAt, unknownDate)}</span>
             <span>{activeLabel}: {displayDate(item.lastActivityAt, unknownDate)}</span>
           </div>
-          <button
-            type="button"
-            className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-border-visible px-3 py-1.5 text-xs text-text-display transition-colors hover:border-text-secondary disabled:cursor-not-allowed disabled:opacity-50"
-            onClick={() => onResume(item)}
-            disabled={resumeDisabled}
-          >
-            <Play size={12} />
-            {resumeLabel}
-          </button>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-full border border-border-visible px-3 py-1.5 text-xs text-text-display transition-colors hover:border-text-secondary disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={() => onResume(item)}
+              disabled={resumeDisabled}
+            >
+              <Play size={12} />
+              {resumeLabel}
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-full border border-border-visible px-3 py-1.5 text-xs text-text-display transition-colors hover:border-text-secondary"
+              onClick={() => onViewConversation(item)}
+            >
+              <MessageSquareText size={12} />
+              {t('agents.viewConversation')}
+            </button>
+          </div>
         </div>
       </div>
     </article>
@@ -201,6 +219,7 @@ export function AgentPanel({
   const [historySearch, setHistorySearch] = useState('')
   const [historyState, setHistoryState] = useState<HistoryState>({ status: 'idle', items: [], hasMore: false })
   const [resumeError, setResumeError] = useState<string | null>(null)
+  const [transcriptItem, setTranscriptItem] = useState<AgentSessionHistoryItem | null>(null)
   const historyRequestRef = useRef(0)
   const historyRefreshSchedulerRef = useRef(createAgentHistoryRefreshScheduler())
   const availabilityRequestRef = useRef(0)
@@ -272,6 +291,8 @@ export function AgentPanel({
       setResumeError(error instanceof Error ? error.message : String(error))
     }
   }, [canResume, onOpenAgentsSession, workspaceId])
+
+  const resumeTranscriptItem = transcriptItem && canResume(transcriptItem.provider) ? resumeAgent : undefined
 
   const tileById = useMemo(() => new Map(tiles.map((tile) => [tile.id, tile])), [tiles])
 
@@ -394,6 +415,7 @@ export function AgentPanel({
               <HistoryCard
                 key={`${item.provider}-${item.identifier}`}
                 item={item}
+                onViewConversation={setTranscriptItem}
                 onResume={resumeAgent}
                 resumeDisabled={!canResume(item.provider)}
                 unknownTitle={copy.unknownTitle}
@@ -412,6 +434,16 @@ export function AgentPanel({
           </div>
         </section>
         </div>
+      )}
+      {transcriptItem && (
+        <React.Suspense fallback={null}>
+          <AgentTranscriptDialog
+            item={transcriptItem}
+            workspaceId={workspaceId}
+            onClose={() => setTranscriptItem(null)}
+            onResume={resumeTranscriptItem}
+          />
+        </React.Suspense>
       )}
     </div>
   )
