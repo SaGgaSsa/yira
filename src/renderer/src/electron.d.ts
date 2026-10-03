@@ -53,6 +53,8 @@ import type {
   AgentSessionCreateResult,
   AgentSessionHistoryQuery,
   AgentSessionHistoryResult,
+  AgentSessionTranscriptQuery,
+  AgentSessionTranscriptResult,
   AgentUsageSnapshot,
   AgentUsageDetailsSnapshot,
   AgentUsageHistoryRequest,
@@ -108,6 +110,7 @@ interface ElectronWorld {
     onUsageChanged: (callback: (snapshot: AgentUsageSnapshot) => void) => () => void
     history: (query?: AgentSessionHistoryQuery) => Promise<AgentSessionHistoryResult>
     queryHistory: (query?: AgentSessionHistoryQuery) => Promise<AgentSessionHistoryResult>
+    historyTranscript: (query: AgentSessionTranscriptQuery) => Promise<AgentSessionTranscriptResult>
   }
   settings: {
     load: () => Promise<UserSettings | null>

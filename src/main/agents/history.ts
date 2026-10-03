@@ -1,5 +1,5 @@
 import { createReadStream, promises as fs } from 'node:fs'
-import { extname, isAbsolute, join, relative, resolve, sep, win32 } from 'node:path'
+import { basename, extname, isAbsolute, join, relative, resolve, sep, win32 } from 'node:path'
 import { createInterface } from 'node:readline'
 
 import type {
@@ -399,6 +399,45 @@ async function readProviderSessionHistory(
     items: sorted.slice(0, limit),
     hasMore: sorted.length > limit,
   }
+}
+
+/** Find a visible session transcript without exposing its path to the renderer. */
+export async function findAgentTranscriptFile(
+  provider: AgentProvider,
+  identifier: string,
+  options: AgentHistoryReadOptions = {},
+): Promise<string | null> {
+  const normalizedIdentifier = normalizeResumeId(identifier)
+  if (!normalizedIdentifier) return null
+
+  const rootPath = options.rootPath ?? options.roots?.[provider] ?? getAgentProviderTranscriptRoot(provider, options.homeDirectory)
+  const canonicalRoot = await canonicalDirectory(rootPath)
+  if (!canonicalRoot) return null
+
+  const workspaceRoot = options.workspaceRoot === undefined
+    ? undefined
+    : await canonicalDirectory(options.workspaceRoot)
+  if (options.workspaceRoot !== undefined && !workspaceRoot) return null
+
+  const files = await listTranscriptFiles(canonicalRoot)
+  const likelyFiles = files.filter((file) => basename(file.path).includes(normalizedIdentifier))
+  const remainingFiles = files.filter((file) => !basename(file.path).includes(normalizedIdentifier))
+
+  for (const file of [...likelyFiles, ...remainingFiles]) {
+    try {
+      const transcript = await parseTranscriptFile(provider, file.path)
+      const parsed = transcript?.parsed
+      if (!parsed || parsed.identifier !== normalizedIdentifier) continue
+
+      const cwd = await canonicalCwd(parsed.cwd)
+      if (workspaceRoot && (!cwd || !pathWithinRoot(cwd, workspaceRoot))) continue
+      return file.path
+    } catch {
+      // A damaged transcript must not prevent other files from matching the ID.
+    }
+  }
+
+  return null
 }
 
 export function readClaudeSessionHistory(options: AgentHistoryReadOptions = {}): Promise<AgentSessionHistoryResult> {

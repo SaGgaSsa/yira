@@ -7,7 +7,7 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 import test from 'node:test'
-import type { AgentActiveSessionSnapshot } from '@shared/types'
+import type { AgentActiveSessionSnapshot, AgentSessionTranscriptResult } from '@shared/types'
 import { AgentSessionRegistry } from '../agents/registry'
 import { createAgentWorkspaceWorktrees, resolveWorkspaceWorktreeRepositories } from '../agents/worktree'
 import { execGitCommand } from '../git/runner'
@@ -29,6 +29,7 @@ test('registers restricted agent availability, snapshot/subscription, and histor
   assert.match(text, /ipcMain\.handle\('agents:sessions:subscribe'/)
   assert.match(text, /ipcMain\.handle\('agents:sessions:unsubscribe'/)
   assert.match(text, /ipcMain\.handle\('agents:history'/)
+  assert.match(text, /ipcMain\.handle\('agents:history:transcript'/)
   assert.match(text, /normalizeAgentHistoryQuery/)
   assert.match(text, /getWorkspaceRootFolderById/)
   assert.match(text, /randomUUID/)
@@ -65,6 +66,7 @@ test('exposes only normalized agent contracts through preload', async () => {
   assert.match(text, /ipcRenderer\.invoke\('agents:sessions:close'/)
   assert.match(text, /ipcRenderer\.invoke\('agents:sessions:snapshot'/)
   assert.match(text, /ipcRenderer\.invoke\('agents:history'/)
+  assert.match(text, /ipcRenderer\.invoke\('agents:history:transcript'/)
   assert.match(text, /agents:sessions:changed/)
   assert.doesNotMatch(text, /agents[^\n]*readFile|agents[^\n]*rootPath/)
 })
@@ -75,6 +77,8 @@ test('declares the agent bridge and registers it from main', async () => {
   const main = await source('src/main/index.ts')
   assert.match(declaration, /agents:\s*\{/)
   assert.match(declaration, /AgentSessionHistoryResult/)
+  assert.match(declaration, /AgentSessionTranscriptResult/)
+  assert.match(declaration, /historyTranscript: \(query: AgentSessionTranscriptQuery\) => Promise<AgentSessionTranscriptResult>/)
   assert.match(declaration, /subscribeSessions: \(workspaceId\?: string\) => Promise<string \| false>/)
   assert.match(declaration, /unsubscribeSessions: \(token: string\) => Promise<boolean>/)
   assert.match(declaration, /onSessionsChanged/)
@@ -142,6 +146,46 @@ function loadAgentsIPC(ipcMain: FakeIpcMain): typeof import('./agents') {
     nodeModule._load = originalLoad
   }
 }
+
+test('rejects malformed transcript queries and passes normalized IDs to the reader', async () => {
+  const ipcMain = new FakeIpcMain()
+  const { registerAgentsIPC } = loadAgentsIPC(ipcMain)
+  const result: AgentSessionTranscriptResult = { entries: [], start: 0, total: 0, found: true }
+  const received: Array<{ provider: string; identifier: string }> = []
+  registerAgentsIPC({
+    transcript: async (query) => {
+      received.push({ provider: query.provider, identifier: query.identifier })
+      return result
+    },
+  })
+  const sender = new FakeWebContents(99)
+  const invalidInputs: unknown[] = [
+    null,
+    [],
+    Object.create({ provider: 'claude', identifier: 'inherited-id' }),
+    { provider: 'other', identifier: 'session-id' },
+    { provider: 'claude', identifier: '../outside' },
+    { provider: 'claude', identifier: 'session-id', workspaceId: '../workspace' },
+    { provider: 'claude', identifier: 'session-id', before: -1 },
+    { provider: 'claude', identifier: 'session-id', limit: 1.5 },
+  ]
+
+  for (const input of invalidInputs) {
+    assert.deepEqual(
+      await ipcMain.call('agents:history:transcript', sender, input),
+      { entries: [], start: 0, total: 0, found: false },
+    )
+  }
+
+  assert.equal(received.length, 0)
+  assert.equal(await ipcMain.call('agents:history:transcript', sender, {
+    provider: 'claude',
+    identifier: '  valid-session  ',
+    before: 0,
+    limit: 0,
+  }), result)
+  assert.deepEqual(received, [{ provider: 'claude', identifier: 'valid-session' }])
+})
 
 test('keeps the replacement session subscription after a late stale unsubscribe', async () => {
   const ipcMain = new FakeIpcMain()

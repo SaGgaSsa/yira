@@ -11,6 +11,8 @@ import type {
   AgentSessionCloseResult,
   AgentSessionCreateResult,
   AgentSessionHistoryResult,
+  AgentSessionTranscriptQuery,
+  AgentSessionTranscriptResult,
   AgentActiveSessionSnapshot,
   AgentUsageSnapshot,
   AgentUsageDetailsSnapshot,
@@ -30,6 +32,7 @@ import {
 } from '../agents/providers'
 import { agentSessionRegistry, type AgentSessionRegistry } from '../agents/registry'
 import { readAgentSessionHistory } from '../agents/history'
+import { readAgentSessionTranscript } from '../agents/transcript'
 import {
   createAgentWorkspaceWorktrees,
   removeAgentWorktreeIfClean,
@@ -71,6 +74,10 @@ export interface AgentIPCOptions {
     search?: string
     limit?: number
   }) => Promise<AgentSessionHistoryResult>
+  transcript?: (
+    query: AgentSessionTranscriptQuery,
+    options: { workspaceRoot?: string },
+  ) => Promise<AgentSessionTranscriptResult>
   usageService?: Pick<AgentUsageService, 'getSnapshot' | 'refresh' | 'subscribe'>
   usageDetailsService?: Pick<AgentUsageDetailsService, 'getSnapshot'>
   usageIndex?: Pick<AgentUsageIndex, 'getHistory'>
@@ -181,6 +188,62 @@ async function historyForQuery(input: unknown, readHistory: AgentIPCOptions['his
     search: query.search,
     limit: query.limit,
   })
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false
+  try {
+    const prototype = Object.getPrototypeOf(value)
+    return prototype === Object.prototype || prototype === null
+  } catch {
+    return false
+  }
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0
+}
+
+function normalizeTranscriptQuery(input: unknown): AgentSessionTranscriptQuery | null {
+  if (!isPlainRecord(input) || !isAgentProvider(input.provider)) return null
+  const identifier = normalizeResumeId(input.identifier)
+  if (!identifier) return null
+
+  const workspaceId = input.workspaceId === undefined
+    ? undefined
+    : normalizeAgentOpaqueId(input.workspaceId)
+  if (input.workspaceId !== undefined && !workspaceId) return null
+  if (input.before !== undefined && !isNonNegativeInteger(input.before)) return null
+  if (input.limit !== undefined && !isNonNegativeInteger(input.limit)) return null
+
+  return {
+    provider: input.provider,
+    identifier,
+    ...(workspaceId ? { workspaceId } : {}),
+    ...(input.before !== undefined ? { before: input.before } : {}),
+    ...(input.limit !== undefined ? { limit: input.limit } : {}),
+  }
+}
+
+const emptyTranscriptResult = (): AgentSessionTranscriptResult => ({
+  entries: [],
+  start: 0,
+  total: 0,
+  found: false,
+})
+
+async function transcriptForQuery(
+  input: unknown,
+  readTranscript: AgentIPCOptions['transcript'],
+): Promise<AgentSessionTranscriptResult> {
+  const query = normalizeTranscriptQuery(input)
+  if (!query) return emptyTranscriptResult()
+
+  let workspaceRoot: string | undefined
+  if (query.workspaceId) workspaceRoot = await getWorkspaceRootFolderById(query.workspaceId) ?? ''
+
+  const reader = readTranscript ?? readAgentSessionTranscript
+  return reader(query, { workspaceRoot })
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -491,6 +554,14 @@ export function registerAgentsIPC(options: AgentIPCOptions = {}): void {
       // runs. Renderer receives an empty normalized result, never an error or
       // an untrusted filesystem detail.
       return { items: [], hasMore: false }
+    }
+  })
+
+  ipcMain.handle('agents:history:transcript', async (_event, input: unknown): Promise<AgentSessionTranscriptResult> => {
+    try {
+      return await transcriptForQuery(input, options.transcript)
+    } catch {
+      return emptyTranscriptResult()
     }
   })
 }
