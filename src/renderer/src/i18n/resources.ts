@@ -138,6 +138,20 @@ type TranslationResources = {
     noSearchResults: string
     historyMore: string
     resume: string
+    viewConversation: string
+    conversationTitle: string
+    loadingConversation: string
+    conversationError: string
+    conversationNotFound: string
+    conversationEmpty: string
+    loadEarlier: string
+    entries: string
+    truncatedEntry: string
+    closeConversation: string
+    you: string
+    agent: string
+    claude: string
+    codex: string
     resumeError: string
     unknownTitle: string
     unknownDate: string
@@ -899,6 +913,20 @@ const en: TranslationResources = {
     noSearchResults: 'No history matches this search.',
     historyMore: 'More local sessions are available.',
     resume: 'Resume',
+    viewConversation: 'View conversation',
+    conversationTitle: 'Conversation',
+    loadingConversation: 'Loading conversation…',
+    conversationError: 'Unable to load this conversation.',
+    conversationNotFound: 'This conversation could not be found.',
+    conversationEmpty: 'This conversation has no entries.',
+    loadEarlier: 'Load earlier',
+    entries: '{{count}} entries',
+    truncatedEntry: 'This entry was shortened.',
+    closeConversation: 'Close conversation',
+    you: 'You',
+    agent: 'Agent',
+    claude: 'Claude',
+    codex: 'Codex',
     resumeError: 'Unable to resume this agent session.',
     unknownTitle: 'Untitled session',
     unknownDate: 'Unknown date',
@@ -1694,6 +1722,20 @@ const es: TranslationResources = {
     noSearchResults: 'Ningún historial coincide con esta búsqueda.',
     historyMore: 'Hay más sesiones locales disponibles.',
     resume: 'Reanudar',
+    viewConversation: 'Ver conversación',
+    conversationTitle: 'Conversación',
+    loadingConversation: 'Cargando conversación…',
+    conversationError: 'No se pudo cargar esta conversación.',
+    conversationNotFound: 'No se encontró esta conversación.',
+    conversationEmpty: 'Esta conversación no tiene entradas.',
+    loadEarlier: 'Cargar anteriores',
+    entries: '{{count}} entradas',
+    truncatedEntry: 'Esta entrada se acortó.',
+    closeConversation: 'Cerrar conversación',
+    you: 'Tú',
+    agent: 'Agente',
+    claude: 'Claude',
+    codex: 'Codex',
     resumeError: 'No se pudo reanudar esta sesión de agente.',
     unknownTitle: 'Sesión sin título',
     unknownDate: 'Fecha desconocida',

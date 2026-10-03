@@ -2,7 +2,50 @@ import type { AppThemeId } from '@shared/appThemes'
 import type { WindowBackgroundMaterial, WindowBackgroundMaterialState } from '@shared/types'
 import type { TerminalProcessActivitySnapshot } from '@shared/terminalProcessActivity'
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AgentActiveSessionSnapshot, AgentDetectionSnapshot, AgentProviderAvailabilitySnapshot, AgentSessionCapabilities, AgentSessionCloseInput, AgentSessionCloseResult, AgentSessionCreateInput, AgentSessionCreateResult, AgentSessionHistoryQuery, AgentSessionHistoryResult, AgentUsageDetailsSnapshot, AgentUsageHistoryRequest, AgentUsageHistorySnapshot, AgentUsageSnapshot, BoardTask, FileListOptions, FileSearchResult, FileWriteInput, FloatingNavigationEvent, FloatingNavigationRequest, GitCommitHistoryResult, GitFileDiffContent, GitRepository, GitStatusResult, NotificationAttentionOptions, RemotePreparationResult, RemotePreparationStatus, TerminalCreateOptions, TerminalCreateResult, TerminalExitEvent, UpdateState, WindowBounds, WindowClosePreparationRequest, WindowClosePreparationResponse, Workspace, WorkspaceCreateInput, WorkspaceGitDiffResult, WorkspaceManagementCommitInput, WorkspaceType, WorkspaceUpdatePatch } from '@shared/types'
+import type {
+  AgentActiveSessionSnapshot,
+  AgentDetectionSnapshot,
+  AgentProviderAvailabilitySnapshot,
+  AgentSessionCapabilities,
+  AgentSessionCloseInput,
+  AgentSessionCloseResult,
+  AgentSessionCreateInput,
+  AgentSessionCreateResult,
+  AgentSessionHistoryQuery,
+  AgentSessionHistoryResult,
+  AgentSessionTranscriptQuery,
+  AgentSessionTranscriptResult,
+  AgentUsageDetailsSnapshot,
+  AgentUsageHistoryRequest,
+  AgentUsageHistorySnapshot,
+  AgentUsageSnapshot,
+  BoardTask,
+  FileListOptions,
+  FileSearchResult,
+  FileWriteInput,
+  FloatingNavigationEvent,
+  FloatingNavigationRequest,
+  GitCommitHistoryResult,
+  GitFileDiffContent,
+  GitRepository,
+  GitStatusResult,
+  NotificationAttentionOptions,
+  RemotePreparationResult,
+  RemotePreparationStatus,
+  TerminalCreateOptions,
+  TerminalCreateResult,
+  TerminalExitEvent,
+  UpdateState,
+  WindowBounds,
+  WindowClosePreparationRequest,
+  WindowClosePreparationResponse,
+  Workspace,
+  WorkspaceCreateInput,
+  WorkspaceGitDiffResult,
+  WorkspaceManagementCommitInput,
+  WorkspaceType,
+  WorkspaceUpdatePatch,
+} from '@shared/types'
 import { createSerialTaskQueue } from '@shared/serialTaskQueue'
 import {
   terminalSessionDataChannel,
@@ -69,6 +112,8 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.invoke('agents:history', query) as Promise<AgentSessionHistoryResult>,
     queryHistory: (query?: AgentSessionHistoryQuery) =>
       ipcRenderer.invoke('agents:history', query) as Promise<AgentSessionHistoryResult>,
+    historyTranscript: (query: AgentSessionTranscriptQuery) =>
+      ipcRenderer.invoke('agents:history:transcript', query) as Promise<AgentSessionTranscriptResult>,
   },
 
   // Settings

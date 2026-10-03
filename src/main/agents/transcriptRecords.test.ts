@@ -200,3 +200,14 @@ test('Codex ignores answers to agent questions', () => {
     },
   }).events, [])
 })
+
+test('Codex item ids are not treated as session ids', () => {
+  const reply = classifyCodexRecord({
+    type: 'response_item',
+    payload: { type: 'message', role: 'assistant', id: 'msg_0123456789abcdef', content: [{ type: 'output_text', text: 'Done.' }] },
+  })
+  assert.equal(reply.context.sessionId, undefined)
+  assert.equal(reply.events[0]?.kind, 'reply')
+  const meta = classifyCodexRecord({ type: 'session_meta', payload: { id: 'session-codex', originator: 'codex-tui' } })
+  assert.equal(meta.context.sessionId, 'session-codex')
+})

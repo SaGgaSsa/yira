@@ -93,9 +93,12 @@ function contextFromClaude(row: Record<string, unknown>, type: string): Transcri
 
 function contextFromCodex(
   row: Record<string, unknown>,
+  type: string,
   payload?: Record<string, unknown>,
 ): TranscriptRecordContext {
-  const sessionId = firstSafeString(payload?.id, payload?.session_id, row.sessionId, row.session_id)
+  // Only session_meta carries the session id in payload.id; on other records it identifies the item itself.
+  const payloadId = type === 'session_meta' ? payload?.id : undefined
+  const sessionId = firstSafeString(payloadId, payload?.session_id, row.sessionId, row.session_id)
   const cwd = firstSafeString(payload?.cwd, row.cwd)
   const model = firstSafeString(payload?.model, payload?.model_name, row.model)
   return {
@@ -195,7 +198,7 @@ export function classifyCodexRecord(value: unknown): TranscriptRecordClassificat
   if (!isRecord(value)) return makeClassification({}, [])
   const type = typeof value.type === 'string' ? value.type.toLowerCase() : ''
   const payload = isRecord(value.payload) ? value.payload : undefined
-  const context = contextFromCodex(value, payload)
+  const context = contextFromCodex(value, type, payload)
 
   if (type === 'session_meta') return makeClassification(context, [], payload ?? value)
   if (type === 'turn_context') {

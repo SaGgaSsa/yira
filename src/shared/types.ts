@@ -146,6 +146,35 @@ export interface AgentSessionHistoryQuery {
   limit?: number
 }
 
+export type AgentTranscriptEntryKind = 'prompt' | 'command' | 'reply'
+
+export interface AgentTranscriptEntry {
+  kind: AgentTranscriptEntryKind
+  /** Prompt or reply text with line breaks preserved; commands are formatted as "/name args". */
+  text: string
+  timestamp?: string
+  /** True when text was cut at the per-entry limit. */
+  truncated?: boolean
+}
+
+export interface AgentSessionTranscriptQuery {
+  workspaceId?: string
+  provider: AgentProvider
+  identifier: string
+  /** Entry index (exclusive) to page backwards from; omitted means the end of the conversation. */
+  before?: number
+  limit?: number
+}
+
+export interface AgentSessionTranscriptResult {
+  /** Entries in chronological order. */
+  entries: AgentTranscriptEntry[]
+  /** Index of entries[0] within the whole conversation. */
+  start: number
+  total: number
+  found: boolean
+}
+
 export interface AgentSessionCreateInput {
   workspaceId: string
   prompt?: string

@@ -19,6 +19,18 @@ if (i18n.t('common.tileCount', { count: 2 }) !== '2 paneles') {
 }
 
 for (const [key, expected] of [
+  ['agents.viewConversation', 'Ver conversación'],
+  ['agents.loadingConversation', 'Cargando conversación…'],
+  ['agents.loadEarlier', 'Cargar anteriores'],
+  ['agents.you', 'Tú'],
+] as const) {
+  if (i18n.t(key) !== expected) throw new Error(`Spanish transcript copy must translate ${key}`)
+}
+if (i18n.t('agents.entries', { count: 3 }) !== '3 entradas') {
+  throw new Error('Spanish transcript entry count must interpolate')
+}
+
+for (const [key, expected] of [
   ['workspace.sourceControl', 'Source Control'],
   ['workspace.repository', 'Repositorio'],
   ['workspace.selectRepositories', 'Seleccionar repositorios'],
@@ -30,6 +42,18 @@ for (const [key, expected] of [
 }
 
 await i18n.changeLanguage('en')
+for (const [key, expected] of [
+  ['agents.viewConversation', 'View conversation'],
+  ['agents.loadingConversation', 'Loading conversation…'],
+  ['agents.loadEarlier', 'Load earlier'],
+  ['agents.you', 'You'],
+] as const) {
+  if (i18n.t(key) !== expected) throw new Error(`English transcript copy must translate ${key}`)
+}
+if (i18n.t('agents.entries', { count: 3 }) !== '3 entries') {
+  throw new Error('English transcript entry count must interpolate')
+}
+
 for (const [key, expected] of [
   ['workspace.sourceControl', 'Source Control'],
   ['workspace.repository', 'Repository'],
