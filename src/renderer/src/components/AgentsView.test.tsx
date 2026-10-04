@@ -192,24 +192,34 @@ function createView(
   callbacks: {
     onCloseSession?: (value: AgentActiveSession) => void
     onFocusSession?: (id: string) => void
+    onMaximizedSessionChange?: (id: string | null) => void
     shortcutLabel?: string
   } = {},
 ): { container: any; root: { unmount: () => void } } {
   const container = document.createElement('div')
   const root = ReactDOM.createRoot(container)
-  root.render(
-    <AgentsView
-      workspaceId="workspace-a"
-      workspaceConfig={workspaceConfig}
-      provider="claude"
-      sessions={sessions}
-      focusedSessionId={null}
-      onFocusSession={callbacks.onFocusSession ?? (() => undefined)}
-      onCloseSession={callbacks.onCloseSession ?? (() => undefined)}
-      onNewSession={() => undefined}
-      shortcutLabel={callbacks.shortcutLabel}
-    />,
-  )
+  function ControlledAgentsView(): React.ReactElement {
+    const [maximizedSessionId, setMaximizedSessionId] = React.useState<string | null>(null)
+    return (
+      <AgentsView
+        workspaceId="workspace-a"
+        workspaceConfig={workspaceConfig}
+        provider="claude"
+        sessions={sessions}
+        focusedSessionId={null}
+        onFocusSession={callbacks.onFocusSession ?? (() => undefined)}
+        maximizedSessionId={maximizedSessionId}
+        onMaximizedSessionChange={(id) => {
+          callbacks.onMaximizedSessionChange?.(id)
+          setMaximizedSessionId(id)
+        }}
+        onCloseSession={callbacks.onCloseSession ?? (() => undefined)}
+        onNewSession={() => undefined}
+        shortcutLabel={callbacks.shortcutLabel}
+      />
+    )
+  }
+  root.render(<ControlledAgentsView />)
   return { container, root }
 }
 
@@ -274,6 +284,26 @@ test('renders badges for different session states and closes through the callbac
     await settle()
     assert.equal(closed.length, 1)
     assert.equal(closed[0].tileId, 'agent-a')
+  } finally {
+    root.unmount()
+  }
+})
+
+test('reports the maximized session so the app can hide the sidebar', async () => {
+  const changes: Array<string | null> = []
+  const { container, root } = createView([session(), session({ tileId: 'agent-b' })], {
+    onMaximizedSessionChange: (id) => changes.push(id),
+  })
+
+  try {
+    await settle()
+    findButton(container, 'Maximize session').dispatchEvent(new TestEvent('click', { bubbles: true, cancelable: true }))
+    await settle()
+    assert.deepEqual(changes, ['agent-a'])
+
+    findButton(container, 'Restore session').dispatchEvent(new TestEvent('click', { bubbles: true, cancelable: true }))
+    await settle()
+    assert.deepEqual(changes, ['agent-a', null])
   } finally {
     root.unmount()
   }
