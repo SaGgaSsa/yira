@@ -1,40 +1,61 @@
-export interface AgentsViewGrid {
-  columns: number
-  rows: number
+export interface AgentsViewTilePlacement {
+  /** 1-based grid column line. */
+  column: number
+  /** 1-based grid row line. */
+  rowStart: number
+  rowSpan: number
 }
 
-const TERMINAL_ASPECT_RATIO = 1.65
+export interface AgentsViewLayout {
+  columns: number
+  /** Row tracks shared by every column, so stacks of different sizes line up. */
+  rows: number
+  /** Sessions per column, left to right. */
+  stacks: number[]
+  /** One placement per session, in session order. */
+  placements: AgentsViewTilePlacement[]
+}
 
-/** Pick a compact grid whose cells stay close to a comfortable terminal shape. */
-export function computeAgentsViewGrid(count: number, width: number, height: number): AgentsViewGrid {
+export const AGENTS_VIEW_MAX_COLUMNS = 4
+/** Past this many sessions the view keeps a minimum tile height and scrolls. */
+export const AGENTS_VIEW_SCROLL_THRESHOLD = 16
+
+/** One column per session up to three, three columns for four or five, then four. */
+export function computeAgentsViewColumnCount(count: number): number {
   const sessionCount = Math.max(0, Math.floor(count))
-  if (sessionCount === 0) return { columns: 0, rows: 0 }
-  if (sessionCount === 1) return { columns: 1, rows: 1 }
+  if (sessionCount <= 3) return sessionCount
+  if (sessionCount <= 5) return 3
+  return AGENTS_VIEW_MAX_COLUMNS
+}
 
-  const containerIsLandscape = width >= height
-  if (sessionCount === 2) {
-    return containerIsLandscape ? { columns: 2, rows: 1 } : { columns: 1, rows: 2 }
-  }
-  if (sessionCount === 4) return { columns: 2, rows: 2 }
+/** Balanced stacks per column; the extra rows go to the rightmost columns. */
+export function computeAgentsViewStacks(count: number): number[] {
+  const sessionCount = Math.max(0, Math.floor(count))
+  const columns = computeAgentsViewColumnCount(sessionCount)
+  if (columns === 0) return []
 
-  const containerAspect = width > 0 && height > 0 ? width / height : 16 / 9
-  let bestGrid = { columns: sessionCount, rows: 1 }
-  let bestScore = Number.POSITIVE_INFINITY
+  const base = Math.floor(sessionCount / columns)
+  const extra = sessionCount % columns
+  return Array.from({ length: columns }, (_, index) => (index >= columns - extra ? base + 1 : base))
+}
 
-  for (let columns = 1; columns <= sessionCount; columns += 1) {
-    const rows = Math.ceil(sessionCount / columns)
+function greatestCommonDivisor(a: number, b: number): number {
+  return b === 0 ? a : greatestCommonDivisor(b, a % b)
+}
 
-    // These bounds keep both the last column and last row occupied.
-    if ((columns - 1) * rows >= sessionCount) continue
-    if ((rows - 1) * columns >= sessionCount) continue
+/** Fill columns top to bottom, left to right, so the newest session ends bottom right. */
+export function computeAgentsViewLayout(count: number): AgentsViewLayout {
+  const stacks = computeAgentsViewStacks(count)
+  if (stacks.length === 0) return { columns: 0, rows: 0, stacks, placements: [] }
 
-    const cellAspect = containerAspect * rows / columns
-    const score = Math.abs(Math.log(cellAspect / TERMINAL_ASPECT_RATIO))
-    if (score < bestScore) {
-      bestGrid = { columns, rows }
-      bestScore = score
+  const rows = stacks.reduce((total, stack) => total * stack / greatestCommonDivisor(total, stack), 1)
+  const placements: AgentsViewTilePlacement[] = []
+  stacks.forEach((stack, columnIndex) => {
+    const rowSpan = rows / stack
+    for (let index = 0; index < stack; index += 1) {
+      placements.push({ column: columnIndex + 1, rowStart: index * rowSpan + 1, rowSpan })
     }
-  }
+  })
 
-  return bestGrid
+  return { columns: stacks.length, rows, stacks, placements }
 }
