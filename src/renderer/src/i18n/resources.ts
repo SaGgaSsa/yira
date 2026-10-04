@@ -169,6 +169,9 @@ type TranslationResources = {
     worktreeKeptMessage: string
     worktreePathUnavailable: string
     closeSessionErrorTitle: string
+    closeActiveSessionTitle: string
+    closeWorkingSessionMessage: string
+    closeNeedsInputSessionMessage: string
     sessionCount: string
     newSession: string
     emptyTitle: string
@@ -948,6 +951,9 @@ const en: TranslationResources = {
     worktreeKeptMessage: 'The worktree has changes and was kept at {{path}}.',
     worktreePathUnavailable: 'an unknown path',
     closeSessionErrorTitle: 'Could not close agent session',
+    closeActiveSessionTitle: 'Close agent session?',
+    closeWorkingSessionMessage: 'The agent is still working. Closing the session interrupts it.',
+    closeNeedsInputSessionMessage: 'The agent has not finished and is waiting for your input. Closing the session stops it.',
     sessionCount: '{{count}} sessions',
     newSession: 'New session',
     emptyTitle: 'No agent sessions in this view',
@@ -1687,6 +1693,9 @@ const es: TranslationResources = {
     worktreeKeptMessage: 'El worktree tiene cambios y se conservó en {{path}}.',
     worktreePathUnavailable: 'una ruta desconocida',
     closeSessionErrorTitle: 'No se pudo cerrar la sesión del agente',
+    closeActiveSessionTitle: '¿Cerrar la sesión del agente?',
+    closeWorkingSessionMessage: 'El agente sigue trabajando. Cerrar la sesión lo interrumpe.',
+    closeNeedsInputSessionMessage: 'El agente no terminó y está esperando tu respuesta. Cerrar la sesión lo detiene.',
     sessionCount: '{{count}} sesiones',
     newSession: 'Nueva sesión',
     emptyTitle: 'No hay sesiones de agentes en esta vista',
