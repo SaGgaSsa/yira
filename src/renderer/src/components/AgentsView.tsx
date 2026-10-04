@@ -9,6 +9,7 @@ import type {
 } from '@shared/types'
 import { computeAgentsViewGrid } from '@/utils/agentsViewLayout'
 import { selectAgentsViewSessions } from '@/utils/agentsViewSessions'
+import { useCanvasStore } from '@/store/canvasStore'
 import { AgentSessionTerminal } from './AgentSessionTerminal'
 
 export interface AgentsViewProps {
@@ -83,7 +84,12 @@ function AgentSessionCard({
   onOpenFileTile,
 }: SessionCardProps): React.ReactElement {
   const { t } = useTranslation()
-  const title = session.title?.trim() || t('agentsView.unknownTitle')
+  const liveTitle = useCanvasStore((state) => state.terminalTitles[session.tileId])?.trim() ?? ''
+  // Sessions started without a prompt have no stored title; use the agent's
+  // terminal title unless it is only a spinner frame.
+  const title = session.title?.trim()
+    || (/[\p{L}\p{N}]/u.test(liveTitle) ? liveTitle : '')
+    || t('agentsView.unknownTitle')
   const providerLabel = session.provider === 'claude' ? 'Claude' : 'Codex'
   const providerColor = 'text-activity'
   const statusLabel = getStatusLabel(session.status, t)

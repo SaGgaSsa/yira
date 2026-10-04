@@ -146,7 +146,7 @@ export function AgentSessionDialog({
 
   const createSession = async (promptValue = prompt): Promise<void> => {
     const trimmedPrompt = promptValue.trim()
-    if (!trimmedPrompt || !selectedWorkspace || !selectedProvider || isSubmitting) return
+    if (!selectedWorkspace || !selectedProvider || isSubmitting) return
 
     setIsSubmitting(true)
     setError(null)
@@ -155,7 +155,7 @@ export function AgentSessionDialog({
       result = await window.electron.agents.createSession({
         workspaceId: selectedWorkspace.workspace.id,
         provider: selectedProvider,
-        prompt: trimmedPrompt,
+        ...(trimmedPrompt ? { prompt: trimmedPrompt } : {}),
         worktree: worktreeAvailable && worktree,
       })
     } catch (submitError) {
@@ -309,7 +309,7 @@ export function AgentSessionDialog({
             <button
               type="submit"
               className="rounded-full border border-text-display px-4 py-2 text-sm text-text-display transition-colors hover:bg-bg-primary disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={!prompt.trim() || !selectedWorkspace || !selectedProvider || isSubmitting}
+              disabled={!selectedWorkspace || !selectedProvider || isSubmitting}
             >
               {isSubmitting ? t('agentsView.creatingSession') : t('agentsView.createSession')}
             </button>
