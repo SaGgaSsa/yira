@@ -15,6 +15,7 @@ docs/*-plan.md
 docs/workspace-terminal-activity.md
 
 # Local agent delegation packages and logs
+/DELEGATION.md
 /*.jsonl
 /*-task.md
 /*-permissions.json
