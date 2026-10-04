@@ -2338,11 +2338,9 @@ function AppContent(): React.ReactElement {
         agentAttentionCount={countAgentsViewAttention(agentsView.sessions)}
         onToggleAgentsView={() => {
           setActivityOpen(false)
-          // A maximized session is a focus inside the Agents view: the button returns to all sessions.
-          const wasMaximized = agentsMaximizedSessionId !== null
+          // The button selects the Agents view like the other view buttons and always shows every session.
           setAgentsMaximizedSessionId(null)
-          if (agentsView.isOpen && (wasMaximized || activityOpen)) return
-          agentsView.toggle()
+          if (!agentsView.isOpen) agentsView.toggle()
         }}
         agentProvider={activeWorkspaceConfig.agentProvider}
         agentUsage={agentUsage}
