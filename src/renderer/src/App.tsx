@@ -415,6 +415,19 @@ function AppContent(): React.ReactElement {
   }, [])
 
   const closeAgentsSession = useCallback(async (session: AgentActiveSession): Promise<void> => {
+    // Closing kills the agent process, so ask first unless it already finished.
+    if (session.status === 'working' || session.status === 'needs-input') {
+      const confirmed = await requestConfirm({
+        title: t('agentsView.closeActiveSessionTitle'),
+        message: session.status === 'working'
+          ? t('agentsView.closeWorkingSessionMessage')
+          : t('agentsView.closeNeedsInputSessionMessage'),
+        confirmLabel: t('agentsView.closeSession'),
+        cancelLabel: t('ui.keepOpen'),
+        danger: true,
+      })
+      if (!confirmed) return
+    }
     try {
       const result = await window.electron.agents.closeSession({
         workspaceId: session.workspaceId,
