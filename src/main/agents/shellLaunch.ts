@@ -50,8 +50,18 @@ function quotePowerShell(value: string): string {
   return `'${value.replace(/'/g, "''")}'`
 }
 
+// Windows PowerShell 5.1 drops embedded double quotes from native arguments.
 function normalizeWindowsPrompt(prompt: string): string {
-  return prompt.replace(/"/g, "'").replace(/\r\n|\n|\r/g, ' ')
+  return prompt.replace(/"/g, "'").replace(/\r\n|\r/g, '\n')
+}
+
+// cmd.exe ends a batch command line at the first line break, so npm `.cmd`
+// shims would receive only the first prompt line. Executables and `.ps1`
+// shims keep line breaks, so the prompt is flattened only for batch files.
+function powerShellPromptReference(quotedCommand: string): string {
+  const prompt = `$env:${PROMPT_ENVIRONMENT_VARIABLE}`
+  const extension = `(Get-Command -Name ${quotedCommand} -ErrorAction Ignore | Select-Object -First 1).Extension`
+  return `$(if (${extension} -in '.cmd', '.bat') { ${prompt} -replace '\\n', ' ' } else { ${prompt} })`
 }
 
 function validatePowerShellArguments(args: string[]): void {
@@ -94,9 +104,11 @@ export function buildAgentShellCommand(input: AgentShellCommandInput): {
     env[PROMPT_ENVIRONMENT_VARIABLE] = isWindowsPowerShell
       ? normalizeWindowsPrompt(input.prompt)
       : input.prompt
-    const promptReference = input.shellProfileId === 'powershell'
-      ? `"$env:${PROMPT_ENVIRONMENT_VARIABLE}"`
-      : `"$${PROMPT_ENVIRONMENT_VARIABLE}"`
+    const promptReference = isWindowsPowerShell
+      ? powerShellPromptReference(quote(input.command))
+      : input.shellProfileId === 'powershell'
+        ? `"$env:${PROMPT_ENVIRONMENT_VARIABLE}"`
+        : `"$${PROMPT_ENVIRONMENT_VARIABLE}"`
     commandParts.push(promptReference)
   }
 
