@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo } from 'react'
 import { Bot, Maximize2, Minimize2, Plus, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type {
@@ -7,7 +7,7 @@ import type {
   FileTileOpenOptions,
   WorkspaceConfig,
 } from '@shared/types'
-import { computeAgentsViewGrid } from '@/utils/agentsViewLayout'
+import { AGENTS_VIEW_SCROLL_THRESHOLD, computeAgentsViewLayout } from '@/utils/agentsViewLayout'
 import { selectAgentsViewSessions } from '@/utils/agentsViewSessions'
 import { useCanvasStore } from '@/store/canvasStore'
 import { AgentSessionTerminal } from './AgentSessionTerminal'
@@ -30,6 +30,8 @@ export interface AgentsViewProps {
   onOpenBrowserTile?: (url: string) => void
   onOpenFileTile?: (relativePath: string, options?: FileTileOpenOptions) => void | Promise<void>
 }
+
+const MIN_SCROLLING_TILE_HEIGHT = 180
 
 interface SessionCardProps {
   session: AgentActiveSession
@@ -177,28 +179,10 @@ export function AgentsView({
   onOpenFileTile,
 }: AgentsViewProps): React.ReactElement {
   const { t } = useTranslation()
-  const containerRef = useRef<HTMLDivElement | null>(null)
-  const [size, setSize] = useState({ width: 0, height: 0 })
   const visibleSessions = useMemo(
     () => selectAgentsViewSessions({ sessions }, workspaceId),
     [sessions, workspaceId],
   )
-
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
-
-    const updateSize = (): void => {
-      const bounds = container.getBoundingClientRect()
-      setSize({ width: bounds.width, height: bounds.height })
-    }
-    updateSize()
-
-    if (typeof ResizeObserver === 'undefined') return
-    const observer = new ResizeObserver(updateSize)
-    observer.observe(container)
-    return () => observer.disconnect()
-  }, [])
 
   useEffect(() => {
     if (maximizedSessionId && !visibleSessions.some((session) => session.tileId === maximizedSessionId)) {
@@ -206,10 +190,14 @@ export function AgentsView({
     }
   }, [maximizedSessionId, onMaximizedSessionChange, visibleSessions])
 
-  const grid = computeAgentsViewGrid(visibleSessions.length, size.width, size.height)
+  const layout = computeAgentsViewLayout(visibleSessions.length)
+  // Past the threshold, keep tiles usable and let the view scroll instead of shrinking them.
+  const scrolls = visibleSessions.length > AGENTS_VIEW_SCROLL_THRESHOLD && maximizedSessionId === null
+  const smallestSpan = layout.rows / Math.max(1, ...layout.stacks)
+  const rowTrackMin = scrolls ? `${Math.ceil(MIN_SCROLLING_TILE_HEIGHT / smallestSpan)}px` : '0'
   const gridStyle: React.CSSProperties = {
-    gridTemplateColumns: `repeat(${grid.columns}, minmax(0, 1fr))`,
-    gridTemplateRows: `repeat(${grid.rows}, minmax(0, 1fr))`,
+    gridTemplateColumns: `repeat(${layout.columns}, minmax(0, 1fr))`,
+    gridTemplateRows: `repeat(${layout.rows}, minmax(${rowTrackMin}, 1fr))`,
   }
   const providerLabel = provider === 'claude' ? 'Claude' : 'Codex'
 
@@ -231,7 +219,7 @@ export function AgentsView({
           {t('agentsView.newSession')}
         </button>
       </header>
-      <div ref={containerRef} className="min-h-0 flex-1">
+      <div className={`min-h-0 flex-1 ${scrolls ? 'overflow-y-auto' : ''}`}>
         {visibleSessions.length === 0 ? (
           <div className="flex h-full min-h-0 flex-col items-center justify-center px-6 text-center">
             <Bot size={28} className="text-text-disabled" aria-hidden="true" />
@@ -249,18 +237,25 @@ export function AgentsView({
           </div>
         ) : (
           <div
-            className="grid h-full min-h-0 w-full gap-2.5 p-2.5"
+            className={`grid w-full gap-2.5 p-2.5 ${scrolls ? 'min-h-full' : 'h-full min-h-0'}`}
             style={gridStyle}
             data-agent-session-grid="true"
           >
-            {visibleSessions.map((session) => {
+            {visibleSessions.map((session, index) => {
               const isMaximized = maximizedSessionId === session.tileId
               const isVisible = maximizedSessionId === null || isMaximized
+              const placement = layout.placements[index]
+              const placementStyle: React.CSSProperties | undefined = isMaximized
+                ? { gridColumn: '1 / -1', gridRow: '1 / -1' }
+                : placement && {
+                  gridColumn: placement.column,
+                  gridRow: `${placement.rowStart} / span ${placement.rowSpan}`,
+                }
               return (
                 <div
                   key={session.tileId}
                   className={isVisible ? 'min-h-0 min-w-0' : 'hidden'}
-                  style={isMaximized ? { gridColumn: '1 / -1', gridRow: '1 / -1' } : undefined}
+                  style={placementStyle}
                 >
                   <AgentSessionCard
                     session={session}
