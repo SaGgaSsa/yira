@@ -87,6 +87,8 @@ test('uses fish quoting for backslashes and single quotes', () => {
   assert.equal(result.initialCommand, "'codex' 'path\\\\part' 'agent\\'s option'")
 })
 
+const codexPromptReference = "$(if ((Get-Command -Name 'codex' -ErrorAction Ignore | Select-Object -First 1).Extension -in '.cmd', '.bat') { $env:YIRA_AGENT_PROMPT -replace '\\n', ' ' } else { $env:YIRA_AGENT_PROMPT })"
+
 test('invokes PowerShell commands with the call operator and normalizes Windows prompts', () => {
   const result = buildAgentShellCommand({
     shellProfileId: 'powershell',
@@ -96,8 +98,8 @@ test('invokes PowerShell commands with the call operator and normalizes Windows 
     platform: 'win32',
   })
 
-  assert.equal(result.initialCommand, "& 'codex' 'resume' 'session-1' \"$env:YIRA_AGENT_PROMPT\"")
-  assert.deepEqual(result.env, { YIRA_AGENT_PROMPT: "Use 'quotes' then newline then carriage return" })
+  assert.equal(result.initialCommand, `& 'codex' 'resume' 'session-1' ${codexPromptReference}`)
+  assert.deepEqual(result.env, { YIRA_AGENT_PROMPT: "Use 'quotes'\nthen newline\nthen carriage\nreturn" })
 })
 
 test('PowerShell exits with the agent status only when requested, including prompts', () => {
@@ -108,7 +110,7 @@ test('PowerShell exits with the agent status only when requested, including prom
     prompt: 'Continue this task',
     platform: 'win32' as const,
   }
-  const expectedCommand = '& \'codex\' \'resume\' \'session-1\' "$env:YIRA_AGENT_PROMPT"'
+  const expectedCommand = `& 'codex' 'resume' 'session-1' ${codexPromptReference}`
 
   const withoutExit = buildAgentShellCommand(input)
   assert.equal(withoutExit.initialCommand, expectedCommand)
