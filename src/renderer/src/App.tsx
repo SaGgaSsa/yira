@@ -566,6 +566,14 @@ function AppContent(): React.ReactElement {
     void initializeUpdates()
   }, [initializeUpdates])
 
+  const agentsViewTitleSession = useMemo(() => {
+    if (activityOpen || !agentsView.isOpen) return undefined
+    const sessions = agentsView.sessions
+    const session = sessions.find((candidate) => candidate.tileId === agentsView.focusedSessionId)
+      ?? (sessions.length === 1 ? sessions[0] : undefined)
+    return session ? { tileId: session.tileId, title: session.title } : null
+  }, [activityOpen, agentsView.focusedSessionId, agentsView.isOpen, agentsView.sessions])
+
   const windowTitle = useMemo(() => getActiveWindowTitle({
     tiles,
     terminalTitles,
@@ -574,7 +582,8 @@ function AppContent(): React.ReactElement {
     focusedTileId,
     fullviewActiveTileId,
     splitViewState,
-  }), [activeWorkspaceName, focusedTileId, fullviewActiveTileId, splitViewState, terminalTitles, tiles, viewMode])
+    agentsViewSession: agentsViewTitleSession,
+  }), [activeWorkspaceName, agentsViewTitleSession, focusedTileId, fullviewActiveTileId, splitViewState, terminalTitles, tiles, viewMode])
 
   useEffect(() => {
     void window.electron.window.setTitle(windowTitle)
