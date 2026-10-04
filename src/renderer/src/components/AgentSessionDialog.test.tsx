@@ -350,6 +350,11 @@ async function settle(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 50))
 }
 
+async function waitFor(condition: () => boolean, timeoutMs = 2000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (!condition() && Date.now() < deadline) await settle()
+}
+
 async function chooseWorkspace(container: any, label: string): Promise<void> {
   dispatch(findWorkspaceTrigger(container), 'click')
   await settle()
@@ -386,6 +391,7 @@ test('preselects the initial workspace and its configured usable provider', asyn
     assert.equal(findWorkspaceTrigger(container).getAttribute('aria-label'), 'Workspace: workspace-b')
     assert.equal(findWorkspaceTrigger(container).getAttribute('aria-expanded'), 'false')
     assert.equal(findRadio(container, 'Codex')?.getAttribute('aria-checked'), 'true')
+    await waitFor(() => capabilityCalls.length >= 1)
     assert.deepEqual(capabilityCalls, ['workspace-b'])
   } finally {
     root.unmount()
@@ -414,6 +420,7 @@ test('changing workspaces updates provider choices and requests new capabilities
     const divs = container.getElementsByTagName('div')
     assert.equal(Array.from({ length: divs.length }, (_, index) => divs[index])
       .some((element) => element.getAttribute('role') === 'radiogroup'), false)
+    await waitFor(() => capabilityCalls.length >= 2)
     assert.deepEqual(capabilityCalls, ['workspace-a', 'workspace-b'])
   } finally {
     root.unmount()
