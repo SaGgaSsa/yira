@@ -185,12 +185,16 @@ type TranslationResources = {
     statusExited: string
     exitedMessage: string
     provider: string
+    claude: string
+    codex: string
     workspace: string
+    unnamedWorkspace: string
+    noUsableWorkspace: string
     closeDialog: string
     prompt: string
     promptPlaceholder: string
     worktree: string
-    worktreeUnavailable: string
+    worktreeDescription: string
     createSession: string
     creatingSession: string
     shortcutLabel: string
@@ -960,12 +964,16 @@ const en: TranslationResources = {
     statusExited: 'Exited',
     exitedMessage: 'Session exited',
     provider: 'Provider',
+    claude: 'Claude',
+    codex: 'Codex',
     workspace: 'Workspace',
+    unnamedWorkspace: 'Unnamed workspace',
+    noUsableWorkspace: 'No workspace has an enabled agent.',
     closeDialog: 'Close dialog',
     prompt: 'Prompt',
     promptPlaceholder: 'Describe what you want the agent to do. Enter starts the session; Shift+Enter adds a line.',
-    worktree: 'Run in a git worktree',
-    worktreeUnavailable: 'Git worktrees are unavailable for this workspace.',
+    worktree: 'Worktree',
+    worktreeDescription: 'Run in a git worktree',
     createSession: 'Create session',
     creatingSession: 'Creating session…',
     shortcutLabel: 'Shortcut: {{shortcut}}',
@@ -1695,12 +1703,16 @@ const es: TranslationResources = {
     statusExited: 'Finalizada',
     exitedMessage: 'La sesión terminó',
     provider: 'Proveedor',
+    claude: 'Claude',
+    codex: 'Codex',
     workspace: 'Espacio de trabajo',
+    unnamedWorkspace: 'Espacio de trabajo sin nombre',
+    noUsableWorkspace: 'Ningún espacio de trabajo tiene un agente habilitado.',
     closeDialog: 'Cerrar diálogo',
     prompt: 'Instrucción',
     promptPlaceholder: 'Describe qué quieres que haga el agente. Enter inicia la sesión; Shift+Enter agrega una línea.',
-    worktree: 'Ejecutar en un worktree de Git',
-    worktreeUnavailable: 'Los worktrees de Git no están disponibles en este espacio de trabajo.',
+    worktree: 'Worktree',
+    worktreeDescription: 'Ejecutar en un worktree de Git',
     createSession: 'Crear sesión',
     creatingSession: 'Creando sesión…',
     shortcutLabel: 'Atajo: {{shortcut}}',

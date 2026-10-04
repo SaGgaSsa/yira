@@ -278,7 +278,13 @@ app.whenReady().then(async () => {
 
   // Register all IPC handlers
   registerWorkspaceIPC({ beforeDelete: destroyWorkspaceTerminalSessions })
-  registerAgentsIPC({ usageService: agentUsageService, usageDetailsService: agentUsageDetailsService, usageIndex: agentUsageIndex, enabledProviders: async () => getEnabledAgentProviders(), workspaces: getWorkspaceRootFolders })
+  registerAgentsIPC({
+    usageService: agentUsageService,
+    usageDetailsService: agentUsageDetailsService,
+    usageIndex: agentUsageIndex,
+    enabledProviders: async () => getEnabledAgentProviders(),
+    workspaces: getWorkspaceRootFolders,
+  })
   registerCanvasIPC()
   registerTerminalIPC()
   void hydrateTerminalSessions().catch((error) => {

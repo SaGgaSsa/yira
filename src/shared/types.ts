@@ -177,6 +177,7 @@ export interface AgentSessionTranscriptResult {
 
 export interface AgentSessionCreateInput {
   workspaceId: string
+  provider?: AgentProvider
   prompt?: string
   resumeSessionId?: string
   resumeCwd?: string
@@ -201,6 +202,7 @@ export interface AgentSessionCloseResult {
 
 export interface AgentSessionCapabilities {
   provider: AgentProvider | null
+  providers: AgentProvider[]
   worktreeAvailable: boolean
 }
 

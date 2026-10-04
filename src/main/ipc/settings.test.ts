@@ -25,6 +25,8 @@ test('exposes managed Claude statusLine setup alongside ordinary agent hooks', a
   assert.match(settings, /setMainLanguage\(defaults\.language\)/)
   assert.match(settings, /normalizeAgentSessionShortcut/)
   assert.match(settings, /DEFAULT_USER_SETTINGS\.shortcuts\.newAgentSession/)
+  assert.doesNotMatch(settings, /if \(value === ''\)/)
+  assert.match(settings, /newAgentSession: normalizeAgentSessionShortcut\(rawSettings\.shortcuts\?\.newAgentSession\)\s*\?\?\s*DEFAULT_USER_SETTINGS\.shortcuts\.newAgentSession/)
   assert.match(settings, /parsed\?\.shortcuts\?\.newAgentSession !== normalized\.shortcuts\.newAgentSession/)
   assert.match(preload, /configureAgentHooks/)
   assert.match(preload, /uninstallAgentHooks/)

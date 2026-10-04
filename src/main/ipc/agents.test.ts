@@ -85,7 +85,7 @@ test('declares the agent bridge and registers it from main', async () => {
   assert.match(preload, /AgentSessionHistoryResult/)
   assert.match(preload, /subscribeSessions:[\s\S]*Promise<string \| false>/)
   assert.match(preload, /unsubscribeSessions: \(token: string\)/)
-  assert.match(main, /registerAgentsIPC\(\{ usageService: agentUsageService, usageDetailsService: agentUsageDetailsService, usageIndex: agentUsageIndex,/)
+  assert.match(main, /registerAgentsIPC\(\{\s*usageService: agentUsageService,/)
 })
 
 type IpcHandler = (event: { sender: FakeWebContents }, ...args: unknown[]) => unknown
@@ -254,12 +254,120 @@ test('reports no effective provider when user settings have not enabled the work
 
   assert.deepEqual(await ipcMain.call('agents:sessions:capabilities', sender, 'workspace-a'), {
     provider: null,
+    providers: [],
     worktreeAvailable: true,
   })
   await assert.rejects(
     () => ipcMain.call('agents:sessions:create', sender, { workspaceId: 'workspace-a', prompt: 'hello' }) as Promise<unknown>,
     /This workspace has no enabled agent/,
   )
+})
+
+test('reports only providers enabled globally and in the workspace', async () => {
+  const ipcMain = new FakeIpcMain()
+  const { registerAgentsIPC } = loadAgentsIPC(ipcMain)
+  registerAgentsIPC({
+    enabledProviders: async () => ['claude', 'codex'],
+    workspaceAgentConfig: async () => ({
+      ...workspaceAgentConfig(),
+      agentProviders: {
+        claude: { enabled: true, args: [] },
+        codex: { enabled: false, args: [] },
+      },
+    }),
+    worktrees: {
+      resolveWorkspaceWorktreeRepositories: async () => [],
+      createAgentWorkspaceWorktrees: async () => { throw new Error('not used') },
+      removeAgentWorktreeIfClean: async () => 'missing',
+    },
+  })
+
+  assert.deepEqual(
+    await ipcMain.call('agents:sessions:capabilities', new FakeWebContents(61), 'workspace-a'),
+    { provider: 'claude', providers: ['claude'], worktreeAvailable: false },
+  )
+})
+
+test('allows a valid enabled provider override for a new session', async () => {
+  const ipcMain = new FakeIpcMain()
+  const { registerAgentsIPC } = loadAgentsIPC(ipcMain)
+  let launch: AgentsViewLaunchSpec | undefined
+  registerAgentsIPC({
+    enabledProviders: async () => ['claude', 'codex'],
+    workspaceAgentConfig: async () => workspaceAgentConfig(),
+    createSession: async (_target, spec) => { launch = spec },
+  })
+
+  const result = await ipcMain.call('agents:sessions:create', new FakeWebContents(55), {
+    workspaceId: 'workspace-a',
+    provider: 'codex',
+    prompt: 'Use Codex',
+  }) as { workspaceId: string; tileId: string; provider: string }
+
+  assert.equal(result.workspaceId, 'workspace-a')
+  assert.match(result.tileId, /^agent-[0-9a-f-]+$/)
+  assert.equal(result.provider, 'codex')
+  assert.equal(launch?.provider, 'codex')
+})
+
+test('rejects a provider override that is disabled in user settings', async () => {
+  const ipcMain = new FakeIpcMain()
+  const { registerAgentsIPC } = loadAgentsIPC(ipcMain)
+  registerAgentsIPC({
+    enabledProviders: async () => ['claude'],
+    workspaceAgentConfig: async () => workspaceAgentConfig(),
+  })
+
+  await assert.rejects(
+    () => ipcMain.call('agents:sessions:create', new FakeWebContents(59), {
+      workspaceId: 'workspace-a',
+      provider: 'codex',
+      prompt: 'Use Codex',
+    }) as Promise<unknown>,
+    /Agent provider "codex" is disabled in user settings/,
+  )
+})
+
+test('rejects an unknown provider value during session input normalization', async () => {
+  const ipcMain = new FakeIpcMain()
+  const { registerAgentsIPC } = loadAgentsIPC(ipcMain)
+  registerAgentsIPC({})
+
+  await assert.rejects(
+    () => ipcMain.call('agents:sessions:create', new FakeWebContents(60), {
+      workspaceId: 'workspace-a',
+      provider: 'other',
+      prompt: 'Run the task',
+    }) as Promise<unknown>,
+    /Invalid agent provider/,
+  )
+})
+
+test('rejects a provider override disabled in the workspace', async () => {
+  const ipcMain = new FakeIpcMain()
+  const { registerAgentsIPC } = loadAgentsIPC(ipcMain)
+  let launches = 0
+  registerAgentsIPC({
+    enabledProviders: async () => ['claude', 'codex'],
+    workspaceAgentConfig: async () => ({
+      ...workspaceAgentConfig(),
+      agentProviders: {
+        claude: { enabled: true, args: [] },
+        codex: { enabled: false, args: [] },
+      },
+    }),
+    createSession: async () => { launches += 1 },
+  })
+
+  await assert.rejects(
+    () => ipcMain.call('agents:sessions:create', new FakeWebContents(58), {
+      workspaceId: 'workspace-a',
+      provider: 'codex',
+      prompt: 'Use Codex',
+    }) as Promise<unknown>,
+    /Agent provider "codex" is disabled for this workspace/,
+  )
+  assert.equal(launches, 0)
 })
 
 test('rejects an empty prompt before attempting to launch', async () => {
