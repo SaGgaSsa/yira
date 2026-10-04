@@ -370,24 +370,28 @@ test('rejects a provider override disabled in the workspace', async () => {
   assert.equal(launches, 0)
 })
 
-test('rejects an empty prompt before attempting to launch', async () => {
+test('starts a session without an initial prompt when the prompt is blank', async () => {
   const ipcMain = new FakeIpcMain()
   const { registerAgentsIPC } = loadAgentsIPC(ipcMain)
-  let launches = 0
+  const launches: AgentsViewLaunchSpec[] = []
   registerAgentsIPC({
     enabledProviders: async () => ['claude'],
     workspaceAgentConfig: async () => workspaceAgentConfig(),
-    createSession: async () => { launches += 1 },
+    createSession: async (_target, spec) => { launches.push(spec) },
   })
 
-  await assert.rejects(
-    () => ipcMain.call('agents:sessions:create', new FakeWebContents(53), {
+  for (const [id, prompt] of [[53, ' \n\t '], [54, undefined]] as const) {
+    await ipcMain.call('agents:sessions:create', new FakeWebContents(id), {
       workspaceId: 'workspace-a',
-      prompt: ' \n\t ',
-    }) as Promise<unknown>,
-    /Agent prompt is required/,
-  )
-  assert.equal(launches, 0)
+      ...(prompt !== undefined ? { prompt } : {}),
+    })
+  }
+
+  assert.equal(launches.length, 2)
+  for (const launch of launches) {
+    assert.equal(launch.prompt, undefined)
+    assert.equal(launch.title, '')
+  }
 })
 
 test('ignores legacy overrides when launching a resumed session from its worktree cwd', async () => {

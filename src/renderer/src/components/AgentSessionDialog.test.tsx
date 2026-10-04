@@ -564,6 +564,30 @@ test('sends the selected workspace, provider, prompt, and worktree setting', asy
   }
 })
 
+test('starts a session without a prompt when the prompt is empty', async () => {
+  const { container, root } = renderDialog({
+    workspaces: [workspace('workspace-a', { agentProvider: 'claude' })],
+  })
+
+  try {
+    await settle()
+    assert.equal(findCreateButton(container).hasAttribute('disabled'), false)
+    const prompt = findElement(container, 'textarea')
+    prompt.value = '  '
+    dispatch(prompt, 'input')
+    dispatch(prompt, 'keydown', { key: 'Enter', shiftKey: false })
+    await settle()
+    assert.deepEqual(payloads[0], {
+      workspaceId: 'workspace-a',
+      provider: 'claude',
+      worktree: false,
+    })
+    assert.equal(createdCount, 1)
+  } finally {
+    root.unmount()
+  }
+})
+
 test('hides the worktree control while checking capabilities and when unavailable', async () => {
   let resolveCapabilities: (value: AgentSessionCapabilities) => void = () => undefined
   const pendingCapabilities = new Promise<AgentSessionCapabilities>((resolve) => { resolveCapabilities = resolve })

@@ -270,9 +270,9 @@ function normalizeCreateInput(value: unknown): NormalizedAgentSessionCreateInput
       || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/.test(value.prompt)) {
       throw new Error('Invalid agent prompt')
     }
-    prompt = value.prompt
+    // A blank prompt starts the agent without an initial message.
+    if (value.prompt.trim()) prompt = value.prompt
   }
-  if (!resumeSessionId && (!prompt || !prompt.trim())) throw new Error('Agent prompt is required')
 
   let resumeCwd: string | undefined
   if (value.resumeCwd !== undefined) {
