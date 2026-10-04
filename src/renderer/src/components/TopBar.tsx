@@ -140,6 +140,50 @@ export function TopBar({
             >
               <Activity size={14} />
             </button>
+            {agentProvider && agents[agentProvider]?.enabled && <AgentUsageIndicator provider={agentProvider} snapshot={agentUsage?.[agentProvider]} />}
+          </div>
+
+          <div className="absolute left-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1 rounded-md border border-border-visible bg-bg-secondary px-0.5 top-1/2">
+            <SegmentedButton
+              active={!agentsViewOpen && viewMode === 'fullview'}
+              label={t('shortcuts.focus')}
+              icon={Columns}
+              onClick={() => onSetViewMode('fullview')}
+            />
+            <SegmentedButton
+              active={!agentsViewOpen && viewMode === 'splitview'}
+              label={t('shortcuts.split')}
+              title={splitOrientation === 'horizontal' ? 'Split top/bottom' : 'Split left/right'}
+              icon={SplitIcon}
+              onClick={() => onSetViewMode('splitview')}
+              disabled={!canSplitView}
+            />
+            {isGridWorkspace ? (
+              <SegmentedButton
+                active={!agentsViewOpen && viewMode === 'gridview'}
+                label={t('shortcuts.grid')}
+                title={viewMode === 'gridview' ? t('workspace.canvas') : t('shortcuts.grid')}
+                icon={Grid3X3}
+                onClick={() => onSetViewMode(viewMode === 'gridview' && !agentsViewOpen ? 'canvas' : 'gridview')}
+              />
+            ) : (
+              <SegmentedButton
+                active={!agentsViewOpen && viewMode === 'canvas'}
+                label={t('shortcuts.canvas')}
+                title={viewMode === 'canvas' ? t('shortcuts.grid') : t('shortcuts.canvas')}
+                icon={LayoutGrid}
+                onClick={() => onSetViewMode(viewMode === 'canvas' && !agentsViewOpen ? 'gridview' : 'canvas')}
+              />
+            )}
+            {boardEnabled && boardVisible && (
+              <SegmentedButton
+                active={!agentsViewOpen && viewMode === 'board'}
+                label={t('tile.board')}
+                icon={ClipboardList}
+                badgeCount={boardReviewCount}
+                onClick={() => onSetViewMode('board')}
+              />
+            )}
             {agentsViewAvailable && (
               <button
                 className={`relative inline-flex h-7 items-center gap-1.5 rounded-md px-1.5 text-xs transition-colors ${
@@ -158,56 +202,12 @@ export function TopBar({
                 <span className="font-mono text-[10px]">{agentSessionCount}</span>
                 {agentAttentionCount > 0 && (
                   <span
-                    className="absolute -right-1 -top-1 size-2.5 rounded-full border-2 border-bg-primary bg-warning"
+                    className="absolute -right-1 -top-1 size-2.5 rounded-full border-2 border-bg-secondary bg-warning"
                     title={t('agentsView.needsAttention', { count: agentAttentionCount })}
                     aria-hidden="true"
                   />
                 )}
               </button>
-            )}
-            {agentProvider && agents[agentProvider]?.enabled && <AgentUsageIndicator provider={agentProvider} snapshot={agentUsage?.[agentProvider]} />}
-          </div>
-
-          <div className="absolute left-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1 rounded-md border border-border-visible bg-bg-secondary px-0.5 top-1/2">
-            <SegmentedButton
-              active={viewMode === 'fullview'}
-              label={t('shortcuts.focus')}
-              icon={Columns}
-              onClick={() => onSetViewMode('fullview')}
-            />
-            <SegmentedButton
-              active={viewMode === 'splitview'}
-              label={t('shortcuts.split')}
-              title={splitOrientation === 'horizontal' ? 'Split top/bottom' : 'Split left/right'}
-              icon={SplitIcon}
-              onClick={() => onSetViewMode('splitview')}
-              disabled={!canSplitView}
-            />
-            {isGridWorkspace ? (
-              <SegmentedButton
-                active={viewMode === 'gridview'}
-                label={t('shortcuts.grid')}
-                title={viewMode === 'gridview' ? t('workspace.canvas') : t('shortcuts.grid')}
-                icon={Grid3X3}
-                onClick={() => onSetViewMode(viewMode === 'gridview' ? 'canvas' : 'gridview')}
-              />
-            ) : (
-              <SegmentedButton
-                active={viewMode === 'canvas'}
-                label={t('shortcuts.canvas')}
-                title={viewMode === 'canvas' ? t('shortcuts.grid') : t('shortcuts.canvas')}
-                icon={LayoutGrid}
-                onClick={() => onSetViewMode(viewMode === 'canvas' ? 'gridview' : 'canvas')}
-              />
-            )}
-            {boardEnabled && boardVisible && (
-              <SegmentedButton
-                active={viewMode === 'board'}
-                label={t('tile.board')}
-                icon={ClipboardList}
-                badgeCount={boardReviewCount}
-                onClick={() => onSetViewMode('board')}
-              />
             )}
           </div>
 
