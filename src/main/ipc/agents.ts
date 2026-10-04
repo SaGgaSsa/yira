@@ -101,6 +101,7 @@ interface NormalizedAgentSessionCreateInput {
   resumeSessionId?: string
   resumeCwd?: string
   worktree: boolean
+  provider?: AgentProvider
 }
 
 const defaultWorktrees: AgentIPCWorktrees = {
@@ -282,6 +283,9 @@ function normalizeCreateInput(value: unknown): NormalizedAgentSessionCreateInput
   if (value.worktree !== undefined && typeof value.worktree !== 'boolean') {
     throw new Error('Invalid agent worktree option')
   }
+  if (value.provider !== undefined && !isAgentProvider(value.provider)) {
+    throw new Error('Invalid agent provider')
+  }
 
   return {
     workspaceId,
@@ -289,6 +293,7 @@ function normalizeCreateInput(value: unknown): NormalizedAgentSessionCreateInput
     ...(resumeSessionId ? { resumeSessionId } : {}),
     ...(resumeCwd !== undefined ? { resumeCwd } : {}),
     worktree: value.worktree === true,
+    ...(value.provider !== undefined ? { provider: value.provider } : {}),
   }
 }
 
@@ -404,16 +409,32 @@ export function registerAgentsIPC(options: AgentIPCOptions = {}): void {
         // An inaccessible workspace cannot offer a worktree capability.
       }
     }
+    const providers = config
+      ? enabled.filter((candidate) => config.agentProviders?.[candidate]?.enabled === true)
+      : []
     const worktreeAvailable = repositories.length > 0
-    return { provider, worktreeAvailable }
+    return { provider, providers, worktreeAvailable }
   })
 
   ipcMain.handle('agents:sessions:create', async (_event, rawInput: unknown): Promise<AgentSessionCreateResult> => {
     const input = normalizeCreateInput(rawInput)
     const config = await workspaceAgentConfig(input.workspaceId)
     const enabled = await enabledProviders(options)
-    const provider = effectiveWorkspaceProvider(config, enabled)
-    if (!provider || !config) throw new Error('This workspace has no enabled agent')
+    if (!config) throw new Error('This workspace has no enabled agent')
+
+    let provider: AgentProvider | null
+    if (input.provider) {
+      if (!enabled.includes(input.provider)) {
+        throw new Error(`Agent provider "${input.provider}" is disabled in user settings`)
+      }
+      if (config.agentProviders[input.provider]?.enabled !== true) {
+        throw new Error(`Agent provider "${input.provider}" is disabled for this workspace`)
+      }
+      provider = input.provider
+    } else {
+      provider = effectiveWorkspaceProvider(config, enabled)
+    }
+    if (!provider) throw new Error('This workspace has no enabled agent')
 
     const providerConfig: AgentProviderConfig = config.agentProviders[provider]
 

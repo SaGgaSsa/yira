@@ -36,7 +36,7 @@ import { useFontSize } from './hooks/useFontSize'
 import { resolveSidebarCollapsedForActivity } from './utils/emptyWorkspaceView'
 import { useUpdateStore } from './store/updateStore'
 import { findMergeTargetGroup, getGroupingBlockedReason } from './utils/grouping'
-import { GRID_MAX_TILES, GROUP_COLOR_ORDER, getDefaultTileSize, type AgentActiveSession, type AgentUsageSnapshot, type BoardState, type BoardTask, type FileTileOpenOptions, type TileState, type CanvasState, type GridWorkspaceState, type Workspace, type WorkspaceMetadata, type TileGroup, type ViewMode, type SplitPanelId, type SplitViewState, type WorkspaceManagementEntry, type WorkspaceType } from '@shared/types'
+import { GRID_MAX_TILES, GROUP_COLOR_ORDER, getDefaultTileSize, type AgentActiveSession, type AgentSessionCreateResult, type AgentUsageSnapshot, type BoardState, type BoardTask, type FileTileOpenOptions, type TileState, type CanvasState, type GridWorkspaceState, type Workspace, type WorkspaceMetadata, type TileGroup, type ViewMode, type SplitPanelId, type SplitViewState, type WorkspaceManagementEntry, type WorkspaceType } from '@shared/types'
 import { createDefaultAgentProvidersConfig } from '@shared/workspaceConfig'
 import { createEmptyGridWorkspaceState, normalizeGridWorkspaceState } from '@shared/gridWorkspaceState'
 import {
@@ -465,9 +465,24 @@ function AppContent(): React.ReactElement {
   const [showJsonEditor, setShowJsonEditor] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [activityOpen, setActivityOpen] = useState(false)
+  const [pendingAgentSession, setPendingAgentSession] = useState<{ workspaceId: string; tileId: string } | null>(null)
+  const pendingAgentSessionSourceRef = useRef('')
   useEffect(() => {
     if (agentsView.sessionDialogOpen) setActivityOpen(false)
   }, [agentsView.sessionDialogOpen])
+  useEffect(() => {
+    if (!pendingAgentSession) return
+    if (activeWorkspaceId === pendingAgentSession.workspaceId) {
+      if (agentsView.effectiveProvider) agentsView.openForSession(pendingAgentSession.tileId)
+      pendingAgentSessionSourceRef.current = ''
+      setPendingAgentSession(null)
+      return
+    }
+    if (activeWorkspaceId !== pendingAgentSessionSourceRef.current) {
+      pendingAgentSessionSourceRef.current = ''
+      setPendingAgentSession(null)
+    }
+  }, [activeWorkspaceId, agentsView.effectiveProvider, agentsView.openForSession, pendingAgentSession])
   const sidebarBeforeActivityRef = useRef(false)
   const previousActivityOpenRef = useRef(false)
   const [groupEditor, setGroupEditor] = useState<GroupEditorState>(null)
@@ -1010,6 +1025,12 @@ function AppContent(): React.ReactElement {
   const sidebarWorkspaces = useMemo(
     () => getWorkspaceSidebarOrder(workspaceMetadata),
     [workspaceMetadata],
+  )
+  const agentSessionWorkspaces = useMemo(
+    () => sidebarWorkspaces.filter((workspace) => (
+      workspace.id === activeWorkspaceId || sessionActiveWorkspaceIds.has(workspace.id)
+    )),
+    [activeWorkspaceId, sessionActiveWorkspaceIds, sidebarWorkspaces],
   )
   const deactivateWorkspace = useCallback(async (workspace: WorkspaceMetadata) => {
     if (pendingWorkspaceDeactivationIds.has(workspace.id)) return
@@ -1623,6 +1644,22 @@ function AppContent(): React.ReactElement {
     setActivityOpen(false)
     switchWorkspace(workspace)
   }, [agentsView.close, switchWorkspace])
+
+  const handleAgentSessionCreated = useCallback((result: AgentSessionCreateResult) => {
+    if (result.workspaceId === activeWorkspaceId) {
+      agentsView.openForSession(result.tileId)
+      return
+    }
+
+    const workspace = sidebarWorkspaces.find((entry) => entry.id === result.workspaceId)
+    if (!workspace) return
+
+    pendingAgentSessionSourceRef.current = activeWorkspaceId
+    setPendingAgentSession({ workspaceId: result.workspaceId, tileId: result.tileId })
+    setActivityOpen(false)
+    agentsView.close()
+    switchWorkspace(workspace)
+  }, [activeWorkspaceId, agentsView.close, agentsView.openForSession, sidebarWorkspaces, switchWorkspace])
 
   const goToWorkspaceTerminal = useCallback((workspace: WorkspaceMetadata, tileId: string | null) => {
     agentsView.close()
@@ -2659,15 +2696,15 @@ function AppContent(): React.ReactElement {
           setShowJsonEditor(true)
         }}
       />
-      {activeWorkspaceId && agentsView.effectiveProvider && (
+      {workspaceMetadata.length > 0 && (
         <AgentSessionDialog
           open={agentsView.sessionDialogOpen}
-          workspaceId={activeWorkspaceId}
-          workspaceName={activeWorkspaceName}
-          provider={agentsView.effectiveProvider}
-          worktreeAvailable={agentsView.worktreeAvailable}
+          workspaces={agentSessionWorkspaces}
+          initialWorkspaceId={agentsView.sessionDialogInitialWorkspaceId}
+          agents={agentSettings}
+          focusRequestId={agentsView.sessionDialogFocusRequestId}
           onClose={agentsView.closeSessionDialog}
-          onCreated={agentsView.onSessionCreated}
+          onCreated={handleAgentSessionCreated}
         />
       )}
       <RawJsonEditor
