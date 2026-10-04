@@ -21,6 +21,9 @@ export interface AgentsViewProps {
   focusedSessionId: string | null
   /** Receives the synthetic tileId used by the terminal runtime. */
   onFocusSession: (tileId: string) => void
+  /** Synthetic tileId of the session that fills the view, if any. */
+  maximizedSessionId: string | null
+  onMaximizedSessionChange: (tileId: string | null) => void
   onCloseSession: (session: AgentActiveSession) => void
   onNewSession: () => void
   shortcutLabel?: string
@@ -165,6 +168,8 @@ export function AgentsView({
   sessions,
   focusedSessionId,
   onFocusSession,
+  maximizedSessionId,
+  onMaximizedSessionChange,
   onCloseSession,
   onNewSession,
   shortcutLabel = 'Ctrl+N',
@@ -174,7 +179,6 @@ export function AgentsView({
   const { t } = useTranslation()
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [size, setSize] = useState({ width: 0, height: 0 })
-  const [maximizedSessionId, setMaximizedSessionId] = useState<string | null>(null)
   const visibleSessions = useMemo(
     () => selectAgentsViewSessions({ sessions }, workspaceId),
     [sessions, workspaceId],
@@ -198,9 +202,9 @@ export function AgentsView({
 
   useEffect(() => {
     if (maximizedSessionId && !visibleSessions.some((session) => session.tileId === maximizedSessionId)) {
-      setMaximizedSessionId(null)
+      onMaximizedSessionChange(null)
     }
-  }, [maximizedSessionId, visibleSessions])
+  }, [maximizedSessionId, onMaximizedSessionChange, visibleSessions])
 
   const grid = computeAgentsViewGrid(visibleSessions.length, size.width, size.height)
   const gridStyle: React.CSSProperties = {
@@ -267,7 +271,7 @@ export function AgentsView({
                     isVisible={isVisible}
                     onFocus={() => onFocusSession(session.tileId)}
                     onClose={() => onCloseSession(session)}
-                    onToggleMaximize={() => setMaximizedSessionId(isMaximized ? null : session.tileId)}
+                    onToggleMaximize={() => onMaximizedSessionChange(isMaximized ? null : session.tileId)}
                     onOpenBrowserTile={onOpenBrowserTile}
                     onOpenFileTile={onOpenFileTile}
                   />

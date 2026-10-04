@@ -465,6 +465,18 @@ function AppContent(): React.ReactElement {
   const [showJsonEditor, setShowJsonEditor] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [activityOpen, setActivityOpen] = useState(false)
+  const [agentsMaximizedSessionId, setAgentsMaximizedSessionId] = useState<string | null>(null)
+  // A maximized agent session hides the sidebar without changing its saved state.
+  const agentSessionMaximized = agentsMaximizedSessionId !== null && agentsView.isOpen && !activityOpen
+  const sidebarHidden = sidebarCollapsed || agentSessionMaximized
+  const toggleSidebar = useCallback(() => {
+    if (agentSessionMaximized) {
+      setAgentsMaximizedSessionId(null)
+      setSidebarCollapsed(false)
+      return
+    }
+    setSidebarCollapsed((collapsed) => !collapsed)
+  }, [agentSessionMaximized])
   const [pendingAgentSession, setPendingAgentSession] = useState<{ workspaceId: string; tileId: string } | null>(null)
   const pendingAgentSessionSourceRef = useRef('')
   useEffect(() => {
@@ -2300,8 +2312,8 @@ function AppContent(): React.ReactElement {
         boardVisible={boardVisible}
         boardReviewCount={boardReviewCount}
         canSplitView={attachedTiles.length >= 2}
-        sidebarCollapsed={sidebarCollapsed}
-        onToggleSidebar={() => setSidebarCollapsed(c => !c)}
+        sidebarCollapsed={sidebarHidden}
+        onToggleSidebar={toggleSidebar}
         activityOpen={activityOpen}
         onToggleActivity={() => {
           agentsView.close()
@@ -2333,8 +2345,8 @@ function AppContent(): React.ReactElement {
       <div className="flex min-h-0 flex-1 overflow-hidden">
       {/* Sidebar — below the native title bar */}
       <Sidebar
-        collapsed={sidebarCollapsed}
-        onToggle={() => setSidebarCollapsed(c => !c)}
+        collapsed={sidebarHidden}
+        onToggle={toggleSidebar}
         footer={
           <div ref={footerRef} className="relative border-t border-border bg-bg-secondary px-3 py-3">
             {showProfilePicker && (
@@ -2671,6 +2683,8 @@ function AppContent(): React.ReactElement {
                   sessions={agentsView.sessions}
                   focusedSessionId={agentsView.focusedSessionId}
                   onFocusSession={agentsView.openForSession}
+                  maximizedSessionId={agentsMaximizedSessionId}
+                  onMaximizedSessionChange={setAgentsMaximizedSessionId}
                   onCloseSession={(session) => { void closeAgentsSession(session) }}
                   onNewSession={agentsView.openNewSessionDialog}
                   shortcutLabel={newAgentSessionShortcut}
