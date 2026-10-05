@@ -4,6 +4,8 @@ import { ChevronDown, ChevronRight, ExternalLink, File, Folder, RefreshCw, Searc
 import type { FileEntry } from '@shared/types'
 import {
   createExplorerNode,
+  getLoadedExpandedDirectories,
+  mergeExplorerDirectoryChildren,
   toggleExplorerDirectory,
   updateExplorerDirectory,
   type ExplorerNode,
@@ -19,6 +21,10 @@ import {
   type WorkspaceSearchRequest,
   type WorkspaceSearchState,
 } from '@/utils/workspaceExplorerSearch'
+
+// Explorer trees by root path, kept for the app session so switching panel tabs
+// or workspaces does not collapse the folders the user had open.
+const explorerTreeCache = new Map<string, ExplorerNode>()
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback
@@ -108,7 +114,10 @@ interface WorkspaceExplorerProps {
 
 export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile }: WorkspaceExplorerProps): React.ReactElement {
   const { t } = useTranslation()
-  const [root, setRoot] = useState<ExplorerNode>(() => createExplorerNode('', rootLabel(rootPath), 'directory'))
+  const [root, setRoot] = useState<ExplorerNode>(() => (
+    explorerTreeCache.get(rootPath) ?? createExplorerNode('', rootLabel(rootPath), 'directory')
+  ))
+  const treeRootPathRef = useRef(rootPath)
   const [openError, setOpenError] = useState<string | null>(null)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchState, setSearchState] = useState<WorkspaceSearchState>(() => createWorkspaceSearchState())
@@ -135,11 +144,34 @@ export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile }: Work
     }
   }, [rootPath, t])
 
+  const refreshDirectory = useCallback(async (relativePath: string) => {
+    try {
+      const result = await window.electron.files.list(rootPath, relativePath)
+      if (treeRootPathRef.current !== rootPath) return
+      setRoot((current) => mergeExplorerDirectoryChildren(current, relativePath, result.entries.map(toExplorerNode)))
+    } catch {
+      // Keep the cached listing; the user can collapse and reopen the folder to retry.
+    }
+  }, [rootPath])
+
+  // Runs before the root reset below so a stale tree is never stored under a new root path.
   useEffect(() => {
+    if (treeRootPathRef.current === rootPath) explorerTreeCache.set(rootPath, root)
+  }, [root, rootPath])
+
+  useEffect(() => {
+    treeRootPathRef.current = rootPath
+    const cached = explorerTreeCache.get(rootPath)
+    if (cached?.status === 'ready') {
+      setRoot(cached)
+      for (const relativePath of getLoadedExpandedDirectories(cached)) void refreshDirectory(relativePath)
+      return
+    }
+
     const nextRoot = createExplorerNode('', rootName, 'directory')
     setRoot(nextRoot)
     void loadDirectory('')
-  }, [loadDirectory, rootName])
+  }, [loadDirectory, refreshDirectory, rootName, rootPath])
 
   useEffect(() => {
     searchRequestIdRef.current += 1

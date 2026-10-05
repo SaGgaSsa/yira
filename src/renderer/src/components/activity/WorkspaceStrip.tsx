@@ -19,7 +19,7 @@ export function WorkspaceStrip({ cards, todayHistory, agents, onOpenWorkspace, o
   }
 
   return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-2">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       {cards.map((card) => (
         <WorkspaceActivityCard
           key={card.workspace.id}

@@ -53,6 +53,8 @@ type TranslationResources = {
     emptyMessage: string
     terminals_one: string
     terminals_other: string
+    workingCount: string
+    noAgentsRunning: string
     statusActive: string
     statusUnread: string
     statusIdle: string
@@ -835,6 +837,8 @@ const en: TranslationResources = {
     emptyMessage: 'Open a workspace to see it here. Only workspaces visited in this session appear.',
     terminals_one: '{{count}} terminal',
     terminals_other: '{{count}} terminals',
+    workingCount: '{{count}} working',
+    noAgentsRunning: 'No agents running',
     statusActive: 'Terminals active',
     statusUnread: 'Unreviewed output',
     statusIdle: 'No activity',
@@ -1617,6 +1621,8 @@ const es: TranslationResources = {
     emptyMessage: 'Abre un espacio de trabajo para verlo aquí. Solo aparecen los visitados en esta sesión.',
     terminals_one: '{{count}} terminal',
     terminals_other: '{{count}} terminales',
+    workingCount: '{{count}} trabajando',
+    noAgentsRunning: 'Sin agentes en ejecución',
     statusActive: 'Terminales activas',
     statusUnread: 'Salida sin revisar',
     statusIdle: 'Sin actividad',

@@ -280,3 +280,25 @@ test('rejects stale post-activation navigation targets', () => {
     tileId: 't1',
   }), null)
 })
+
+test('summarizes agents and working terminals per workspace', () => {
+  const [card] = buildWorkspaceActivityCards({
+    workspaces: [workspace('busy')],
+    sessionActiveIds: new Set(['busy']),
+    attentionCounts: {},
+    terminalCounts: { busy: 4 },
+    activeWorkspaceId: null,
+    processActivity: [
+      { workspaceId: 'busy', tileId: 't1', state: 'working', agent: 'codex' },
+      { workspaceId: 'busy', tileId: 't2', state: 'background', agent: 'claude' },
+      { workspaceId: 'busy', tileId: 't3', state: 'working', agent: 'claude' },
+      { workspaceId: 'other', tileId: 't4', state: 'working', agent: 'claude' },
+    ],
+  })
+
+  assert.equal(card.workingTerminalCount, 2)
+  assert.deepEqual(card.agents, [
+    { agent: 'claude', count: 2, working: 1 },
+    { agent: 'codex', count: 1, working: 1 },
+  ])
+})

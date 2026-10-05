@@ -28,6 +28,18 @@ import { UsageKpis } from './activity/UsageKpis'
 import { WorkspaceStrip } from './activity/WorkspaceStrip'
 import { activityPanelClass } from './activity/shared'
 
+interface CachedActivityHistory {
+  history: AgentUsageHistorySnapshot | null
+  todayHistory: AgentUsageHistorySnapshot | null
+}
+
+// Kept for the app session so reopening Activity shows the last data while it refreshes.
+const activityHistoryCache = new Map<string, CachedActivityHistory>()
+
+function activityCacheKey(period: AgentUsagePeriod, providers: readonly AgentProvider[]): string {
+  return `${period}|${providers.join(',')}`
+}
+
 export interface WorkspaceActivityViewProps {
   cards: readonly WorkspaceActivityCardData[]
   agentUsage?: AgentUsageSnapshot | null
@@ -50,10 +62,15 @@ export function WorkspaceActivityView({
   const { t } = useTranslation()
   const enabled = useMemo(() => getEnabledAgentProviders(agents), [agents])
   const [filters, setFilters] = useState(readActivityFilters)
-  const [history, setHistory] = useState<AgentUsageHistorySnapshot | null>(null)
-  const [todayHistory, setTodayHistory] = useState<AgentUsageHistorySnapshot | null>(null)
   const providerFilter = normalizeActivityFilter(filters.provider, enabled)
   const providers: AgentProvider[] = providerFilter === 'all' ? enabled : [providerFilter]
+  const cacheKey = activityCacheKey(filters.period, providers)
+  const [history, setHistory] = useState<AgentUsageHistorySnapshot | null>(
+    () => activityHistoryCache.get(cacheKey)?.history ?? null,
+  )
+  const [todayHistory, setTodayHistory] = useState<AgentUsageHistorySnapshot | null>(
+    () => activityHistoryCache.get(cacheKey)?.todayHistory ?? null,
+  )
   const workspaceList = workspaces ?? cards.map((card) => card.workspace)
   const workspaceNames = useMemo(
     () => Object.fromEntries(workspaceList.map((workspace) => [workspace.id, workspace.name])),
@@ -71,8 +88,9 @@ export function WorkspaceActivityView({
   useEffect(() => {
     let active = true
     let timer = 0
-    setHistory(null)
-    setTodayHistory(null)
+    const cached = activityHistoryCache.get(cacheKey)
+    setHistory(cached?.history ?? null)
+    setTodayHistory(cached?.todayHistory ?? null)
     const refresh = async () => {
       if (!window.electron?.agents?.usageHistory || providers.length === 0) return
       try {
@@ -86,6 +104,7 @@ export function WorkspaceActivityView({
           ? await window.electron.agents.usageHistory(todayRequest)
           : nextHistory
         if (!active) return
+        activityHistoryCache.set(cacheKey, { history: nextHistory, todayHistory: nextToday })
         setHistory(nextHistory)
         setTodayHistory(nextToday)
         const indexing = nextHistory?.indexing === true || nextToday?.indexing === true
@@ -99,7 +118,7 @@ export function WorkspaceActivityView({
       active = false
       window.clearTimeout(timer)
     }
-  }, [enabled.join(','), filters.period, providers.join(',')])
+  }, [cacheKey, enabled.join(','), filters.period, providers.join(',')])
 
   const changeFilters = (next: Partial<typeof filters>) => {
     setFilters((current) => ({ ...current, ...next }))

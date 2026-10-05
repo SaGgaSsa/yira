@@ -1,14 +1,26 @@
 import type { WorkspaceMetadata } from '@shared/types'
-import type { TerminalProcessActivity } from '@shared/terminalProcessActivity'
+import type { TerminalProcessActivity, TerminalProcessAgent } from '@shared/terminalProcessActivity'
 import { getWorkspaceSidebarOrder } from './workspaceOrdering'
 
 export type WorkspaceActivityStatus = 'active' | 'unread' | 'idle'
+
+export interface WorkspaceActivityAgentSummary {
+  agent: TerminalProcessAgent
+  /** Terminals running this agent. */
+  count: number
+  /** Of those, terminals where the agent is working right now. */
+  working: number
+}
 
 export interface WorkspaceActivityCardData {
   workspace: WorkspaceMetadata
   status: WorkspaceActivityStatus
   /** Real terminal count supplied by the caller (tiles for the active workspace, live runtimes otherwise). */
   terminalCount: number
+  /** Terminals with recent output or a working process. */
+  workingTerminalCount: number
+  /** Agents detected in the workspace terminals, in a stable order. */
+  agents: WorkspaceActivityAgentSummary[]
   attentionCount: number
   isCurrent: boolean
   /** Tile that requires attention, resolved from tile counters only. Null when unknown. */
@@ -58,6 +70,21 @@ export function resolveWorkspaceAttentionTileId(
   return bestTileId
 }
 
+const AGENT_ORDER: readonly TerminalProcessAgent[] = ['claude', 'codex', 'opencode']
+
+function summarizeWorkspaceAgents(processes: readonly TerminalProcessActivity[]): WorkspaceActivityAgentSummary[] {
+  return AGENT_ORDER
+    .map((agent) => {
+      const agentProcesses = processes.filter((activity) => activity.agent === agent)
+      return {
+        agent,
+        count: agentProcesses.length,
+        working: agentProcesses.filter((activity) => activity.state === 'working').length,
+      }
+    })
+    .filter((summary) => summary.count > 0)
+}
+
 export interface BuildWorkspaceActivityCardsOptions {
   workspaces: readonly WorkspaceMetadata[]
   /**
@@ -92,16 +119,17 @@ export function buildWorkspaceActivityCards({
     if (!sessionActiveIds.has(workspace.id)) continue
     const attentionCount = attentionCounts[workspace.id] ?? 0
     const recentOutput = recentOutputCounts[workspace.id] ?? 0
-    const processWorking = processActivity.some((activity) => (
-      activity.workspaceId === workspace.id && activity.state === 'working'
-    ))
-    const status: WorkspaceActivityStatus = recentOutput > 0 || processWorking
+    const workspaceProcesses = processActivity.filter((activity) => activity.workspaceId === workspace.id)
+    const processWorkingCount = workspaceProcesses.filter((activity) => activity.state === 'working').length
+    const status: WorkspaceActivityStatus = recentOutput > 0 || processWorkingCount > 0
       ? 'active'
       : attentionCount > 0 ? 'unread' : 'idle'
     cards.push({
       workspace,
       status,
       terminalCount: terminalCounts[workspace.id] ?? 0,
+      workingTerminalCount: Math.max(recentOutput, processWorkingCount),
+      agents: summarizeWorkspaceAgents(workspaceProcesses),
       attentionCount,
       isCurrent: workspace.id === activeWorkspaceId,
       attentionTileId: resolveWorkspaceAttentionTileId(
