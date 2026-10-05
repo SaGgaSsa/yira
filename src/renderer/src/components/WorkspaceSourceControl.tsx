@@ -212,6 +212,11 @@ export function WorkspaceSourceControl({
     if (workspaceRef.current !== requestWorkspaceId || pendingActionsRef.current.has(actionKey)) return
 
     pendingActionsRef.current.add(actionKey)
+    // Actions run from an open section. Pin it open so it does not collapse
+    // when the repository runs out of changes (for example after a commit).
+    setExpandedRepositories((current) => (
+      current[repositoryPath] === undefined ? { ...current, [repositoryPath]: true } : current
+    ))
     setPendingActions((current) => ({ ...current, [repositoryPath]: repositoryAction.type }))
     setActionErrors((current) => ({ ...current, [repositoryPath]: undefined }))
 
@@ -293,8 +298,13 @@ export function WorkspaceSourceControl({
       || left.name.localeCompare(right.name)
       || left.relativePath.localeCompare(right.relativePath)
   })
+  // Repositories with commits waiting to sync stay visible so a commit does not hide its section.
+  const hasOutgoingCommits = (repositoryStatus: GitStatusResult | undefined): boolean => (repositoryStatus?.ahead ?? 0) > 0
   const visibleRepositories = onlyChanged
-    ? orderedRepositories.filter((repository) => isRepositoryChanged(statuses[repository.relativePath]))
+    ? orderedRepositories.filter((repository) => {
+      const repositoryStatus = statuses[repository.relativePath]
+      return isRepositoryChanged(repositoryStatus) || hasOutgoingCommits(repositoryStatus)
+    })
     : orderedRepositories
   const changedRepositoryCount = repositories.filter((repository) => isRepositoryChanged(statuses[repository.relativePath])).length
 
@@ -319,48 +329,50 @@ export function WorkspaceSourceControl({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border px-3 py-2">
-        <span className="min-w-0 flex-1 text-xs text-text-display">
+      <div className="flex shrink-0 flex-col gap-1.5 border-b border-border px-3 py-2">
+        <span className="min-w-0 truncate text-xs text-text-display">
           {t('sourceControl.repositoriesSummary', { count: repositories.length, changed: changedRepositoryCount })}
         </span>
-        <button
-          type="button"
-          className={`inline-flex h-7 items-center gap-1 rounded px-2 text-xs ${onlyChanged ? 'bg-active-bg text-text-display' : 'text-text-secondary hover:bg-hover-bg hover:text-text-display'}`}
-          aria-pressed={onlyChanged}
-          onClick={() => setOnlyChanged((current) => !current)}
-          title={t('sourceControl.onlyChanged')}
-        >
-          <ListFilter size={14} /> {t('sourceControl.onlyChanged')}
-        </button>
-        <button
-          type="button"
-          className={`inline-flex h-7 w-7 items-center justify-center rounded ${sourceControlViewMode === 'list' ? 'bg-active-bg text-text-display' : 'text-text-secondary hover:bg-hover-bg'}`}
-          onClick={() => handleViewModeChange('list')}
-          title={t('sourceControl.listView')}
-          aria-label={t('sourceControl.listView')}
-        >
-          <List size={15} />
-        </button>
-        <button
-          type="button"
-          className={`inline-flex h-7 w-7 items-center justify-center rounded ${sourceControlViewMode === 'tree' ? 'bg-active-bg text-text-display' : 'text-text-secondary hover:bg-hover-bg'}`}
-          onClick={() => handleViewModeChange('tree')}
-          title={t('sourceControl.treeView')}
-          aria-label={t('sourceControl.treeView')}
-        >
-          <TreePine size={15} />
-        </button>
-        <button
-          type="button"
-          className="inline-flex h-7 w-7 items-center justify-center rounded text-text-secondary hover:bg-hover-bg hover:text-text-display disabled:opacity-50"
-          onClick={() => void refreshAllStatuses(repositories)}
-          disabled={statusRefreshing}
-          title={t('sourceControl.refreshAll')}
-          aria-label={t('sourceControl.refreshAll')}
-        >
-          <RefreshCw size={15} className={statusRefreshing ? 'animate-spin' : ''} />
-          <span className="sr-only">{t('sourceControl.refreshAll')}</span>
-        </button>
+        <div className="flex min-w-0 items-center gap-2">
+          <button
+            type="button"
+            className={`mr-auto inline-flex h-7 items-center gap-1 rounded px-2 text-xs ${onlyChanged ? 'bg-active-bg text-text-display' : 'text-text-secondary hover:bg-hover-bg hover:text-text-display'}`}
+            aria-pressed={onlyChanged}
+            onClick={() => setOnlyChanged((current) => !current)}
+            title={t('sourceControl.onlyChanged')}
+          >
+            <ListFilter size={14} /> {t('sourceControl.onlyChanged')}
+          </button>
+          <button
+            type="button"
+            className={`inline-flex h-7 w-7 items-center justify-center rounded ${sourceControlViewMode === 'list' ? 'bg-active-bg text-text-display' : 'text-text-secondary hover:bg-hover-bg'}`}
+            onClick={() => handleViewModeChange('list')}
+            title={t('sourceControl.listView')}
+            aria-label={t('sourceControl.listView')}
+          >
+            <List size={15} />
+          </button>
+          <button
+            type="button"
+            className={`inline-flex h-7 w-7 items-center justify-center rounded ${sourceControlViewMode === 'tree' ? 'bg-active-bg text-text-display' : 'text-text-secondary hover:bg-hover-bg'}`}
+            onClick={() => handleViewModeChange('tree')}
+            title={t('sourceControl.treeView')}
+            aria-label={t('sourceControl.treeView')}
+          >
+            <TreePine size={15} />
+          </button>
+          <button
+            type="button"
+            className="inline-flex h-7 w-7 items-center justify-center rounded text-text-secondary hover:bg-hover-bg hover:text-text-display disabled:opacity-50"
+            onClick={() => void refreshAllStatuses(repositories)}
+            disabled={statusRefreshing}
+            title={t('sourceControl.refreshAll')}
+            aria-label={t('sourceControl.refreshAll')}
+          >
+            <RefreshCw size={15} className={statusRefreshing ? 'animate-spin' : ''} />
+            <span className="sr-only">{t('sourceControl.refreshAll')}</span>
+          </button>
+        </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto">
