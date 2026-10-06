@@ -397,6 +397,27 @@ test('shows only working and waiting agents, with waiting workspaces first', asy
   }
 })
 
+test('names each agent by its prompt title, then its terminal title, then its provider', async () => {
+  const { container, root } = renderActivityStep([
+    session({ sessionId: 'prompted', tileId: 'tile-1', title: 'Refactor', liveTitle: 'Terminal name' }),
+    session({ sessionId: 'renamed', tileId: 'tile-2', liveTitle: '✳ Fix the login flow' }),
+    session({ sessionId: 'unnamed', tileId: 'tile-3' }),
+  ])
+
+  try {
+    await settle()
+    const rows = findByAttribute(container, 'div', 'data-activity-palette-agent')
+      .map((element) => element.textContent as string)
+    assert.equal(rows.length, 3)
+    assert.ok(rows[0].startsWith('Refactor'), rows[0])
+    assert.ok(rows[1].startsWith('✳ Fix the login flow'), rows[1])
+    assert.ok(rows[2].startsWith('Claude'), rows[2])
+    assert.doesNotMatch(container.textContent, /Terminal name/)
+  } finally {
+    root.unmount()
+  }
+})
+
 test('shows the last agent message on one line and skips sessions without one', async () => {
   transcriptQueries = []
   transcriptHandler = async (query) => (

@@ -556,6 +556,9 @@ export class PersistentTerminalSessions {
       })
       record.agentRegistered = true
     }
+    if (snapshot.agentTitle && record.agentRegistered) {
+      this.registry.updateLiveTitle(snapshot.identity.workspaceId, snapshot.identity.tileId, snapshot.agentTitle)
+    }
     if (snapshot.alert) {
       this.registry.reportAgentAlert(snapshot.alert, snapshot.identity.workspaceId)
       if (!sameAlert(previousAlert, snapshot.alert)) this.applyAlert(record, snapshot.alert)
@@ -590,6 +593,14 @@ export class PersistentTerminalSessions {
     if (newerRecord) return
     if (destroyedGeneration !== undefined && identity.generation > destroyedGeneration) {
       this.destroyedGenerations.delete(targetKey)
+    }
+    if (event.event === 'agent-title') {
+      // Out-of-band metadata: it does not advance the stream sequence.
+      const titled = this.sessions.get(identityKey(identity))
+      if (titled?.agentRegistered) {
+        this.registry.updateLiveTitle(identity.workspaceId, identity.tileId, event.title)
+      }
+      return
     }
     const record = this.ensureRecord(identity)
     if (event.sequence <= record.sequence) return
@@ -697,7 +708,7 @@ export class PersistentTerminalSessions {
         sender.send(terminalSessionDataChannel(event.identity), event.data)
       } else if (event.event === 'exit') {
         sender.send(terminalSessionExitChannel(event.identity), event.exitEvent)
-      } else {
+      } else if (event.event === 'alert') {
         this.sendAlert(sender, event.identity, event.alert)
       }
     } catch {

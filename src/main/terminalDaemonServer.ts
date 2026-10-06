@@ -14,6 +14,7 @@ import type {
   TerminalDaemonSpawn,
 } from '@shared/terminalDaemonProtocol'
 import { TERMINAL_DAEMON_MAX_FRAME_BYTES, TERMINAL_DAEMON_PROTOCOL_VERSION } from '@shared/terminalDaemonProtocol'
+import { normalizeAgentTerminalTitle } from '@shared/agentTerminalTitle'
 import {
   terminalSessionLookupKey,
   type TerminalSessionIdentity,
@@ -117,6 +118,7 @@ const ENDPOINT_DIRECTORY_MODE = 0o700
 const ENDPOINT_FILE_MODE = 0o600
 const DEFAULT_IDLE_MS = 30_000
 const MAX_ID_LENGTH = 256
+const AGENT_TITLE_PUBLISH_INTERVAL_MS = 500
 const MAX_AGENT_TITLE_LENGTH = 200
 const MAX_WORKTREE_PATH_LENGTH = 4_096
 const MAX_EXECUTABLE_LENGTH = 4_096
@@ -617,6 +619,15 @@ class DaemonSession {
 
   private title: string | undefined
 
+  /** Latest agent title; `publishedAgentTitle` is the last one sent to clients. */
+  private agentTitle = ''
+
+  private publishedAgentTitle = ''
+
+  private agentTitlePublishedAt = 0
+
+  private agentTitleTimer: ReturnType<typeof setTimeout> | undefined
+
   private suppressAlertQueue = false
 
   private localAlertRegistered = false
@@ -662,6 +673,7 @@ class DaemonSession {
       this.titleSubscription = this.terminal.onTitleChange((title) => {
         if (typeof title === 'string') {
           this.title = title.replace(/[\u0000-\u001f\u007f-\u009f]/g, '').slice(0, MAX_ID_LENGTH)
+          this.updateAgentTitle(title)
         }
       })
     }
@@ -823,6 +835,8 @@ class DaemonSession {
     disposeSubscription(this.dataSubscription)
     disposeSubscription(this.exitSubscription)
     disposeSubscription(this.titleSubscription)
+    clearTimeout(this.agentTitleTimer)
+    this.agentTitleTimer = undefined
     disposeSubscription(this.terminalDataSubscription)
     this.dataSubscription = undefined
     this.exitSubscription = undefined
@@ -955,6 +969,36 @@ class DaemonSession {
     })
   }
 
+  private updateAgentTitle(title: string): void {
+    if (!this.spawn.agent || this.disposed) return
+    const agentTitle = normalizeAgentTerminalTitle(title)
+    if (!agentTitle) return
+    this.agentTitle = agentTitle
+    if (this.agentTitleTimer !== undefined) return
+    // Agents animate their title while working; publish at most once per interval.
+    const delay = this.agentTitlePublishedAt + AGENT_TITLE_PUBLISH_INTERVAL_MS - Date.now()
+    if (delay <= 0) {
+      this.publishAgentTitle()
+      return
+    }
+    this.agentTitleTimer = setTimeout(() => {
+      this.agentTitleTimer = undefined
+      this.publishAgentTitle()
+    }, delay)
+  }
+
+  private publishAgentTitle(): void {
+    if (this.disposed || this.agentTitle === this.publishedAgentTitle) return
+    this.publishedAgentTitle = this.agentTitle
+    this.agentTitlePublishedAt = Date.now()
+    this.broadcast({
+      event: 'agent-title',
+      identity: { ...this.identity },
+      sequence: this.sequence,
+      title: this.agentTitle,
+    })
+  }
+
   private async handleProcessExit(value: unknown): Promise<void> {
     if (this.processExitHandled || this.disposed) return
     this.processExitHandled = true
@@ -1009,6 +1053,7 @@ class DaemonSession {
         ? { alert: toDaemonAlert(this.alertState.get(this.target.tileId)!) }
         : {}),
       ...(this.exitEvent ? { exitEvent: { ...this.exitEvent } } : {}),
+      ...(this.agentTitle ? { agentTitle: this.agentTitle } : {}),
     }
     return snapshot
   }

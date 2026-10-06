@@ -5,6 +5,7 @@ import type {
   AgentSessionSurface,
   AgentSessionStatus,
 } from '@shared/types'
+import { normalizeAgentTerminalTitle } from '@shared/agentTerminalTitle'
 import { normalizeAgentAlert, SemanticAgentAlertState, type AgentAlert } from '../agentAlerts'
 import { normalizeAgentOpaqueId, isAgentProvider } from './query'
 import { normalizeResumeId } from './providers'
@@ -202,6 +203,19 @@ export class AgentSessionRegistry {
     if (!session || session.status === 'exited' || session.status === status) return false
     session.status = status
     session.lastActivityAt = timestamp(this.now)
+    this.emit()
+    return true
+  }
+
+  /** Record the title the agent set on its terminal; an empty title is ignored. */
+  updateLiveTitle(workspaceId: string, tileId: string, title: string): boolean {
+    const workspace = normalizeAgentOpaqueId(workspaceId)
+    const tile = normalizeAgentOpaqueId(tileId)
+    if (!workspace || !tile) return false
+    const session = this.sessions.get(sessionKey(workspace, tile))
+    const liveTitle = normalizeAgentTerminalTitle(title)
+    if (!session || session.status === 'exited' || !liveTitle || session.liveTitle === liveTitle) return false
+    session.liveTitle = liveTitle
     this.emit()
     return true
   }

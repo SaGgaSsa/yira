@@ -384,7 +384,7 @@ function AgentRow({
   const rowRef = useRef<HTMLDivElement | null>(null)
   const needsInput = session.status === 'needs-input'
   const providerLabel = getProviderLabel(session.provider, t)
-  const title = session.title?.trim() || providerLabel
+  const title = session.title?.trim() || session.liveTitle?.trim() || providerLabel
   const source = getAgentSessionSurface(session) === 'agents-view'
     ? t('activityPalette.sourceAgentsView', { shortcut: shortcutLabel })
     : t('activityPalette.sourceTile')

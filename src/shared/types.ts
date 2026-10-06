@@ -78,6 +78,8 @@ export interface AgentActiveSession {
   /** Missing values from older daemons are interpreted as 'tile'. */
   surface?: AgentSessionSurface
   title?: string
+  /** Latest title the agent set on its terminal, without spinner glyphs. */
+  liveTitle?: string
   worktreeRoot?: string
   worktreeBranch?: string
   worktrees?: Array<{ path: string; baseSha: string }>

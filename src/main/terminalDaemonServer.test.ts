@@ -683,6 +683,22 @@ test('authenticates every request and retains local semantic alerts without clie
     { path: '/tmp/worktrees/agent-1/repo-b', baseSha: 'fedcba654321' },
   ])
 
+  const titleEvents = (): unknown[] => client.messages
+    .filter((message) => (message as { event?: unknown }).event === 'agent-title')
+    .map((message) => (message as { title?: unknown }).title)
+  pty.emitData('\u001b]0;⠂ Review the migration\u0007')
+  await wait(100)
+  pty.emitData('\u001b]0;⠐ Review the migration\u0007')
+  await wait(100)
+  pty.emitData('\u001b]0;✳ Review the migration\u0007')
+  await wait(100)
+  const titled = snapshotResult(await request(client.socket, client.messages, handle.endpoint.token, 20, 'snapshot', created.identity))
+  assert.equal(titled.agentTitle, '✳ Review the migration')
+  // Animated titles are throttled: the first frame goes out at once, the latest one after the interval.
+  assert.deepEqual(titleEvents(), ['⠂ Review the migration'])
+  await wait(400)
+  assert.deepEqual(titleEvents(), ['⠂ Review the migration', '✳ Review the migration'])
+
   const unauthorized = await request(client.socket, client.messages, 'wrong-token', 2, 'list')
   assert.match(unauthorized.error ?? '', /unauthorized/i)
   client.socket.destroy()

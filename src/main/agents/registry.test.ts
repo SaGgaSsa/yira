@@ -128,3 +128,21 @@ test('retains Agents View and worktree metadata in runtime snapshots', () => {
   created.worktrees![0].path = 'mutated'
   assert.equal(registry.get('workspace-1', 'tile-1')?.worktrees?.[0].path, worktrees[0].path)
 })
+
+test('updates the live terminal title only when its text changes', () => {
+  const registry = new AgentSessionRegistry()
+  const titles: Array<string | undefined> = []
+  registry.register(session)
+  registry.subscribe((snapshot) => titles.push(snapshot.sessions[0]?.liveTitle))
+
+  assert.equal(registry.updateLiveTitle('workspace-1', 'tile-1', '⠂ Fix the login flow'), true)
+  assert.equal(registry.updateLiveTitle('workspace-1', 'tile-1', '⠂ Fix the login flow'), false)
+  assert.equal(registry.updateLiveTitle('workspace-1', 'tile-1', '✳ Fix the login flow'), true)
+  assert.equal(registry.updateLiveTitle('workspace-1', 'tile-1', ' '), false)
+  assert.equal(registry.updateLiveTitle('workspace-1', 'missing', 'Other'), false)
+  assert.equal(registry.get('workspace-1', 'tile-1')?.liveTitle, '✳ Fix the login flow')
+  assert.deepEqual(titles, [undefined, '⠂ Fix the login flow', '✳ Fix the login flow'])
+
+  registry.markExited('workspace-1', 'tile-1')
+  assert.equal(registry.updateLiveTitle('workspace-1', 'tile-1', 'Renamed'), false)
+})
