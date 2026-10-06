@@ -1,8 +1,34 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import type { AgentProvider, AgentSessionCreateResult, UserSettings, WorkspaceMetadata } from '@shared/types'
+import type {
+  AgentPromptImageMimeType,
+  AgentSessionCreateResult,
+  AgentProvider,
+  UserSettings,
+  WorkspaceMetadata,
+} from '@shared/types'
 import { WorkspacePickerMenu } from './WorkspacePickerMenu'
+import {
+  insertPromptImageReferences,
+  removePromptImageReference,
+} from '@/utils/agentPromptImages'
+
+const MAX_PROMPT_IMAGE_COUNT = 10
+const MAX_PROMPT_IMAGE_SIZE = 10 * 1024 * 1024
+
+interface PromptImagePreview {
+  id: number
+  /** Shown in the prompt as `[Image #number]`. */
+  number: number
+  preview: string
+  path: string | null
+}
+
+interface ClipboardPromptImage {
+  file: File
+  mimeType: AgentPromptImageMimeType
+}
 
 export interface AgentSessionDialogProps {
   open: boolean
@@ -58,6 +84,48 @@ function getProviderLabel(provider: AgentProvider, translate: (key: string) => s
   return translate(provider === 'claude' ? 'agentsView.claude' : 'agentsView.codex')
 }
 
+function getPromptImageMimeType(mimeType: string): AgentPromptImageMimeType | null {
+  switch (mimeType) {
+    case 'image/png':
+    case 'image/jpeg':
+    case 'image/gif':
+    case 'image/webp':
+      return mimeType
+    default:
+      return null
+  }
+}
+
+function getClipboardPromptImages(clipboardData: DataTransfer): ClipboardPromptImage[] {
+  const itemImages = Array.from(clipboardData.items ?? []).flatMap((item) => {
+    if (item.kind !== 'file') return []
+    const mimeType = getPromptImageMimeType(item.type)
+    const file = mimeType ? item.getAsFile() : null
+    return file && mimeType ? [{ file, mimeType }] : []
+  })
+  if (itemImages.length > 0) return itemImages
+
+  return Array.from(clipboardData.files ?? []).flatMap((file) => {
+    const mimeType = getPromptImageMimeType(file.type)
+    return mimeType ? [{ file, mimeType }] : []
+  })
+}
+
+function readImageDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result)
+      } else {
+        reject(new Error('Could not read image preview'))
+      }
+    }
+    reader.onerror = () => reject(reader.error ?? new Error('Could not read image preview'))
+    reader.readAsDataURL(file)
+  })
+}
+
 export function AgentSessionDialog({
   open,
   workspaces,
@@ -73,6 +141,11 @@ export function AgentSessionDialog({
   const promptRef = useRef<HTMLTextAreaElement | null>(null)
   const wasOpenRef = useRef(false)
   const capabilityRequestRef = useRef(0)
+  const promptImageIdRef = useRef(0)
+  const promptImageNumberRef = useRef(0)
+  const pendingCaretRef = useRef<number | null>(null)
+  const promptImageGenerationRef = useRef(0)
+  const promptImagesRef = useRef<PromptImagePreview[]>([])
   const usableWorkspaces = useMemo(
     () => getUsableAgentWorkspaces(workspaces, agents),
     [agents, workspaces],
@@ -81,11 +154,19 @@ export function AgentSessionDialog({
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(firstWorkspace?.workspace.id ?? null)
   const [selectedProvider, setSelectedProvider] = useState<AgentProvider | null>(() => getDefaultProvider(firstWorkspace))
   const [prompt, setPrompt] = useState('')
+  const [promptImages, setPromptImages] = useState<PromptImagePreview[]>([])
   const [worktree, setWorktree] = useState(false)
   const [worktreeAvailable, setWorktreeAvailable] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const isSavingImages = promptImages.some((image) => image.path === null)
   const selectedWorkspace = usableWorkspaces.find(({ workspace }) => workspace.id === selectedWorkspaceId)
+
+  const updatePromptImages = (update: (current: PromptImagePreview[]) => PromptImagePreview[]): void => {
+    const nextImages = update(promptImagesRef.current)
+    promptImagesRef.current = nextImages
+    setPromptImages(nextImages)
+  }
 
   const requestWorkspaceCapabilities = useCallback((workspaceId: string | null): void => {
     const requestId = ++capabilityRequestRef.current
@@ -113,6 +194,7 @@ export function AgentSessionDialog({
   useEffect(() => {
     if (!open) {
       wasOpenRef.current = false
+      promptImageGenerationRef.current += 1
       requestWorkspaceCapabilities(null)
       return
     }
@@ -123,6 +205,10 @@ export function AgentSessionDialog({
     setSelectedWorkspaceId(nextWorkspace?.workspace.id ?? null)
     setSelectedProvider(getDefaultProvider(nextWorkspace))
     setPrompt('')
+    promptImageGenerationRef.current += 1
+    promptImageNumberRef.current = 0
+    promptImagesRef.current = []
+    setPromptImages([])
     setWorktree(false)
     setWorktreeAvailable(false)
     setError(null)
@@ -134,6 +220,14 @@ export function AgentSessionDialog({
   useEffect(() => {
     if (open) promptRef.current?.focus()
   }, [focusRequestId, open])
+
+  useEffect(() => {
+    // Keep the caret after the image references inserted by a paste.
+    const caret = pendingCaretRef.current
+    if (caret === null) return
+    pendingCaretRef.current = null
+    promptRef.current?.setSelectionRange?.(caret, caret)
+  }, [prompt])
 
   useEffect(() => {
     if (!open) return
@@ -150,7 +244,7 @@ export function AgentSessionDialog({
 
   const createSession = async (promptValue = prompt): Promise<void> => {
     const trimmedPrompt = promptValue.trim()
-    if (!selectedWorkspace || !selectedProvider || isSubmitting) return
+    if (!selectedWorkspace || !selectedProvider || isSubmitting || isSavingImages) return
 
     setIsSubmitting(true)
     setError(null)
@@ -160,6 +254,13 @@ export function AgentSessionDialog({
         workspaceId: selectedWorkspace.workspace.id,
         provider: selectedProvider,
         ...(trimmedPrompt ? { prompt: trimmedPrompt } : {}),
+        ...(promptImages.length > 0
+          ? {
+            images: promptImages.flatMap((image) => (
+              image.path ? [{ number: image.number, path: image.path }] : []
+            )),
+          }
+          : {}),
         worktree: worktreeAvailable && worktree,
       })
     } catch (submitError) {
@@ -171,6 +272,101 @@ export function AgentSessionDialog({
     setIsSubmitting(false)
     onCreated(result)
     onClose()
+  }
+
+  const removePromptImage = (previewId: number): void => {
+    const image = promptImagesRef.current.find((entry) => entry.id === previewId)
+    if (!image) return
+    updatePromptImages((current) => current.filter((entry) => entry.id !== previewId))
+    setPrompt((current) => removePromptImageReference(current, image.number))
+  }
+
+  const attachPromptImage = async (
+    image: ClipboardPromptImage,
+    previewId: number,
+    generation: number,
+  ): Promise<void> => {
+    try {
+      const [preview, buffer] = await Promise.all([
+        readImageDataUrl(image.file),
+        image.file.arrayBuffer(),
+      ])
+      if (
+        generation !== promptImageGenerationRef.current
+        || !promptImagesRef.current.some((entry) => entry.id === previewId)
+      ) return
+
+      updatePromptImages((current) => current.map((entry) => (
+        entry.id === previewId ? { ...entry, preview } : entry
+      )))
+      const savedImage = await window.electron.agents.savePromptImage({
+        mimeType: image.mimeType,
+        data: new Uint8Array(buffer),
+      })
+      if (generation !== promptImageGenerationRef.current) return
+
+      updatePromptImages((current) => current.map((entry) => (
+        entry.id === previewId ? { ...entry, path: savedImage.path } : entry
+      )))
+    } catch {
+      if (
+        generation !== promptImageGenerationRef.current
+        || !promptImagesRef.current.some((entry) => entry.id === previewId)
+      ) return
+      removePromptImage(previewId)
+      setError(t('agentsView.promptImageAttachError'))
+    }
+  }
+
+  const handlePromptPaste = (event: React.ClipboardEvent<HTMLTextAreaElement>): void => {
+    const clipboardImages = getClipboardPromptImages(event.clipboardData)
+    if (clipboardImages.length === 0) return
+
+    event.preventDefault()
+    setError(null)
+
+    const currentImages = promptImagesRef.current
+    const acceptedImages: ClipboardPromptImage[] = []
+    let hasOversizedImage = false
+    let hasTooManyImages = false
+    for (const image of clipboardImages) {
+      if (image.file.size > MAX_PROMPT_IMAGE_SIZE) {
+        hasOversizedImage = true
+        continue
+      }
+      if (currentImages.length + acceptedImages.length >= MAX_PROMPT_IMAGE_COUNT) {
+        hasTooManyImages = true
+        continue
+      }
+      acceptedImages.push(image)
+    }
+
+    if (hasOversizedImage) setError(t('agentsView.promptImageTooLarge'))
+    else if (hasTooManyImages) setError(t('agentsView.promptImageLimit'))
+
+    if (acceptedImages.length === 0) return
+
+    const newPreviews = acceptedImages.map(() => ({
+      id: ++promptImageIdRef.current,
+      number: ++promptImageNumberRef.current,
+      preview: '',
+      path: null,
+    }))
+    updatePromptImages((current) => [...current, ...newPreviews])
+
+    const textarea = event.currentTarget
+    const edit = insertPromptImageReferences(
+      textarea.value,
+      textarea.selectionStart ?? textarea.value.length,
+      textarea.selectionEnd ?? textarea.value.length,
+      newPreviews.map((preview) => preview.number),
+    )
+    pendingCaretRef.current = edit.caret
+    setPrompt(edit.value)
+    const generation = promptImageGenerationRef.current
+    acceptedImages.forEach((image, index) => {
+      void attachPromptImage(image, newPreviews[index].id, generation)
+    })
   }
 
   return (
@@ -219,13 +415,49 @@ export function AgentSessionDialog({
           }}
         >
           <div className="space-y-4 px-6 py-5">
-            <label className="block">
-              <span className="nd-label mb-2 block text-text-secondary">{t('agentsView.prompt')}</span>
+            <div className="space-y-3">
+              {promptImages.length > 0 && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {promptImages.map((image) => (
+                    <div
+                      key={image.id}
+                      className="relative h-12 w-12 shrink-0 rounded-lg border border-border-visible bg-bg-primary"
+                      aria-busy={image.path === null}
+                    >
+                      {image.preview && (
+                        <img
+                          src={image.preview}
+                          alt={`${t('agentsView.promptImageAlt')} ${image.number}`}
+                          className={`h-full w-full rounded-lg object-cover ${
+                            image.path === null ? 'opacity-50' : ''
+                          }`}
+                        />
+                      )}
+                      <span className="pointer-events-none absolute bottom-0.5 left-0.5 rounded bg-black/70 px-1 text-[10px] leading-4 text-white">
+                        #{image.number}
+                      </span>
+                      <button
+                        type="button"
+                        className="absolute -right-1 -top-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-border-visible bg-bg-secondary text-text-secondary shadow transition-colors hover:bg-hover-bg hover:text-text-display"
+                        aria-label={`${t('agentsView.removePromptImage')} ${image.number}`}
+                        disabled={isSubmitting}
+                        onClick={() => {
+                          removePromptImage(image.id)
+                          promptRef.current?.focus()
+                        }}
+                      >
+                        <X size={11} aria-hidden="true" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
               <textarea
                 ref={promptRef}
                 className="min-h-36 w-full resize-y rounded-xl border border-border-visible bg-bg-primary px-4 py-3 text-sm leading-6 text-text-primary outline-none focus:border-text-secondary"
                 value={prompt}
                 onChange={(event) => setPrompt(event.target.value)}
+                onPaste={handlePromptPaste}
                 onKeyDown={(event) => {
                   if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return
                   event.preventDefault()
@@ -236,12 +468,13 @@ export function AgentSessionDialog({
                     setPrompt(textarea.value)
                     return
                   }
-                  void createSession(event.currentTarget.value)
+                  if (!isSavingImages) void createSession(event.currentTarget.value)
                 }}
                 placeholder={t('agentsView.promptPlaceholder')}
+                aria-label={t('agentsView.prompt')}
                 disabled={isSubmitting}
               />
-            </label>
+            </div>
 
             {usableWorkspaces.length === 0 ? (
               <p className="rounded-lg border border-border-visible bg-bg-primary px-3 py-2 text-sm text-text-secondary">
@@ -333,7 +566,7 @@ export function AgentSessionDialog({
             <button
               type="submit"
               className="rounded-full border border-text-display px-4 py-2 text-sm text-text-display transition-colors hover:bg-bg-primary disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={!selectedWorkspace || !selectedProvider || isSubmitting}
+              disabled={!selectedWorkspace || !selectedProvider || isSubmitting || isSavingImages}
             >
               {isSubmitting ? t('agentsView.creatingSession') : t('agentsView.createSession')}
             </button>

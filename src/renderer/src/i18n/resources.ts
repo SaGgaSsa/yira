@@ -199,6 +199,11 @@ type TranslationResources = {
     closeDialog: string
     prompt: string
     promptPlaceholder: string
+    removePromptImage: string
+    promptImageAlt: string
+    promptImageAttachError: string
+    promptImageLimit: string
+    promptImageTooLarge: string
     worktree: string
     worktreeDescription: string
     createSession: string
@@ -1010,6 +1015,11 @@ const en: TranslationResources = {
     closeDialog: 'Close dialog',
     prompt: 'Prompt (optional)',
     promptPlaceholder: 'Describe what you want the agent to do, or leave it empty. Enter starts the session; Shift+Enter adds a line.',
+    removePromptImage: 'Remove image',
+    promptImageAlt: 'Attached image',
+    promptImageAttachError: 'Could not attach image.',
+    promptImageLimit: 'You can attach up to 10 images.',
+    promptImageTooLarge: 'Each image must be 10 MB or smaller.',
     worktree: 'Worktree',
     worktreeDescription: 'Run in a git worktree',
     createSession: 'Create session',
@@ -1781,6 +1791,11 @@ const es: TranslationResources = {
     prompt: 'Instrucción (opcional)',
     promptPlaceholder: 'Describe qué quieres que haga el agente o déjalo vacío. Enter inicia la sesión; Shift+Enter agrega una línea.',
     worktree: 'Worktree',
+    removePromptImage: 'Quitar imagen',
+    promptImageAlt: 'Imagen adjunta',
+    promptImageAttachError: 'No se pudo adjuntar la imagen.',
+    promptImageLimit: 'Puedes adjuntar hasta 10 imágenes.',
+    promptImageTooLarge: 'Cada imagen debe pesar 10 MB o menos.',
     worktreeDescription: 'Ejecutar en un worktree de Git',
     createSession: 'Crear sesión',
     creatingSession: 'Creando sesión…',

@@ -184,6 +184,24 @@ export interface AgentSessionCreateInput {
   resumeSessionId?: string
   resumeCwd?: string
   worktree?: boolean
+  /** Images saved with `savePromptImage`; the prompt refers to each one as `[Image #number]`. */
+  images?: AgentPromptImageAttachment[]
+}
+
+export interface AgentPromptImageAttachment {
+  number: number
+  path: string
+}
+
+export type AgentPromptImageMimeType = 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp'
+
+export interface AgentPromptImageSaveInput {
+  mimeType: AgentPromptImageMimeType
+  data: Uint8Array
+}
+
+export interface AgentPromptImage {
+  path: string
 }
 
 export interface AgentSessionCreateResult {
