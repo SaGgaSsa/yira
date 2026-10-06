@@ -204,6 +204,29 @@ type TranslationResources = {
     creatingSession: string
     shortcutLabel: string
   }
+  activityPalette: {
+    title: string
+    backToActivity: string
+    newSession: string
+    agentCount_one: string
+    agentCount_other: string
+    workspaceCount_one: string
+    workspaceCount_other: string
+    needsInputCount_one: string
+    needsInputCount_other: string
+    workingCount_one: string
+    workingCount_other: string
+    statusNeedsInput: string
+    statusWorking: string
+    sourceTile: string
+    sourceAgentsView: string
+    empty: string
+    agentList: string
+    footerMove: string
+    footerOpen: string
+    footerNewSession: string
+    footerClose: string
+  }
   settings: {
     active: string
     agentAlerts: string
@@ -988,6 +1011,29 @@ const en: TranslationResources = {
     creatingSession: 'Creating session…',
     shortcutLabel: 'Shortcut: {{shortcut}}',
   },
+  activityPalette: {
+    title: 'Activity',
+    backToActivity: 'Back to Activity',
+    newSession: 'New session',
+    agentCount_one: '{{count}} agent',
+    agentCount_other: '{{count}} agents',
+    workspaceCount_one: '{{count}} workspace',
+    workspaceCount_other: '{{count}} workspaces',
+    needsInputCount_one: '{{count}} waiting for input',
+    needsInputCount_other: '{{count}} waiting for input',
+    workingCount_one: '{{count}} working',
+    workingCount_other: '{{count}} working',
+    statusNeedsInput: 'Waiting for input',
+    statusWorking: 'Working',
+    sourceTile: 'Tile',
+    sourceAgentsView: '{{shortcut}} session',
+    empty: 'No workspace has agents working or waiting.',
+    agentList: 'Active agents',
+    footerMove: 'move between agents',
+    footerOpen: 'go to the terminal',
+    footerNewSession: 'new session',
+    footerClose: 'close',
+  },
   settings: {
     active: 'ACTIVE',
     agentAlerts: 'Agent alerts',
@@ -1731,6 +1777,29 @@ const es: TranslationResources = {
     createSession: 'Crear sesión',
     creatingSession: 'Creando sesión…',
     shortcutLabel: 'Atajo: {{shortcut}}',
+  },
+  activityPalette: {
+    title: 'Actividad',
+    backToActivity: 'Volver a Actividad',
+    newSession: 'Nueva sesión',
+    agentCount_one: '{{count}} agente',
+    agentCount_other: '{{count}} agentes',
+    workspaceCount_one: '{{count}} workspace',
+    workspaceCount_other: '{{count}} workspaces',
+    needsInputCount_one: '{{count}} espera input',
+    needsInputCount_other: '{{count}} esperan input',
+    workingCount_one: '{{count}} trabajando',
+    workingCount_other: '{{count}} trabajando',
+    statusNeedsInput: 'Espera input',
+    statusWorking: 'Trabajando',
+    sourceTile: 'Tile',
+    sourceAgentsView: 'Sesión {{shortcut}}',
+    empty: 'Ningún workspace tiene agentes trabajando o esperando.',
+    agentList: 'Agentes activos',
+    footerMove: 'moverse entre agentes',
+    footerOpen: 'ir a la terminal',
+    footerNewSession: 'nueva sesión',
+    footerClose: 'cerrar',
   },
   agents: {
     title: 'Agentes',

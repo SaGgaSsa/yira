@@ -17,7 +17,11 @@ export interface AgentsViewState {
   snapshot: AgentActiveSessionSnapshot
   sessions: ReturnType<typeof selectAgentsViewSessions>
   isOpen: boolean
+  /** True while the Activity palette is open, on either step. */
   sessionDialogOpen: boolean
+  activityPaletteStep: ActivityPaletteStep | null
+  /** True when the new-session step was reached from the Activity step. */
+  sessionDialogFromActivity: boolean
   sessionDialogInitialWorkspaceId: string | null
   sessionDialogFocusRequestId: number
   focusedSessionId: string | null
@@ -25,8 +29,12 @@ export interface AgentsViewState {
   close: () => void
   openForSession: (tileId: string) => void
   openNewSessionDialog: () => void
+  showNewSessionStep: () => void
+  backToActivity: () => void
   closeSessionDialog: () => void
 }
+
+export type ActivityPaletteStep = 'activity' | 'new-session'
 
 function isShortcutCaptureTarget(target: EventTarget | null): boolean {
   if (!target || typeof target !== 'object') return false
@@ -35,6 +43,8 @@ function isShortcutCaptureTarget(target: EventTarget | null): boolean {
 }
 
 interface SessionDialogRequest {
+  step: ActivityPaletteStep
+  fromActivity: boolean
   initialWorkspaceId: string | null
   requestId: number
 }
@@ -69,9 +79,44 @@ export function useAgentsView({
 
   const openNewSessionDialog = useCallback(() => {
     setSessionDialogRequest((current) => ({
+      step: 'new-session',
+      fromActivity: current?.step === 'new-session' ? current.fromActivity : false,
       initialWorkspaceId: workspaceId || null,
       requestId: (current?.requestId ?? 0) + 1,
     }))
+  }, [workspaceId])
+
+  const showNewSessionStep = useCallback(() => {
+    setSessionDialogRequest((current) => ({
+      step: 'new-session',
+      fromActivity: current ? current.step === 'activity' || current.fromActivity : false,
+      initialWorkspaceId: workspaceId || null,
+      requestId: (current?.requestId ?? 0) + 1,
+    }))
+  }, [workspaceId])
+
+  const backToActivity = useCallback(() => {
+    setSessionDialogRequest((current) => ({
+      step: 'activity',
+      fromActivity: false,
+      initialWorkspaceId: workspaceId || null,
+      requestId: (current?.requestId ?? 0) + 1,
+    }))
+  }, [workspaceId])
+
+  // The shortcut opens the Activity step first; pressed again it moves on to the new-session step.
+  const handleNewSessionShortcut = useCallback(() => {
+    setSessionDialogRequest((current) => {
+      if (!current) {
+        return { step: 'activity', fromActivity: false, initialWorkspaceId: workspaceId || null, requestId: 1 }
+      }
+      return {
+        step: 'new-session',
+        fromActivity: current.step === 'activity' || current.fromActivity,
+        initialWorkspaceId: current.step === 'new-session' ? current.initialWorkspaceId : workspaceId || null,
+        requestId: current.requestId + 1,
+      }
+    })
   }, [workspaceId])
 
   useEffect(() => {
@@ -80,11 +125,11 @@ export function useAgentsView({
 
       event.preventDefault()
       event.stopPropagation()
-      openNewSessionDialog()
+      handleNewSessionShortcut()
     }
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [newSessionShortcut, openNewSessionDialog])
+  }, [handleNewSessionShortcut, newSessionShortcut])
 
   const toggle = useCallback(() => {
     if (!effectiveProvider) return
@@ -107,6 +152,8 @@ export function useAgentsView({
     sessions,
     isOpen: Boolean(effectiveProvider) && openViewScope === scopeKey,
     sessionDialogOpen: sessionDialogRequest !== null,
+    activityPaletteStep: sessionDialogRequest?.step ?? null,
+    sessionDialogFromActivity: sessionDialogRequest?.fromActivity ?? false,
     sessionDialogInitialWorkspaceId: sessionDialogRequest?.initialWorkspaceId ?? null,
     sessionDialogFocusRequestId: sessionDialogRequest?.requestId ?? 0,
     focusedSessionId: focusedSession?.scope === scopeKey ? focusedSession.tileId : null,
@@ -114,6 +161,8 @@ export function useAgentsView({
     close,
     openForSession,
     openNewSessionDialog,
+    showNewSessionStep,
+    backToActivity,
     closeSessionDialog,
   }
 }

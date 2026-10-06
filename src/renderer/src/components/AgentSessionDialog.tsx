@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { X } from 'lucide-react'
+import { ArrowLeft, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { AgentProvider, AgentSessionCreateResult, UserSettings, WorkspaceMetadata } from '@shared/types'
 import { WorkspacePickerMenu } from './WorkspacePickerMenu'
@@ -12,6 +12,8 @@ export interface AgentSessionDialogProps {
   focusRequestId: number
   onClose: () => void
   onCreated: (result: AgentSessionCreateResult) => void
+  /** Shown as a step of the Activity palette: Escape and Cancel go back instead of closing. */
+  onBack?: () => void
 }
 
 export interface UsableAgentWorkspace {
@@ -64,8 +66,10 @@ export function AgentSessionDialog({
   focusRequestId,
   onClose,
   onCreated,
+  onBack,
 }: AgentSessionDialogProps): React.ReactElement | null {
   const { t } = useTranslation()
+  const dismiss = onBack ?? onClose
   const promptRef = useRef<HTMLTextAreaElement | null>(null)
   const wasOpenRef = useRef(false)
   const capabilityRequestRef = useRef(0)
@@ -136,11 +140,11 @@ export function AgentSessionDialog({
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape' || event.defaultPrevented || isSubmitting) return
       event.preventDefault()
-      onClose()
+      dismiss()
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isSubmitting, onClose, open])
+  }, [dismiss, isSubmitting, open])
 
   if (!open) return null
 
@@ -178,6 +182,19 @@ export function AgentSessionDialog({
         className="w-full max-w-2xl overflow-hidden rounded-[20px] border border-border-visible bg-bg-secondary shadow-2xl"
       >
         <div className="flex items-start gap-4 border-b border-border px-6 py-5">
+          {onBack && (
+            <button
+              type="button"
+              className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-border-visible px-3 text-sm text-text-secondary transition-colors hover:text-text-display disabled:opacity-50"
+              aria-label={t('activityPalette.backToActivity')}
+              title={t('activityPalette.backToActivity')}
+              disabled={isSubmitting}
+              onClick={onBack}
+            >
+              <ArrowLeft size={14} aria-hidden="true" />
+              {t('activityPalette.title')}
+            </button>
+          )}
           <div className="min-w-0 flex-1">
             <h2 id="agent-session-dialog-title" className="text-xl text-text-display">
               {t('agentsView.newAgentSession')}
@@ -302,7 +319,7 @@ export function AgentSessionDialog({
               type="button"
               className="rounded-full border border-border-visible px-4 py-2 text-sm text-text-secondary transition-colors hover:bg-hover-bg disabled:opacity-50"
               disabled={isSubmitting}
-              onClick={onClose}
+              onClick={dismiss}
             >
               {t('common.cancel')}
             </button>
