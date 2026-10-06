@@ -376,65 +376,63 @@ export function AgentSessionDialog({
           }}
         >
           <div className="space-y-4 px-6 py-5">
-            <label className="block">
-              <span className="nd-label mb-2 block text-text-secondary">{t('agentsView.prompt')}</span>
-              <div className="rounded-xl border border-border-visible bg-bg-primary focus-within:border-text-secondary">
-                <textarea
-                  ref={promptRef}
-                  className="min-h-36 w-full resize-y border-0 bg-transparent px-4 py-3 text-sm leading-6 text-text-primary outline-none"
-                  value={prompt}
-                  onChange={(event) => setPrompt(event.target.value)}
-                  onPaste={handlePromptPaste}
-                  onKeyDown={(event) => {
-                    if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return
-                    event.preventDefault()
-                    if (event.altKey) {
-                      // Textareas ignore Alt+Enter, so insert the line break like Shift+Enter does.
-                      const textarea = event.currentTarget
-                      textarea.setRangeText('\n', textarea.selectionStart, textarea.selectionEnd, 'end')
-                      setPrompt(textarea.value)
-                      return
-                    }
-                    if (!isSavingImages) void createSession(event.currentTarget.value)
-                  }}
-                  placeholder={t('agentsView.promptPlaceholder')}
-                  disabled={isSubmitting}
-                />
-                {promptImages.length > 0 && (
-                  <div className="flex flex-wrap gap-2 px-4 pb-3">
-                    {promptImages.map((image, index) => (
-                      <div
-                        key={image.id}
-                        className="relative h-12 w-12 shrink-0 rounded-lg border border-border-visible bg-bg-primary"
-                        aria-busy={image.path === null}
+            <div className="space-y-3">
+              {promptImages.length > 0 && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {promptImages.map((image, index) => (
+                    <div
+                      key={image.id}
+                      className="relative h-12 w-12 shrink-0 rounded-lg border border-border-visible bg-bg-primary"
+                      aria-busy={image.path === null}
+                    >
+                      {image.preview && (
+                        <img
+                          src={image.preview}
+                          alt={`${t('agentsView.promptImageAlt')} ${index + 1}`}
+                          className={`h-full w-full rounded-lg object-cover ${
+                            image.path === null ? 'opacity-50' : ''
+                          }`}
+                        />
+                      )}
+                      <button
+                        type="button"
+                        className="absolute -right-1 -top-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-border-visible bg-bg-secondary text-text-secondary shadow transition-colors hover:bg-hover-bg hover:text-text-display"
+                        aria-label={`${t('agentsView.removePromptImage')} ${index + 1}`}
+                        disabled={isSubmitting}
+                        onClick={() => {
+                          updatePromptImages((current) => current.filter((entry) => entry.id !== image.id))
+                          promptRef.current?.focus()
+                        }}
                       >
-                        {image.preview && (
-                          <img
-                            src={image.preview}
-                            alt={`${t('agentsView.promptImageAlt')} ${index + 1}`}
-                            className={`h-full w-full rounded-lg object-cover ${
-                              image.path === null ? 'opacity-50' : ''
-                            }`}
-                          />
-                        )}
-                        <button
-                          type="button"
-                          className="absolute -right-1 -top-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-border-visible bg-bg-secondary text-text-secondary shadow transition-colors hover:bg-hover-bg hover:text-text-display"
-                          aria-label={`${t('agentsView.removePromptImage')} ${index + 1}`}
-                          disabled={isSubmitting}
-                          onClick={() => {
-                            updatePromptImages((current) => current.filter((entry) => entry.id !== image.id))
-                            promptRef.current?.focus()
-                          }}
-                        >
-                          <X size={11} aria-hidden="true" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </label>
+                        <X size={11} aria-hidden="true" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <textarea
+                ref={promptRef}
+                className="min-h-36 w-full resize-y rounded-xl border border-border-visible bg-bg-primary px-4 py-3 text-sm leading-6 text-text-primary outline-none focus:border-text-secondary"
+                value={prompt}
+                onChange={(event) => setPrompt(event.target.value)}
+                onPaste={handlePromptPaste}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return
+                  event.preventDefault()
+                  if (event.altKey) {
+                    // Textareas ignore Alt+Enter, so insert the line break like Shift+Enter does.
+                    const textarea = event.currentTarget
+                    textarea.setRangeText('\n', textarea.selectionStart, textarea.selectionEnd, 'end')
+                    setPrompt(textarea.value)
+                    return
+                  }
+                  if (!isSavingImages) void createSession(event.currentTarget.value)
+                }}
+                placeholder={t('agentsView.promptPlaceholder')}
+                aria-label={t('agentsView.prompt')}
+                disabled={isSubmitting}
+              />
+            </div>
 
             {usableWorkspaces.length === 0 ? (
               <p className="rounded-lg border border-border-visible bg-bg-primary px-3 py-2 text-sm text-text-secondary">
