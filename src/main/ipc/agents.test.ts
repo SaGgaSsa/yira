@@ -331,28 +331,28 @@ test('passes attached image paths in the initial prompt and uses an image title 
 
   await ipcMain.call('agents:sessions:create', new FakeWebContents(62), {
     workspaceId: 'workspace-a',
-    prompt: '  Please inspect the screenshot.  ',
-    imagePaths: [imagePath],
+    prompt: '  Please inspect [Image #2].  ',
+    images: [{ number: 2, path: imagePath }],
   })
 
   assert.equal(
     launch?.prompt,
-    'Please inspect the screenshot.\n\nAttached images:\n- ' + imagePath,
+    'Please inspect [Image #2].\n\nAttached images:\n- [Image #2]: ' + imagePath,
   )
-  assert.equal(launch?.title, 'Please inspect the screenshot.')
+  assert.equal(launch?.title, 'Please inspect [Image #2].')
 
   await ipcMain.call('agents:sessions:create', new FakeWebContents(63), {
     workspaceId: 'workspace-a',
-    imagePaths: [imagePath],
+    images: [{ number: 1, path: imagePath }],
   })
 
-  assert.equal(launch?.prompt, 'Attached images:\n- ' + imagePath)
+  assert.equal(launch?.prompt, 'Attached images:\n- [Image #1]: ' + imagePath)
   assert.equal(launch?.title, 'Image prompt')
 
   await ipcMain.call('agents:sessions:create', new FakeWebContents(65), {
     workspaceId: 'workspace-a',
     resumeSessionId: 'history-123',
-    imagePaths: ['ignored-image-path'],
+    images: [{ number: 1, path: 'ignored-image-path' }],
   })
 
   assert.equal(launch?.prompt, undefined)
@@ -379,7 +379,7 @@ test('rejects a session when an attached image is no longer available', async (t
   await assert.rejects(
     () => ipcMain.call('agents:sessions:create', new FakeWebContents(64), {
       workspaceId: 'workspace-a',
-      imagePaths: [imagePath],
+      images: [{ number: 1, path: imagePath }],
     }) as Promise<unknown>,
     /Agent prompt image is no longer available/,
   )

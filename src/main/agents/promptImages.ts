@@ -1,7 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
-import type { AgentPromptImage, AgentPromptImageMimeType } from '@shared/types'
+import type {
+  AgentPromptImage,
+  AgentPromptImageAttachment,
+  AgentPromptImageMimeType,
+} from '@shared/types'
 
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024
 const IMAGE_RETENTION_MS = 7 * 24 * 60 * 60 * 1000
@@ -100,49 +104,68 @@ function comparablePath(path: string): string {
   return process.platform === 'win32' ? path.toLowerCase() : path
 }
 
-export function normalizeAgentPromptImagePaths(directory: string, value: unknown): string[] {
-  if (value === undefined) return []
-  if (!Array.isArray(value) || value.length > 10) {
-    throw new Error('Invalid agent prompt images')
+function invalidPromptImages(): Error {
+  return new Error('Invalid agent prompt images')
+}
+
+function normalizePromptImagePath(directoryKey: string, value: unknown): string {
+  if (typeof value !== 'string') throw invalidPromptImages()
+
+  let path: string
+  try {
+    path = resolve(value)
+  } catch {
+    throw invalidPromptImages()
   }
 
-  const resolvedDirectory = resolve(directory)
-  const directoryKey = comparablePath(resolvedDirectory)
-  const normalizedPaths: string[] = []
+  if (comparablePath(dirname(path)) !== directoryKey
+    || !/^[0-9a-f-]{36}\.(png|jpg|gif|webp)$/i.test(basename(path))) {
+    throw invalidPromptImages()
+  }
+  return path
+}
+
+function isPromptImageNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 999
+}
+
+export function normalizeAgentPromptImages(
+  directory: string,
+  value: unknown,
+): AgentPromptImageAttachment[] {
+  if (value === undefined) return []
+  if (!Array.isArray(value) || value.length > 10) throw invalidPromptImages()
+
+  const directoryKey = comparablePath(resolve(directory))
+  const images: AgentPromptImageAttachment[] = []
+  const seenNumbers = new Set<number>()
   const seenPaths = new Set<string>()
 
-  for (const valuePath of value) {
-    if (typeof valuePath !== 'string') throw new Error('Invalid agent prompt images')
-
-    let path: string
-    try {
-      path = resolve(valuePath)
-    } catch {
-      throw new Error('Invalid agent prompt images')
-    }
-
-    if (comparablePath(dirname(path)) !== directoryKey
-      || !/^[0-9a-f-]{36}\.(png|jpg|gif|webp)$/i.test(basename(path))) {
-      throw new Error('Invalid agent prompt images')
-    }
-
+  for (const entry of value) {
+    if (!isPlainRecord(entry) || !isPromptImageNumber(entry.number)) throw invalidPromptImages()
+    const path = normalizePromptImagePath(directoryKey, entry.path)
     const pathKey = comparablePath(path)
-    if (!seenPaths.has(pathKey)) {
-      seenPaths.add(pathKey)
-      normalizedPaths.push(path)
-    }
+    // Each `[Image #n]` reference must point at exactly one file.
+    if (seenNumbers.has(entry.number) || seenPaths.has(pathKey)) throw invalidPromptImages()
+
+    seenNumbers.add(entry.number)
+    seenPaths.add(pathKey)
+    images.push({ number: entry.number, path })
   }
 
-  return normalizedPaths
+  return images
 }
 
 export function appendAgentPromptImages(
   prompt: string | undefined,
-  imagePaths: string[],
+  images: AgentPromptImageAttachment[],
 ): string | undefined {
-  if (imagePaths.length === 0) return prompt
+  if (images.length === 0) return prompt
 
   const promptText = prompt?.trim()
-  const attachedImages = ['Attached images:', ...imagePaths.map((path) => '- ' + path)].join('\n')
+  const attachedImages = [
+    'Attached images:',
+    ...images.map((image) => `- [Image #${image.number}]: ${image.path}`),
+  ].join('\n')
   return promptText ? promptText + '\n\n' + attachedImages : attachedImages
 }

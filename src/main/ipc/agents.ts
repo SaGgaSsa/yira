@@ -4,6 +4,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { BrowserWindow, ipcMain, type WebContents } from 'electron'
 import type {
+  AgentPromptImageAttachment,
   AgentProviderAvailabilitySnapshot,
   AgentProvider,
   AgentProviderConfig,
@@ -36,7 +37,7 @@ import { readAgentSessionTranscript } from '../agents/transcript'
 import {
   appendAgentPromptImages,
   getAgentPromptImageDirectory,
-  normalizeAgentPromptImagePaths,
+  normalizeAgentPromptImages,
   saveAgentPromptImage,
 } from '../agents/promptImages'
 import {
@@ -107,7 +108,7 @@ interface NormalizedAgentSessionCreateInput {
   prompt?: string
   resumeSessionId?: string
   resumeCwd?: string
-  imagePaths: string[]
+  images: AgentPromptImageAttachment[]
   worktree: boolean
   provider?: AgentProvider
 }
@@ -298,16 +299,16 @@ function normalizeCreateInput(
     throw new Error('Invalid agent provider')
   }
 
-  const imagePaths = resumeSessionId
+  const images = resumeSessionId
     ? []
-    : normalizeAgentPromptImagePaths(promptImageDirectory, value.imagePaths)
+    : normalizeAgentPromptImages(promptImageDirectory, value.images)
 
   return {
     workspaceId,
     ...(prompt !== undefined ? { prompt } : {}),
     ...(resumeSessionId ? { resumeSessionId } : {}),
     ...(resumeCwd !== undefined ? { resumeCwd } : {}),
-    imagePaths,
+    images,
     worktree: value.worktree === true,
     ...(value.provider !== undefined ? { provider: value.provider } : {}),
   }
@@ -438,9 +439,9 @@ export function registerAgentsIPC(options: AgentIPCOptions = {}): void {
 
   ipcMain.handle('agents:sessions:create', async (_event, rawInput: unknown): Promise<AgentSessionCreateResult> => {
     const input = normalizeCreateInput(rawInput, promptImageDirectory)
-    for (const imagePath of input.imagePaths) {
+    for (const image of input.images) {
       try {
-        if (!(await fs.stat(imagePath)).isFile()) {
+        if (!(await fs.stat(image.path)).isFile()) {
           throw new Error('Agent prompt image is no longer available')
         }
       } catch {
@@ -473,10 +474,10 @@ export function registerAgentsIPC(options: AgentIPCOptions = {}): void {
       : homedir()
     let cwd = resolveAgentCwd(workspaceRoot, input.resumeCwd)
     const tileId = `agent-${randomUUID()}`
-    const title = input.imagePaths.length > 0 && input.prompt === undefined
+    const title = input.images.length > 0 && input.prompt === undefined
       ? 'Image prompt'
       : sessionTitle(input.prompt, input.resumeSessionId)
-    const prompt = appendAgentPromptImages(input.prompt, input.imagePaths)
+    const prompt = appendAgentPromptImages(input.prompt, input.images)
     let worktree: AgentWorkspaceWorktree | undefined
 
     if (input.worktree) {

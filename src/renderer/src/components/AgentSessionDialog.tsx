@@ -9,12 +9,18 @@ import type {
   WorkspaceMetadata,
 } from '@shared/types'
 import { WorkspacePickerMenu } from './WorkspacePickerMenu'
+import {
+  insertPromptImageReferences,
+  removePromptImageReference,
+} from '@/utils/agentPromptImages'
 
 const MAX_PROMPT_IMAGE_COUNT = 10
 const MAX_PROMPT_IMAGE_SIZE = 10 * 1024 * 1024
 
 interface PromptImagePreview {
   id: number
+  /** Shown in the prompt as `[Image #number]`. */
+  number: number
   preview: string
   path: string | null
 }
@@ -136,6 +142,8 @@ export function AgentSessionDialog({
   const wasOpenRef = useRef(false)
   const capabilityRequestRef = useRef(0)
   const promptImageIdRef = useRef(0)
+  const promptImageNumberRef = useRef(0)
+  const pendingCaretRef = useRef<number | null>(null)
   const promptImageGenerationRef = useRef(0)
   const promptImagesRef = useRef<PromptImagePreview[]>([])
   const usableWorkspaces = useMemo(
@@ -198,6 +206,7 @@ export function AgentSessionDialog({
     setSelectedProvider(getDefaultProvider(nextWorkspace))
     setPrompt('')
     promptImageGenerationRef.current += 1
+    promptImageNumberRef.current = 0
     promptImagesRef.current = []
     setPromptImages([])
     setWorktree(false)
@@ -211,6 +220,14 @@ export function AgentSessionDialog({
   useEffect(() => {
     if (open) promptRef.current?.focus()
   }, [focusRequestId, open])
+
+  useEffect(() => {
+    // Keep the caret after the image references inserted by a paste.
+    const caret = pendingCaretRef.current
+    if (caret === null) return
+    pendingCaretRef.current = null
+    promptRef.current?.setSelectionRange?.(caret, caret)
+  }, [prompt])
 
   useEffect(() => {
     if (!open) return
@@ -238,7 +255,11 @@ export function AgentSessionDialog({
         provider: selectedProvider,
         ...(trimmedPrompt ? { prompt: trimmedPrompt } : {}),
         ...(promptImages.length > 0
-          ? { imagePaths: promptImages.flatMap((image) => image.path ? [image.path] : []) }
+          ? {
+            images: promptImages.flatMap((image) => (
+              image.path ? [{ number: image.number, path: image.path }] : []
+            )),
+          }
           : {}),
         worktree: worktreeAvailable && worktree,
       })
@@ -251,6 +272,13 @@ export function AgentSessionDialog({
     setIsSubmitting(false)
     onCreated(result)
     onClose()
+  }
+
+  const removePromptImage = (previewId: number): void => {
+    const image = promptImagesRef.current.find((entry) => entry.id === previewId)
+    if (!image) return
+    updatePromptImages((current) => current.filter((entry) => entry.id !== previewId))
+    setPrompt((current) => removePromptImageReference(current, image.number))
   }
 
   const attachPromptImage = async (
@@ -285,7 +313,7 @@ export function AgentSessionDialog({
         generation !== promptImageGenerationRef.current
         || !promptImagesRef.current.some((entry) => entry.id === previewId)
       ) return
-      updatePromptImages((current) => current.filter((entry) => entry.id !== previewId))
+      removePromptImage(previewId)
       setError(t('agentsView.promptImageAttachError'))
     }
   }
@@ -320,10 +348,21 @@ export function AgentSessionDialog({
 
     const newPreviews = acceptedImages.map(() => ({
       id: ++promptImageIdRef.current,
+      number: ++promptImageNumberRef.current,
       preview: '',
       path: null,
     }))
     updatePromptImages((current) => [...current, ...newPreviews])
+
+    const textarea = event.currentTarget
+    const edit = insertPromptImageReferences(
+      textarea.value,
+      textarea.selectionStart ?? textarea.value.length,
+      textarea.selectionEnd ?? textarea.value.length,
+      newPreviews.map((preview) => preview.number),
+    )
+    pendingCaretRef.current = edit.caret
+    setPrompt(edit.value)
     const generation = promptImageGenerationRef.current
     acceptedImages.forEach((image, index) => {
       void attachPromptImage(image, newPreviews[index].id, generation)
@@ -379,7 +418,7 @@ export function AgentSessionDialog({
             <div className="space-y-3">
               {promptImages.length > 0 && (
                 <div className="flex flex-wrap gap-2 pt-1">
-                  {promptImages.map((image, index) => (
+                  {promptImages.map((image) => (
                     <div
                       key={image.id}
                       className="relative h-12 w-12 shrink-0 rounded-lg border border-border-visible bg-bg-primary"
@@ -388,19 +427,22 @@ export function AgentSessionDialog({
                       {image.preview && (
                         <img
                           src={image.preview}
-                          alt={`${t('agentsView.promptImageAlt')} ${index + 1}`}
+                          alt={`${t('agentsView.promptImageAlt')} ${image.number}`}
                           className={`h-full w-full rounded-lg object-cover ${
                             image.path === null ? 'opacity-50' : ''
                           }`}
                         />
                       )}
+                      <span className="pointer-events-none absolute bottom-0.5 left-0.5 rounded bg-black/70 px-1 text-[10px] leading-4 text-white">
+                        #{image.number}
+                      </span>
                       <button
                         type="button"
                         className="absolute -right-1 -top-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-border-visible bg-bg-secondary text-text-secondary shadow transition-colors hover:bg-hover-bg hover:text-text-display"
-                        aria-label={`${t('agentsView.removePromptImage')} ${index + 1}`}
+                        aria-label={`${t('agentsView.removePromptImage')} ${image.number}`}
                         disabled={isSubmitting}
                         onClick={() => {
-                          updatePromptImages((current) => current.filter((entry) => entry.id !== image.id))
+                          removePromptImage(image.id)
                           promptRef.current?.focus()
                         }}
                       >

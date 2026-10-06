@@ -696,6 +696,7 @@ test('pastes multiple prompt images, removes one, and sends the remaining path',
 
     const previews = container.getElementsByTagName('img')
     assert.equal(pasteEvent.defaultPrevented, true)
+    assert.equal(prompt.value, '[Image #1] [Image #2] ')
     assert.equal(previews.length, 2)
     assert.equal(previews[0].getAttribute('alt'), 'Attached image 1')
     assert.equal(promptImageSaveCalls[0].mimeType, 'image/png')
@@ -714,12 +715,14 @@ test('pastes multiple prompt images, removes one, and sends the remaining path',
     await settle()
 
     assert.equal(container.getElementsByTagName('img').length, 1)
+    assert.equal(prompt.value, '[Image #2]')
     dispatch(prompt, 'keydown', { key: 'Enter' })
     await settle()
     assert.deepEqual(payloads[0], {
       workspaceId: 'workspace-a',
       provider: 'claude',
-      imagePaths: ['C:\\prompt-images\\image-2.png'],
+      prompt: '[Image #2]',
+      images: [{ number: 2, path: 'C:\\prompt-images\\image-2.png' }],
       worktree: false,
     })
   } finally {

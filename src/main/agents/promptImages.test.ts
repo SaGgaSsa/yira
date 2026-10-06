@@ -6,7 +6,7 @@ import test from 'node:test'
 import {
   appendAgentPromptImages,
   getAgentPromptImageDirectory,
-  normalizeAgentPromptImagePaths,
+  normalizeAgentPromptImages,
   saveAgentPromptImage,
 } from './promptImages'
 
@@ -77,7 +77,7 @@ test('removes prompt image files older than seven days before saving', async (t)
   assert.equal((await stat(nestedDirectory)).isDirectory(), true)
 })
 
-test('normalizes image paths, rejects unsafe paths, and removes duplicates', async (t) => {
+test('normalizes numbered images and rejects unsafe or ambiguous entries', async (t) => {
   const temporaryDirectory = await mkdtemp(join(tmpdir(), 'yira-prompt-image-'))
   t.after(() => rm(temporaryDirectory, { recursive: true, force: true }))
 
@@ -85,41 +85,53 @@ test('normalizes image paths, rejects unsafe paths, and removes duplicates', asy
   const firstPath = join(directory, '00000000-0000-4000-8000-000000000001.png')
   const secondPath = join(directory, '00000000-0000-4000-8000-000000000002.webp')
 
-  assert.deepEqual(normalizeAgentPromptImagePaths(directory, undefined), [])
-  assert.deepEqual(normalizeAgentPromptImagePaths(directory, [firstPath, secondPath, firstPath]), [
-    resolve(firstPath),
-    resolve(secondPath),
+  assert.deepEqual(normalizeAgentPromptImages(directory, undefined), [])
+  assert.deepEqual(normalizeAgentPromptImages(directory, [
+    { number: 1, path: firstPath },
+    { number: 3, path: secondPath },
+  ]), [
+    { number: 1, path: resolve(firstPath) },
+    { number: 3, path: resolve(secondPath) },
   ])
 
   const invalidValues: unknown[] = [
-    join(temporaryDirectory, basename(firstPath)),
-    join(directory, 'not-a-uuid.png'),
-    join(directory, '..', basename(firstPath)),
-    [firstPath, 1],
-    Array.from({ length: 11 }, (_, index) => join(
-      directory,
-      '00000000-0000-4000-8000-' + index.toString(16).padStart(12, '0') + '.png',
-    )),
+    firstPath,
+    [firstPath],
+    [{ number: 1, path: join(temporaryDirectory, basename(firstPath)) }],
+    [{ number: 1, path: join(directory, 'not-a-uuid.png') }],
+    [{ number: 1, path: join(directory, '..', basename(firstPath)) }],
+    [{ number: 0, path: firstPath }],
+    [{ number: 1.5, path: firstPath }],
+    [{ number: 1, path: firstPath }, { number: 1, path: secondPath }],
+    [{ number: 1, path: firstPath }, { number: 2, path: firstPath }],
+    Array.from({ length: 11 }, (_, index) => ({
+      number: index + 1,
+      path: join(directory, '00000000-0000-4000-8000-' + index.toString(16).padStart(12, '0') + '.png'),
+    })),
   ]
 
   for (const value of invalidValues) {
     assert.throws(
-      () => normalizeAgentPromptImagePaths(directory, value),
+      () => normalizeAgentPromptImages(directory, value),
       /Invalid agent prompt images/,
     )
   }
 })
 
-test('appends image paths after a trimmed prompt or as a standalone block', () => {
-  const imagePaths = ['C:\\images\\first.png', 'C:\\images\\second.jpg']
+test('appends numbered image references after a trimmed prompt or as a standalone block', () => {
+  const images = [
+    { number: 1, path: 'C:\images\first.png' },
+    { number: 4, path: 'C:\images\second.jpg' },
+  ]
   assert.equal(appendAgentPromptImages(undefined, []), undefined)
   assert.equal(appendAgentPromptImages('  keep this  ', []), '  keep this  ')
   assert.equal(
-    appendAgentPromptImages('  Review these files  ', imagePaths),
-    'Review these files\n\nAttached images:\n- C:\\images\\first.png\n- C:\\images\\second.jpg',
+    appendAgentPromptImages('  Compare [Image #1] with [Image #4]  ', images),
+    'Compare [Image #1] with [Image #4]\n\nAttached images:\n'
+      + '- [Image #1]: C:\images\first.png\n- [Image #4]: C:\images\second.jpg',
   )
   assert.equal(
-    appendAgentPromptImages(' \n\t ', imagePaths),
-    'Attached images:\n- C:\\images\\first.png\n- C:\\images\\second.jpg',
+    appendAgentPromptImages(' \n\t ', images),
+    'Attached images:\n- [Image #1]: C:\images\first.png\n- [Image #4]: C:\images\second.jpg',
   )
 })
