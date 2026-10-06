@@ -5,6 +5,8 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type {
   AgentActiveSessionSnapshot,
   AgentDetectionSnapshot,
+  AgentPromptImage,
+  AgentPromptImageSaveInput,
   AgentProviderAvailabilitySnapshot,
   AgentSessionCapabilities,
   AgentSessionCloseInput,
@@ -84,6 +86,8 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.invoke('agents:sessions:capabilities', workspaceId) as Promise<AgentSessionCapabilities>,
     createSession: (input: AgentSessionCreateInput) =>
       ipcRenderer.invoke('agents:sessions:create', input) as Promise<AgentSessionCreateResult>,
+    savePromptImage: (input: AgentPromptImageSaveInput) =>
+      ipcRenderer.invoke('agents:promptImages:save', input) as Promise<AgentPromptImage>,
     closeSession: (input: AgentSessionCloseInput) =>
       ipcRenderer.invoke('agents:sessions:close', input) as Promise<AgentSessionCloseResult>,
     sessionsSnapshot: (workspaceId?: string) =>
