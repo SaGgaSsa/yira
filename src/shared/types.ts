@@ -80,8 +80,6 @@ export interface AgentActiveSession {
   title?: string
   /** Latest title the agent set on its terminal, as the agent wrote it. */
   liveTitle?: string
-  /** Provider conversation running now, when detected; it replaces `sessionId` after /clear. */
-  conversationId?: string
   worktreeRoot?: string
   worktreeBranch?: string
   worktrees?: Array<{ path: string; baseSha: string }>

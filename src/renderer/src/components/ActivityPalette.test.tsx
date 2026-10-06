@@ -7,8 +7,6 @@ import React from 'react'
 import type {
   AgentActiveSession,
   AgentSessionCapabilities,
-  AgentSessionTranscriptQuery,
-  AgentSessionTranscriptResult,
   WorkspaceMetadata,
 } from '@shared/types'
 import { resources } from '@/i18n/resources'
@@ -217,19 +215,12 @@ function session(overrides: Partial<AgentActiveSession> = {}): AgentActiveSessio
   }
 }
 
-const emptyTranscript: AgentSessionTranscriptResult = { entries: [], start: 0, total: 0, found: false }
-let transcriptQueries: AgentSessionTranscriptQuery[] = []
-let transcriptHandler: (query: AgentSessionTranscriptQuery) => Promise<AgentSessionTranscriptResult> = async () => emptyTranscript
 Object.defineProperty(globalThis, 'electron', {
   configurable: true,
   value: {
     agents: {
       createSession: async () => ({ workspaceId: 'alpha', tileId: 'created', provider: 'claude' }),
       sessionCapabilities: async (): Promise<AgentSessionCapabilities> => ({ provider: null, providers: [], worktreeAvailable: false }),
-      historyTranscript: (query: AgentSessionTranscriptQuery) => {
-        transcriptQueries.push(query)
-        return transcriptHandler(query)
-      },
       sessionsSnapshot: async () => ({ sessions: [] }),
       subscribeSessions: async () => false,
       unsubscribeSessions: async () => true,
@@ -374,7 +365,7 @@ async function settle(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 50))
 }
 
-test('shows only working and waiting agents, with waiting workspaces first', async () => {
+test('shows every open agent, with waiting workspaces first and done agents last', async () => {
   const { container, root } = renderActivityStep()
 
   try {
@@ -382,15 +373,17 @@ test('shows only working and waiting agents, with waiting workspaces first', asy
     assert.deepEqual(findCardIds(container), ['gamma', 'alpha'])
     const agentIds = findByAttribute(container, 'div', 'data-activity-palette-agent')
       .map((element) => element.getAttribute('data-activity-palette-agent'))
-    assert.deepEqual(agentIds, ['gamma-input', 'gamma-working', 'alpha-working'])
+    assert.deepEqual(agentIds, ['gamma-input', 'gamma-working', 'alpha-working', 'alpha-done'])
     const [summary] = findByAttribute(container, 'p', 'data-activity-palette-summary')
-    assert.equal(summary?.textContent, '3 agentes · 2 workspaces · 1 espera input')
+    assert.equal(summary?.textContent, '4 agentes · 2 workspaces · 1 espera input')
     assert.match(container.textContent, /Espera input/)
     assert.match(container.textContent, /Sesión Ctrl\+N/)
     assert.match(container.textContent, /Tile/)
     assert.match(container.textContent, /⎇ feat\/x/)
     assert.match(container.textContent, /4 min/)
-    assert.doesNotMatch(container.textContent, /Finished task/)
+    assert.match(container.textContent, /Finished task/)
+    assert.match(container.textContent, /Terminada/)
+    assert.match(container.textContent, /1 trabajando · 1 terminada/)
     assert.doesNotMatch(container.textContent, /Beta/)
   } finally {
     root.unmount()
@@ -413,44 +406,6 @@ test('names each agent by its prompt title, then its terminal title, then its pr
     assert.ok(rows[1].startsWith('✳ Fix the login flow'), rows[1])
     assert.ok(rows[2].startsWith('Claude'), rows[2])
     assert.doesNotMatch(container.textContent, /Terminal name/)
-  } finally {
-    root.unmount()
-  }
-})
-
-test('shows the last agent message on one line and skips sessions without one', async () => {
-  transcriptQueries = []
-  transcriptHandler = async (query) => (
-    query.identifier === 'gamma-input'
-      ? { entries: [{ kind: 'reply', text: 'Need approval\nfor the migration' }], start: 0, total: 1, found: true }
-      : { ...emptyTranscript, found: true }
-  )
-  const { container, root } = renderActivityStep()
-
-  try {
-    await settle()
-    const messages = findByAttribute(container, 'p', 'data-activity-palette-message')
-      .map((element) => element.textContent)
-    assert.deepEqual(messages, ['Need approval for the migration'])
-    assert.deepEqual(
-      transcriptQueries.find((query) => query.identifier === 'gamma-input'),
-      { workspaceId: 'gamma', provider: 'codex', identifier: 'gamma-input', limit: 1 },
-    )
-  } finally {
-    transcriptHandler = async () => emptyTranscript
-    root.unmount()
-  }
-})
-
-test('reads the last message from the conversation the agent is running now', async () => {
-  transcriptQueries = []
-  const { root } = renderActivityStep([
-    session({ sessionId: 'launch-id', tileId: 'tile-1', conversationId: 'after-clear' }),
-  ])
-
-  try {
-    await settle()
-    assert.deepEqual(transcriptQueries.map((query) => query.identifier), ['after-clear'])
   } finally {
     root.unmount()
   }
@@ -485,12 +440,12 @@ test('Enter opens the selected agent and arrows move between agents and cards', 
 })
 
 test('shows the empty state and Enter moves on to a new session', async () => {
-  const { container, root, calls } = renderActivityStep([session({ status: 'done' })])
+  const { container, root, calls } = renderActivityStep([session({ status: 'exited' })])
 
   try {
     await settle()
     assert.deepEqual(findCardIds(container), [])
-    assert.match(container.textContent, /Ningún workspace tiene agentes trabajando o esperando\./)
+    assert.match(container.textContent, /Ningún workspace tiene agentes abiertos\./)
     assert.ok(findButton(container, 'Nueva sesión'))
     pressKey('Enter')
     await settle()

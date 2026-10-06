@@ -129,17 +129,6 @@ test('retains Agents View and worktree metadata in runtime snapshots', () => {
   assert.equal(registry.get('workspace-1', 'tile-1')?.worktrees?.[0].path, worktrees[0].path)
 })
 
-test('tracks the conversation an agent is running and ignores invalid ids', () => {
-  const registry = new AgentSessionRegistry()
-  registry.register(session)
-
-  assert.equal(registry.updateConversationId('workspace-1', 'tile-1', 'conversation-1'), true)
-  assert.equal(registry.updateConversationId('workspace-1', 'tile-1', 'conversation-1'), false)
-  assert.equal(registry.updateConversationId('workspace-1', 'tile-1', '../escape'), false)
-  assert.equal(registry.updateConversationId('workspace-1', 'missing', 'conversation-2'), false)
-  assert.equal(registry.get('workspace-1', 'tile-1')?.conversationId, 'conversation-1')
-})
-
 test('updates the live terminal title only when its text changes', () => {
   const registry = new AgentSessionRegistry()
   const titles: Array<string | undefined> = []

@@ -12,7 +12,6 @@ import type { ActivityPaletteStep } from '@/hooks/useAgentsView'
 import {
   ACTIVITY_PALETTE_GRID_TRACKS,
   buildActivityPaletteGroups,
-  flattenActivityMessage,
   formatActivityElapsed,
   getActivityPaletteCardSpans,
   getAgentSessionSurface,
@@ -48,18 +47,6 @@ export interface ActivityPaletteProps {
   onOpenAgent: (workspace: WorkspaceMetadata, session: AgentActiveSession) => void
 }
 
-/** Latest agent message per `sessionId:lastActivityAt`; `null` means there is none to show. */
-type MessageCache = Map<string, string | null>
-
-/** Transcript of the conversation the agent is running now. */
-function getConversationId(session: AgentActiveSession): string {
-  return session.conversationId ?? session.sessionId
-}
-
-function getMessageKey(session: AgentActiveSession): string {
-  return `${getConversationId(session)}:${session.lastActivityAt}`
-}
-
 function getProviderLabel(provider: AgentProvider, translate: (key: string) => string): string {
   return translate(provider === 'claude' ? 'agentsView.claude' : 'agentsView.codex')
 }
@@ -68,61 +55,23 @@ function getProviderColor(provider: AgentProvider): string {
   return provider === 'claude' ? 'var(--agent-claude)' : 'var(--agent-codex)'
 }
 
+function getStatusLabel(status: AgentActiveSession['status'], translate: (key: string) => string): string {
+  if (status === 'needs-input') return translate('activityPalette.statusNeedsInput')
+  if (status === 'done') return translate('activityPalette.statusDone')
+  return translate('activityPalette.statusWorking')
+}
+
+/** Same status colors as Agents View. */
+function getStatusBadgeClass(status: AgentActiveSession['status']): string {
+  if (status === 'needs-input') return 'border-warning text-warning'
+  if (status === 'done') return 'border-success text-success'
+  return 'border-activity text-activity'
+}
+
 function isButtonTarget(target: EventTarget | null): boolean {
   if (!target || typeof target !== 'object') return false
   const closest = (target as { closest?: unknown }).closest
   return typeof closest === 'function' && Boolean(closest.call(target, 'button'))
-}
-
-/** Loads the last transcript entry of each visible session, refreshing when its activity changes. */
-function useLatestAgentMessages(
-  sessions: readonly AgentActiveSession[],
-  cache: MessageCache,
-): Record<string, string | null> {
-  const [messages, setMessages] = useState<Record<string, string | null>>(() => (
-    Object.fromEntries(sessions.map((session) => [session.sessionId, cache.get(getMessageKey(session)) ?? null]))
-  ))
-  const latestKeysRef = useRef(new Map<string, string>())
-  const mountedRef = useRef(true)
-
-  useEffect(() => {
-    mountedRef.current = true
-    return () => { mountedRef.current = false }
-  }, [])
-
-  useEffect(() => {
-    for (const session of sessions) {
-      const key = getMessageKey(session)
-      if (latestKeysRef.current.get(session.sessionId) === key) continue
-      latestKeysRef.current.set(session.sessionId, key)
-
-      if (cache.has(key)) {
-        const cached = cache.get(key) ?? null
-        setMessages((current) => ({ ...current, [session.sessionId]: cached }))
-        continue
-      }
-
-      void window.electron.agents.historyTranscript({
-        workspaceId: session.workspaceId,
-        provider: session.provider,
-        identifier: getConversationId(session),
-        limit: 1,
-      })
-        .then((result) => {
-          const lastEntry = result.entries[result.entries.length - 1]
-          return lastEntry ? flattenActivityMessage(lastEntry.text) || null : null
-        })
-        .catch(() => null)
-        .then((text) => {
-          // A newer activity timestamp has been requested since; drop this response.
-          if (latestKeysRef.current.get(session.sessionId) !== key) return
-          cache.set(key, text)
-          if (mountedRef.current) setMessages((current) => ({ ...current, [session.sessionId]: text }))
-        })
-    }
-  }, [cache, sessions])
-
-  return messages
 }
 
 function useNow(): number {
@@ -144,7 +93,6 @@ function Keycap({ children }: { children: React.ReactNode }): React.ReactElement
 
 interface ActivityStepProps {
   groups: ActivityPaletteGroup[]
-  messageCache: MessageCache
   shortcutLabel: string
   onClose: () => void
   onNewSession: () => void
@@ -153,7 +101,6 @@ interface ActivityStepProps {
 
 function ActivityStep({
   groups,
-  messageCache,
   shortcutLabel,
   onClose,
   onNewSession,
@@ -162,7 +109,6 @@ function ActivityStep({
   const { t } = useTranslation()
   const containerRef = useRef<HTMLDivElement | null>(null)
   const visibleSessions = useMemo(() => groups.flatMap((group) => group.sessions), [groups])
-  const messages = useLatestAgentMessages(visibleSessions, messageCache)
   const now = useNow()
   const summary = summarizeActivityPalette(groups)
   const spans = getActivityPaletteCardSpans(groups.length)
@@ -281,7 +227,6 @@ function ActivityStep({
                 group={group}
                 span={spans[index] ?? ACTIVITY_PALETTE_GRID_TRACKS}
                 selectedSessionId={selectedSessionId}
-                messages={messages}
                 now={now}
                 shortcutLabel={shortcutLabel}
                 onSelect={setSelectedId}
@@ -306,7 +251,6 @@ interface WorkspaceCardProps {
   group: ActivityPaletteGroup
   span: number
   selectedSessionId: string | null
-  messages: Record<string, string | null>
   now: number
   shortcutLabel: string
   onSelect: (sessionId: string) => void
@@ -317,7 +261,6 @@ function WorkspaceCard({
   group,
   span,
   selectedSessionId,
-  messages,
   now,
   shortcutLabel,
   onSelect,
@@ -329,7 +272,9 @@ function WorkspaceCard({
   const cardSummary = [
     ...(group.needsInputCount > 0 ? [t('activityPalette.needsInputCount', { count: group.needsInputCount })] : []),
     ...(group.workingCount > 0 ? [t('activityPalette.workingCount', { count: group.workingCount })] : []),
+    ...(group.doneCount > 0 ? [t('activityPalette.doneCount', { count: group.doneCount })] : []),
   ].join(' · ')
+  const dotClass = hasInput ? 'bg-warning' : group.workingCount > 0 ? 'bg-activity' : 'bg-success'
 
   return (
     <section
@@ -343,7 +288,7 @@ function WorkspaceCard({
     >
       <div className="flex items-center gap-2 border-b border-border px-4 py-3">
         <span
-          className={`h-2 w-2 shrink-0 rounded-full ${hasInput ? 'bg-warning' : 'bg-activity'}`}
+          className={`h-2 w-2 shrink-0 rounded-full ${dotClass}`}
           aria-hidden="true"
         />
         <h3 className="min-w-0 flex-1 truncate text-sm text-text-display">{workspaceName}</h3>
@@ -355,7 +300,6 @@ function WorkspaceCard({
             key={session.sessionId}
             session={session}
             selected={session.sessionId === selectedSessionId}
-            message={messages[session.sessionId] ?? null}
             now={now}
             shortcutLabel={shortcutLabel}
             onSelect={() => onSelect(session.sessionId)}
@@ -370,7 +314,6 @@ function WorkspaceCard({
 interface AgentRowProps {
   session: AgentActiveSession
   selected: boolean
-  message: string | null
   now: number
   shortcutLabel: string
   onSelect: () => void
@@ -380,7 +323,6 @@ interface AgentRowProps {
 function AgentRow({
   session,
   selected,
-  message,
   now,
   shortcutLabel,
   onSelect,
@@ -388,7 +330,6 @@ function AgentRow({
 }: AgentRowProps): React.ReactElement {
   const { t } = useTranslation()
   const rowRef = useRef<HTMLDivElement | null>(null)
-  const needsInput = session.status === 'needs-input'
   const providerLabel = getProviderLabel(session.provider, t)
   const title = getAgentSessionTitle(session) || providerLabel
   const source = getAgentSessionSurface(session) === 'agents-view'
@@ -420,21 +361,11 @@ function AgentRow({
         />
         <span className="min-w-0 flex-1 truncate text-sm text-text-primary">{title}</span>
         <span
-          className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] ${
-            needsInput ? 'border-warning text-warning' : 'border-activity text-activity'
-          }`}
+          className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] ${getStatusBadgeClass(session.status)}`}
         >
-          {needsInput ? t('activityPalette.statusNeedsInput') : t('activityPalette.statusWorking')}
+          {getStatusLabel(session.status, t)}
         </span>
       </div>
-      {message && (
-        <p
-          className={`mt-1 truncate text-xs ${needsInput ? 'text-warning' : 'text-text-secondary'}`}
-          data-activity-palette-message="true"
-        >
-          {message}
-        </p>
-      )}
       <div className="mt-1 flex min-w-0 items-center gap-1.5 font-mono text-[10px] text-text-muted">
         <span className="min-w-0 flex-1 truncate">
           {[providerLabel, source, ...(session.worktreeBranch ? [`⎇ ${session.worktreeBranch}`] : [])].join(' · ')}
@@ -461,8 +392,6 @@ export function ActivityPalette({
   onCreated,
   onOpenAgent,
 }: ActivityPaletteProps): React.ReactElement {
-  // Kept for the palette's lifetime so reopening shows messages without waiting.
-  const messageCacheRef = useRef<MessageCache>(new Map())
   const groups = useMemo(
     () => buildActivityPaletteGroups(workspaces, sessions),
     [sessions, workspaces],
@@ -473,7 +402,6 @@ export function ActivityPalette({
       {step === 'activity' && (
         <ActivityStep
           groups={groups}
-          messageCache={messageCacheRef.current}
           shortcutLabel={shortcutLabel}
           onClose={onClose}
           onNewSession={onNewSession}

@@ -217,8 +217,11 @@ type TranslationResources = {
     needsInputCount_other: string
     workingCount_one: string
     workingCount_other: string
+    doneCount_one: string
+    doneCount_other: string
     statusNeedsInput: string
     statusWorking: string
+    statusDone: string
     sourceTile: string
     sourceAgentsView: string
     empty: string
@@ -1025,11 +1028,14 @@ const en: TranslationResources = {
     needsInputCount_other: '{{count}} waiting for input',
     workingCount_one: '{{count}} working',
     workingCount_other: '{{count}} working',
+    doneCount_one: '{{count}} done',
+    doneCount_other: '{{count}} done',
     statusNeedsInput: 'Waiting for input',
     statusWorking: 'Working',
+    statusDone: 'Done',
     sourceTile: 'Tile',
     sourceAgentsView: '{{shortcut}} session',
-    empty: 'No workspace has agents working or waiting.',
+    empty: 'No workspace has open agents.',
     agentList: 'Active agents',
     footerMove: 'move between agents',
     footerOpen: 'go to the terminal',
@@ -1792,11 +1798,14 @@ const es: TranslationResources = {
     needsInputCount_other: '{{count}} esperan input',
     workingCount_one: '{{count}} trabajando',
     workingCount_other: '{{count}} trabajando',
+    doneCount_one: '{{count}} terminada',
+    doneCount_other: '{{count}} terminadas',
     statusNeedsInput: 'Espera input',
     statusWorking: 'Trabajando',
+    statusDone: 'Terminada',
     sourceTile: 'Tile',
     sourceAgentsView: 'Sesión {{shortcut}}',
-    empty: 'Ningún workspace tiene agentes trabajando o esperando.',
+    empty: 'Ningún workspace tiene agentes abiertos.',
     agentList: 'Agentes activos',
     footerMove: 'moverse entre agentes',
     footerOpen: 'ir a la terminal',

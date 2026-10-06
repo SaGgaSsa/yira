@@ -3,7 +3,6 @@ import test from 'node:test'
 import type { AgentActiveSession, WorkspaceMetadata } from '@shared/types'
 import {
   buildActivityPaletteGroups,
-  flattenActivityMessage,
   formatActivityElapsed,
   getActivityPaletteCardSpans,
   getActivityPaletteRowSizes,
@@ -60,7 +59,7 @@ test('spans every row across the six grid tracks', () => {
   }
 })
 
-test('keeps only working and waiting agents and drops workspaces without them', () => {
+test('keeps every open agent and drops workspaces without one', () => {
   const groups = buildActivityPaletteGroups(
     [workspace('a'), workspace('b'), workspace('c')],
     [
@@ -73,8 +72,12 @@ test('keeps only working and waiting agents and drops workspaces without them', 
     ],
   )
 
-  assert.deepEqual(groups.map((group) => group.workspace.id), ['c', 'a'])
-  assert.deepEqual(groups.map((group) => group.sessions.map((entry) => entry.sessionId)), [['c-input'], ['a-working']])
+  assert.deepEqual(groups.map((group) => group.workspace.id), ['c', 'a', 'b'])
+  assert.deepEqual(groups.map((group) => group.sessions.map((entry) => entry.sessionId)), [
+    ['c-input'],
+    ['a-working', 'a-done'],
+    ['b-done'],
+  ])
 })
 
 test('orders workspaces with waiting agents first, keeping sidebar order within each group', () => {
@@ -91,17 +94,19 @@ test('orders workspaces with waiting agents first, keeping sidebar order within 
   assert.deepEqual(groups.map((group) => group.workspace.id), ['second', 'fourth', 'first', 'third'])
 })
 
-test('orders agents waiting for input first, then by start time, and counts them', () => {
+test('orders agents waiting, working, then done, each by start time, and counts them', () => {
   const [group] = buildActivityPaletteGroups([workspace('a')], [
+    session({ sessionId: 'done', workspaceId: 'a', status: 'done', startedAt: '2026-01-01T00:00:00.000Z' }),
     session({ sessionId: 'late', workspaceId: 'a', startedAt: '2026-01-01T00:03:00.000Z' }),
     session({ sessionId: 'early', workspaceId: 'a', startedAt: '2026-01-01T00:01:00.000Z' }),
     session({ sessionId: 'input', workspaceId: 'a', status: 'needs-input', startedAt: '2026-01-01T00:05:00.000Z' }),
   ])
 
-  assert.deepEqual(group.sessions.map((entry) => entry.sessionId), ['input', 'early', 'late'])
+  assert.deepEqual(group.sessions.map((entry) => entry.sessionId), ['input', 'early', 'late', 'done'])
   assert.equal(group.needsInputCount, 1)
   assert.equal(group.workingCount, 2)
-  assert.deepEqual(summarizeActivityPalette([group]), { agentCount: 3, workspaceCount: 1, needsInputCount: 1 })
+  assert.equal(group.doneCount, 1)
+  assert.deepEqual(summarizeActivityPalette([group]), { agentCount: 4, workspaceCount: 1, needsInputCount: 1 })
 })
 
 test('treats a missing surface as a permanent tile', () => {
@@ -116,10 +121,6 @@ test('formats elapsed time in seconds, minutes, and hours', () => {
   assert.equal(formatActivityElapsed(startedAt, start + 4 * 60_000 + 10_000), '4 min')
   assert.equal(formatActivityElapsed(startedAt, start + 2 * 3_600_000 + 60_000), '2 h')
   assert.equal(formatActivityElapsed(startedAt, start - 5_000), '0 s')
-})
-
-test('flattens multi-line messages into one line', () => {
-  assert.equal(flattenActivityMessage('  First line\n\nsecond\tline  '), 'First line second line')
 })
 
 test('moves selection through agents and jumps between cards', () => {

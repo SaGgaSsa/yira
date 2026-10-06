@@ -10,6 +10,7 @@ export interface ActivityPaletteGroup {
   sessions: AgentActiveSession[]
   needsInputCount: number
   workingCount: number
+  doneCount: number
 }
 
 export interface ActivityPaletteSummary {
@@ -20,24 +21,30 @@ export interface ActivityPaletteSummary {
 
 export type ActivityPaletteNavigationKey = 'ArrowUp' | 'ArrowDown' | 'ArrowLeft' | 'ArrowRight'
 
+/** Every agent with an open terminal: working, waiting for input, or done. */
 export function isActivityPaletteSession(session: AgentActiveSession): boolean {
-  return session.status === 'working' || session.status === 'needs-input'
+  return session.status !== 'exited'
 }
 
 export function getAgentSessionSurface(session: AgentActiveSession): AgentSessionSurface {
   return session.surface ?? 'tile'
 }
 
+const STATUS_ORDER: Record<AgentActiveSession['status'], number> = {
+  'needs-input': 0,
+  working: 1,
+  done: 2,
+  exited: 3,
+}
+
 function compareSessions(left: AgentActiveSession, right: AgentActiveSession): number {
-  const leftNeedsInput = left.status === 'needs-input' ? 0 : 1
-  const rightNeedsInput = right.status === 'needs-input' ? 0 : 1
-  return leftNeedsInput - rightNeedsInput
+  return STATUS_ORDER[left.status] - STATUS_ORDER[right.status]
     || left.startedAt.localeCompare(right.startedAt)
     || left.tileId.localeCompare(right.tileId)
 }
 
 /**
- * Groups working and waiting agents by workspace. `workspaces` must already be
+ * Groups open agents by workspace. `workspaces` must already be
  * in sidebar order: workspaces with an agent waiting for input come first and
  * each group keeps its sidebar position otherwise.
  */
@@ -51,12 +58,15 @@ export function buildActivityPaletteGroups(
       .sort(compareSessions)
     if (workspaceSessions.length === 0) return []
 
-    const needsInputCount = workspaceSessions.filter((session) => session.status === 'needs-input').length
+    const countStatus = (status: AgentActiveSession['status']) => (
+      workspaceSessions.filter((session) => session.status === status).length
+    )
     return [{
       workspace,
       sessions: workspaceSessions,
-      needsInputCount,
-      workingCount: workspaceSessions.length - needsInputCount,
+      needsInputCount: countStatus('needs-input'),
+      workingCount: countStatus('working'),
+      doneCount: countStatus('done'),
     }]
   })
 
@@ -98,11 +108,6 @@ export function formatActivityElapsed(startedAt: string, now: number): string {
   const minutes = Math.floor(seconds / 60)
   if (minutes < 60) return `${minutes} min`
   return `${Math.floor(minutes / 60)} h`
-}
-
-/** Collapses line breaks and repeated whitespace so a message fits on one line. */
-export function flattenActivityMessage(text: string): string {
-  return text.replace(/\s+/g, ' ').trim()
 }
 
 /**

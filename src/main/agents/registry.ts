@@ -207,19 +207,6 @@ export class AgentSessionRegistry {
     return true
   }
 
-  /** Record the provider conversation the agent is running now; it changes after /clear. */
-  updateConversationId(workspaceId: string, tileId: string, conversationId: string): boolean {
-    const workspace = normalizeAgentOpaqueId(workspaceId)
-    const tile = normalizeAgentOpaqueId(tileId)
-    const id = normalizeResumeId(conversationId)
-    if (!workspace || !tile || !id) return false
-    const session = this.sessions.get(sessionKey(workspace, tile))
-    if (!session || session.status === 'exited' || session.conversationId === id) return false
-    session.conversationId = id
-    this.emit()
-    return true
-  }
-
   /** Record the title the agent set on its terminal; an empty title is ignored. */
   updateLiveTitle(workspaceId: string, tileId: string, title: string): boolean {
     const workspace = normalizeAgentOpaqueId(workspaceId)
