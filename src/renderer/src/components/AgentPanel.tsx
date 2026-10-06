@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAgentSessionSnapshot } from '@/hooks/useAgentSessionSnapshot'
-import { Bot, Clock3, History, MessageSquareText, Play, RefreshCw, Search, Settings } from 'lucide-react'
+import { Bot, Clock3, History, MessageSquareText, Pin, RefreshCw, Search, Settings, Zap } from 'lucide-react'
 import type {
   AgentActiveSession,
   AgentProvider,
@@ -36,6 +36,8 @@ export interface AgentPanelProps {
   terminalTitles: Record<string, string>
   onFocusTile: (tileId: string) => void
   onOpenAgentsSession: (tileId: string) => void
+  /** Missing when the workspace cannot create agent tiles. */
+  onResumeInTile?: (item: AgentSessionHistoryItem) => void
   onOpenWorkspaceSettings: () => void
 }
 
@@ -128,15 +130,19 @@ function RunningSessionCard({
   )
 }
 
+const iconButtonClassName = 'inline-flex h-7 w-7 items-center justify-center rounded-full border border-border-visible text-text-display transition-colors hover:border-text-secondary disabled:cursor-not-allowed disabled:opacity-50'
+
 function HistoryCard({
   item,
   onViewConversation,
   onResume,
   resumeDisabled,
+  onResumeInTile,
   unknownTitle,
   unknownDate,
   cwdUnavailableLabel,
-  resumeLabel,
+  resumeInTileLabel,
+  resumeInAgentsViewLabel,
   modelLabel,
   messagesLabel,
   startedLabel,
@@ -146,10 +152,12 @@ function HistoryCard({
   onViewConversation: (item: AgentSessionHistoryItem) => void
   onResume: (item: AgentSessionHistoryItem) => void
   resumeDisabled: boolean
+  onResumeInTile?: (item: AgentSessionHistoryItem) => void
   unknownTitle: string
   unknownDate: string
   cwdUnavailableLabel: string
-  resumeLabel: string
+  resumeInTileLabel: string
+  resumeInAgentsViewLabel: string
   modelLabel: string
   messagesLabel: string
   startedLabel: string
@@ -180,12 +188,23 @@ function HistoryCard({
           <div className="mt-3 flex flex-wrap gap-2">
             <button
               type="button"
-              className="inline-flex items-center gap-1.5 rounded-full border border-border-visible px-3 py-1.5 text-xs text-text-display transition-colors hover:border-text-secondary disabled:cursor-not-allowed disabled:opacity-50"
+              className={iconButtonClassName}
+              onClick={() => onResumeInTile?.(item)}
+              disabled={resumeDisabled || !onResumeInTile}
+              title={resumeInTileLabel}
+              aria-label={resumeInTileLabel}
+            >
+              <Pin size={13} />
+            </button>
+            <button
+              type="button"
+              className={iconButtonClassName}
               onClick={() => onResume(item)}
               disabled={resumeDisabled}
+              title={resumeInAgentsViewLabel}
+              aria-label={resumeInAgentsViewLabel}
             >
-              <Play size={12} />
-              {resumeLabel}
+              <Zap size={13} />
             </button>
             <button
               type="button"
@@ -210,6 +229,7 @@ export function AgentPanel({
   terminalTitles,
   onFocusTile,
   onOpenAgentsSession,
+  onResumeInTile,
   onOpenWorkspaceSettings,
 }: AgentPanelProps): React.ReactElement {
   const { t } = useTranslation()
@@ -312,7 +332,8 @@ export function AgentPanel({
     noHistory: t('agents.noHistory', 'No agent history found.'),
     noSearchResults: t('agents.noSearchResults', 'No history matches this search.'),
     historyMore: t('agents.historyMore', 'More local sessions are available.'),
-    resume: t('agents.resume', 'Resume'),
+    resumeInTile: t('agents.resumeInTile', 'Resume in an agent tile'),
+    resumeInAgentsView: t('agents.resumeInAgentsView', 'Resume in Agents View'),
     unknownTitle: t('agents.unknownTitle', 'Untitled session'),
     unknownDate: t('agents.unknownDate', 'Unknown date'),
     cwdUnavailable: t('agents.cwdUnavailable', 'cwd unavailable'),
@@ -418,10 +439,12 @@ export function AgentPanel({
                 onViewConversation={setTranscriptItem}
                 onResume={resumeAgent}
                 resumeDisabled={!canResume(item.provider)}
+                onResumeInTile={onResumeInTile}
                 unknownTitle={copy.unknownTitle}
                 unknownDate={copy.unknownDate}
                 cwdUnavailableLabel={copy.cwdUnavailable}
-                resumeLabel={copy.resume}
+                resumeInTileLabel={copy.resumeInTile}
+                resumeInAgentsViewLabel={copy.resumeInAgentsView}
                 modelLabel={copy.model}
                 messagesLabel={copy.messages}
                 startedLabel={copy.started}
@@ -442,6 +465,7 @@ export function AgentPanel({
             workspaceId={workspaceId}
             onClose={() => setTranscriptItem(null)}
             onResume={resumeTranscriptItem}
+            onResumeInTile={resumeTranscriptItem ? onResumeInTile : undefined}
           />
         </React.Suspense>
       )}

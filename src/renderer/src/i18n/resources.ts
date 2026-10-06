@@ -139,7 +139,8 @@ type TranslationResources = {
     noHistory: string
     noSearchResults: string
     historyMore: string
-    resume: string
+    resumeInTile: string
+    resumeInAgentsView: string
     viewConversation: string
     conversationTitle: string
     loadingConversation: string
@@ -946,7 +947,8 @@ const en: TranslationResources = {
     noHistory: 'No agent history found.',
     noSearchResults: 'No history matches this search.',
     historyMore: 'More local sessions are available.',
-    resume: 'Resume',
+    resumeInTile: 'Resume in an agent tile',
+    resumeInAgentsView: 'Resume in Agents View',
     viewConversation: 'View conversation',
     conversationTitle: 'Conversation',
     loadingConversation: 'Loading conversation…',
@@ -1817,7 +1819,8 @@ const es: TranslationResources = {
     noHistory: 'No se encontró historial de agentes.',
     noSearchResults: 'Ningún historial coincide con esta búsqueda.',
     historyMore: 'Hay más sesiones locales disponibles.',
-    resume: 'Reanudar',
+    resumeInTile: 'Reanudar en un tile de agente',
+    resumeInAgentsView: 'Reanudar en la vista de agentes',
     viewConversation: 'Ver conversación',
     conversationTitle: 'Conversación',
     loadingConversation: 'Cargando conversación…',
