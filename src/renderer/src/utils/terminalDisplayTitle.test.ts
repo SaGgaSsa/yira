@@ -1,4 +1,5 @@
 import {
+  getAgentSessionTitles,
   getTerminalDisplayTitle,
   normalizeTerminalWindowTitle,
 } from './terminalDisplayTitle'
@@ -25,6 +26,26 @@ if (getTerminalDisplayTitle({ ...terminalTile, label: '   ' }, { [terminalTile.i
 
 if (getTerminalDisplayTitle({ ...terminalTile, label: undefined }, {}) !== 'Terminal abcd') {
   throw new Error('missing terminal label and dynamic title must fall back to Terminal ####')
+}
+
+const agentTile: TileState = { ...terminalTile, label: undefined, agent: { provider: 'claude' } }
+
+if (getTerminalDisplayTitle(agentTile, { [agentTile.id]: 'shell title' }, { [agentTile.id]: '✳ Fix login' }) !== '✳ Fix login') {
+  throw new Error('agent session name must win over the dynamic terminal title')
+}
+
+if (getTerminalDisplayTitle(agentTile, {}) !== 'Claude') {
+  throw new Error('an agent tile without a title must fall back to the agent name')
+}
+
+const agentTitles = getAgentSessionTitles([
+  { sessionId: 's1', tileId: 'tile-1', workspaceId: 'w1', provider: 'claude', status: 'working', startedAt: '', lastActivityAt: '', title: 'Prompt', liveTitle: 'Live' },
+  { sessionId: 's2', tileId: 'tile-2', workspaceId: 'w1', provider: 'codex', status: 'working', startedAt: '', lastActivityAt: '', liveTitle: '⠂ Live' },
+  { sessionId: 's3', tileId: 'tile-3', workspaceId: 'w1', provider: 'claude', status: 'working', startedAt: '', lastActivityAt: '' },
+  { sessionId: 's4', tileId: 'tile-4', workspaceId: 'w2', provider: 'claude', status: 'working', startedAt: '', lastActivityAt: '', liveTitle: 'Other' },
+], 'w1')
+if (JSON.stringify(agentTitles) !== JSON.stringify({ 'tile-1': 'Prompt', 'tile-2': '⠂ Live' })) {
+  throw new Error('agent session titles must prefer the prompt title and keep only named sessions of the workspace')
 }
 
 const normalizedWindowTitle = normalizeTerminalWindowTitle(`  ${'dev '.repeat(40)}  `)

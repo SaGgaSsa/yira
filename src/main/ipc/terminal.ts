@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto'
 import { BrowserWindow, ipcMain, type WebContents } from 'electron'
 import { promises as fs } from 'fs'
 import { dirname, join } from 'path'
@@ -137,6 +138,9 @@ function getTerminalProcessActivityMonitor(): TerminalProcessActivityMonitor {
         for (const window of BrowserWindow.getAllWindows()) {
           if (!window.isDestroyed()) window.webContents.send('terminal:processActivity:changed', snapshot)
         }
+      },
+      onClaudeSession: (root, sessionId) => {
+        agentSessionRegistry.updateConversationId(root.workspaceId, root.tileId, sessionId)
       },
     })
   }
@@ -311,13 +315,13 @@ export async function createAgentsViewSession(
   const snapshot = await persistentTerminalSessions.create(runtimeTarget, async () => {
     const shellProfile = resolveCompatibleAgentShellProfile()
 
-    const providerCommand = buildAgentCommand(spec.provider, providerConfig)
+    // Like agent tiles, a new Claude session starts with a known ID so its
+    // transcript can be found. Codex cannot preset one.
+    const presetSessionId = !resumeSessionId && spec.provider === 'claude' ? randomUUID() : undefined
+    const providerCommand = presetSessionId
+      ? buildAgentCommand(spec.provider, providerConfig, presetSessionId, { newSession: true })
+      : buildAgentCommand(spec.provider, providerConfig, resumeSessionId)
     const args = [...providerCommand.args]
-    if (resumeSessionId) {
-      args.push(...(spec.provider === 'claude'
-        ? ['--resume', resumeSessionId]
-        : ['resume', resumeSessionId]))
-    }
 
     const launch = buildAgentShellCommand({
       shellProfileId: shellProfile.id,
@@ -330,7 +334,7 @@ export async function createAgentsViewSession(
     const startedAt = new Date().toISOString()
     const agent = {
       provider: spec.provider,
-      sessionId: resumeSessionId ?? runtimeTarget.tileId,
+      sessionId: resumeSessionId ?? presetSessionId ?? runtimeTarget.tileId,
       startedAt,
       surface: 'agents-view' as const,
       ...(spec.title !== undefined ? { title: spec.title } : {}),

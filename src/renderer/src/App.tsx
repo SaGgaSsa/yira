@@ -51,6 +51,7 @@ import { getAttachedTiles, isTileDetached, selectFloatingTileWindowOpenRequests 
 import { refreshGridTileContent } from './utils/gridTileRefresh'
 import { DEFAULT_SPLIT_ORIENTATION, toggleSplitOrientation } from './utils/splitViewState'
 import { getActiveWindowTitle } from './utils/windowTitle'
+import { getAgentSessionTitles } from './utils/terminalDisplayTitle'
 import { resolveViewModeTransition } from './utils/viewModeTransition'
 import {
   resolveSidebarCollapsedAfterWorkspaceViewChange,
@@ -593,6 +594,10 @@ function AppContent(): React.ReactElement {
     void initializeUpdates()
   }, [initializeUpdates])
 
+  const agentTitles = useMemo(
+    () => getAgentSessionTitles(agentsView.snapshot.sessions, activeWorkspaceId),
+    [activeWorkspaceId, agentsView.snapshot.sessions],
+  )
   const agentsViewTitleSession = useMemo(() => {
     if (activityOpen || !agentsView.isOpen) return undefined
     const sessions = agentsView.sessions
@@ -2588,6 +2593,7 @@ function AppContent(): React.ReactElement {
                   tiles={sortedTiles}
                   splitViewState={splitViewState}
                   attentionCounts={terminalAttentionCounts}
+                  agentTitles={agentTitles}
                   onActivateTile={activateSplitTile}
                   onCloseTile={(panel, tileId) => {
                     void closeTileFromSplitview(panel, tileId)
@@ -2633,6 +2639,7 @@ function AppContent(): React.ReactElement {
                     tileRefreshKeys={tileRefreshKeys}
                     focusedTileId={focusedTileId}
                     terminalTitles={terminalTitles}
+                    agentTitles={agentTitles}
                     onFocusTile={(tileId) => {
                       focusTile(tileId)
                       selectTiles([tileId])

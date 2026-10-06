@@ -91,6 +91,17 @@ test('recent Claude subagent activity makes an idle session working', () => {
   assert.equal(result[0]?.state, 'working')
 })
 
+test('reports the conversation each Claude terminal is running, even when idle', () => {
+  const reported: Array<{ tileId: string; sessionId: string }> = []
+  const result = classify([proc(1, 0, 'bash', ''), proc(2, 1, 'claude', 'claude')], {
+    ...emptyOptions,
+    readClaudeSession: () => ({ status: 'idle', sessionId: '889ff946-65d2-478f-b782-91c3bae95a85' }),
+    onClaudeSession: (sessionRoot, sessionId) => reported.push({ tileId: sessionRoot.tileId, sessionId }),
+  })
+  assert.deepEqual(result, [])
+  assert.deepEqual(reported, [{ tileId: 'terminal', sessionId: '889ff946-65d2-478f-b782-91c3bae95a85' }])
+})
+
 test('reads bounded Claude session files and finds recent project subagent files', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'yira-claude-reader-'))
   const sessionId = '889ff946-65d2-478f-b782-91c3bae95a85'

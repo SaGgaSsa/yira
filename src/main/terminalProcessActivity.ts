@@ -23,6 +23,8 @@ export interface ClaudeSessionState {
 export interface ClassifyOptions {
   readClaudeSession: (pid: number) => ClaudeSessionState | null
   hasRecentClaudeSubagentActivity: (sessionId: string) => boolean
+  /** Receives the conversation a terminal's Claude process is running, which changes after /clear. */
+  onClaudeSession?: (root: TerminalProcessRoot, sessionId: string) => void
 }
 
 function commandTokens(args: string): string[] {
@@ -120,6 +122,7 @@ export function classifyTerminalProcesses(
         if (session.status === 'busy') state = 'working'
         break
       }
+      if (claudeSessionId) options.onClaudeSession?.(root, claudeSessionId)
       if (claudeSessionId && options.hasRecentClaudeSubagentActivity(claudeSessionId)) state = 'working'
       if (!state && claudeStatus === 'shell') state = 'background'
     }
@@ -220,10 +223,11 @@ export class TerminalProcessActivityMonitor {
     reader?: Pick<ClassifyOptions, 'readClaudeSession' | 'hasRecentClaudeSubagentActivity'>
     intervalMs?: number
     onChange: (snapshot: TerminalProcessActivitySnapshot) => void
+    onClaudeSession?: ClassifyOptions['onClaudeSession']
   }) {
     this.listRoots = options.listRoots
     this.getProcesses = options.listProcesses ?? listProcesses
-    this.reader = options.reader ?? createClaudeSessionReader()
+    this.reader = { ...(options.reader ?? createClaudeSessionReader()), onClaudeSession: options.onClaudeSession }
     this.intervalMs = options.intervalMs ?? 40_000
     this.onChange = options.onChange
   }

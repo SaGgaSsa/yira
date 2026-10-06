@@ -86,6 +86,8 @@ test('launches Agents view sessions with exit behavior and PowerShell startup ar
   assert.match(agentsViewSession, /platform: process\.platform,[\s\S]*?exitWithAgent: true,/)
   assert.match(agentsViewSession, /args: \[\.\.\.shellProfile\.args, \.\.\.\(launch\.shellArgs \?\? \[\]\)\]/)
   assert.match(agentsViewSession, /\.\.\.\(launch\.initialCommand !== undefined \? \{ initialCommand: launch\.initialCommand \} : \{\}\)/)
+  assert.match(agentsViewSession, /buildAgentCommand\(spec\.provider, providerConfig, presetSessionId, \{ newSession: true \}\)/)
+  assert.match(agentsViewSession, /sessionId: resumeSessionId \?\? presetSessionId \?\? runtimeTarget\.tileId/)
 })
 
 test('writes a startup command once after shell output becomes quiet', async () => {

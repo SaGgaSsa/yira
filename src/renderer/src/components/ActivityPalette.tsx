@@ -21,6 +21,7 @@ import {
   type ActivityPaletteGroup,
   type ActivityPaletteNavigationKey,
 } from '@/utils/activityPalette'
+import { getAgentSessionTitle } from '@/utils/terminalDisplayTitle'
 import { AgentSessionDialog } from './AgentSessionDialog'
 
 const ELAPSED_REFRESH_MS = 30_000
@@ -50,8 +51,13 @@ export interface ActivityPaletteProps {
 /** Latest agent message per `sessionId:lastActivityAt`; `null` means there is none to show. */
 type MessageCache = Map<string, string | null>
 
+/** Transcript of the conversation the agent is running now. */
+function getConversationId(session: AgentActiveSession): string {
+  return session.conversationId ?? session.sessionId
+}
+
 function getMessageKey(session: AgentActiveSession): string {
-  return `${session.sessionId}:${session.lastActivityAt}`
+  return `${getConversationId(session)}:${session.lastActivityAt}`
 }
 
 function getProviderLabel(provider: AgentProvider, translate: (key: string) => string): string {
@@ -99,7 +105,7 @@ function useLatestAgentMessages(
       void window.electron.agents.historyTranscript({
         workspaceId: session.workspaceId,
         provider: session.provider,
-        identifier: session.sessionId,
+        identifier: getConversationId(session),
         limit: 1,
       })
         .then((result) => {
@@ -384,7 +390,7 @@ function AgentRow({
   const rowRef = useRef<HTMLDivElement | null>(null)
   const needsInput = session.status === 'needs-input'
   const providerLabel = getProviderLabel(session.provider, t)
-  const title = session.title?.trim() || session.liveTitle?.trim() || providerLabel
+  const title = getAgentSessionTitle(session) || providerLabel
   const source = getAgentSessionSurface(session) === 'agents-view'
     ? t('activityPalette.sourceAgentsView', { shortcut: shortcutLabel })
     : t('activityPalette.sourceTile')

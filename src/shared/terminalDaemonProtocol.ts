@@ -53,8 +53,6 @@ export interface TerminalDaemonSnapshot {
   agent?: TerminalDaemonAgent
   alert?: TerminalDaemonAlert
   exitEvent?: TerminalExitEvent
-  /** Normalized terminal title of an agent session, when it has set one. */
-  agentTitle?: string
 }
 
 export interface TerminalDaemonMethods {
@@ -92,5 +90,3 @@ export type TerminalDaemonEvent =
   | { event: 'data'; identity: TerminalSessionIdentity; sequence: number; data: string }
   | { event: 'exit'; identity: TerminalSessionIdentity; sequence: number; exitEvent: TerminalExitEvent }
   | { event: 'alert'; identity: TerminalSessionIdentity; sequence: number; alert: TerminalDaemonAlert | null }
-  /** Out-of-band: carries the current sequence without advancing it and is not forwarded to renderers. */
-  | { event: 'agent-title'; identity: TerminalSessionIdentity; sequence: number; title: string }

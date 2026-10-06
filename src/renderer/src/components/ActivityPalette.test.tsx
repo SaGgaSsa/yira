@@ -442,6 +442,20 @@ test('shows the last agent message on one line and skips sessions without one', 
   }
 })
 
+test('reads the last message from the conversation the agent is running now', async () => {
+  transcriptQueries = []
+  const { root } = renderActivityStep([
+    session({ sessionId: 'launch-id', tileId: 'tile-1', conversationId: 'after-clear' }),
+  ])
+
+  try {
+    await settle()
+    assert.deepEqual(transcriptQueries.map((query) => query.identifier), ['after-clear'])
+  } finally {
+    root.unmount()
+  }
+})
+
 test('Enter opens the selected agent and arrows move between agents and cards', async () => {
   const { root, calls } = renderActivityStep()
 

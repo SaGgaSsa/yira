@@ -15,6 +15,7 @@ import {
 } from '@shared/terminalSessionIdentity'
 import type { TerminalCreateResult } from '@shared/types'
 import { agentSessionRegistry, type AgentSessionRegistry } from './agents/registry'
+import { AgentTerminalTitleTracker } from './agents/terminalTitle'
 import { isTerminalProtocolReply } from './agents/terminal'
 import type { TerminalProcessRoot } from './terminalProcessActivity'
 
@@ -43,6 +44,8 @@ export interface PersistentTerminalSessionsOptions {
   onAgentAlert?: (identity: TerminalSessionIdentity, alert: TerminalDaemonAlert | null) => void
   onAgentExit?: (identity: TerminalSessionIdentity) => void
   onAgentDestroyed?: (identity: TerminalSessionIdentity) => void
+  /** Minimum time between agent title updates; tests shorten it. */
+  agentTitleIntervalMs?: number
   onDisconnect?: (error: Error) => void
 }
 
@@ -139,6 +142,9 @@ export class PersistentTerminalSessions {
 
   private readonly onDisconnect?: PersistentTerminalSessionsOptions['onDisconnect']
 
+  /** Reads agent titles from the output stream, so it also works with daemons from older releases. */
+  private readonly agentTitles: AgentTerminalTitleTracker
+
   private readonly sessions = new Map<string, SessionRecord>()
 
   private readonly targetTails = new Map<string, Promise<void>>()
@@ -181,6 +187,10 @@ export class PersistentTerminalSessions {
     this.onAgentExit = options.onAgentExit
     this.onAgentDestroyed = options.onAgentDestroyed
     this.onDisconnect = options.onDisconnect
+    this.agentTitles = new AgentTerminalTitleTracker({
+      publish: (workspaceId, tileId, title) => { this.registry.updateLiveTitle(workspaceId, tileId, title) },
+      ...(options.agentTitleIntervalMs !== undefined ? { intervalMs: options.agentTitleIntervalMs } : {}),
+    })
   }
 
   isAcceptingSessions(): boolean {
@@ -483,6 +493,7 @@ export class PersistentTerminalSessions {
       const pendingConnect = this.connectPromise
       if (pendingConnect) await Promise.allSettled([pendingConnect])
       this.removeAllRenderers()
+      this.agentTitles.dispose()
       const client = this.client
       this.client = undefined
       this.clientEventCleanup?.()
@@ -555,9 +566,8 @@ export class PersistentTerminalSessions {
         ...(snapshot.agent.worktrees !== undefined ? { worktrees: snapshot.agent.worktrees } : {}),
       })
       record.agentRegistered = true
-    }
-    if (snapshot.agentTitle && record.agentRegistered) {
-      this.registry.updateLiveTitle(snapshot.identity.workspaceId, snapshot.identity.tileId, snapshot.agentTitle)
+      // The snapshot buffer ends with the terminal's current title.
+      this.agentTitles.receive(snapshot.identity.workspaceId, snapshot.identity.tileId, snapshot.buffer)
     }
     if (snapshot.alert) {
       this.registry.reportAgentAlert(snapshot.alert, snapshot.identity.workspaceId)
@@ -594,14 +604,6 @@ export class PersistentTerminalSessions {
     if (destroyedGeneration !== undefined && identity.generation > destroyedGeneration) {
       this.destroyedGenerations.delete(targetKey)
     }
-    if (event.event === 'agent-title') {
-      // Out-of-band metadata: it does not advance the stream sequence.
-      const titled = this.sessions.get(identityKey(identity))
-      if (titled?.agentRegistered) {
-        this.registry.updateLiveTitle(identity.workspaceId, identity.tileId, event.title)
-      }
-      return
-    }
     const record = this.ensureRecord(identity)
     if (event.sequence <= record.sequence) return
     record.sequence = event.sequence
@@ -619,8 +621,9 @@ export class PersistentTerminalSessions {
         ? { ...record.snapshot, sequence: event.sequence, exitEvent: { ...event.exitEvent } }
         : undefined
       this.applyExit(record)
-    } else if (record.snapshot) {
-      record.snapshot = { ...record.snapshot, sequence: event.sequence }
+    } else {
+      if (record.snapshot) record.snapshot = { ...record.snapshot, sequence: event.sequence }
+      if (record.agentRegistered) this.agentTitles.receive(identity.workspaceId, identity.tileId, event.data)
     }
 
     for (const renderer of [...record.renderers]) this.sendEvent(renderer, event)
@@ -639,6 +642,7 @@ export class PersistentTerminalSessions {
   }
 
   private applyExit(record: SessionRecord): void {
+    this.agentTitles.forget(record.identity.workspaceId, record.identity.tileId)
     if (record.agentRegistered || record.snapshot?.agent) {
       this.registry.markExited(record.identity.workspaceId, record.identity.tileId)
     }
@@ -689,6 +693,7 @@ export class PersistentTerminalSessions {
     if (!record) return
     this.removeAllRecordRenderers(record)
     this.sessions.delete(key)
+    this.agentTitles.forget(identity.workspaceId, identity.tileId)
     if (destroyed && (record.agentRegistered || record.snapshot?.agent)) {
       this.registry.remove(identity.workspaceId, identity.tileId)
       this.onAgentDestroyed?.(identity)
@@ -708,7 +713,7 @@ export class PersistentTerminalSessions {
         sender.send(terminalSessionDataChannel(event.identity), event.data)
       } else if (event.event === 'exit') {
         sender.send(terminalSessionExitChannel(event.identity), event.exitEvent)
-      } else if (event.event === 'alert') {
+      } else {
         this.sendAlert(sender, event.identity, event.alert)
       }
     } catch {

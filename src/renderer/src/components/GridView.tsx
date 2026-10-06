@@ -28,6 +28,8 @@ interface GridViewProps {
   tileRefreshKeys: Record<string, number>
   focusedTileId: string | null
   terminalTitles: Record<string, string>
+  /** Agent session names by tile id. */
+  agentTitles?: Record<string, string>
   onFocusTile: (tileId: string) => void
   onUpdateTile: (tileId: string, patch: Partial<TileState>) => void
   onSetRootNode: (rootNode: GridLayoutNode | null) => void
@@ -76,9 +78,14 @@ function releaseMovePointerCapture(drag: MoveDragState | null): void {
   }
 }
 
-function getTileTitle(tile: TileState, terminalTitles: Record<string, string>, translate: (key: string) => string): string {
+function getTileTitle(
+  tile: TileState,
+  terminalTitles: Record<string, string>,
+  agentTitles: Record<string, string>,
+  translate: (key: string) => string,
+): string {
   if (tile.label?.trim()) return tile.label.trim()
-  if (tile.type === 'terminal') return getTerminalDisplayTitle(tile, terminalTitles)
+  if (tile.type === 'terminal') return getTerminalDisplayTitle(tile, terminalTitles, agentTitles)
   return getTileTypeLabel(tile.type, translate)
 }
 
@@ -99,6 +106,7 @@ export function GridView({
   tileRefreshKeys,
   focusedTileId,
   terminalTitles,
+  agentTitles = {},
   onFocusTile,
   onUpdateTile,
   onSetRootNode,
@@ -305,7 +313,7 @@ export function GridView({
       const tile = tilesById.get(node.tileId)
       if (!tile) return null
       const Icon = TILE_META[tile.type].icon
-      const title = getTileTitle(tile, terminalTitles, t)
+      const title = getTileTitle(tile, terminalTitles, agentTitles, t)
       const isDraggedTile = draggedTileId === tile.id
 
       return (
@@ -468,7 +476,7 @@ export function GridView({
                   <>
                     <Icon size={16} className="shrink-0 text-cyan-300" />
                     <div className="min-w-0">
-                      <div className="truncate text-sm text-text-display">{getTileTitle(tile, terminalTitles, t)}</div>
+                      <div className="truncate text-sm text-text-display">{getTileTitle(tile, terminalTitles, agentTitles, t)}</div>
                       <div className="mt-1 text-xs text-text-secondary">{getTileTypeLabel(tile.type, t)}</div>
                     </div>
                   </>

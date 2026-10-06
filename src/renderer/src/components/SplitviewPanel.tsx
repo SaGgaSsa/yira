@@ -12,6 +12,8 @@ interface SplitviewPanelProps {
   tiles: TileState[]
   splitViewState: SplitViewState
   attentionCounts?: Record<string, number>
+  /** Agent session names by tile id. */
+  agentTitles?: Record<string, string>
   onActivateTile: (panel: SplitPanelId, tileId: string) => void
   onCloseTile: (panel: SplitPanelId, tileId: string) => void | Promise<void>
   onEditTile: (tile: TileState) => void
@@ -30,6 +32,7 @@ interface PanelTabStripProps {
   orientation: SplitViewState['orientation']
   activeTileId: string | null
   attentionCounts: Record<string, number>
+  agentTitles: Record<string, string>
   onActivateTile: (panel: SplitPanelId, tileId: string) => void
   onCloseTile: (panel: SplitPanelId, tileId: string) => void | Promise<void>
   onConfigureTile: (tileId: string, x: number, y: number) => void
@@ -44,6 +47,7 @@ function PanelTabStrip({
   orientation,
   activeTileId,
   attentionCounts,
+  agentTitles,
   onActivateTile,
   onCloseTile,
   onConfigureTile,
@@ -86,7 +90,7 @@ function PanelTabStrip({
           tiles.map((tile) => {
             const isActive = tile.id === activeTileId
             const displayLabel = tile.type === 'terminal'
-              ? getTerminalDisplayTitle(tile, terminalTitles)
+              ? getTerminalDisplayTitle(tile, terminalTitles, agentTitles)
               : undefined
 
             return (
@@ -135,6 +139,7 @@ export function SplitviewPanel({
   tiles,
   splitViewState,
   attentionCounts = {},
+  agentTitles = {},
   onActivateTile,
   onCloseTile,
   onEditTile,
@@ -189,6 +194,7 @@ export function SplitviewPanel({
         orientation={splitViewState.orientation}
         activeTileId={splitViewState.activeLeftTileId}
         attentionCounts={attentionCounts}
+        agentTitles={agentTitles}
         onActivateTile={onActivateTile}
         onCloseTile={onCloseTile}
         onConfigureTile={(tileId, x, y) => setTabMenu({ tileId, x, y })}
@@ -202,6 +208,7 @@ export function SplitviewPanel({
         orientation={splitViewState.orientation}
         activeTileId={splitViewState.activeRightTileId}
         attentionCounts={attentionCounts}
+        agentTitles={agentTitles}
         onActivateTile={onActivateTile}
         onCloseTile={onCloseTile}
         onConfigureTile={(tileId, x, y) => setTabMenu({ tileId, x, y })}

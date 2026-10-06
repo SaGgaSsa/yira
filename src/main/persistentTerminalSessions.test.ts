@@ -433,3 +433,21 @@ test('late events from a destroyed generation do not replace a newer record', as
 
   assert.deepEqual(alerts, [])
 })
+
+test('reads the agent title from the restored screen and from later output', async () => {
+  const transport = new FakeTransport()
+  const registry = new AgentSessionRegistry()
+  const agent = { provider: 'claude' as const, sessionId: 'session-1', startedAt: '2024-01-01T00:00:00.000Z' }
+  const restored = snapshot({ agent, buffer: 'screen\u001b]2;✳ Fix the login flow\u0007' })
+  transport.setHandler('list', () => [restored])
+  transport.setHandler('attach', () => restored)
+  const sessions = createSessions(transport, { registry, agentTitleIntervalMs: 0 })
+
+  await sessions.hydrate()
+  assert.equal(registry.get(identity.workspaceId, identity.tileId)?.liveTitle, '✳ Fix the login flow')
+
+  transport.emitEvent({ event: 'data', identity: { ...identity }, sequence: 2, data: 'out\u001b]0;⠂ Review' })
+  transport.emitEvent({ event: 'data', identity: { ...identity }, sequence: 3, data: ' the plan\u0007more' })
+  assert.equal(registry.get(identity.workspaceId, identity.tileId)?.liveTitle, '⠂ Review the plan')
+  await sessions.shutdown()
+})
