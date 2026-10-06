@@ -113,6 +113,8 @@ export function TopBar({
   const zoomPercent = Math.round(zoom * 100)
   const SplitIcon = splitOrientation === 'horizontal' ? SplitSquareVertical : SplitSquareHorizontal
   const isGridWorkspace = workspaceType === 'grid'
+  // With Agents or Activity on top, a view button returns to that view instead of toggling it.
+  const overlayOpen = agentsViewOpen || activityOpen
 
   return (
     <header className="window-titlebar nd-panel relative flex shrink-0 items-center border-x-0 border-t-0">
@@ -164,7 +166,7 @@ export function TopBar({
                 label={t('shortcuts.grid')}
                 title={viewMode === 'gridview' ? t('workspace.canvas') : t('shortcuts.grid')}
                 icon={Grid3X3}
-                onClick={() => onSetViewMode(viewMode === 'gridview' && !agentsViewOpen ? 'canvas' : 'gridview')}
+                onClick={() => onSetViewMode(viewMode === 'gridview' && !overlayOpen ? 'canvas' : 'gridview')}
               />
             ) : (
               <SegmentedButton
@@ -172,7 +174,7 @@ export function TopBar({
                 label={t('shortcuts.canvas')}
                 title={viewMode === 'canvas' ? t('shortcuts.grid') : t('shortcuts.canvas')}
                 icon={LayoutGrid}
-                onClick={() => onSetViewMode(viewMode === 'canvas' && !agentsViewOpen ? 'gridview' : 'canvas')}
+                onClick={() => onSetViewMode(viewMode === 'canvas' && !overlayOpen ? 'gridview' : 'canvas')}
               />
             )}
             {boardEnabled && boardVisible && (

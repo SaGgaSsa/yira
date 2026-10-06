@@ -2361,8 +2361,12 @@ function AppContent(): React.ReactElement {
         workspacePanelOpen={activeWorkspaceConfig.workspacePanelOpen}
         onToggleWorkspacePanel={toggleWorkspacePanel}
         onSetViewMode={(mode) => {
+          const overlayOpen = agentsView.isOpen || activityOpen
           agentsView.close()
           setActivityOpen(false)
+          // Leaving Agents or Activity for the view underneath restores it as it was,
+          // instead of toggling it (split orientation, canvas/grid swap).
+          if (overlayOpen && mode === viewMode) return
           handleSetViewMode(mode)
         }}
         onFitToContent={() => getCanvasMethods()?.fitViewToContent()}
