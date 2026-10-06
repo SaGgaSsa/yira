@@ -21,7 +21,7 @@ import { WorkspaceManagementDialog } from './components/WorkspaceManagementDialo
 import { WorkspaceListItem } from './components/WorkspaceListItem'
 import { WorkspaceActivityView } from './components/WorkspaceActivityView'
 import { AgentsView } from './components/AgentsView'
-import { AgentSessionDialog } from './components/AgentSessionDialog'
+import { ActivityPalette } from './components/ActivityPalette'
 import { useWorkspaceTerminalCounts } from './hooks/useWorkspaceTerminalCounts'
 import { useTerminalProcessActivity } from './hooks/useTerminalProcessActivity'
 import { buildWorkspaceActivityCards, resolveActivationFocusTarget } from './utils/workspaceActivity'
@@ -45,6 +45,7 @@ import {
 } from '@shared/workspaceTypeSwitch'
 import { getBoardReviewCount } from '@shared/board'
 import { countAgentsViewAttention } from './utils/agentsViewSessions'
+import { getAgentSessionSurface } from './utils/activityPalette'
 import { getAttachedTiles, isTileDetached, selectFloatingTileWindowOpenRequests } from '@shared/floatingTiles'
 import { refreshGridTileContent } from './utils/gridTileRefresh'
 import { DEFAULT_SPLIT_ORIENTATION, toggleSplitOrientation } from './utils/splitViewState'
@@ -1679,21 +1680,25 @@ function AppContent(): React.ReactElement {
     switchWorkspace(workspace)
   }, [agentsView.close, switchWorkspace])
 
-  const handleAgentSessionCreated = useCallback((result: AgentSessionCreateResult) => {
-    if (result.workspaceId === activeWorkspaceId) {
-      agentsView.openForSession(result.tileId)
+  const openAgentsViewSession = useCallback((workspaceId: string, tileId: string) => {
+    if (workspaceId === activeWorkspaceId) {
+      agentsView.openForSession(tileId)
       return
     }
 
-    const workspace = sidebarWorkspaces.find((entry) => entry.id === result.workspaceId)
+    const workspace = sidebarWorkspaces.find((entry) => entry.id === workspaceId)
     if (!workspace) return
 
     pendingAgentSessionSourceRef.current = activeWorkspaceId
-    setPendingAgentSession({ workspaceId: result.workspaceId, tileId: result.tileId })
+    setPendingAgentSession({ workspaceId, tileId })
     setActivityOpen(false)
     agentsView.close()
     switchWorkspace(workspace)
   }, [activeWorkspaceId, agentsView.close, agentsView.openForSession, sidebarWorkspaces, switchWorkspace])
+
+  const handleAgentSessionCreated = useCallback((result: AgentSessionCreateResult) => {
+    openAgentsViewSession(result.workspaceId, result.tileId)
+  }, [openAgentsViewSession])
 
   const goToWorkspaceTerminal = useCallback((workspace: WorkspaceMetadata, tileId: string | null) => {
     agentsView.close()
@@ -1727,6 +1732,14 @@ function AppContent(): React.ReactElement {
       }
     })()
   }, [activateWorkspace, agentsView.close, focusTile, focusTileInFullview, recordWorkspaceSelection, selectTiles, setFullviewActiveTileId])
+
+  const openActivityPaletteAgent = useCallback((workspace: WorkspaceMetadata, session: AgentActiveSession) => {
+    if (getAgentSessionSurface(session) === 'agents-view') {
+      openAgentsViewSession(workspace.id, session.tileId)
+      return
+    }
+    goToWorkspaceTerminal(workspace, session.tileId)
+  }, [goToWorkspaceTerminal, openAgentsViewSession])
 
   const detachTile = useCallback((tile: TileState) => {
     if (!activeWorkspaceId || isTileDetached(tile)) return
@@ -2735,14 +2748,21 @@ function AppContent(): React.ReactElement {
         }}
       />
       {workspaceMetadata.length > 0 && (
-        <AgentSessionDialog
-          open={agentsView.sessionDialogOpen}
-          workspaces={agentSessionWorkspaces}
-          initialWorkspaceId={agentsView.sessionDialogInitialWorkspaceId}
+        <ActivityPalette
+          step={agentsView.activityPaletteStep}
+          fromActivity={agentsView.sessionDialogFromActivity}
+          workspaces={sidebarWorkspaces}
+          sessionWorkspaces={agentSessionWorkspaces}
+          sessions={agentsView.snapshot.sessions}
           agents={agentSettings}
+          initialWorkspaceId={agentsView.sessionDialogInitialWorkspaceId}
           focusRequestId={agentsView.sessionDialogFocusRequestId}
+          shortcutLabel={newAgentSessionShortcut}
           onClose={agentsView.closeSessionDialog}
+          onNewSession={agentsView.showNewSessionStep}
+          onBack={agentsView.backToActivity}
           onCreated={handleAgentSessionCreated}
+          onOpenAgent={openActivityPaletteAgent}
         />
       )}
       <RawJsonEditor
