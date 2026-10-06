@@ -564,6 +564,38 @@ test('sends the selected workspace, provider, prompt, and worktree setting', asy
   }
 })
 
+test('Alt+Enter inserts a line break instead of starting the session', async () => {
+  const { container, root } = renderDialog({
+    workspaces: [workspace('workspace-a', { agentProvider: 'claude' })],
+  })
+
+  try {
+    await settle()
+    const prompt = findElement(container, 'textarea')
+    prompt.value = 'First line'
+    dispatch(prompt, 'input')
+    await settle()
+    prompt.selectionStart = prompt.value.length
+    prompt.selectionEnd = prompt.value.length
+    prompt.setRangeText = (text: string, start: number, end: number) => {
+      prompt.value = prompt.value.slice(0, start) + text + prompt.value.slice(end)
+    }
+
+    dispatch(prompt, 'keydown', { key: 'Enter', altKey: true })
+    await settle()
+    assert.equal(payloads.length, 0)
+    assert.equal(prompt.value, 'First line\n')
+
+    prompt.value = 'First line\nSecond line'
+    dispatch(prompt, 'input')
+    dispatch(prompt, 'keydown', { key: 'Enter' })
+    await settle()
+    assert.equal(payloads[0]?.prompt, 'First line\nSecond line')
+  } finally {
+    root.unmount()
+  }
+})
+
 test('starts a session without a prompt when the prompt is empty', async () => {
   const { container, root } = renderDialog({
     workspaces: [workspace('workspace-a', { agentProvider: 'claude' })],

@@ -6,7 +6,8 @@ import type {
   AgentSessionHistoryQuery,
 } from '@shared/types'
 
-const HISTORY_SEARCH_DEBOUNCE_MS = 250
+// Long enough to wait for the user to stop typing; Enter in the search box runs it immediately.
+const HISTORY_SEARCH_DEBOUNCE_MS = 600
 
 type AgentHistoryRefreshTimer = number
 

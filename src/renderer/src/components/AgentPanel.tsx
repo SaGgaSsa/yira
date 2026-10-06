@@ -411,6 +411,11 @@ export function AgentPanel({
                 type="search"
                 value={historySearch}
                 onChange={(event) => setHistorySearch(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter' || event.nativeEvent.isComposing) return
+                  event.preventDefault()
+                  historyRefreshSchedulerRef.current.runNow(() => void loadHistory())
+                }}
                 placeholder={copy.searchPlaceholder}
                 aria-label={copy.searchPlaceholder}
                 className="w-full rounded-full border border-border-visible bg-bg-primary py-2 pl-9 pr-3 text-xs text-text-display outline-none placeholder:text-text-disabled focus:border-text-secondary"
