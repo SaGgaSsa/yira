@@ -34,6 +34,12 @@ import { agentSessionRegistry, type AgentSessionRegistry } from '../agents/regis
 import { readAgentSessionHistory } from '../agents/history'
 import { readAgentSessionTranscript } from '../agents/transcript'
 import {
+  appendAgentPromptImages,
+  getAgentPromptImageDirectory,
+  normalizeAgentPromptImagePaths,
+  saveAgentPromptImage,
+} from '../agents/promptImages'
+import {
   createAgentWorkspaceWorktrees,
   removeAgentWorktreeIfClean,
   resolveWorkspaceWorktreeRepositories,
@@ -81,6 +87,7 @@ export interface AgentIPCOptions {
   usageService?: Pick<AgentUsageService, 'getSnapshot' | 'refresh' | 'subscribe'>
   usageDetailsService?: Pick<AgentUsageDetailsService, 'getSnapshot'>
   usageIndex?: Pick<AgentUsageIndex, 'getHistory'>
+  promptImageDirectory?: string
   enabledProviders?: () => Promise<AgentProvider[]>
   workspaces?: () => Promise<Array<{ id: string; rootFolderPath: string }>>
   createSession?: (target: TerminalSessionTarget, spec: AgentsViewLaunchSpec) => Promise<unknown>
@@ -100,6 +107,7 @@ interface NormalizedAgentSessionCreateInput {
   prompt?: string
   resumeSessionId?: string
   resumeCwd?: string
+  imagePaths: string[]
   worktree: boolean
   provider?: AgentProvider
 }
@@ -251,7 +259,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
-function normalizeCreateInput(value: unknown): NormalizedAgentSessionCreateInput {
+function normalizeCreateInput(
+  value: unknown,
+  promptImageDirectory: string,
+): NormalizedAgentSessionCreateInput {
   if (!isRecord(value)) throw new Error('Invalid agent session input')
 
   const workspaceId = normalizeAgentOpaqueId(value.workspaceId)
@@ -287,11 +298,16 @@ function normalizeCreateInput(value: unknown): NormalizedAgentSessionCreateInput
     throw new Error('Invalid agent provider')
   }
 
+  const imagePaths = resumeSessionId
+    ? []
+    : normalizeAgentPromptImagePaths(promptImageDirectory, value.imagePaths)
+
   return {
     workspaceId,
     ...(prompt !== undefined ? { prompt } : {}),
     ...(resumeSessionId ? { resumeSessionId } : {}),
     ...(resumeCwd !== undefined ? { resumeCwd } : {}),
+    imagePaths,
     worktree: value.worktree === true,
     ...(value.provider !== undefined ? { provider: value.provider } : {}),
   }
@@ -345,11 +361,15 @@ async function destroyAgentSession(options: AgentIPCOptions, target: TerminalSes
 /** Register all renderer-facing agent operations with validated, data-only inputs. */
 export function registerAgentsIPC(options: AgentIPCOptions = {}): void {
   const registry = options.registry ?? agentSessionRegistry
+  const promptImageDirectory = options.promptImageDirectory
+    ?? getAgentPromptImageDirectory(YIRA_HOME)
   const availability = options.availability ?? (() => getAgentProviderAvailability())
   const usageService = options.usageService
   const usageDetailsService = options.usageDetailsService
   const usageIndex = options.usageIndex
 
+  ipcMain.handle('agents:promptImages:save', async (_event, input: unknown) =>
+    saveAgentPromptImage(promptImageDirectory, input))
   ipcMain.handle('agents:availability', async (): Promise<AgentProviderAvailabilitySnapshot> => availability())
   ipcMain.handle('agents:detect', async (): Promise<AgentDetectionSnapshot> => {
     const home = homedir()
@@ -417,7 +437,17 @@ export function registerAgentsIPC(options: AgentIPCOptions = {}): void {
   })
 
   ipcMain.handle('agents:sessions:create', async (_event, rawInput: unknown): Promise<AgentSessionCreateResult> => {
-    const input = normalizeCreateInput(rawInput)
+    const input = normalizeCreateInput(rawInput, promptImageDirectory)
+    for (const imagePath of input.imagePaths) {
+      try {
+        if (!(await fs.stat(imagePath)).isFile()) {
+          throw new Error('Agent prompt image is no longer available')
+        }
+      } catch {
+        throw new Error('Agent prompt image is no longer available')
+      }
+    }
+
     const config = await workspaceAgentConfig(input.workspaceId)
     const enabled = await enabledProviders(options)
     if (!config) throw new Error('This workspace has no enabled agent')
@@ -443,7 +473,10 @@ export function registerAgentsIPC(options: AgentIPCOptions = {}): void {
       : homedir()
     let cwd = resolveAgentCwd(workspaceRoot, input.resumeCwd)
     const tileId = `agent-${randomUUID()}`
-    const title = sessionTitle(input.prompt, input.resumeSessionId)
+    const title = input.imagePaths.length > 0 && input.prompt === undefined
+      ? 'Image prompt'
+      : sessionTitle(input.prompt, input.resumeSessionId)
+    const prompt = appendAgentPromptImages(input.prompt, input.imagePaths)
     let worktree: AgentWorkspaceWorktree | undefined
 
     if (input.worktree) {
@@ -471,7 +504,7 @@ export function registerAgentsIPC(options: AgentIPCOptions = {}): void {
     const spec: AgentsViewLaunchSpec = {
       provider,
       providerConfig,
-      ...(!input.resumeSessionId && input.prompt !== undefined ? { prompt: input.prompt } : {}),
+      ...(!input.resumeSessionId && prompt !== undefined ? { prompt } : {}),
       ...(input.resumeSessionId ? { resumeSessionId: input.resumeSessionId } : {}),
       cwd,
       title,

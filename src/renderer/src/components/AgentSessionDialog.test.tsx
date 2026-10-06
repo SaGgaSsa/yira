@@ -6,6 +6,8 @@ import { DOMImplementation } from '@xmldom/xmldom'
 import React from 'react'
 import type {
   AgentProvider,
+  AgentPromptImage,
+  AgentPromptImageSaveInput,
   AgentSessionCapabilities,
   AgentSessionCreateInput,
   UserSettings,
@@ -141,6 +143,23 @@ Object.assign(globalThis, {
   Text: document.createTextNode('text').constructor,
 })
 
+class TestFileReader {
+  result: string | ArrayBuffer | null = null
+  error: Error | null = null
+  onload: ((event: ProgressEvent<FileReader>) => void) | null = null
+  onerror: ((event: ProgressEvent<FileReader>) => void) | null = null
+
+  readAsDataURL(file: File): void {
+    this.result = `data:${file.type};base64,cHJldmlldw==`
+    this.onload?.({} as ProgressEvent<FileReader>)
+  }
+}
+
+Object.defineProperty(globalThis, 'FileReader', {
+  configurable: true,
+  value: TestFileReader,
+})
+
 const require = createRequire(import.meta.url)
 const cssExtensions = require.extensions as Record<string, (module: NodeModule, filename: string) => void>
 cssExtensions['.css'] = () => {}
@@ -168,6 +187,11 @@ const translationCopy: Record<string, string> = {
   'agentsView.closeDialog': 'Close dialog',
   'agentsView.prompt': 'Prompt',
   'agentsView.promptPlaceholder': 'Enter starts the session',
+  'agentsView.removePromptImage': 'Remove image',
+  'agentsView.promptImageAlt': 'Attached image',
+  'agentsView.promptImageAttachError': 'Could not attach image.',
+  'agentsView.promptImageLimit': 'You can attach up to 10 images.',
+  'agentsView.promptImageTooLarge': 'Each image must be 10 MB or smaller.',
   'agentsView.worktree': 'Worktree',
   'agentsView.worktreeDescription': 'Run in a git worktree',
   'agentsView.createSession': 'Create session',
@@ -223,6 +247,10 @@ function capabilities(worktreeAvailable: boolean): AgentSessionCapabilities {
 
 let payloads: AgentSessionCreateInput[] = []
 let capabilityCalls: string[] = []
+let promptImageSaveCalls: AgentPromptImageSaveInput[] = []
+let promptImageSaveHandler: (input: AgentPromptImageSaveInput) => Promise<AgentPromptImage> = async () => ({
+  path: `C:\\prompt-images\\image-${promptImageSaveCalls.length}.png`,
+})
 let capabilityHandler: (workspaceId: string) => Promise<AgentSessionCapabilities> = async () => capabilities(true)
 let closeCount = 0
 let createdCount = 0
@@ -238,6 +266,10 @@ Object.defineProperty(globalThis, 'electron', {
       sessionCapabilities: (workspaceId: string) => {
         capabilityCalls.push(workspaceId)
         return capabilityHandler(workspaceId)
+      },
+      savePromptImage: (input: AgentPromptImageSaveInput) => {
+        promptImageSaveCalls.push(input)
+        return promptImageSaveHandler(input)
       },
     },
   },
@@ -258,6 +290,10 @@ function renderDialog(options: DialogOptions = {}): {
 } {
   payloads = []
   capabilityCalls = []
+  promptImageSaveCalls = []
+  promptImageSaveHandler = async () => ({
+    path: `C:\\prompt-images\\image-${promptImageSaveCalls.length}.png`,
+  })
   closeCount = 0
   createdCount = 0
   capabilityHandler = options.capabilities ?? (async () => capabilities(true))
@@ -344,6 +380,32 @@ function findCreateButton(container: any): any {
 
 function dispatch(element: any, type: string, init: Record<string, unknown> = {}): void {
   element.dispatchEvent(new TestEvent(type, { bubbles: true, cancelable: true, ...init }))
+}
+
+function makeClipboardImage(mimeType: string, bytes: number[]): File {
+  const buffer = Uint8Array.from(bytes).buffer
+  return {
+    type: mimeType,
+    size: bytes.length,
+    arrayBuffer: async () => buffer,
+  } as unknown as File
+}
+
+function pasteClipboardImages(textarea: any, files: File[]): TestEvent {
+  const event = new TestEvent('paste', {
+    bubbles: true,
+    cancelable: true,
+    clipboardData: {
+      items: files.map((file) => ({
+        kind: 'file',
+        type: file.type,
+        getAsFile: () => file,
+      })),
+      files,
+    },
+  })
+  textarea.dispatchEvent(event)
+  return event
 }
 
 async function settle(): Promise<void> {
@@ -615,6 +677,76 @@ test('starts a session without a prompt when the prompt is empty', async () => {
       worktree: false,
     })
     assert.equal(createdCount, 1)
+  } finally {
+    root.unmount()
+  }
+})
+
+test('pastes multiple prompt images, removes one, and sends the remaining path', async () => {
+  const { container, root } = renderDialog()
+
+  try {
+    await settle()
+    const prompt = findElement(container, 'textarea')
+    const pasteEvent = pasteClipboardImages(prompt, [
+      makeClipboardImage('image/png', [1, 2, 3]),
+      makeClipboardImage('image/jpeg', [4, 5, 6]),
+    ])
+    await waitFor(() => promptImageSaveCalls.length === 2)
+
+    const previews = container.getElementsByTagName('img')
+    assert.equal(pasteEvent.defaultPrevented, true)
+    assert.equal(previews.length, 2)
+    assert.equal(previews[0].getAttribute('alt'), 'Attached image 1')
+    assert.equal(promptImageSaveCalls[0].mimeType, 'image/png')
+    assert.deepEqual(Array.from(promptImageSaveCalls[0].data), [1, 2, 3])
+
+    const buttons = container.getElementsByTagName('button')
+    let removeButton: any = null
+    for (let index = 0; index < buttons.length; index += 1) {
+      if (buttons[index].getAttribute('aria-label') === 'Remove image 1') {
+        removeButton = buttons[index]
+        break
+      }
+    }
+    assert.ok(removeButton)
+    dispatch(removeButton, 'click')
+    await settle()
+
+    assert.equal(container.getElementsByTagName('img').length, 1)
+    dispatch(prompt, 'keydown', { key: 'Enter' })
+    await settle()
+    assert.deepEqual(payloads[0], {
+      workspaceId: 'workspace-a',
+      provider: 'claude',
+      imagePaths: ['C:\\prompt-images\\image-2.png'],
+      worktree: false,
+    })
+  } finally {
+    root.unmount()
+  }
+})
+
+test('pasting text does not save an image or prevent the default paste', async () => {
+  const { container, root } = renderDialog()
+
+  try {
+    await settle()
+    const prompt = findElement(container, 'textarea')
+    const pasteEvent = new TestEvent('paste', {
+      bubbles: true,
+      cancelable: true,
+      clipboardData: {
+        items: [{ kind: 'string', type: 'text/plain', getAsFile: () => null }],
+        files: [],
+      },
+    })
+    prompt.dispatchEvent(pasteEvent)
+    await settle()
+
+    assert.equal(pasteEvent.defaultPrevented, false)
+    assert.equal(promptImageSaveCalls.length, 0)
+    assert.equal(container.getElementsByTagName('img').length, 0)
   } finally {
     root.unmount()
   }

@@ -310,6 +310,82 @@ test('allows a valid enabled provider override for a new session', async () => {
   assert.equal(launch?.provider, 'codex')
 })
 
+test('passes attached image paths in the initial prompt and uses an image title when needed', async (t) => {
+  const temporaryDirectory = await mkdtemp(join(tmpdir(), 'yira-agent-prompt-images-'))
+  t.after(() => rm(temporaryDirectory, { recursive: true, force: true }))
+
+  const promptImageDirectory = join(temporaryDirectory, 'agent-images')
+  await mkdir(promptImageDirectory)
+  const imagePath = join(promptImageDirectory, '00000000-0000-4000-8000-000000000001.png')
+  await writeFile(imagePath, 'image')
+
+  const ipcMain = new FakeIpcMain()
+  const { registerAgentsIPC } = loadAgentsIPC(ipcMain)
+  let launch: AgentsViewLaunchSpec | undefined
+  registerAgentsIPC({
+    promptImageDirectory,
+    enabledProviders: async () => ['claude'],
+    workspaceAgentConfig: async () => workspaceAgentConfig(),
+    createSession: async (_target, spec) => { launch = spec },
+  })
+
+  await ipcMain.call('agents:sessions:create', new FakeWebContents(62), {
+    workspaceId: 'workspace-a',
+    prompt: '  Please inspect the screenshot.  ',
+    imagePaths: [imagePath],
+  })
+
+  assert.equal(
+    launch?.prompt,
+    'Please inspect the screenshot.\n\nAttached images:\n- ' + imagePath,
+  )
+  assert.equal(launch?.title, 'Please inspect the screenshot.')
+
+  await ipcMain.call('agents:sessions:create', new FakeWebContents(63), {
+    workspaceId: 'workspace-a',
+    imagePaths: [imagePath],
+  })
+
+  assert.equal(launch?.prompt, 'Attached images:\n- ' + imagePath)
+  assert.equal(launch?.title, 'Image prompt')
+
+  await ipcMain.call('agents:sessions:create', new FakeWebContents(65), {
+    workspaceId: 'workspace-a',
+    resumeSessionId: 'history-123',
+    imagePaths: ['ignored-image-path'],
+  })
+
+  assert.equal(launch?.prompt, undefined)
+  assert.equal(launch?.resumeSessionId, 'history-123')
+  assert.equal(launch?.title, 'Resume history-')
+})
+
+test('rejects a session when an attached image is no longer available', async (t) => {
+  const temporaryDirectory = await mkdtemp(join(tmpdir(), 'yira-agent-prompt-images-'))
+  t.after(() => rm(temporaryDirectory, { recursive: true, force: true }))
+
+  const promptImageDirectory = join(temporaryDirectory, 'agent-images')
+  const imagePath = join(promptImageDirectory, '00000000-0000-4000-8000-000000000001.png')
+  const ipcMain = new FakeIpcMain()
+  const { registerAgentsIPC } = loadAgentsIPC(ipcMain)
+  let launches = 0
+  registerAgentsIPC({
+    promptImageDirectory,
+    enabledProviders: async () => ['claude'],
+    workspaceAgentConfig: async () => workspaceAgentConfig(),
+    createSession: async () => { launches += 1 },
+  })
+
+  await assert.rejects(
+    () => ipcMain.call('agents:sessions:create', new FakeWebContents(64), {
+      workspaceId: 'workspace-a',
+      imagePaths: [imagePath],
+    }) as Promise<unknown>,
+    /Agent prompt image is no longer available/,
+  )
+  assert.equal(launches, 0)
+})
+
 test('rejects a provider override that is disabled in user settings', async () => {
   const ipcMain = new FakeIpcMain()
   const { registerAgentsIPC } = loadAgentsIPC(ipcMain)
