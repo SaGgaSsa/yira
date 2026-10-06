@@ -36,7 +36,7 @@ import { useFontSize } from './hooks/useFontSize'
 import { resolveSidebarCollapsedForActivity } from './utils/emptyWorkspaceView'
 import { useUpdateStore } from './store/updateStore'
 import { findMergeTargetGroup, getGroupingBlockedReason } from './utils/grouping'
-import { GRID_MAX_TILES, GROUP_COLOR_ORDER, getDefaultTileSize, type AgentActiveSession, type AgentSessionCreateResult, type AgentUsageSnapshot, type BoardState, type BoardTask, type FileTileOpenOptions, type TileState, type CanvasState, type GridWorkspaceState, type Workspace, type WorkspaceMetadata, type TileGroup, type ViewMode, type SplitPanelId, type SplitViewState, type WorkspaceManagementEntry, type WorkspaceType } from '@shared/types'
+import { GRID_MAX_TILES, GROUP_COLOR_ORDER, getDefaultTileSize, type AgentActiveSession, type AgentSessionCreateResult, type AgentSessionHistoryItem, type AgentUsageSnapshot, type BoardState, type BoardTask, type FileTileOpenOptions, type TileState, type CanvasState, type GridWorkspaceState, type Workspace, type WorkspaceMetadata, type TileGroup, type ViewMode, type SplitPanelId, type SplitViewState, type WorkspaceManagementEntry, type WorkspaceType } from '@shared/types'
 import { createDefaultAgentProvidersConfig } from '@shared/workspaceConfig'
 import { createEmptyGridWorkspaceState, normalizeGridWorkspaceState } from '@shared/gridWorkspaceState'
 import {
@@ -46,6 +46,7 @@ import {
 import { getBoardReviewCount } from '@shared/board'
 import { countAgentsViewAttention } from './utils/agentsViewSessions'
 import { getAgentSessionSurface } from './utils/activityPalette'
+import { sanitizeAgentCwd } from './utils/agentPanel'
 import { getAttachedTiles, isTileDetached, selectFloatingTileWindowOpenRequests } from '@shared/floatingTiles'
 import { refreshGridTileContent } from './utils/gridTileRefresh'
 import { DEFAULT_SPLIT_ORIENTATION, toggleSplitOrientation } from './utils/splitViewState'
@@ -2286,6 +2287,22 @@ function AppContent(): React.ReactElement {
   })()
 
   const agentTileProvider = activeWorkspaceId ? agentsView.effectiveProvider : null
+  const resumeHistoryInTile = tileCreationAvailability.agent && defaultProfile
+    ? (item: AgentSessionHistoryItem) => {
+        // Reuse the tile that already holds this conversation instead of opening it twice.
+        const existing = tiles.find((tile) => tile.agent?.provider === item.provider && tile.agent.sessionId === item.identifier)
+        const cwd = sanitizeAgentCwd(item.cwd)
+        const tileId = existing?.id ?? addTerminal(defaultProfile.id, {
+          provider: item.provider,
+          sessionId: item.identifier,
+          ...(cwd ? { cwd } : {}),
+        })
+        if (!tileId) return
+        agentsView.close()
+        setActivityOpen(false)
+        focusAgentTile(tileId)
+      }
+    : undefined
   const tileCreationSelectorProps: TileCreationSelectorProps = {
     canCreateAgent: Boolean(tileCreationAvailability.agent && agentTileProvider && defaultProfile),
     canCreateNote,
@@ -2692,6 +2709,7 @@ function AppContent(): React.ReactElement {
                   terminalTitles={terminalTitles}
                   onFocusTile={focusAgentTile}
                   onOpenAgentsSession={agentsView.openForSession}
+                  onResumeInTile={resumeHistoryInTile}
                   onOpenWorkspaceSettings={openActiveWorkspaceEditor}
                 />
               )}

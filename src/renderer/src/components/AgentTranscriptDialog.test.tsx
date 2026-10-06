@@ -143,7 +143,7 @@ const translationCopy: Record<string, string> = {
   'agents.truncatedEntry': 'This entry was shortened.',
   'agents.you': 'You',
   'agents.agent': 'Agent',
-  'agents.resume': 'Resume',
+  'agents.resumeInAgentsView': 'Resume in Agents View',
 }
 const reactI18nextPath = require.resolve('react-i18next')
 require.cache[reactI18nextPath] = {

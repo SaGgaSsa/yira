@@ -4,7 +4,7 @@ import MDEditor from '@uiw/react-md-editor'
 import '@uiw/react-markdown-preview/markdown.css'
 import type { Components } from 'react-markdown'
 import { useTranslation } from 'react-i18next'
-import { ArrowUp, Play, X } from 'lucide-react'
+import { ArrowUp, Pin, X, Zap } from 'lucide-react'
 import type { AgentSessionHistoryItem, AgentSessionTranscriptResult, AgentTranscriptEntry } from '@shared/types'
 import { safeMarkdownPreviewOptions } from '../utils/markdownPlugins'
 import { safeMarkdownUrl } from '../utils/markdownPreview'
@@ -14,6 +14,7 @@ export interface AgentTranscriptDialogProps {
   workspaceId: string
   onClose: () => void
   onResume?: (item: AgentSessionHistoryItem) => void
+  onResumeInTile?: (item: AgentSessionHistoryItem) => void
   /** Defaults to document.body. */
   portalTarget?: Element
 }
@@ -152,6 +153,7 @@ export function AgentTranscriptDialog({
   workspaceId,
   onClose,
   onResume,
+  onResumeInTile,
   portalTarget,
 }: AgentTranscriptDialogProps): React.ReactElement {
   const { t } = useTranslation()
@@ -348,7 +350,20 @@ export function AgentTranscriptDialog({
         </div>
 
         {onResume && (
-          <footer className="flex justify-end border-t border-border px-5 py-4 sm:px-6">
+          <footer className="flex justify-end gap-2 border-t border-border px-5 py-4 sm:px-6">
+            {onResumeInTile && (
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 rounded-full border border-border-visible px-4 py-2 text-sm text-text-display transition-colors hover:bg-hover-bg"
+                onClick={() => {
+                  onResumeInTile(item)
+                  closeDialog()
+                }}
+              >
+                <Pin size={13} aria-hidden="true" />
+                {t('agents.resumeInTile')}
+              </button>
+            )}
             <button
               type="button"
               className="inline-flex items-center gap-1.5 rounded-full border border-border-visible px-4 py-2 text-sm text-text-display transition-colors hover:bg-hover-bg"
@@ -357,8 +372,8 @@ export function AgentTranscriptDialog({
                 closeDialog()
               }}
             >
-              <Play size={13} aria-hidden="true" />
-              {t('agents.resume')}
+              <Zap size={13} aria-hidden="true" />
+              {t('agents.resumeInAgentsView')}
             </button>
           </footer>
         )}

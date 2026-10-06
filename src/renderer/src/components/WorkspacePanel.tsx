@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   AgentProvider,
   AgentProvidersConfig,
+  AgentSessionHistoryItem,
   SourceControlViewMode,
   TileState,
   Workspace,
@@ -32,6 +33,7 @@ interface WorkspacePanelProps {
   terminalTitles: Record<string, string>
   onFocusTile: (tileId: string) => void
   onOpenAgentsSession: (tileId: string) => void
+  onResumeInTile?: (item: AgentSessionHistoryItem) => void
   onOpenWorkspaceSettings: (initialTab?: 'sourceControl') => void
 }
 
@@ -50,6 +52,7 @@ export function WorkspacePanel({
   terminalTitles,
   onFocusTile,
   onOpenAgentsSession,
+  onResumeInTile,
   onOpenWorkspaceSettings,
 }: WorkspacePanelProps): React.ReactElement {
   const agents = useSettingsStore((state) => state.agents)
@@ -122,6 +125,7 @@ export function WorkspacePanel({
             terminalTitles={terminalTitles}
             onFocusTile={onFocusTile}
             onOpenAgentsSession={onOpenAgentsSession}
+            onResumeInTile={onResumeInTile}
             onOpenWorkspaceSettings={onOpenWorkspaceSettings}
           />
         )}
