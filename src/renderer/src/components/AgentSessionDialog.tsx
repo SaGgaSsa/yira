@@ -229,6 +229,13 @@ export function AgentSessionDialog({
                 onKeyDown={(event) => {
                   if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return
                   event.preventDefault()
+                  if (event.altKey) {
+                    // Textareas ignore Alt+Enter, so insert the line break like Shift+Enter does.
+                    const textarea = event.currentTarget
+                    textarea.setRangeText('\n', textarea.selectionStart, textarea.selectionEnd, 'end')
+                    setPrompt(textarea.value)
+                    return
+                  }
                   void createSession(event.currentTarget.value)
                 }}
                 placeholder={t('agentsView.promptPlaceholder')}

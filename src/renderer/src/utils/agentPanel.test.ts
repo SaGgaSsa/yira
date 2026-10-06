@@ -127,7 +127,7 @@ test('agent history refresh delay is immediate for defaults and debounced for se
   if (getAgentHistoryRefreshDelay('   ') !== 0) {
     throw new Error('cleared history search must refresh immediately')
   }
-  if (getAgentHistoryRefreshDelay('release notes') !== 250) {
+  if (getAgentHistoryRefreshDelay('release notes') !== 600) {
     throw new Error('history searches must wait briefly before refreshing')
   }
 })
