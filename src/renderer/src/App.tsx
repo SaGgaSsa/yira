@@ -52,6 +52,11 @@ import { refreshGridTileContent } from './utils/gridTileRefresh'
 import { DEFAULT_SPLIT_ORIENTATION, toggleSplitOrientation } from './utils/splitViewState'
 import { getActiveWindowTitle } from './utils/windowTitle'
 import { getAgentSessionTitles } from './utils/terminalDisplayTitle'
+import {
+  buildAgentAlertNotificationText,
+  decideAgentAlertNotification,
+} from './utils/agentAlertNotifications'
+import { playAgentAlertSound } from './utils/agentAlertSound'
 import { resolveViewModeTransition } from './utils/viewModeTransition'
 import {
   resolveSidebarCollapsedAfterWorkspaceViewChange,
@@ -1738,6 +1743,56 @@ function AppContent(): React.ReactElement {
       }
     })()
   }, [activateWorkspace, agentsView.close, focusTile, focusTileInFullview, recordWorkspaceSelection, selectTiles, setFullviewActiveTileId])
+
+  useEffect(() => {
+    return window.electron.agents.onAlert((event) => {
+      const canvasState = useCanvasStore.getState()
+      const tile = canvasState.tiles.find((entry) => entry.id === event.tileId)
+      const decision = decideAgentAlertNotification({
+        enabled: useSettingsStore.getState().notifications.desktopAlertsEnabled,
+        windowFocused: document.hasFocus(),
+        activeWorkspaceId: canvasState.activeWorkspaceId,
+        alertWorkspaceId: event.workspaceId,
+        tileMuted: tile?.type === 'terminal' && tile.notificationsMuted === true,
+      })
+
+      if (decision.sound) {
+        playAgentAlertSound(event.priority === 'intervention' ? 'intervention' : 'completed')
+      }
+      if (!decision.toast) return
+
+      const workspace = workspaceMetadata.find((entry) => entry.id === event.workspaceId)
+      const providerLabel = t(event.provider === 'claude' ? 'agentsView.claude' : 'agentsView.codex')
+      const eventLabel = t({
+        completed: 'agentAlert.completed',
+        input: 'agentAlert.input',
+        permission: 'agentAlert.permission',
+      }[event.event])
+      const notificationText = buildAgentAlertNotificationText({
+        providerLabel,
+        workspaceName: workspace?.name ?? null,
+        sessionTitle: event.sessionTitle,
+        eventLabel,
+      })
+
+      void window.electron.notifications.showAgentAlert({
+        ...notificationText,
+        workspaceId: event.workspaceId,
+        tileId: event.tileId,
+      }).catch((error) => {
+        console.error('[App] Failed to show agent alert notification:', error)
+      })
+    })
+  }, [t, workspaceMetadata])
+
+  useEffect(() => {
+    return window.electron.notifications.onAgentAlertClicked(({ workspaceId, tileId }) => {
+      if (!workspaceId) return
+      const workspace = workspaceMetadata.find((entry) => entry.id === workspaceId)
+      if (!workspace) return
+      goToWorkspaceTerminal(workspace, tileId)
+    })
+  }, [goToWorkspaceTerminal, workspaceMetadata])
 
   const openActivityPaletteAgent = useCallback((workspace: WorkspaceMetadata, session: AgentActiveSession) => {
     if (getAgentSessionSurface(session) === 'agents-view') {

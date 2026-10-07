@@ -19,6 +19,7 @@ if (normalizeUserSettings({ windowBackgroundMaterial: 'invalid' as never }).wind
   throw new Error('invalid window background material must normalize to none')
 }
 if (defaults.notifications.attentionDelayEnabled !== true) throw new Error('native attention delay must default on')
+if (defaults.notifications.desktopAlertsEnabled !== true) throw new Error('desktop agent alerts must default on')
 if (!defaults.agents.claude.enabled || !defaults.agents.codex.enabled) throw new Error('agent settings must default enabled before main-process detection')
 const agentPreferences = normalizeUserSettings({ agents: { claude: { enabled: false }, codex: { enabled: true } } })
 if (agentPreferences.agents.claude.enabled || !agentPreferences.agents.codex.enabled) throw new Error('saved agent preferences must be preserved')
@@ -68,6 +69,7 @@ if (clamped.tileFontSizePx !== 36) throw new Error('tile font must clamp to maxi
 const legacy = normalizeUserSettings({ groups: { enabled: true } })
 if (legacy.terminal.attentionEnabled !== true) throw new Error('legacy settings must migrate terminal attention on')
 if (legacy.notifications.attentionDelayEnabled !== true) throw new Error('legacy settings must migrate native attention delay on')
+if (legacy.notifications.desktopAlertsEnabled !== true) throw new Error('legacy settings must migrate desktop agent alerts on')
 
 const disabled = normalizeUserSettings({ terminal: { attentionEnabled: false } })
 if (disabled.terminal.attentionEnabled !== false) throw new Error('disabled terminal attention setting must be preserved')
@@ -91,6 +93,16 @@ for (const themeId of ['yira-default', 'classic-dark', 'light', 'high-contrast']
 
 const immediateAttention = normalizeUserSettings({ notifications: { attentionDelayEnabled: false } })
 if (immediateAttention.notifications.attentionDelayEnabled !== false) throw new Error('disabled native attention delay must be preserved')
+
+const disabledDesktopAlerts = normalizeUserSettings({ notifications: { desktopAlertsEnabled: false } })
+if (disabledDesktopAlerts.notifications.desktopAlertsEnabled !== false) {
+  throw new Error('disabled desktop agent alerts must be preserved')
+}
+
+const invalidDesktopAlerts = normalizeUserSettings({ notifications: { desktopAlertsEnabled: 'false' as never } })
+if (invalidDesktopAlerts.notifications.desktopAlertsEnabled !== true) {
+  throw new Error('invalid desktop agent alerts must default on')
+}
 
 const legacyTileAvailability = normalizeUserSettings({
   tiles: {

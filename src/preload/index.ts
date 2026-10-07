@@ -4,6 +4,9 @@ import type { TerminalProcessActivitySnapshot } from '@shared/terminalProcessAct
 import { contextBridge, ipcRenderer } from 'electron'
 import type {
   AgentActiveSessionSnapshot,
+  AgentAlertEvent,
+  AgentAlertNotificationRequest,
+  AgentAlertNotificationTarget,
   AgentDetectionSnapshot,
   AgentPromptImage,
   AgentPromptImageSaveInput,
@@ -102,6 +105,11 @@ contextBridge.exposeInMainWorld('electron', {
       const handler = (_event: unknown, snapshot: AgentActiveSessionSnapshot) => callback(snapshot)
       ipcRenderer.on('agents:sessions:changed', handler)
       return () => ipcRenderer.removeListener('agents:sessions:changed', handler)
+    },
+    onAlert: (callback: (alert: AgentAlertEvent) => void) => {
+      const handler = (_event: unknown, alert: AgentAlertEvent) => callback(alert)
+      ipcRenderer.on('agents:alert', handler)
+      return () => ipcRenderer.removeListener('agents:alert', handler)
     },
     usageSnapshot: () => ipcRenderer.invoke('agents:usage:snapshot') as Promise<AgentUsageSnapshot | null>,
     usageDetails: () => ipcRenderer.invoke('agents:usage:details') as Promise<AgentUsageDetailsSnapshot | null>,
@@ -271,6 +279,13 @@ contextBridge.exposeInMainWorld('electron', {
     requestAttention: (options?: NotificationAttentionOptions) =>
       ipcRenderer.invoke('notifications:requestAttention', options),
     clearAttention: () => ipcRenderer.invoke('notifications:clearAttention'),
+    showAgentAlert: (request: AgentAlertNotificationRequest) =>
+      ipcRenderer.invoke('notifications:showAgentAlert', request) as Promise<boolean>,
+    onAgentAlertClicked: (callback: (target: AgentAlertNotificationTarget) => void) => {
+      const handler = (_event: unknown, target: AgentAlertNotificationTarget) => callback(target)
+      ipcRenderer.on('notifications:agentAlertClicked', handler)
+      return () => ipcRenderer.removeListener('notifications:agentAlertClicked', handler)
+    },
   },
 
   window: {

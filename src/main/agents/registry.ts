@@ -164,6 +164,13 @@ export class AgentSessionRegistry {
     return session ? cloneSession(session) : null
   }
 
+  findByTileId(tileId: string): AgentActiveSession | null {
+    const normalizedTileId = normalizeAgentOpaqueId(tileId)
+    if (!normalizedTileId) return null
+    const matching = [...this.sessions.values()].filter((session) => session.tileId === normalizedTileId)
+    return matching.length === 1 ? cloneSession(matching[0]) : null
+  }
+
   snapshot(workspaceId?: string): AgentActiveSessionSnapshot {
     const normalizedWorkspaceId = workspaceId === undefined ? undefined : normalizeAgentOpaqueId(workspaceId)
     if (workspaceId !== undefined && !normalizedWorkspaceId) return { sessions: [] }

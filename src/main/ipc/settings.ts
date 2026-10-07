@@ -202,6 +202,8 @@ export async function loadStoredUserSettings(): Promise<UserSettings | null> {
       parsed?.terminal?.themeId !== normalized.terminal.themeId ||
       parsed.windowBackgroundMaterial !== normalized.windowBackgroundMaterial
       || !Object.prototype.hasOwnProperty.call(parsed, 'agents')
+      || typeof parsed?.notifications?.desktopAlertsEnabled !== 'boolean'
+      || parsed.notifications.desktopAlertsEnabled !== normalized.notifications.desktopAlertsEnabled
       || parsed?.shortcuts?.newAgentSession !== normalized.shortcuts.newAgentSession
     ) {
       await fs.writeFile(SETTINGS_PATH, JSON.stringify(normalized, null, 2))

@@ -4,6 +4,7 @@ import { dirname, join } from 'path'
 
 import type {
   AgentProvider,
+  AgentAlertEvent,
   AgentProviderConfig,
   RemotePreparationResult,
   RemotePreparationStatus,
@@ -85,8 +86,25 @@ function appImagePathForDaemon(): string | undefined {
   return appImagePath
 }
 
+let getMainWindow: () => BrowserWindow | null = () => null
+
 const agentAlerts = new SemanticAgentAlertState({
-  onChange: (_tileId, state) => {
+  onChange: (tileId, state) => {
+    if (state) {
+      const window = getMainWindow()
+      if (window && !window.isDestroyed()) {
+        const session = agentSessionRegistry.findByTileId(tileId)
+        const alertEvent: AgentAlertEvent = {
+          tileId,
+          workspaceId: session?.workspaceId ?? null,
+          provider: state.provider,
+          event: state.event,
+          priority: state.priority,
+          sessionTitle: session?.title ?? null,
+        }
+        window.webContents.send('agents:alert', alertEvent)
+      }
+    }
     if (!state || BrowserWindow.getAllWindows().some((window) => !window.isDestroyed() && window.isFocused())) return
     BrowserWindow.getAllWindows().find((window) => !window.isDestroyed())?.flashFrame(true)
   },
@@ -472,7 +490,8 @@ export function setAgentAlertsEnabled(enabled: boolean): void {
   agentAlerts.setEnabled(enabled)
 }
 
-export function registerTerminalIPC(): void {
+export function registerTerminalIPC(getWindow: () => BrowserWindow | null): void {
+  getMainWindow = getWindow
   const processActivityMonitor = getTerminalProcessActivityMonitor()
   ipcMain.handle('terminal:processActivity:snapshot', () => processActivityMonitor.snapshot())
   processActivityMonitor.start()
