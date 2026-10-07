@@ -125,8 +125,6 @@ const terminalMock = ({ session }: { session: AgentActiveSession }) => React.cre
 })
 const translationCopy: Record<string, string> = {
   'agentsView.title': 'Agents',
-  'agentsView.sessionCount': '{{count}} sessions',
-  'agentsView.newSession': 'New session',
   'agentsView.emptyTitle': 'No agent sessions in this view',
   'agentsView.emptyDescription': 'Start a session to see its live terminal here.',
   'agentsView.newAgentSession': 'New agent session',
@@ -204,7 +202,6 @@ function createView(
       <AgentsView
         workspaceId="workspace-a"
         workspaceConfig={workspaceConfig}
-        provider="claude"
         sessions={sessions}
         focusedSessionId={null}
         onFocusSession={callbacks.onFocusSession ?? (() => undefined)}

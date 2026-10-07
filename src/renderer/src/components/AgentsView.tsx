@@ -3,7 +3,6 @@ import { Bot, Maximize2, Minimize2, Plus, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type {
   AgentActiveSession,
-  AgentProvider,
   FileTileOpenOptions,
   WorkspaceConfig,
 } from '@shared/types'
@@ -15,7 +14,6 @@ import { AgentSessionTerminal } from './AgentSessionTerminal'
 export interface AgentsViewProps {
   workspaceId: string
   workspaceConfig: WorkspaceConfig
-  provider: AgentProvider
   sessions: AgentActiveSession[]
   /** Synthetic tileId of the session whose terminal currently has focus. */
   focusedSessionId: string | null
@@ -166,7 +164,6 @@ function AgentSessionCard({
 export function AgentsView({
   workspaceId,
   workspaceConfig,
-  provider,
   sessions,
   focusedSessionId,
   onFocusSession,
@@ -199,26 +196,9 @@ export function AgentsView({
     gridTemplateColumns: `repeat(${layout.columns}, minmax(0, 1fr))`,
     gridTemplateRows: `repeat(${layout.rows}, minmax(${rowTrackMin}, 1fr))`,
   }
-  const providerLabel = provider === 'claude' ? 'Claude' : 'Codex'
 
   return (
     <section className="flex h-full min-h-0 w-full flex-col bg-bg-primary" aria-label={t('agentsView.title')}>
-      <header className="flex min-h-14 shrink-0 items-center gap-3 border-b border-border px-4">
-        <Bot size={17} className="text-text-secondary" aria-hidden="true" />
-        <h1 className="nd-label text-text-display">{t('agentsView.title')}</h1>
-        <span className="rounded-full border border-border-visible px-2 py-0.5 text-xs text-text-secondary">
-          {t('agentsView.sessionCount', { count: visibleSessions.length })}
-        </span>
-        <span className="ml-auto text-xs text-text-secondary">{providerLabel}</span>
-        <button
-          type="button"
-          className="inline-flex items-center gap-2 rounded-full border border-border-visible px-3 py-1.5 text-xs text-text-display transition-colors hover:bg-hover-bg"
-          onClick={onNewSession}
-        >
-          <Plus size={13} aria-hidden="true" />
-          {t('agentsView.newSession')}
-        </button>
-      </header>
       <div className={`min-h-0 flex-1 ${scrolls ? 'overflow-y-auto' : ''}`}>
         {visibleSessions.length === 0 ? (
           <div className="flex h-full min-h-0 flex-col items-center justify-center px-6 text-center">

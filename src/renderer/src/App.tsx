@@ -2801,7 +2801,6 @@ function AppContent(): React.ReactElement {
                 <AgentsView
                   workspaceId={activeWorkspaceId}
                   workspaceConfig={activeWorkspaceConfig}
-                  provider={agentsView.effectiveProvider}
                   sessions={agentsView.sessions}
                   focusedSessionId={agentsView.focusedSessionId}
                   onFocusSession={agentsView.openForSession}
