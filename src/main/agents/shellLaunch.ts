@@ -154,9 +154,10 @@ export function buildWorkspaceScriptShellCommand(input: WorkspaceScriptShellComm
       '& ([scriptblock]::Create($scriptText))',
       '$scriptSucceeded = $?',
       '$scriptExitCode = $global:LASTEXITCODE',
-      'if ($scriptSucceeded) { exit 0 }',
-      'if ($null -ne $scriptExitCode) { exit $scriptExitCode }',
-      'exit 1',
+      // npm and similar shims are .ps1 scripts: `$?` stays true while LASTEXITCODE carries the failure.
+      'if ($null -ne $scriptExitCode -and $scriptExitCode -ne 0) { exit $scriptExitCode }',
+      'if (-not $scriptSucceeded) { exit 1 }',
+      'exit 0',
     ].join('; ')
     return ['-EncodedCommand', Buffer.from(command, 'utf16le').toString('base64')]
   }
