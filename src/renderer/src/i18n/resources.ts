@@ -117,6 +117,28 @@ type TranslationResources = {
     periodFilter: string
     cacheReadAmount: string
   }
+  scripts: {
+    title: string
+    packageJson: string
+    customCommands: string
+    editCommands: string
+    addCommand: string
+    otherProcesses: string
+    running: string
+    exited: string
+    exitCode: string
+    noPackageScripts: string
+    runScript: string
+    stopScript: string
+    showOutput: string
+    hideOutput: string
+    output: string
+    restart: string
+    closeOutput: string
+    outputUnavailable: string
+    runFailed: string
+    stopFailed: string
+  }
   terminalActivity: {
     'needs-input': string
     working: string
@@ -382,6 +404,7 @@ type TranslationResources = {
   workspace: {
     general: string
     terminal: string
+    scripts: string
     agents: string
     sourceControl: string
     repository: string
@@ -398,6 +421,14 @@ type TranslationResources = {
     noFolderSelected: string
     initialCommand: string
     optionalCommand: string
+    customScriptsHelp: string
+    noCustomScripts: string
+    addCustomScript: string
+    customScriptName: string
+    customScriptNamePlaceholder: string
+    customScriptCommand: string
+    customScriptCommandPlaceholder: string
+    removeCustomScript: string
     remoteTerminal: string
     saveWorkspace: string
     manageWorkspaces: string
@@ -938,6 +969,28 @@ const en: TranslationResources = {
     cacheReadAmount: '{{count}} read from cache',
     token: { cacheRead: 'Cache read', cacheWrite: 'Cache write', input: 'Input', output: 'Output', cached: 'Cached', reasoning: 'Reasoning' },
   },
+  scripts: {
+    title: 'Scripts',
+    packageJson: 'package.json',
+    customCommands: 'Custom commands',
+    editCommands: 'Edit commands…',
+    addCommand: 'Add command…',
+    otherProcesses: 'Other processes',
+    running: 'Running',
+    exited: 'Exited',
+    exitCode: 'Exited with code {{code}}',
+    noPackageScripts: 'No package.json scripts found in this workspace.',
+    runScript: 'Run script',
+    stopScript: 'Stop script',
+    showOutput: 'Show output',
+    hideOutput: 'Hide output',
+    output: 'Output',
+    restart: 'Restart',
+    closeOutput: 'Close output',
+    outputUnavailable: 'Output is unavailable.',
+    runFailed: 'Unable to run this script.',
+    stopFailed: 'Unable to stop this script.',
+  },
   terminalActivity: {
     'needs-input': 'Needs input',
     working: 'Working',
@@ -1203,6 +1256,7 @@ const en: TranslationResources = {
   workspace: {
     general: 'General',
     terminal: 'Terminal',
+    scripts: 'Commands',
     agents: 'Agents',
     sourceControl: 'Source Control',
     repository: 'Repository',
@@ -1219,6 +1273,14 @@ const en: TranslationResources = {
     noFolderSelected: 'No folder selected',
     initialCommand: 'Initial command',
     optionalCommand: 'Optional command for new terminals',
+    customScriptsHelp: 'Add workspace-specific commands to run beside package.json scripts.',
+    noCustomScripts: 'No custom commands yet.',
+    addCustomScript: 'Add command',
+    customScriptName: 'Name',
+    customScriptNamePlaceholder: 'Start development server',
+    customScriptCommand: 'Command',
+    customScriptCommandPlaceholder: 'npm run dev',
+    removeCustomScript: 'Remove command',
     remoteTerminal: 'Remote terminal',
     saveWorkspace: 'Save Workspace',
     manageWorkspaces: 'Manage Workspaces',
@@ -1759,6 +1821,28 @@ const es: TranslationResources = {
     cacheReadAmount: '{{count}} leídos de caché',
     token: { cacheRead: 'Lectura de caché', cacheWrite: 'Escritura de caché', input: 'Entrada', output: 'Salida', cached: 'En caché', reasoning: 'Razonamiento' },
   },
+  scripts: {
+    title: 'Scripts',
+    packageJson: 'package.json',
+    customCommands: 'Comandos propios',
+    editCommands: 'Editar comandos…',
+    addCommand: 'Agregar comando…',
+    otherProcesses: 'Otros procesos',
+    running: 'En ejecución',
+    exited: 'Finalizado',
+    exitCode: 'Finalizó con código {{code}}',
+    noPackageScripts: 'No se encontraron scripts en package.json para este espacio de trabajo.',
+    runScript: 'Ejecutar script',
+    stopScript: 'Detener script',
+    showOutput: 'Mostrar salida',
+    hideOutput: 'Ocultar salida',
+    output: 'Salida',
+    restart: 'Reiniciar',
+    closeOutput: 'Cerrar salida',
+    outputUnavailable: 'La salida no está disponible.',
+    runFailed: 'No se pudo ejecutar este script.',
+    stopFailed: 'No se pudo detener este script.',
+  },
   terminalActivity: {
     'needs-input': 'Requiere intervención',
     working: 'Trabajando',
@@ -2024,6 +2108,7 @@ const es: TranslationResources = {
   workspace: {
     general: 'General',
     terminal: 'Terminal',
+    scripts: 'Comandos',
     agents: 'Agentes',
     sourceControl: 'Source Control',
     repository: 'Repositorio',
@@ -2040,6 +2125,14 @@ const es: TranslationResources = {
     noFolderSelected: 'No se seleccionó ninguna carpeta',
     initialCommand: 'Comando inicial',
     optionalCommand: 'Comando opcional para nuevas terminales',
+    customScriptsHelp: 'Agrega comandos del espacio de trabajo junto a los scripts de package.json.',
+    noCustomScripts: 'Aún no hay comandos propios.',
+    addCustomScript: 'Agregar comando',
+    customScriptName: 'Nombre',
+    customScriptNamePlaceholder: 'Iniciar servidor de desarrollo',
+    customScriptCommand: 'Comando',
+    customScriptCommandPlaceholder: 'npm run dev',
+    removeCustomScript: 'Quitar comando',
     remoteTerminal: 'Terminal remota',
     saveWorkspace: 'Guardar espacio de trabajo',
     manageWorkspaces: 'Administrar espacios de trabajo',

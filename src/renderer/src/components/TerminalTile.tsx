@@ -28,6 +28,8 @@ interface Props {
   workspaceConfig: WorkspaceConfig
   isFocused: boolean
   edgeToEdge?: boolean
+  /** Connect an existing daemon-backed script session without creating a shell. */
+  connectOnly?: boolean
   isVisible?: boolean
   autoFocus?: boolean
   onFocus: () => void
@@ -313,6 +315,7 @@ export function TerminalTileWrapper({
   workspaceConfig,
   isFocused,
   edgeToEdge = false,
+  connectOnly = false,
   isVisible = true,
   autoFocus = false,
   onFocus,
@@ -454,7 +457,7 @@ export function TerminalTileWrapper({
     }
   }, [acquireError, activeRuntime, pendingSnapshot, reconnectPending, runtimeSnapshot])
 
-  const closeOnAgentExit = shouldCloseExitedAgentTile(tile, snapshot.exitEvent)
+  const closeOnAgentExit = !connectOnly && shouldCloseExitedAgentTile(tile, snapshot.exitEvent)
   const onDeleteRef = useRef(onDelete)
   onDeleteRef.current = onDelete
   const isAgentsViewSession = tile.agent?.surface === 'agents-view'
@@ -626,6 +629,9 @@ export function TerminalTileWrapper({
       markdownBaseDirectory: tile.agent?.cwd ?? '',
     }
     const create = async (): Promise<TerminalRuntime> => {
+      if (connectOnly && !target.tileId.startsWith('script-')) {
+        throw new Error('Only existing workspace script sessions can be connected')
+      }
       if (shouldPrepareRemote) {
         await window.electron.terminal.prepareRemote(target.workspaceId)
       }
@@ -661,7 +667,7 @@ export function TerminalTileWrapper({
   // `viewOptions` is intentionally captured when a target starts. Mutable view
   // callbacks and dimensions are applied by the layout effect below.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [acquireGeneration, target])
+  }, [acquireGeneration, connectOnly, target])
 
   // Park in a layout cleanup so the runtime root moves to the parking root
   // before React removes the host DOM node. This is also the pending-creation
