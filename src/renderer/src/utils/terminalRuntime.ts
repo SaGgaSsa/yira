@@ -140,6 +140,7 @@ export interface TerminalRuntime extends TerminalRuntimeHandle {
   acknowledgeAgentAlert: () => Promise<void>
   openBrowserTile: (url: string) => void
   openFileTile: (relativePath: string, options?: FileTileOpenOptions) => void | Promise<void>
+  clearError: () => void
   subscribe: (listener: () => void) => () => void
   getSnapshot: () => TerminalRuntimeSnapshot
 }
@@ -341,10 +342,16 @@ function createRuntime(
     report(dependencies, target, operation, error)
   }
 
+  const clearError = (): void => {
+    if (snapshot.error !== null) updateSnapshot({ error: null })
+  }
+
   const writeInput = (identity: TerminalSessionIdentity, data: string): void => {
     if (!isCurrentIdentity(identity) || processExited) return
 
     lastInputAt = now()
+    // Operation errors are transient; typing in the terminal dismisses them.
+    clearError()
     try {
       void Promise.resolve(dependencies.bridge.write(identity, data)).catch((error: unknown) => {
         if (!isCurrentIdentity(identity)) return
@@ -1002,6 +1009,7 @@ function createRuntime(
     acknowledgeAgentAlert,
     openBrowserTile,
     openFileTile,
+    clearError,
     subscribe: (listener) => {
       listeners.add(listener)
       return () => listeners.delete(listener)

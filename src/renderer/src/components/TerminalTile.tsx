@@ -1,7 +1,7 @@
 import { resolveTerminalThemeId } from '@/utils/terminalTheme'
 import { useLightAppearance } from '@/hooks/useLightAppearance'
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { FileTileOpenOptions, RemotePreparationResult, RemotePreparationStatus, TerminalCreateOptions, TerminalExitEvent, TileState, WorkspaceConfig } from '@shared/types'
 import type { TerminalSessionTarget } from '@shared/terminalSessionIdentity'
@@ -805,9 +805,23 @@ export function TerminalTileWrapper({
       {snapshot.error && (
         <div
           role="alert"
-          className="absolute inset-x-3 bottom-3 z-20 rounded-md border border-red-400/50 bg-red-950/80 px-3 py-2 text-xs text-red-200"
+          className="absolute inset-x-3 bottom-3 z-20 flex items-start gap-2 rounded-md border border-red-400/50 bg-red-950/80 py-2 pl-3 pr-2 text-xs text-red-200"
         >
-          {snapshot.error}
+          <span className="min-w-0 flex-1 break-words">{snapshot.error}</span>
+          <button
+            type="button"
+            aria-label={t('common.close')}
+            title={t('common.close')}
+            className="shrink-0 rounded p-0.5 text-red-200/80 hover:bg-red-400/20 hover:text-red-100"
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation()
+              activeRuntimeRef.current?.clearError()
+              setAcquireError(null)
+            }}
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
         </div>
       )}
     </div>

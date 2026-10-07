@@ -5,6 +5,7 @@ import {
   absoluteSourcePathToRelative,
   chooseTerminalSourceSearchMatch,
   findTerminalSourceLinks,
+  isTerminalFileLinkPath,
   resolveTerminalSourcePath,
 } from './terminalSourceLinks'
 
@@ -26,6 +27,31 @@ test('detects source paths with line, column, range, parenthesized, and hash suf
     { path: 'C:\\repo\\Bar.java', line: 10, column: undefined, endLine: undefined },
     { path: 'Dockerfile', line: undefined, column: undefined, endLine: undefined },
   ])
+})
+
+test('links readable text files and images but leaves Markdown and unknown files out', () => {
+  assert.equal(isTerminalFileLinkPath('src/App.tsx'), true)
+  assert.equal(isTerminalFileLinkPath('notes.txt'), true)
+  assert.equal(isTerminalFileLinkPath('logs/app.log'), true)
+  assert.equal(isTerminalFileLinkPath('assets/logo.PNG'), true)
+  assert.equal(isTerminalFileLinkPath('README.md'), false)
+  assert.equal(isTerminalFileLinkPath('release/app.exe'), false)
+})
+
+test('strips agent tool calls, Markdown links, and mentions around paths', () => {
+  const text = String.raw`Read(src\main\a.ts) Update(src/b.ts:4) [c.ts](src/c.ts) @src/d.png src/foo/Baz.java(8,2)`
+  assert.deepEqual(findTerminalSourceLinks(text).map(({ path, text: linkText }) => ({ path, linkText })), [
+    { path: String.raw`src\main\a.ts`, linkText: String.raw`src\main\a.ts` },
+    { path: 'src/b.ts', linkText: 'src/b.ts:4' },
+    { path: 'src/c.ts', linkText: 'src/c.ts' },
+    { path: 'src/d.png', linkText: 'src/d.png' },
+    { path: 'src/foo/Baz.java', linkText: 'src/foo/Baz.java(8,2)' },
+  ])
+})
+
+test('keeps paths relative when there is no base directory', () => {
+  assert.equal(resolveTerminalSourcePath('src/main/a.ts'), 'src/main/a.ts')
+  assert.equal(resolveTerminalSourcePath('src/main/a.ts', ''), 'src/main/a.ts')
 })
 
 test('normalizes safe relative paths and rejects escapes, roots, UNC, and protocols', () => {
