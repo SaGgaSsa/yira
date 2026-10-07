@@ -29,7 +29,15 @@ import { AgentUsageService } from './agentUsage'
 import { AgentUsageDetailsService } from './agentUsageDetails'
 import { AgentUsageIndex } from './agentUsageIndex'
 import { readClaudeUsageStatusLinePayload } from './claudeUsageStatusLinePayload'
-import { APP_ID, APP_NAME, DEV_APP_NAME, YIRA_HOME } from './paths'
+import {
+  APP_ID,
+  APP_NAME,
+  DEV_APP_ID,
+  DEV_APP_NAME,
+  DEV_TOAST_ACTIVATOR_CLSID,
+  TOAST_ACTIVATOR_CLSID,
+  YIRA_HOME,
+} from './paths'
 import { isUpdateInstallPending, registerUpdateIPC, scheduleStartupUpdateCheck } from './updater'
 import { loadWindowState, saveWindowState } from './windowState'
 import { coordinateWindowClose, type CloseFailureDecision } from './windowCloseCoordinator'
@@ -41,6 +49,10 @@ const REACT_DEVTOOLS_HINT = 'Download the React DevTools'
 const appIconPath = is.dev ? join(__dirname, '../../resources/icon.png') : join(process.resourcesPath, 'icon.png')
 const WINDOW_STATE_PATH = join(YIRA_HOME, 'window-state.json')
 const supportsTitleBarOverlay = process.platform === 'win32' || process.platform === 'linux'
+app.setAppUserModelId(is.dev ? DEV_APP_ID : APP_ID)
+if (process.platform === 'win32') {
+  app.setToastActivatorCLSID(is.dev ? DEV_TOAST_ACTIVATOR_CLSID : TOAST_ACTIVATOR_CLSID)
+}
 if (process.env.YIRA_HOME?.trim()) {
   const electronDataDir = join(YIRA_HOME, 'electron-data')
   app.setPath('userData', electronDataDir)
@@ -241,7 +253,6 @@ async function createWindow(): Promise<BrowserWindow> {
 
 app.whenReady().then(async () => {
   app.setName(appDisplayName)
-  app.setAppUserModelId(APP_ID)
 
   app.on('browser-window-created', (_, window) => {
     // Shortcuts handled by renderer
@@ -300,7 +311,7 @@ app.whenReady().then(async () => {
   registerBoardsIPC()
   registerFilesIPC()
   registerGitIPC()
-  registerNotificationIPC()
+  registerNotificationIPC(() => mainWindow)
   closePreparationBridge = registerWindowIPC(() => mainWindow)
   registerFloatingTilesIPC(() => mainWindow, () => closePreparationApproved)
   registerUpdateIPC({ confirmInstall: confirmUpdateInstall, prepareToClose: prepareApplicationClose })
