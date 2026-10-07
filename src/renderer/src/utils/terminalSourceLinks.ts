@@ -1,5 +1,6 @@
 import type { IBufferLine, ILink, ILinkProvider, Terminal } from '@xterm/xterm'
 import { isSourceFilePath } from './fileEditorState'
+import { isImageFilePath } from './fileImage'
 import { shouldOpenTerminalLink } from './terminalLinkActivation'
 
 export interface TerminalSourceLinkMatch {
@@ -14,13 +15,24 @@ export interface TerminalSourceLinkMatch {
 
 const TOKEN = /[^\s"'`<>|]+/g
 const SUFFIX = /(?::(\d+)(?::(\d+))?(?:-(\d+))?|\((\d+)(?:,(\d+))?\)|#L(\d+))$/i
+// Agent tool calls such as `Read(src/a.ts)` and Markdown links such as `[a.ts](src/a.ts)`.
+const LINK_PREFIX = /^(?:[([{<@]+|[a-z]+\(|[^\](]*\]\()+/i
+// Plain-text files the file tile opens even though Monaco has no language for them.
+const TEXT_FILE_EXTENSIONS = new Set(['cfg', 'conf', 'csv', 'env', 'gitignore', 'lock', 'log', 'tsv', 'txt'])
+
+export function isTerminalFileLinkPath(filePath: string): boolean {
+  if (isSourceFilePath(filePath) || isImageFilePath(filePath)) return true
+  const name = filePath.split(/[\\/]/).at(-1)?.toLowerCase() ?? ''
+  const dotIndex = name.lastIndexOf('.')
+  return dotIndex >= 0 && TEXT_FILE_EXTENSIONS.has(name.slice(dotIndex + 1))
+}
 
 export function findTerminalSourceLinks(text: string): TerminalSourceLinkMatch[] {
   const matches: TerminalSourceLinkMatch[] = []
   for (const token of text.matchAll(TOKEN)) {
     if (token.index === undefined) continue
-    let value = token[0].replace(/^[([{<]+/, '')
-    const leading = token[0].length - token[0].replace(/^[([{<]+/, '').length
+    let value = token[0].replace(LINK_PREFIX, '')
+    const leading = token[0].length - value.length
     let suffix = SUFFIX.exec(value)
     if (!suffix) {
       value = value.replace(/[.,;!?)}\]:]+$/, '')
@@ -29,7 +41,7 @@ export function findTerminalSourceLinks(text: string): TerminalSourceLinkMatch[]
     const suffixText = suffix?.[0] ?? ''
     const rawPath = suffix ? value.slice(0, -suffixText.length) : value
     if (!rawPath || /(?:^|\/)[a-z][a-z\d+.-]*:\/\//i.test(rawPath) || /^[a-z][a-z\d+.-]*:(?![\\/])/i.test(rawPath)) continue
-    if (!isSourceFilePath(rawPath)) continue
+    if (!isTerminalFileLinkPath(rawPath)) continue
     matches.push({
       text: `${rawPath}${suffixText}`,
       path: rawPath,
@@ -64,7 +76,8 @@ export function resolveTerminalSourcePath(rawPath: string, baseDirectory = ''): 
   if (/^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(path)) return null
   const base = normalizeRelative(baseDirectory)
   if (base === null && baseDirectory) return null
-  const combined = normalizeRelative(path, base?.split('/') ?? [])
+  // An empty base must add no segment; [''] would turn the result into `/path`.
+  const combined = normalizeRelative(path, base ? base.split('/') : [])
   if (!combined) return null
   return combined
 }

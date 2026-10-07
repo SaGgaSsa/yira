@@ -50,7 +50,8 @@ const LINE_SUFFIX_PATTERN = /:\d+(?::\d+)?$/
 const QUOTED_TRAILING_SUFFIX_PATTERN = /^:\d+(?::\d+)?(?![a-zA-Z\d:])/
 const QUOTED_TEXT_PATTERN = /(["'`])([^\r\n]*?)\1/g
 const UNQUOTED_TOKEN_PATTERN = /[^\s"'`<>|]+/g
-const LEADING_DELIMITER_PATTERN = /^[([{<]+/
+// Also skips agent tool calls such as `Read(docs/a.md)` and Markdown links such as `[a](docs/a.md)`.
+const LEADING_DELIMITER_PATTERN = /^(?:[([{<@]+|[a-z]+\(|[^\](]*\]\()+/i
 
 function containsControlCharacter(value: string): boolean {
   return CONTROL_CHARACTER_PATTERN.test(value)

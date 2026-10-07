@@ -39,6 +39,17 @@ test('detects and normalizes supported Markdown path forms', () => {
   }
 })
 
+test('strips agent tool calls, Markdown links, and mentions around Markdown paths', () => {
+  assert.deepEqual(
+    findTerminalMarkdownLinks('Read(docs/plan.md) [plan](docs/a.md) @docs/b.md').map(({ text, relativePath }) => ({ text, relativePath })),
+    [
+      { text: 'docs/plan.md', relativePath: 'docs/plan.md' },
+      { text: 'docs/a.md', relativePath: 'docs/a.md' },
+      { text: 'docs/b.md', relativePath: 'docs/b.md' },
+    ],
+  )
+})
+
 test('preserves backticks while detecting the Markdown path inside them', () => {
   assert.deepEqual(findTerminalMarkdownLinks('`README.md`'), [{
     text: '`README.md`',

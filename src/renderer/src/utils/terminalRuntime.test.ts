@@ -662,6 +662,24 @@ test('exposes selection and paste operations on the persistent xterm instance', 
   assert.deepEqual(terminal.pastedData, ['pasted text', 'pasted while parked'])
 })
 
+test('clears an operation error when dismissed or when the user types', async () => {
+  const harness = createRuntimeHarness()
+  harness.options.viewOptions = viewOptions({
+    onOpenFileTile: () => { throw new Error('Path must be relative to the files folder') },
+  })
+  const runtime = await createReadyRuntime(harness)
+
+  runtime.openFileTile('/src/a.ts')
+  assert.equal(runtime.getSnapshot().error, 'Path must be relative to the files folder')
+  runtime.clearError()
+  assert.equal(runtime.getSnapshot().error, null)
+
+  runtime.openFileTile('/src/a.ts')
+  harness.terminals[0].emitInput('x')
+  assert.equal(runtime.getSnapshot().error, null)
+  await runtime.dispose(false)
+})
+
 test('detaches without destroying when create returns an identity for another target', async () => {
   const harness = createRuntimeHarness({
     createResult: {
