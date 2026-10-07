@@ -202,8 +202,6 @@ type TranslationResources = {
     closeActiveSessionTitle: string
     closeWorkingSessionMessage: string
     closeNeedsInputSessionMessage: string
-    sessionCount: string
-    newSession: string
     emptyTitle: string
     emptyDescription: string
     newAgentSession: string
@@ -1061,8 +1059,6 @@ const en: TranslationResources = {
     closeActiveSessionTitle: 'Close agent session?',
     closeWorkingSessionMessage: 'The agent is still working. Closing the session interrupts it.',
     closeNeedsInputSessionMessage: 'The agent has not finished and is waiting for your input. Closing the session stops it.',
-    sessionCount: '{{count}} sessions',
-    newSession: 'New session',
     emptyTitle: 'No agent sessions in this view',
     emptyDescription: 'Start a session to see its live terminal here.',
     newAgentSession: 'New agent session',
@@ -1879,8 +1875,6 @@ const es: TranslationResources = {
     closeActiveSessionTitle: '¿Cerrar la sesión del agente?',
     closeWorkingSessionMessage: 'El agente sigue trabajando. Cerrar la sesión lo interrumpe.',
     closeNeedsInputSessionMessage: 'El agente no terminó y está esperando tu respuesta. Cerrar la sesión lo detiene.',
-    sessionCount: '{{count}} sesiones',
-    newSession: 'Nueva sesión',
     emptyTitle: 'No hay sesiones de agentes en esta vista',
     emptyDescription: 'Inicia una sesión para ver aquí su terminal en vivo.',
     newAgentSession: 'Nueva sesión de agente',
