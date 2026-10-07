@@ -103,6 +103,7 @@ const agentAlerts = new SemanticAgentAlertState({
           event: state.event,
           priority: state.priority,
           sessionTitle: session?.title ?? null,
+          surface: session?.surface ?? 'tile',
         }
         window.webContents.send('agents:alert', alertEvent)
       }

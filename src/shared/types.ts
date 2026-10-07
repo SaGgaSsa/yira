@@ -696,6 +696,7 @@ export interface AgentAlertEvent {
   event: 'completed' | 'permission' | 'input'
   priority: 'normal' | 'intervention'
   sessionTitle: string | null
+  surface: AgentSessionSurface
 }
 
 export interface AgentAlertNotificationRequest {
@@ -703,11 +704,13 @@ export interface AgentAlertNotificationRequest {
   body: string
   workspaceId: string | null
   tileId: string
+  surface: AgentSessionSurface
 }
 
 export interface AgentAlertNotificationTarget {
   workspaceId: string | null
   tileId: string
+  surface: AgentSessionSurface
 }
 
 export type NotificationAttentionReason =

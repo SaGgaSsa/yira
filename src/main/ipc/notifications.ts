@@ -3,6 +3,7 @@ import type { IpcMainInvokeEvent } from 'electron'
 import type {
   AgentAlertNotificationRequest,
   AgentAlertNotificationTarget,
+  AgentSessionSurface,
   NotificationAttentionOptions,
   NotificationAttentionResult,
 } from '@shared/types'
@@ -18,6 +19,7 @@ function normalizeAgentAlertNotificationRequest(input: unknown): AgentAlertNotif
   if (typeof request.title !== 'string' || typeof request.body !== 'string') return null
   if (typeof request.tileId !== 'string') return null
   if (request.workspaceId !== null && typeof request.workspaceId !== 'string') return null
+  if (!isAgentSessionSurface(request.surface)) return null
 
   const title = request.title.trim()
   const body = request.body.trim()
@@ -29,7 +31,12 @@ function normalizeAgentAlertNotificationRequest(input: unknown): AgentAlertNotif
     body: body.slice(0, 240),
     workspaceId: request.workspaceId,
     tileId,
+    surface: request.surface,
   }
+}
+
+function isAgentSessionSurface(value: unknown): value is AgentSessionSurface {
+  return value === 'tile' || value === 'agents-view'
 }
 
 function getEventWindow(event: IpcMainInvokeEvent): BrowserWindow | null {
@@ -50,7 +57,11 @@ function escapeXml(value: string): string {
 // Windows activates toasts through COM, so a click can arrive after the
 // Notification object is gone. The launch argument carries the target tile.
 function buildAgentAlertToastXml(request: AgentAlertNotificationRequest): string {
-  const target: AgentAlertNotificationTarget = { workspaceId: request.workspaceId, tileId: request.tileId }
+  const target: AgentAlertNotificationTarget = {
+    workspaceId: request.workspaceId,
+    tileId: request.tileId,
+    surface: request.surface,
+  }
   const launch = AGENT_ALERT_LAUNCH_PREFIX + JSON.stringify(target)
   return [
     `<toast launch="${escapeXml(launch)}" activationType="foreground" duration="long">`,
@@ -69,7 +80,8 @@ function parseAgentAlertLaunch(argumentsText: string): AgentAlertNotificationTar
     const parsed = JSON.parse(argumentsText.slice(AGENT_ALERT_LAUNCH_PREFIX.length)) as Record<string, unknown>
     if (typeof parsed.tileId !== 'string' || !parsed.tileId) return null
     if (parsed.workspaceId !== null && typeof parsed.workspaceId !== 'string') return null
-    return { workspaceId: parsed.workspaceId, tileId: parsed.tileId }
+    if (!isAgentSessionSurface(parsed.surface)) return null
+    return { workspaceId: parsed.workspaceId, tileId: parsed.tileId, surface: parsed.surface }
   } catch {
     return null
   }
@@ -137,6 +149,7 @@ export function registerNotificationIPC(getMainWindow: () => BrowserWindow | nul
         focusAgentAlertTarget(getEventWindow(event), {
           workspaceId: request.workspaceId,
           tileId: request.tileId,
+          surface: request.surface,
         })
       })
       notification.show()
