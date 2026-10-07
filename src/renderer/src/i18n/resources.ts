@@ -34,6 +34,11 @@ type TranslationResources = {
     newWorkspace: string
     openFolder: string
     manageWorkspaces: string
+    crashTitle: string
+    crashDescription: string
+    crashDetails: string
+    crashCopy: string
+    crashReload: string
   }
   sidebar: {
     groups: string
@@ -850,6 +855,11 @@ const en: TranslationResources = {
     newWorkspace: 'New Workspace',
     openFolder: 'Open Folder',
     manageWorkspaces: 'Manage Workspaces',
+    crashTitle: 'Something went wrong',
+    crashDescription: 'The window hit an unexpected error. Terminals and agents keep running in the background; reloading the window reconnects to them.',
+    crashDetails: 'Error details',
+    crashCopy: 'Copy details',
+    crashReload: 'Reload window',
   },
   sidebar: {
     groups: 'Groups',
@@ -1666,6 +1676,11 @@ const es: TranslationResources = {
     newWorkspace: 'Nuevo espacio de trabajo',
     openFolder: 'Abrir carpeta',
     manageWorkspaces: 'Administrar espacios de trabajo',
+    crashTitle: 'Algo salió mal',
+    crashDescription: 'La ventana tuvo un error inesperado. Las terminales y los agentes siguen corriendo en segundo plano; al recargar la ventana se vuelve a conectar a ellos.',
+    crashDetails: 'Detalle del error',
+    crashCopy: 'Copiar detalle',
+    crashReload: 'Recargar ventana',
   },
   sidebar: {
     groups: 'Grupos',
