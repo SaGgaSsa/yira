@@ -1,8 +1,16 @@
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import test from 'node:test'
 
 import type { ShellProfile } from '@shared/types'
-import { buildAgentShellCommand, resolveAgentShellProfile } from './shellLaunch'
+import {
+  buildAgentShellCommand,
+  buildWorkspaceScriptShellCommand,
+  resolveAgentShellProfile,
+} from './shellLaunch'
 
 const shellProfiles: ShellProfile[] = [
   { id: 'powershell', label: 'PowerShell', shell: 'powershell.exe', args: [], available: true },
@@ -135,4 +143,61 @@ test('rejects PowerShell arguments with quote, percent, or line break characters
       platform: 'win32',
     }), /PowerShell cannot pass safely/)
   }
+})
+
+test('runs workspace scripts in a profile-loading PowerShell command and propagates native exit codes', () => {
+  const args = buildWorkspaceScriptShellCommand({
+    shellProfileId: 'powershell',
+    command: 'npm run dev',
+    platform: 'win32',
+  })
+  const script = Buffer.from(args[1], 'base64').toString('utf16le')
+
+  assert.equal(args[0], '-EncodedCommand')
+  assert.match(script, /\$global:LASTEXITCODE = \$null/)
+  assert.match(script, /FromBase64String\('[A-Za-z0-9+/=]+'\)/)
+  assert.match(script, /& \(\[scriptblock\]::Create\(\$scriptText\)\)/)
+  assert.match(script, /exit \$scriptExitCode/)
+  assert.match(script, /if \(\$null -ne \$scriptExitCode -and \$scriptExitCode -ne 0\) \{ exit \$scriptExitCode \}/)
+  assert.match(script, /if \(-not \$scriptSucceeded\) \{ exit 1 \}/)
+})
+
+test('PowerShell workspace scripts exit with the command status, including .ps1 shims', { skip: process.platform !== 'win32' }, async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'yira-script-exit-'))
+  try {
+    // npm, pnpm and yarn resolve to .ps1 shims in PowerShell; their failures only show up in LASTEXITCODE.
+    const shim = join(directory, 'shim.ps1')
+    await writeFile(shim, 'exit 4\r\n')
+    const run = (command: string): number | null => spawnSync('powershell.exe', [
+      '-NoLogo',
+      '-NoProfile',
+      '-ExecutionPolicy',
+      'Bypass',
+      ...buildWorkspaceScriptShellCommand({ shellProfileId: 'powershell', command, platform: 'win32' }),
+    ], { windowsHide: true }).status
+
+    assert.equal(run(`& '${shim}'`), 4)
+    assert.equal(run('cmd /c exit 3'), 3)
+    assert.equal(run('Write-Output ok'), 0)
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test('runs POSIX workspace scripts through interactive login shells and rejects multiline commands', () => {
+  assert.deepEqual(buildWorkspaceScriptShellCommand({
+    shellProfileId: 'bash',
+    command: 'npm run dev',
+    platform: 'linux',
+  }), ['--login', '-i', '-c', 'npm run dev'])
+  assert.deepEqual(buildWorkspaceScriptShellCommand({
+    shellProfileId: 'zsh',
+    command: 'pnpm run dev',
+    platform: 'darwin',
+  }), ['--login', '-i', '-c', 'pnpm run dev'])
+  assert.throws(() => buildWorkspaceScriptShellCommand({
+    shellProfileId: 'bash',
+    command: 'npm run dev\nrm -rf .',
+    platform: 'linux',
+  }), /single line/)
 })

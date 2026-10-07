@@ -1,3 +1,6 @@
+import assert from 'node:assert/strict'
+import test from 'node:test'
+import type { WorkspaceCustomScript } from './types'
 import { normalizeWorkspaceConfig } from './workspaceConfig'
 
 type SourceControlConfigInput = Parameters<typeof normalizeWorkspaceConfig>[0] & {
@@ -216,3 +219,51 @@ if (malformedRemote.remoteTerminal !== undefined) throw new Error('malformed rem
 
 const legacy = normalizeWorkspaceConfig({ type: 'legacy' as 'grid' })
 if (legacy.type !== 'canvas') throw new Error('legacy workspace type must normalize to canvas')
+
+test('normalizes valid and duplicate custom workspace scripts', () => {
+  const config = normalizeWorkspaceConfig({
+    customScripts: [
+      { id: ' first_id ', name: '  Start app  ', command: '  npm run dev  ' },
+      { id: 'first_id', name: 'Ignored duplicate', command: 'npm run other' },
+      { id: 'second-id', name: 'Check', command: 'npm test' },
+    ],
+  })
+
+  assert.deepEqual(config.customScripts, [
+    { id: 'first_id', name: 'Start app', command: 'npm run dev' },
+    { id: 'second-id', name: 'Check', command: 'npm test' },
+  ])
+})
+
+test('discards invalid custom workspace scripts and leaves an empty list undefined', () => {
+  const config = normalizeWorkspaceConfig({
+    customScripts: [
+      { id: '', name: 'No id', command: 'run' },
+      { id: 'bad id', name: 'Bad id', command: 'run' },
+      { id: 'empty-name', name: '  ', command: 'run' },
+      { id: 'empty-command', name: 'No command', command: '  ' },
+      { id: 'multiline', name: 'Multiline', command: 'first\nsecond' },
+      { id: 'carriage-return', name: 'Carriage return', command: 'first\rsecond' },
+      { id: 'nul-name', name: 'Bad\u0000name', command: 'run' },
+      { id: 'nul-command', name: 'Bad command', command: 'run\u0000now' },
+      { id: 'too-long-name', name: 'n'.repeat(81), command: 'run' },
+      { id: 'too-long-command', name: 'Long command', command: 'x'.repeat(2001) },
+      { id: 'i'.repeat(65), name: 'Long id', command: 'run' },
+    ] as unknown as WorkspaceCustomScript[],
+  })
+
+  assert.equal(config.customScripts, undefined)
+
+  const missing = normalizeWorkspaceConfig({ customScripts: [] })
+  assert.equal(missing.customScripts, undefined)
+})
+
+test('limits normalized custom workspace scripts to fifty entries', () => {
+  const customScripts = Array.from({ length: 51 }, (_, index) => ({
+    id: `script-${index}`,
+    name: `Script ${index}`,
+    command: `run ${index}`,
+  }))
+
+  assert.equal(normalizeWorkspaceConfig({ customScripts }).customScripts?.length, 50)
+})

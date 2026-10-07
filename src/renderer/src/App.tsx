@@ -783,14 +783,15 @@ function AppContent(): React.ReactElement {
     const retainedAgentSessionTiles = agentSessionSnapshotRef.current.sessions
       .filter((session) => session.workspaceId === workspace.id && session.surface === 'agents-view')
       .map((session) => ({ id: session.tileId, type: 'terminal' as const }))
-    // Snapshot IDs protect announced sessions; the registry prefix fallback protects sessions created before the next snapshot arrives.
-    const pendingAgentRuntimeTiles = registry.listTargets()
-      .filter((target) => target.workspaceId === workspace.id && target.tileId.startsWith('agent-'))
+    // Keep non-tile sessions attached to the registry when pruning workspace tile runtimes.
+    const pendingWorkspaceSessionTiles = registry.listTargets()
+      .filter((target) => target.workspaceId === workspace.id
+        && (target.tileId.startsWith('agent-') || target.tileId.startsWith('script-')))
       .map((target) => ({ id: target.tileId, type: 'terminal' as const }))
     await pruneWorkspaceTerminalRuntimes(registry, workspace.id, [
       ...restoredState.tiles,
       ...retainedAgentSessionTiles,
-      ...pendingAgentRuntimeTiles,
+      ...pendingWorkspaceSessionTiles,
     ])
     if (transitionId !== workspaceTransitionRef.current) return
 
@@ -920,6 +921,7 @@ function AppContent(): React.ReactElement {
             type: 'canvas',
             rootFolderPath: '',
             initialCommand: '',
+            customScripts: [],
             terminalHistoryEnabled: true,
             remoteTerminal: { host: '', user: '' },
             agentProvider: undefined,
@@ -1229,6 +1231,7 @@ function AppContent(): React.ReactElement {
           name: workspace.name,
           rootFolderPath: workspace.config.rootFolderPath ?? '',
           initialCommand: workspace.config.initialCommand ?? '',
+          customScripts: workspace.config.customScripts ?? [],
           terminalHistoryEnabled: workspace.config.terminalHistoryEnabled !== false,
           remoteTerminal: workspace.config.remoteTerminal ?? { host: '', user: '' },
           agentProvider: workspace.config.agentProvider,
@@ -1852,6 +1855,7 @@ function AppContent(): React.ReactElement {
         name: value.name,
         rootFolderPath: value.rootFolderPath || undefined,
         initialCommand: value.initialCommand || undefined,
+        customScripts: value.customScripts ?? [],
         terminalHistoryEnabled: value.terminalHistoryEnabled,
         remoteTerminal: value.remoteTerminal,
         agentProvider: value.agentProvider,
@@ -1869,6 +1873,7 @@ function AppContent(): React.ReactElement {
       config: {
         rootFolderPath: value.rootFolderPath || undefined,
         initialCommand: value.initialCommand || undefined,
+        customScripts: value.customScripts ?? [],
         terminalHistoryEnabled: value.terminalHistoryEnabled,
         remoteTerminal: value.remoteTerminal,
         agentProvider: value.agentProvider,
@@ -1959,6 +1964,7 @@ function AppContent(): React.ReactElement {
           name: '',
           rootFolderPath: '',
           initialCommand: '',
+          customScripts: [],
           terminalHistoryEnabled: true,
           remoteTerminal: { host: '', user: '' },
           agentProvider: undefined,
@@ -2352,6 +2358,10 @@ function AppContent(): React.ReactElement {
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-bg-primary text-text-primary">
       <TopBar
         hasWorkspace={Boolean(activeWorkspaceId)}
+        workspaceId={activeWorkspaceId ?? undefined}
+        workspaceName={activeWorkspaceName}
+        workspaceConfig={activeWorkspaceConfig}
+        onEditWorkspaceScripts={() => openActiveWorkspaceEditor('scripts')}
         zoom={viewport.zoom}
         viewMode={viewMode}
         splitOrientation={splitViewState.orientation}
@@ -2839,6 +2849,7 @@ function AppContent(): React.ReactElement {
       />
       <WorkspaceDialog
         request={workspaceEditor?.request ?? null}
+        allowCustomScripts
         onCancel={() => {
           if (workspaceEditor?.request.canCancel === false) return
           setWorkspaceEditor(null)

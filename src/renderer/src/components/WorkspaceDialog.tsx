@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ExternalLink, FolderOpen, GitBranch, Grid3X3, History, Info, LayoutGrid, TerminalSquare, X } from 'lucide-react'
+import { ExternalLink, FolderOpen, GitBranch, Grid3X3, History, Info, LayoutGrid, Plus, TerminalSquare, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import type { AgentProvider, AgentProvidersConfig, ClaudeStatusLineState, GitRepository, RemoteTerminalConfig, WakeOnLanConfig, WorkspaceType } from '@shared/types'
+import type { AgentProvider, AgentProvidersConfig, ClaudeStatusLineState, GitRepository, RemoteTerminalConfig, WakeOnLanConfig, WorkspaceCustomScript, WorkspaceType } from '@shared/types'
 import { normalizeAgentProvidersConfig, normalizeWorkspaceAgentProvider } from '@shared/workspaceConfig'
 import { useSettingsStore } from '@/store/settingsStore'
 import { getEffectiveAgentProvider } from '@/utils/effectiveAgent'
@@ -12,6 +12,7 @@ export interface WorkspaceDialogValue {
   name: string
   rootFolderPath: string
   initialCommand: string
+  customScripts?: WorkspaceCustomScript[]
   terminalHistoryEnabled: boolean
   remoteTerminal: RemoteTerminalConfig
   agentProvider?: AgentProvider
@@ -35,6 +36,7 @@ interface WorkspaceDialogProps {
   request: WorkspaceDialogRequest | null
   onCancel: () => void
   onConfirm: (value: WorkspaceDialogValue) => void
+  allowCustomScripts?: boolean
 }
 
 const WAKE_ON_LAN_MAC_PATTERN = /^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$/i
@@ -90,6 +92,9 @@ export function normalizeValue(value: WorkspaceDialogValue): WorkspaceDialogValu
     name: value.name.trim(),
     rootFolderPath: value.rootFolderPath.trim(),
     initialCommand: value.initialCommand.trim(),
+    customScripts: (value.customScripts ?? [])
+      .map((script) => ({ ...script, name: script.name.trim(), command: script.command.trim() }))
+      .filter((script) => script.name && script.command),
     terminalHistoryEnabled: value.terminalHistoryEnabled,
     remoteTerminal: {
       host: value.remoteTerminal.host.trim(),
@@ -103,9 +108,9 @@ export function normalizeValue(value: WorkspaceDialogValue): WorkspaceDialogValu
   }
 }
 
-type WorkspaceDialogTabId = 'general' | 'terminal' | 'agents' | 'sourceControl'
+type WorkspaceDialogTabId = 'general' | 'terminal' | 'scripts' | 'agents' | 'sourceControl'
 
-export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialogProps): React.ReactElement | null {
+export function WorkspaceDialog({ request, onCancel, onConfirm, allowCustomScripts = false }: WorkspaceDialogProps): React.ReactElement | null {
   const { t } = useTranslation()
   const agents = useSettingsStore((state) => state.agents)
   const nameInputRef = useRef<HTMLInputElement | null>(null)
@@ -243,6 +248,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
   const tabs: Array<{ id: WorkspaceDialogTabId; label: string }> = [
     { id: 'general', label: t('workspace.general') },
     { id: 'terminal', label: t('workspace.terminal') },
+    ...(allowCustomScripts ? [{ id: 'scripts' as const, label: t('workspace.scripts') }] : []),
     { id: 'agents', label: t('workspace.agents') },
     { id: 'sourceControl', label: t('workspace.sourceControl') },
   ]
@@ -257,6 +263,29 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
           args,
         },
       },
+    } : current)
+  }
+
+  const addCustomScript = () => {
+    const script: WorkspaceCustomScript = {
+      id: crypto.randomUUID().replace(/-/g, '').slice(0, 64),
+      name: '',
+      command: '',
+    }
+    setValue((current) => current ? { ...current, customScripts: [...(current.customScripts ?? []), script] } : current)
+  }
+
+  const updateCustomScript = (id: string, patch: Partial<WorkspaceCustomScript>) => {
+    setValue((current) => current ? {
+      ...current,
+      customScripts: (current.customScripts ?? []).map((script) => script.id === id ? { ...script, ...patch } : script),
+    } : current)
+  }
+
+  const removeCustomScript = (id: string) => {
+    setValue((current) => current ? {
+      ...current,
+      customScripts: (current.customScripts ?? []).filter((script) => script.id !== id),
     } : current)
   }
 
@@ -628,6 +657,66 @@ export function WorkspaceDialog({ request, onCancel, onConfirm }: WorkspaceDialo
                 </label>
               </section>
             </div>
+          )}
+
+          {activeTab === 'scripts' && allowCustomScripts && (
+            <section data-testid="workspace-custom-scripts" className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
+              <div className="mb-4 flex items-center gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="nd-label text-text-secondary">{t('workspace.scripts')}</div>
+                  <p className="mt-1 text-xs leading-5 text-text-disabled">{t('workspace.customScriptsHelp')}</p>
+                </div>
+                <button
+                  type="button"
+                  className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-border-visible px-2.5 text-xs text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
+                  onClick={addCustomScript}
+                >
+                  <Plus size={13} />
+                  <span>{t('workspace.addCustomScript')}</span>
+                </button>
+              </div>
+              {(value.customScripts ?? []).length === 0 ? (
+                <div className="rounded-md border border-border-visible px-3 py-3 text-sm text-text-disabled" role="status">
+                  {t('workspace.noCustomScripts')}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {(value.customScripts ?? []).map((script) => (
+                    <div key={script.id} className="grid gap-3 rounded-[16px] border border-border-visible bg-bg-primary p-3 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)_32px] sm:items-end">
+                      <label className="block min-w-0">
+                        <span className="nd-label mb-2 block text-text-secondary">{t('workspace.customScriptName')}</span>
+                        <input
+                          className="w-full rounded-md border border-border-visible bg-bg-secondary px-3 py-2 font-mono text-sm text-text-display outline-none"
+                          value={script.name}
+                          onChange={(event) => updateCustomScript(script.id, { name: event.target.value })}
+                          placeholder={t('workspace.customScriptNamePlaceholder')}
+                          spellCheck={false}
+                        />
+                      </label>
+                      <label className="block min-w-0">
+                        <span className="nd-label mb-2 block text-text-secondary">{t('workspace.customScriptCommand')}</span>
+                        <input
+                          className="w-full rounded-md border border-border-visible bg-bg-secondary px-3 py-2 font-mono text-sm text-text-display outline-none"
+                          value={script.command}
+                          onChange={(event) => updateCustomScript(script.id, { command: event.target.value })}
+                          placeholder={t('workspace.customScriptCommandPlaceholder')}
+                          spellCheck={false}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-hover-bg hover:text-red-300"
+                        onClick={() => removeCustomScript(script.id)}
+                        title={t('workspace.removeCustomScript')}
+                        aria-label={t('workspace.removeCustomScript')}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
           )}
 
           {activeTab === 'agents' && (

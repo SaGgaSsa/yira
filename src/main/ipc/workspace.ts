@@ -60,6 +60,7 @@ export function normalizeWorkspace(workspace: Partial<Workspace> & { id: string;
     remoteTerminal: workspace.config?.remoteTerminal,
     agentProvider: workspace.config?.agentProvider,
     agentProviders: workspace.config?.agentProviders,
+    customScripts: workspace.config?.customScripts,
   })
   const selection = normalizeWorkspaceSelectionMetadata(workspace)
 
@@ -230,6 +231,7 @@ export function createWorkspaceFromInput(input: WorkspaceCreateInput): Workspace
       remoteTerminal: input.remoteTerminal,
       agentProvider: input.agentProvider,
       agentProviders: input.agentProviders,
+      customScripts: input.customScripts,
     }),
   }
 }
@@ -252,6 +254,9 @@ export function updateWorkspace(workspace: Workspace, patch: WorkspaceUpdatePatc
   const hasInitialCommandPatch = patch.config !== undefined
     && patch.config !== null
     && Object.prototype.hasOwnProperty.call(patch.config, 'initialCommand')
+  const hasCustomScriptsPatch = patch.config !== undefined
+    && patch.config !== null
+    && Object.prototype.hasOwnProperty.call(patch.config, 'customScripts')
   const nextRootFolderPath = normalizeWorkspaceRootFolderPath(
     hasRootFolderPathPatch ? patch.config?.rootFolderPath : workspace.config.rootFolderPath,
   )
@@ -271,6 +276,7 @@ export function updateWorkspace(workspace: Workspace, patch: WorkspaceUpdatePatc
     remoteTerminal: patch.config?.remoteTerminal ?? workspace.config.remoteTerminal,
     agentProvider: hasAgentProviderPatch ? patch.config?.agentProvider : workspace.config.agentProvider,
     agentProviders: mergeAgentProvidersConfig(workspace.config.agentProviders, patch.config?.agentProviders),
+    customScripts: hasCustomScriptsPatch ? patch.config?.customScripts : workspace.config.customScripts,
   })
   normalizeWorkspaceSelectionInPlace(workspace)
 

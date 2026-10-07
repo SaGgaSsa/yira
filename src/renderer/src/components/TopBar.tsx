@@ -1,12 +1,17 @@
 import React from 'react'
 import { Settings, Grid3X3, LayoutGrid, Columns, PanelLeft, PanelRight, SplitSquareHorizontal, SplitSquareVertical, ClipboardList, Activity, Bot } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import type { AgentProvider, AgentUsageSnapshot, SplitOrientation, ViewMode, WorkspaceType } from '@shared/types'
+import type { AgentProvider, AgentUsageSnapshot, SplitOrientation, ViewMode, WorkspaceConfig, WorkspaceType } from '@shared/types'
 import { AgentUsageIndicator } from './AgentUsageIndicator'
+import { WorkspaceRunControl } from './WorkspaceRunControl'
 import { useSettingsStore } from '@/store/settingsStore'
 
 interface TopBarProps {
   hasWorkspace: boolean
+  workspaceId?: string
+  workspaceName: string
+  workspaceConfig: WorkspaceConfig
+  onEditWorkspaceScripts: () => void
   zoom: number
   viewMode: ViewMode
   splitOrientation: SplitOrientation
@@ -81,6 +86,10 @@ function SegmentedButton({
 
 export function TopBar({
   hasWorkspace,
+  workspaceId,
+  workspaceName,
+  workspaceConfig,
+  onEditWorkspaceScripts,
   zoom,
   viewMode,
   splitOrientation,
@@ -233,6 +242,16 @@ export function TopBar({
                   {zoomPercent}%
                 </button>
               </>
+            )}
+
+            {/* Scripts belong to the active workspace, so the control stays available in Agents View. */}
+            {workspaceId && !activityOpen && (
+              <WorkspaceRunControl
+                workspaceId={workspaceId}
+                workspaceName={workspaceName}
+                workspaceConfig={workspaceConfig}
+                onEditCommands={() => onEditWorkspaceScripts()}
+              />
             )}
 
             {hasWorkspacePanel && !activityOpen && !agentsViewOpen && (

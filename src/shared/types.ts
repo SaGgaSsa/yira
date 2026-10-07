@@ -374,6 +374,49 @@ export interface WorkspaceConfig {
   remoteTerminal?: RemoteTerminalConfig
   agentProvider?: AgentProvider
   agentProviders: AgentProvidersConfig
+  /** User-defined commands shown in the workspace run control next to package.json scripts. */
+  customScripts?: WorkspaceCustomScript[]
+}
+
+/** A command the user saved for a workspace. Stored only in Yira's workspace config. */
+export interface WorkspaceCustomScript {
+  id: string
+  name: string
+  command: string
+}
+
+export type WorkspaceScriptSource = 'package' | 'custom'
+
+/** A runnable workspace script, discovered from package.json or saved by the user. */
+export interface WorkspaceScript {
+  /** Stable id: `package:<relative dir or .>:<script name>` or `custom:<custom script id>`. */
+  id: string
+  name: string
+  /** Command line the shell runs, for example `npm run dev`. */
+  command: string
+  source: WorkspaceScriptSource
+  /** Absolute directory the command runs in. */
+  cwd: string
+  /** Directory relative to the workspace root for package scripts; `.` for the root. */
+  packageDirectory?: string
+}
+
+export type WorkspaceScriptRunState = 'running' | 'exited'
+
+/** A daemon terminal session started for a workspace script. */
+export interface WorkspaceScriptRun {
+  scriptId: string
+  /** Terminal session tile id, always prefixed with `script-`. */
+  tileId: string
+  state: WorkspaceScriptRunState
+  exitCode?: number
+  startedAt: string
+}
+
+export interface WorkspaceScriptsSnapshot {
+  workspaceId: string
+  scripts: WorkspaceScript[]
+  runs: WorkspaceScriptRun[]
 }
 
 export type WorkspaceConfigInput = Omit<Partial<WorkspaceConfig>, 'agentProviders'> & {
@@ -393,6 +436,7 @@ export interface WorkspaceCreateInput {
   remoteTerminal?: RemoteTerminalConfig
   agentProvider?: AgentProvider
   agentProviders?: AgentProvidersConfigInput
+  customScripts?: WorkspaceCustomScript[]
 }
 
 export interface WorkspaceManagementEntry {
