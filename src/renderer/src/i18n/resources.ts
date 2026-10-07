@@ -48,6 +48,34 @@ type TranslationResources = {
     workspaceActions: string
     collapse: string
     open: string
+    home: string
+    activeSection: string
+    inactiveSection: string
+  }
+  workspaceHome: {
+    title: string
+    subtitle: string
+    newProject: string
+    newProjectDescription: string
+    lastUsedMinute_one: string
+    lastUsedMinute_other: string
+    lastUsedHour_one: string
+    lastUsedHour_other: string
+    lastUsedDay_one: string
+    lastUsedDay_other: string
+    lastUsedWeek_one: string
+    lastUsedWeek_other: string
+  }
+  workspaceAgents: {
+    statusWaiting: string
+    statusReady: string
+    statusWorking: string
+    waitingCount_one: string
+    waitingCount_other: string
+    readyCount_one: string
+    readyCount_other: string
+    workingCount_one: string
+    workingCount_other: string
   }
   activity: {
     activity: string
@@ -880,6 +908,34 @@ const en: TranslationResources = {
     workspaceActions: 'Workspace actions',
     collapse: 'Collapse sidebar',
     open: 'Open sidebar',
+    home: 'Home',
+    activeSection: 'Active',
+    inactiveSection: 'Inactive',
+  },
+  workspaceHome: {
+    title: 'What are you working on?',
+    subtitle: 'Pick up where you left off, or start a new workspace.',
+    newProject: 'New project',
+    newProjectDescription: 'Set up a workspace for a new project.',
+    lastUsedMinute_one: '{{count}} minute ago',
+    lastUsedMinute_other: '{{count}} minutes ago',
+    lastUsedHour_one: '{{count}} hour ago',
+    lastUsedHour_other: '{{count}} hours ago',
+    lastUsedDay_one: '{{count}} day ago',
+    lastUsedDay_other: '{{count}} days ago',
+    lastUsedWeek_one: '{{count}} week ago',
+    lastUsedWeek_other: '{{count}} weeks ago',
+  },
+  workspaceAgents: {
+    statusWaiting: 'Waiting for your reply',
+    statusReady: 'Finished',
+    statusWorking: 'Working',
+    waitingCount_one: '{{count}} waiting',
+    waitingCount_other: '{{count}} waiting',
+    readyCount_one: '{{count}} ready',
+    readyCount_other: '{{count}} ready',
+    workingCount_one: '{{count}} working',
+    workingCount_other: '{{count}} working',
   },
   activity: {
     activity: 'Activity',
@@ -1712,6 +1768,34 @@ const es: TranslationResources = {
     workspaceActions: 'Acciones del espacio de trabajo',
     collapse: 'Contraer barra lateral',
     open: 'Abrir barra lateral',
+    home: 'Inicio',
+    activeSection: 'Activos',
+    inactiveSection: 'Inactivos',
+  },
+  workspaceHome: {
+    title: '¿Con qué vas a trabajar?',
+    subtitle: 'Retoma un espacio de trabajo o crea uno nuevo.',
+    newProject: 'Nuevo proyecto',
+    newProjectDescription: 'Configura un espacio de trabajo para empezar.',
+    lastUsedMinute_one: 'hace {{count}} minuto',
+    lastUsedMinute_other: 'hace {{count}} minutos',
+    lastUsedHour_one: 'hace {{count}} hora',
+    lastUsedHour_other: 'hace {{count}} horas',
+    lastUsedDay_one: 'hace {{count}} día',
+    lastUsedDay_other: 'hace {{count}} días',
+    lastUsedWeek_one: 'hace {{count}} semana',
+    lastUsedWeek_other: 'hace {{count}} semanas',
+  },
+  workspaceAgents: {
+    statusWaiting: 'Esperando respuesta',
+    statusReady: 'Terminado',
+    statusWorking: 'Trabajando',
+    waitingCount_one: '{{count}} esperando',
+    waitingCount_other: '{{count}} esperando',
+    readyCount_one: '{{count}} listo',
+    readyCount_other: '{{count}} listos',
+    workingCount_one: '{{count}} trabajando',
+    workingCount_other: '{{count}} trabajando',
   },
   activity: {
     activity: 'Actividad',
