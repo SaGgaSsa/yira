@@ -319,6 +319,41 @@ test('terminal protocol replies do not restore working status or clear an agent 
   assert.equal(registry.get(identity.workspaceId, identity.tileId)?.status, 'working')
 })
 
+test('an agent found running after a restart starts idle and a new one starts working', async () => {
+  const transport = new FakeTransport()
+  const registry = new AgentSessionRegistry({ now: () => 1_700_000_000_000 })
+  const agent = { provider: 'claude' as const, sessionId: 'resume-4', startedAt: '2024-01-01T00:00:00.000Z' }
+  transport.setHandler('attach', () => snapshot({ agent }))
+  const restored = createSessions(transport, { registry })
+  await restored.attach(target)
+  assert.equal(registry.get(identity.workspaceId, identity.tileId)?.status, 'done')
+
+  const freshTransport = new FakeTransport()
+  const freshRegistry = new AgentSessionRegistry({ now: () => 1_700_000_000_000 })
+  freshTransport.setHandler('attach', () => null)
+  freshTransport.setHandler('create', () => snapshot({ agent }))
+  const fresh = createSessions(freshTransport, { registry: freshRegistry })
+  await fresh.create(target, () => ({ target, executable: '/bin/sh', args: [], cwd: '/tmp', env: {}, cols: 80, rows: 24, local: true }))
+  assert.equal(freshRegistry.get(identity.workspaceId, identity.tileId)?.status, 'working')
+})
+
+test('typing does not start a turn and Esc interrupts one', async () => {
+  const transport = new FakeTransport()
+  const registry = new AgentSessionRegistry({ now: () => 1_700_000_000_000 })
+  const agent = { provider: 'claude' as const, sessionId: 'resume-5', startedAt: '2024-01-01T00:00:00.000Z' }
+  transport.setHandler('attach', () => snapshot({ agent }))
+  transport.setHandler('write', () => null)
+  const sessions = createSessions(transport, { registry })
+  await sessions.attach(target)
+
+  await sessions.write(identity, 'draft a reply')
+  assert.equal(registry.get(identity.workspaceId, identity.tileId)?.status, 'done')
+  await sessions.write(identity, '\r')
+  assert.equal(registry.get(identity.workspaceId, identity.tileId)?.status, 'working')
+  await sessions.write(identity, '\u001b')
+  assert.equal(registry.get(identity.workspaceId, identity.tileId)?.status, 'done')
+})
+
 test('workspace deletion waits for an in-flight create and blocks a later create', async () => {
   const transport = new FakeTransport()
   transport.setHandler('attach', () => null)

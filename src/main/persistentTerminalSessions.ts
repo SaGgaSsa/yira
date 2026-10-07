@@ -16,7 +16,7 @@ import {
 import type { TerminalCreateResult } from '@shared/types'
 import { agentSessionRegistry, type AgentSessionRegistry } from './agents/registry'
 import { AgentTerminalTitleTracker } from './agents/terminalTitle'
-import { isTerminalProtocolReply } from './agents/terminal'
+import { classifyAgentInput } from './agents/terminal'
 import type { TerminalProcessRoot } from './terminalProcessActivity'
 
 /** The small transport surface used by the integration and by its tests. */
@@ -303,7 +303,7 @@ export class PersistentTerminalSessions {
         throw new Error('Terminal workspace is being deleted')
       }
       const created = await client.request('create', spawn)
-      if (!this.adoptSnapshot(created)) {
+      if (!this.adoptSnapshot(created, 'created')) {
         const currentSnapshot = this.sessions.get(identityKey(created.identity))?.snapshot
         if (!currentSnapshot) throw new Error('Terminal session identity is stale')
         return cloneSnapshot(currentSnapshot)
@@ -395,8 +395,9 @@ export class PersistentTerminalSessions {
   async write(identity: TerminalSessionIdentity, data: string): Promise<void> {
     const client = await this.ensureClient()
     await client.request('write', { identity, data })
-    if (data && !isTerminalProtocolReply(data)) {
-      this.registry.recordActivity(identity.workspaceId, identity.tileId)
+    const inputKind = classifyAgentInput(data)
+    if (inputKind) {
+      this.registry.recordActivity(identity.workspaceId, identity.tileId, inputKind)
       this.broadcastAlert(identity, null)
     }
   }
@@ -524,7 +525,11 @@ export class PersistentTerminalSessions {
     return record
   }
 
-  private adoptSnapshot(snapshot: TerminalDaemonSnapshot): boolean {
+  /**
+   * An agent found already running (after an app restart) has no record of
+   * its turn, so it starts idle; only a session created now starts working.
+   */
+  private adoptSnapshot(snapshot: TerminalDaemonSnapshot, origin: 'created' | 'existing' = 'existing'): boolean {
     const key = identityKey(snapshot.identity)
     const targetKey = keyFor(snapshot.identity)
     if (this.destroyedWorkspaces.has(snapshot.identity.workspaceId)) return false
@@ -559,6 +564,7 @@ export class PersistentTerminalSessions {
         workspaceId: snapshot.identity.workspaceId,
         provider: snapshot.agent.provider,
         startedAt: snapshot.agent.startedAt,
+        initialStatus: origin === 'created' ? 'working' : 'done',
         ...(snapshot.agent.surface !== undefined ? { surface: snapshot.agent.surface } : {}),
         ...(snapshot.agent.title !== undefined ? { title: snapshot.agent.title } : {}),
         ...(snapshot.agent.worktreeRoot !== undefined ? { worktreeRoot: snapshot.agent.worktreeRoot } : {}),

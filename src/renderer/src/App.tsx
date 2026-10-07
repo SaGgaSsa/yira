@@ -2572,8 +2572,6 @@ function AppContent(): React.ReactElement {
                           onOpenAgent={openActivityPaletteAgent}
                           active={workspace.id === activeWorkspaceId}
                           sessionActive={sessionActiveWorkspaceIds.has(workspace.id)}
-                          attentionCount={workspaceAttentionCounts[workspace.id] ?? 0}
-                          recentOutputCount={recentOutputCounts[workspace.id] ?? 0}
                           onClick={() => {
                             agentsView.close()
                             agentsView.closeSessionDialog()

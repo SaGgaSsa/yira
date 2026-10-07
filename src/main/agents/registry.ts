@@ -21,7 +21,12 @@ export interface AgentSessionRegistration {
   worktreeRoot?: string
   worktreeBranch?: string
   worktrees?: Array<{ path: string; baseSha: string }>
+  /** Status before any hook or input arrives. Defaults to 'working'. */
+  initialStatus?: 'working' | 'done'
 }
+
+/** What user input means for the turn: see classifyAgentInput. */
+export type AgentInputKind = 'typing' | 'submit' | 'interrupt'
 
 export interface AgentSessionRegistryOptions {
   now?: () => number
@@ -108,6 +113,7 @@ function normalizeRegistration(input: AgentSessionRegistration): AgentSessionReg
     ...(worktreeRoot !== undefined ? { worktreeRoot } : {}),
     ...(worktreeBranch !== undefined ? { worktreeBranch } : {}),
     ...(worktrees !== undefined ? { worktrees } : {}),
+    ...(input.initialStatus === 'done' ? { initialStatus: 'done' as const } : {}),
   }
 }
 
@@ -133,12 +139,17 @@ export class AgentSessionRegistry {
     const normalized = normalizeRegistration(input)
     const currentTime = timestamp(this.now)
     const key = sessionKey(normalized.workspaceId, normalized.tileId)
+    const previous = this.sessions.get(key)
+    // Re-registering the same live session keeps the turn status it reached.
+    const keptStatus = previous?.sessionId === normalized.sessionId && previous.status !== 'exited'
+      ? previous.status
+      : undefined
     const session: AgentActiveSession = {
       sessionId: normalized.sessionId,
       tileId: normalized.tileId,
       workspaceId: normalized.workspaceId,
       provider: normalized.provider,
-      status: 'working',
+      status: keptStatus ?? normalized.initialStatus ?? 'working',
       startedAt: normalized.startedAt ?? currentTime,
       lastActivityAt: currentTime,
       ...(normalized.surface !== undefined ? { surface: normalized.surface } : {}),
@@ -235,14 +246,18 @@ export class AgentSessionRegistry {
     return changed
   }
 
-  /** Record terminal input/output activity and clear an intervention episode. */
-  recordActivity(workspaceId: string, tileId: string): boolean {
+  /**
+   * Record user input and clear an intervention episode. Only a submitted
+   * line starts a turn; an interrupt ends one; typing keeps the status.
+   */
+  recordActivity(workspaceId: string, tileId: string, input: AgentInputKind = 'submit'): boolean {
     const workspace = normalizeAgentOpaqueId(workspaceId)
     const tile = normalizeAgentOpaqueId(tileId)
     if (!workspace || !tile) return false
     const session = this.sessions.get(sessionKey(workspace, tile))
     if (!session || session.status === 'exited') return false
-    session.status = 'working'
+    if (input === 'submit') session.status = 'working'
+    else if (input === 'interrupt' && session.status !== 'done') session.status = 'done'
     session.lastActivityAt = timestamp(this.now)
     this.alerts.clearOnInput(tile)
     this.emit()
