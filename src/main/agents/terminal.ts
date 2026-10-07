@@ -7,7 +7,7 @@ import type {
 import { normalizeAgentProviderConfig } from '@shared/workspaceConfig'
 import { normalizeAgentOpaqueId, isAgentProvider } from './query'
 import { buildAgentCommand, normalizeResumeId } from './providers'
-import { AgentSessionRegistry } from './registry'
+import { AgentSessionRegistry, type AgentInputKind } from './registry'
 
 const WINDOWS_ABSOLUTE_PATH = /^[A-Za-z]:[\\/]/
 const UNC_ABSOLUTE_PATH = /^\\\\/
@@ -179,6 +179,20 @@ export function isTerminalProtocolReply(data: string): boolean {
   return TERMINAL_PROTOCOL_REPLY.test(data)
 }
 
+// Pasted text and Alt+Enter (a newline inside the prompt) carry a carriage
+// return without submitting anything.
+const NON_SUBMIT_RETURNS = new RegExp(`${ESC}\\[200~[\\s\\S]*?(?:${ESC}\\[201~|$)|${ESC}\\r`, 'g')
+
+/**
+ * What a chunk of user input means for the agent's turn. Only Enter starts
+ * a turn; Esc or Ctrl+C on their own interrupt it. Any other key is typing.
+ */
+export function classifyAgentInput(data: string): AgentInputKind | null {
+  if (!data || isTerminalProtocolReply(data)) return null
+  if (data === ESC || data === '\u0003') return 'interrupt'
+  return data.replace(NON_SUBMIT_RETURNS, '').includes('\r') ? 'submit' : 'typing'
+}
+
 /**
  * Adapt PTY lifecycle signals to the shared runtime registry. Focus clears
  * semantic attention only; it deliberately never changes the session status.
@@ -197,7 +211,10 @@ export function createAgentTerminalLifecycle({
 
   return {
     onAlert: (alert: unknown) => registry.reportAgentAlert(alert, normalizedWorkspaceId),
-    onInput: (data: string) => data.length > 0 && !isTerminalProtocolReply(data) && registry.recordActivity(normalizedWorkspaceId, normalizedTileId),
+    onInput: (data: string) => {
+      const kind = classifyAgentInput(data)
+      return kind !== null && registry.recordActivity(normalizedWorkspaceId, normalizedTileId, kind)
+    },
     onFocus: () => registry.alerts.clearOnFocus(normalizedTileId),
     onExit: () => {
       if (exited) return false

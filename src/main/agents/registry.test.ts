@@ -73,6 +73,29 @@ test('records activity for an already-working session without changing its state
   assert.equal(registry.get('workspace-1', 'tile-1')?.lastActivityAt, new Date(2_250).toISOString())
 })
 
+test('typing keeps the status, a submit starts a turn and an interrupt ends it', () => {
+  const registry = new AgentSessionRegistry()
+  registry.register({ ...session, initialStatus: 'done' })
+  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'done')
+
+  registry.recordActivity('workspace-1', 'tile-1', 'typing')
+  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'done')
+  registry.recordActivity('workspace-1', 'tile-1', 'submit')
+  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'working')
+  registry.recordActivity('workspace-1', 'tile-1', 'interrupt')
+  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'done')
+})
+
+test('re-registering the same live session keeps its status', () => {
+  const registry = new AgentSessionRegistry()
+  registry.register(session)
+  registry.markDone('workspace-1', 'tile-1')
+  registry.register(session)
+  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'done')
+  registry.register({ ...session, sessionId: 'session-new' })
+  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'working')
+})
+
 test('keeps exited sessions exited when late activity or hooks arrive', () => {
   const registry = new AgentSessionRegistry()
   registry.register(session)

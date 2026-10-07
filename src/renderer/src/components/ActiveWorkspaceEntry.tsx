@@ -56,7 +56,7 @@ export function ActiveWorkspaceEntry({
           onOpenAgent={onOpenAgent}
         />
       ) : (
-        <div className="ml-7 mt-1">
+        <div className="ml-10 mt-1">
           <WorkspaceAgentSummary {...summary} />
         </div>
       )}

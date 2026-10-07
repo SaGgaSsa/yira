@@ -6,6 +6,7 @@ import { AgentSessionRegistry } from './registry'
 import {
   buildAgentTerminalLaunch,
   createAgentTerminalExitGate,
+  classifyAgentInput,
   createAgentTerminalLifecycle,
   isTerminalProtocolReply,
 } from './terminal'
@@ -169,4 +170,17 @@ test('recognizes terminal protocol replies but not typed input', () => {
 
   const typed = ['a', 'yes\r', '\r', '\u001b', '\u001b[A', '\u001b[1;5C', '\u001b[200~text\u001b[201~', '\u001b[Ix', '\u0003']
   for (const input of typed) assert.equal(isTerminalProtocolReply(input), false, JSON.stringify(input))
+})
+
+test('classifies agent input so only a submitted line starts a turn', () => {
+  assert.equal(classifyAgentInput(''), null)
+  assert.equal(classifyAgentInput('\u001b[I'), null)
+  assert.equal(classifyAgentInput('a'), 'typing')
+  assert.equal(classifyAgentInput('\u001b[A'), 'typing')
+  assert.equal(classifyAgentInput('\u001b\r'), 'typing')
+  assert.equal(classifyAgentInput('\u001b[200~line one\rline two\u001b[201~'), 'typing')
+  assert.equal(classifyAgentInput('\r'), 'submit')
+  assert.equal(classifyAgentInput('\u001b[200~pasted\u001b[201~\r'), 'submit')
+  assert.equal(classifyAgentInput('\u001b'), 'interrupt')
+  assert.equal(classifyAgentInput('\u0003'), 'interrupt')
 })
