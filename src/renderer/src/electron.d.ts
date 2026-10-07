@@ -25,6 +25,9 @@ import type {
   TerminalCreateResult,
   TerminalExitEvent,
   UpdateState,
+  AgentAlertEvent,
+  AgentAlertNotificationRequest,
+  AgentAlertNotificationTarget,
   NotificationAttentionOptions,
   NotificationAttentionResult,
   FileListOptions,
@@ -109,6 +112,7 @@ interface ElectronWorld {
     subscribeSessions: (workspaceId?: string) => Promise<string | false>
     unsubscribeSessions: (token: string) => Promise<boolean>
     onSessionsChanged: (callback: (snapshot: AgentActiveSessionSnapshot) => void) => () => void
+    onAlert: (callback: (alert: AgentAlertEvent) => void) => () => void
     usageSnapshot: () => Promise<AgentUsageSnapshot | null>
     usageDetails: () => Promise<AgentUsageDetailsSnapshot | null>
     usageHistory: (request: AgentUsageHistoryRequest) => Promise<AgentUsageHistorySnapshot | null>
@@ -213,6 +217,8 @@ interface ElectronWorld {
   notifications: {
     requestAttention: (options?: NotificationAttentionOptions) => Promise<NotificationAttentionResult>
     clearAttention: () => Promise<NotificationAttentionResult>
+    showAgentAlert: (request: AgentAlertNotificationRequest) => Promise<boolean>
+    onAgentAlertClicked: (callback: (target: AgentAlertNotificationTarget) => void) => () => void
   }
   window: {
     setTitle: (title: string) => Promise<void>

@@ -287,7 +287,7 @@ app.whenReady().then(async () => {
     workspaces: getWorkspaceRootFolders,
   })
   registerCanvasIPC()
-  registerTerminalIPC()
+  registerTerminalIPC(() => mainWindow)
   registerScriptsIPC()
   void hydrateTerminalSessions().catch((error) => {
     console.warn('[main] terminal session hydration failed:', error instanceof Error ? error.message : String(error))

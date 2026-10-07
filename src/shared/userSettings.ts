@@ -8,9 +8,10 @@ export const MAX_FONT_SIZE_PX = 36
 
 export type LegacyFontSize = 'small' | 'medium' | 'large'
 
-type RawUserSettings = Omit<Partial<UserSettings>, 'terminal' | 'agents' | 'updateDiagnosticsEnabled' | 'updateDiagnosticsMigrationComplete'> & {
+type RawUserSettings = Omit<Partial<UserSettings>, 'terminal' | 'agents' | 'notifications' | 'updateDiagnosticsEnabled' | 'updateDiagnosticsMigrationComplete'> & {
   fontSize?: unknown
   terminal?: Partial<UserSettings['terminal']>
+  notifications?: Partial<UserSettings['notifications']>
   agents?: Partial<Record<'claude' | 'codex', { enabled?: unknown }>>
   updateDiagnosticsEnabled?: unknown
   updateDiagnosticsMigrationComplete?: unknown
@@ -75,6 +76,9 @@ export function normalizeUserSettings(raw: RawUserSettings = {}): UserSettings {
     notifications: {
       ...DEFAULT_USER_SETTINGS.notifications,
       ...(raw.notifications ?? {}),
+      desktopAlertsEnabled: typeof raw.notifications?.desktopAlertsEnabled === 'boolean'
+        ? raw.notifications.desktopAlertsEnabled
+        : DEFAULT_USER_SETTINGS.notifications.desktopAlertsEnabled,
     },
     tiles: {
       ...DEFAULT_USER_SETTINGS.tiles,

@@ -581,6 +581,7 @@ export interface UserSettings {
   }
   notifications: {
     attentionDelayEnabled: boolean
+    desktopAlertsEnabled: boolean
   }
   tiles: {
     creationAvailability: TileCreationAvailability
@@ -616,6 +617,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   },
   notifications: {
     attentionDelayEnabled: true,
+    desktopAlertsEnabled: true,
   },
   tiles: {
     creationAvailability: {
@@ -685,6 +687,27 @@ export interface WindowClosePreparationResponse extends WindowClosePreparationRe
 
 export interface NotificationAttentionOptions {
   onlyWhenInactive?: boolean
+}
+
+export interface AgentAlertEvent {
+  tileId: string
+  workspaceId: string | null
+  provider: AgentProvider
+  event: 'completed' | 'permission' | 'input'
+  priority: 'normal' | 'intervention'
+  sessionTitle: string | null
+}
+
+export interface AgentAlertNotificationRequest {
+  title: string
+  body: string
+  workspaceId: string | null
+  tileId: string
+}
+
+export interface AgentAlertNotificationTarget {
+  workspaceId: string | null
+  tileId: string
 }
 
 export type NotificationAttentionReason =

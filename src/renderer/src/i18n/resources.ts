@@ -263,10 +263,17 @@ type TranslationResources = {
     footerNewSession: string
     footerClose: string
   }
+  agentAlert: {
+    completed: string
+    input: string
+    permission: string
+  }
   settings: {
     active: string
     agentAlerts: string
     agentAlertsDescription: string
+    desktopAlerts: string
+    desktopAlertsDescription: string
     agentHookSetup: string
     agentHookSetupDescription: string
     agentIntegrations: string
@@ -1089,6 +1096,11 @@ const en: TranslationResources = {
     creatingSession: 'Creating session…',
     shortcutLabel: 'Shortcut: {{shortcut}}',
   },
+  agentAlert: {
+    completed: 'Finished',
+    input: 'Needs your reply',
+    permission: 'Asking for permission',
+  },
   activityPalette: {
     title: 'Activity',
     backToActivity: 'Back to Activity',
@@ -1119,6 +1131,8 @@ const en: TranslationResources = {
     active: 'ACTIVE',
     agentAlerts: 'Agent alerts',
     agentAlertsDescription: 'Show semantic completion and intervention alerts from configured Codex and Claude hooks.',
+    desktopAlerts: 'Desktop notifications',
+    desktopAlertsDescription: 'Show a system notification and play a sound when an agent finishes or needs a reply while Yira is in the background. Clicking it opens the session.',
     agentHookSetup: 'Codex and Claude hooks',
     agentHookSetupDescription: 'Configure or repair only Yira-managed hooks. Codex requires approving new hooks with /hooks.',
     agentIntegrations: 'Agent integrations',
@@ -1900,6 +1914,11 @@ const es: TranslationResources = {
     creatingSession: 'Creando sesión…',
     shortcutLabel: 'Atajo: {{shortcut}}',
   },
+  agentAlert: {
+    completed: 'Terminó',
+    input: 'Necesita tu respuesta',
+    permission: 'Pide permiso',
+  },
   activityPalette: {
     title: 'Actividad',
     backToActivity: 'Volver a Actividad',
@@ -1971,6 +1990,8 @@ const es: TranslationResources = {
     active: 'ACTIVO',
     agentAlerts: 'Alertas de agentes',
     agentAlertsDescription: 'Muestra alertas semánticas de finalización e intervención de los hooks configurados de Codex y Claude.',
+    desktopAlerts: 'Notificaciones de escritorio',
+    desktopAlertsDescription: 'Muestra una notificación del sistema y reproduce un sonido cuando un agente termina o necesita respuesta mientras Yira está en segundo plano. Al hacer clic abre la sesión.',
     agentHookSetup: 'Hooks de Codex y Claude',
     agentHookSetupDescription: 'Configura o repara sólo hooks administrados por Yira. Codex requiere aprobar los nuevos hooks con /hooks.',
     agentIntegrations: 'Integraciones de agentes',

@@ -21,6 +21,7 @@ test('createUserSettingsDraft isolates nested changes from the active settings',
   draft.browser.homeUrl = 'https://draft.example'
   draft.terminal.attentionEnabled = false
   draft.notifications.attentionDelayEnabled = false
+  draft.notifications.desktopAlertsEnabled = false
   draft.tiles.creationAvailability.note = false
   draft.groups.enabled = true
   draft.shortcuts.newAgentSession = 'Alt+K'
@@ -28,6 +29,7 @@ test('createUserSettingsDraft isolates nested changes from the active settings',
   assert.equal(active.browser.homeUrl, 'about:blank')
   assert.equal(active.terminal.attentionEnabled, true)
   assert.equal(active.notifications.attentionDelayEnabled, true)
+  assert.equal(active.notifications.desktopAlertsEnabled, true)
   assert.equal(active.tiles.creationAvailability.note, true)
   assert.equal(active.groups.enabled, false)
   assert.equal(active.shortcuts.newAgentSession, 'Ctrl+N')
@@ -97,7 +99,10 @@ test('applySettings persists the complete draft before replacing the active sett
         agentAlertsEnabled: false,
         themeId: 'high-contrast',
       },
-      notifications: { attentionDelayEnabled: false },
+      notifications: {
+        attentionDelayEnabled: false,
+        desktopAlertsEnabled: false,
+      },
       tiles: {
         creationAvailability: {
           agent: true,

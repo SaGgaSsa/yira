@@ -27,6 +27,7 @@ export interface SettingsState extends UserSettings {
   setAgentEnabled: (provider: AgentProvider, enabled: boolean) => void
   setTerminalThemeId: (themeId: TerminalThemeId) => void
   setNotificationAttentionDelayEnabled: (enabled: boolean) => void
+  setDesktopAlertsEnabled: (enabled: boolean) => void
   setTileCreationAvailable: (type: ConfigurableTileCreationType, available: boolean) => void
   setGroupsEnabled: (enabled: boolean) => void
   setNewAgentSessionShortcut: (shortcut: string) => void
@@ -85,7 +86,10 @@ function scheduleSave() {
         agentAlertsEnabled: state.terminal.agentAlertsEnabled,
         themeId: state.terminal.themeId,
       },
-      notifications: { attentionDelayEnabled: state.notifications.attentionDelayEnabled },
+      notifications: {
+        attentionDelayEnabled: state.notifications.attentionDelayEnabled,
+        desktopAlertsEnabled: state.notifications.desktopAlertsEnabled,
+      },
       tiles: {
         creationAvailability: {
           ...DEFAULT_USER_SETTINGS.tiles.creationAvailability,
@@ -174,6 +178,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   setNotificationAttentionDelayEnabled: (enabled) => {
     set((state) => ({ notifications: { ...state.notifications, attentionDelayEnabled: enabled } }))
+    scheduleSave()
+  },
+
+  setDesktopAlertsEnabled: (enabled) => {
+    set((state) => ({ notifications: { ...state.notifications, desktopAlertsEnabled: enabled } }))
     scheduleSave()
   },
 
@@ -272,6 +281,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           },
           notifications: {
             attentionDelayEnabled: normalized.notifications.attentionDelayEnabled,
+            desktopAlertsEnabled: normalized.notifications.desktopAlertsEnabled,
           },
           tiles: {
             creationAvailability: {
@@ -321,7 +331,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         agentAlertsEnabled: state.terminal.agentAlertsEnabled,
         themeId: state.terminal.themeId,
       },
-      notifications: { attentionDelayEnabled: state.notifications.attentionDelayEnabled },
+      notifications: {
+        attentionDelayEnabled: state.notifications.attentionDelayEnabled,
+        desktopAlertsEnabled: state.notifications.desktopAlertsEnabled,
+      },
       tiles: {
         creationAvailability: {
           ...DEFAULT_USER_SETTINGS.tiles.creationAvailability,
