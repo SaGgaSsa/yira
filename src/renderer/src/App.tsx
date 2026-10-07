@@ -1782,6 +1782,7 @@ function AppContent(): React.ReactElement {
         ...notificationText,
         workspaceId: event.workspaceId,
         tileId: event.tileId,
+        surface: event.surface,
       }).catch((error) => {
         console.error('[App] Failed to show agent alert notification:', error)
       })
@@ -1789,13 +1790,17 @@ function AppContent(): React.ReactElement {
   }, [t, workspaceMetadata])
 
   useEffect(() => {
-    return window.electron.notifications.onAgentAlertClicked(({ workspaceId, tileId }) => {
+    return window.electron.notifications.onAgentAlertClicked(({ workspaceId, tileId, surface }) => {
       if (!workspaceId) return
+      if (surface === 'agents-view') {
+        openAgentsViewSession(workspaceId, tileId)
+        return
+      }
       const workspace = workspaceMetadata.find((entry) => entry.id === workspaceId)
       if (!workspace) return
       goToWorkspaceTerminal(workspace, tileId)
     })
-  }, [goToWorkspaceTerminal, workspaceMetadata])
+  }, [goToWorkspaceTerminal, openAgentsViewSession, workspaceMetadata])
 
   const openActivityPaletteAgent = useCallback((workspace: WorkspaceMetadata, session: AgentActiveSession) => {
     if (getAgentSessionSurface(session) === 'agents-view') {
