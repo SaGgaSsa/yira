@@ -1,5 +1,5 @@
 import { buildDuplicateTerminalTile, insertDuplicateIntoSplitPanel } from './duplicateTerminalTile'
-import type { SplitViewState, TileGroup, TileState } from '@shared/types'
+import type { SplitViewState, TileState } from '@shared/types'
 
 const sourceTerminal: TileState = {
   id: 'terminal-1',
@@ -15,25 +15,10 @@ const sourceTerminal: TileState = {
   label: 'API',
   radiusIndex: 2,
   locked: true,
-  groupId: 'group-1',
-}
-
-const unlockedGroup: TileGroup = {
-  id: 'group-1',
-  name: 'Backend',
-  colorId: 'blue',
-  tileIds: ['terminal-1'],
-  locked: false,
-}
-
-const lockedGroup: TileGroup = {
-  ...unlockedGroup,
-  locked: true,
 }
 
 const duplicate = buildDuplicateTerminalTile({
   source: sourceTerminal,
-  groups: [unlockedGroup],
   id: 'terminal-2',
   position: { x: 940, y: 120 },
   zIndex: 8,
@@ -51,18 +36,6 @@ if (duplicate.label !== 'API') throw new Error('duplicate must copy label')
 if (duplicate.width !== 800 || duplicate.height !== 500) throw new Error('duplicate must copy dimensions')
 if (duplicate.radiusIndex !== 2) throw new Error('duplicate must copy visual settings')
 if (duplicate.locked !== false) throw new Error('duplicate must always be unlocked')
-if (duplicate.groupId !== 'group-1') throw new Error('duplicate must stay in an unlocked group')
-
-const duplicateFromLockedGroup = buildDuplicateTerminalTile({
-  source: sourceTerminal,
-  groups: [lockedGroup],
-  id: 'terminal-3',
-  position: { x: 940, y: 120 },
-  zIndex: 9,
-})
-
-if (!duplicateFromLockedGroup) throw new Error('locked-group terminal duplicate must be created')
-if (duplicateFromLockedGroup.groupId !== undefined) throw new Error('duplicate must leave locked groups')
 
 const noteTile: TileState = {
   ...sourceTerminal,
@@ -72,7 +45,6 @@ const noteTile: TileState = {
 
 if (buildDuplicateTerminalTile({
   source: noteTile,
-  groups: [],
   id: 'note-2',
   position: { x: 200, y: 200 },
   zIndex: 10,

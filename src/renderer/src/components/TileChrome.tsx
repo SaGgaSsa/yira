@@ -1,7 +1,6 @@
-import React, { useRef, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import React, { useRef, useCallback, useEffect, useState, type ReactNode } from 'react'
 import { useCanvasStore } from '@/store/canvasStore'
 import { useSettingsStore } from '@/store/settingsStore'
-import { isTileInteractionLocked } from '@/utils/grouping'
 import { getSplitPanelFrame } from '@/utils/splitViewLayout'
 import type { TileState, ViewMode, SplitPanelId, SplitOrientation } from '@shared/types'
 import { getTileSizePreset, NOTE_COLORS } from '@shared/types'
@@ -20,7 +19,6 @@ interface Props {
   onFocusView: () => void
   onDetach?: () => void
   onDelete: () => void
-  onRemoveFromGroup?: () => void
   children: ReactNode
   mode?: ViewMode
   isHiddenInFullview?: boolean
@@ -59,7 +57,6 @@ export function TileChrome({
   onFocusView,
   onDetach,
   onDelete,
-  onRemoveFromGroup,
   children,
   mode = 'canvas',
   isHiddenInFullview = false,
@@ -71,9 +68,6 @@ export function TileChrome({
   const dragStartRef = useRef<{ mx: number; my: number; positions: Array<{ id: string; x: number; y: number }>; anchorX: number; anchorY: number } | null>(null)
   const resizeStartRef = useRef<{ mx: number; my: number; w: number; h: number; tx: number; ty: number } | null>(null)
   const tiles = useCanvasStore((s) => s.tiles)
-  const storedGroups = useCanvasStore((s) => s.groups)
-  const groupsEnabled = useSettingsStore((s) => s.groups.enabled)
-  const groups = groupsEnabled ? storedGroups : []
   const selectedTileIds = useCanvasStore((s) => s.selectedTileIds)
   const zoom = useCanvasStore((s) => s.viewport.zoom)
   const gridSize = useSettingsStore((s) => s.gridSize)
@@ -85,12 +79,7 @@ export function TileChrome({
   const minWidth = sizePreset.minWidth
   const minHeight = sizePreset.minHeight
   const isLocked = Boolean(tile.locked)
-  const isGroupLocked = Boolean(tile.groupId && groups.find((group) => group.id === tile.groupId)?.locked)
-  const isInteractionLocked = isTileInteractionLocked(tile, groups)
-  const lockedGroupIds = useMemo(
-    () => new Set(groups.filter((group) => group.locked).map((group) => group.id)),
-    [groups],
-  )
+  const isInteractionLocked = Boolean(tile.locked)
 
   useEffect(() => {
     if (isFixedView) return
@@ -111,8 +100,7 @@ export function TileChrome({
       const positions = tiles
         .filter((entry) => (
           movableIds.has(entry.id) &&
-          !entry.locked &&
-          !(entry.groupId && lockedGroupIds.has(entry.groupId))
+          !entry.locked
         ))
         .map((entry) => ({ id: entry.id, x: entry.x, y: entry.y }))
 
@@ -127,7 +115,7 @@ export function TileChrome({
       }
       setIsDragging(true)
     },
-    [tile, onFocus, isFixedView, isInteractionLocked, isSelected, selectedTileIds, tiles, lockedGroupIds],
+    [tile, onFocus, isFixedView, isInteractionLocked, isSelected, selectedTileIds, tiles],
   )
 
   // ─── Resize ─────────────────────────────────────────────────────────────
@@ -292,11 +280,9 @@ export function TileChrome({
               }`}
               onClick={(e) => {
                 e.stopPropagation()
-                if (isGroupLocked) return
                 onUpdate({ locked: !isLocked })
               }}
-              disabled={isGroupLocked}
-              title={isGroupLocked ? 'Locked by group' : isLocked ? 'Unlock window' : 'Lock window'}
+              title={isLocked ? 'Unlock window' : 'Lock window'}
             >
               <Lock size={11} />
             </button>
@@ -311,25 +297,6 @@ export function TileChrome({
             <span className="nd-label truncate flex-1 text-text-secondary">
               {getTileDisplayLabel(tile)}
             </span>
-
-            {tile.groupId && onRemoveFromGroup && (
-              <button
-                className="rounded-full border border-border-visible px-2 py-1 text-[10px] uppercase text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display shrink-0"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  if (isGroupLocked) return
-                  onRemoveFromGroup()
-                }}
-                disabled={isGroupLocked}
-                style={{
-                  opacity: isGroupLocked ? 0.45 : 1,
-                  cursor: isGroupLocked ? 'not-allowed' : 'pointer',
-                }}
-                title={isGroupLocked ? 'Unlock group to remove this tile' : 'Remove from group'}
-              >
-                Out
-              </button>
-            )}
 
             {/* Terminal: shell profile badge */}
             {tile.type === 'terminal' && (tile.terminalConnection === 'remote-ssh' || tile.shellProfileId) && (

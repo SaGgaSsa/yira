@@ -7,7 +7,6 @@ import type {
   GridLayoutNode,
   GridWorkspaceState,
   SplitViewState,
-  TileGroup,
   TileState,
   ViewMode,
 } from './types'
@@ -70,7 +69,6 @@ function mergeSharedTileWithCanvasLayout(sharedTile: TileState, canvasTile: Tile
     width: canvasTile.width,
     height: canvasTile.height,
     zIndex: canvasTile.zIndex,
-    groupId: canvasTile.groupId,
     floating: canvasTile.floating
       ? {
           ...canvasTile.floating,
@@ -81,17 +79,6 @@ function mergeSharedTileWithCanvasLayout(sharedTile: TileState, canvasTile: Tile
         }
       : sharedTile.floating,
   }
-}
-
-function reconcileGroups(groups: TileGroup[] | undefined, tiles: TileState[]): TileGroup[] {
-  const tileIds = new Set(tiles.map((tile) => tile.id))
-
-  return (groups ?? [])
-    .map((group) => ({
-      ...group,
-      tileIds: group.tileIds.filter((tileId) => tileIds.has(tileId)),
-    }))
-    .filter((group) => group.tileIds.length > 0)
 }
 
 function normalizeSplitViewForTiles(
@@ -146,7 +133,6 @@ export function createCanvasStateForWorkspaceTypeSwitch(sharedTiles: TileState[]
 
   return {
     tiles,
-    groups: [],
     viewport: { tx: 0, ty: 0, zoom: 1 },
     nextZIndex: maxNextZIndex(tiles, tiles.length + 1),
     focusedTileId: activeTileId,
@@ -177,7 +163,6 @@ export function reconcileCanvasStateWithSharedTiles(
 
   return {
     tiles,
-    groups: reconcileGroups(state.groups, tiles),
     viewport: { ...state.viewport },
     nextZIndex: maxNextZIndex(tiles, state.nextZIndex),
     focusedTileId,

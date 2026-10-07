@@ -1,5 +1,22 @@
 import { create } from 'zustand'
-import { GROUP_COLOR_ORDER, normalizeFileMarkdownViewMode, normalizeMarkdownViewMode, normalizeNoteKind, normalizeTileSize, type TileState, type CanvasState, type Viewport, type ShellProfileId, type TileGroup, type GroupColorId, type ViewMode, type SplitViewState, type SplitPanelId, type WorkspaceConfig, type WorkspaceType, type GridViewState, type GridWorkspaceState, type WindowBounds } from '@shared/types'
+import {
+  normalizeFileMarkdownViewMode,
+  normalizeMarkdownViewMode,
+  normalizeNoteKind,
+  normalizeTileSize,
+  type TileState,
+  type CanvasState,
+  type Viewport,
+  type ShellProfileId,
+  type ViewMode,
+  type SplitViewState,
+  type SplitPanelId,
+  type WorkspaceConfig,
+  type WorkspaceType,
+  type GridViewState,
+  type GridWorkspaceState,
+  type WindowBounds,
+} from '@shared/types'
 import { normalizeWorkspaceConfig } from '@shared/workspaceConfig'
 import { createEmptyGridWorkspaceState, insertTileIntoGridLayout, normalizeGridLayout, normalizeGridWorkspaceState, removeTileFromGridLayout } from '@shared/gridWorkspaceState'
 import {
@@ -8,7 +25,6 @@ import {
   getAttachedTiles,
   normalizeFloatingTileState,
 } from '@shared/floatingTiles'
-import { getGroupingBlockedReason } from '@/utils/grouping'
 import { DEFAULT_SPLIT_ORIENTATION, normalizeSplitOrientation } from '@/utils/splitViewState'
 import { clampTileToWorld, normalizeFiniteViewport } from '@/utils/canvasWorld'
 import {
@@ -19,12 +35,9 @@ import {
 import {
   pinFileTileForDetach,
   pinFileTileForDraft,
-  pinFileTileForGrouping,
   pinFileTileForRename,
 } from '@/utils/fileTileLifecycle'
 
-const UNTITLED_GROUP_NAME = 'Untitled Group'
-const DEFAULT_GROUP_COLOR: GroupColorId = GROUP_COLOR_ORDER[0]
 const EMPTY_SPLIT_VIEW_STATE: SplitViewState = {
   leftTileIds: [],
   rightTileIds: [],
@@ -121,16 +134,6 @@ function isTileInSplitState(splitViewState: SplitViewState, tileId: string): boo
   return splitViewState.leftTileIds.includes(tileId) || splitViewState.rightTileIds.includes(tileId)
 }
 
-function normalizeGroup(group: TileGroup): TileGroup {
-  return {
-    id: group.id,
-    name: group.name.trim() || UNTITLED_GROUP_NAME,
-    colorId: GROUP_COLOR_ORDER.includes(group.colorId) ? group.colorId : DEFAULT_GROUP_COLOR,
-    tileIds: [...group.tileIds],
-    locked: Boolean(group.locked),
-  }
-}
-
 function normalizeTile(tile: TileState): TileState {
   const { width, height } = normalizeTileSize(tile.type, tile)
   const { hideTitlebar: _hideTitlebar, ...tileWithoutTitlebar } = tile as TileState & { hideTitlebar?: unknown }
@@ -184,9 +187,6 @@ function pinFilesTileForPatch(tile: TileState, patch: Partial<TileState>): TileS
   if (hasPatchProperty(patch, 'label') && typeof patch.label === 'string') {
     return pinFileTileForRename(nextTile, patch.label)
   }
-  if (hasPatchProperty(patch, 'groupId') && patch.groupId) {
-    return pinFileTileForGrouping(nextTile)
-  }
   return nextTile
 }
 
@@ -219,83 +219,9 @@ function warnCanvasWorldNormalization(scope: string, state: CanvasState, tiles: 
   })
 }
 
-function buildNormalizedGroupedState(
-  tiles: TileState[],
-  groups: TileGroup[],
-): { tiles: TileState[]; groups: TileGroup[] } {
-  const dimensionedTiles = tiles.map(normalizeTile)
-  const tileMap = new Map(dimensionedTiles.map((tile) => [tile.id, tile]))
-  const tileToGroup = new Map<string, string>()
-  const normalizedGroups: TileGroup[] = []
-
-  for (const group of groups) {
-    if (!group.id) continue
-
-    const seen = new Set<string>()
-    const tileIds = group.tileIds.filter((tileId) => {
-      if (!tileMap.has(tileId) || seen.has(tileId) || tileToGroup.has(tileId)) return false
-      seen.add(tileId)
-      tileToGroup.set(tileId, group.id)
-      return true
-    })
-
-    if (tileIds.length === 0) continue
-
-    normalizedGroups.push(normalizeGroup({
-      ...group,
-      tileIds,
-    }))
-  }
-
-  const groupsById = new Map(normalizedGroups.map((group) => [group.id, group]))
-
-  for (const tile of tiles) {
-    if (!tile.groupId || tileToGroup.has(tile.id)) continue
-
-    const existing = groupsById.get(tile.groupId)
-    if (existing) {
-      existing.tileIds.push(tile.id)
-    } else {
-      const created: TileGroup = {
-        id: tile.groupId,
-        name: UNTITLED_GROUP_NAME,
-        colorId: DEFAULT_GROUP_COLOR,
-        tileIds: [tile.id],
-        locked: false,
-      }
-      normalizedGroups.push(created)
-      groupsById.set(created.id, created)
-    }
-    tileToGroup.set(tile.id, tile.groupId)
-  }
-
-  const normalizedTiles = dimensionedTiles.map((tile) => {
-    const nextGroupId = tileToGroup.get(tile.id)
-    if (!nextGroupId) {
-      return {
-        ...tile,
-        groupId: undefined,
-      }
-    }
-
-    return tile.groupId === nextGroupId
-      ? tile
-      : {
-          ...tile,
-          groupId: nextGroupId,
-        }
-  })
-
-  return {
-    tiles: normalizedTiles,
-    groups: normalizedGroups,
-  }
-}
-
 interface CanvasStore {
   // State
   tiles: TileState[]
-  groups: TileGroup[]
   viewport: Viewport
   nextZIndex: number
   focusedTileId: string | null
@@ -339,19 +265,6 @@ interface CanvasStore {
   clearTerminalAttention: (tileId: string) => void
   clearAllTerminalAttention: () => void
   selectTiles: (tileIds: string[]) => void
-  createGroup: (
-    group: Pick<TileGroup, 'name' | 'colorId' | 'locked'>,
-    tileIds?: string[],
-  ) => TileGroup | null
-  addTilesToGroup: (groupId: string, tileIds: string[]) => void
-  updateGroup: (
-    groupId: string,
-    patch: Partial<Pick<TileGroup, 'name' | 'colorId' | 'locked'>>,
-  ) => void
-  setGroupColor: (groupId: string, colorId: GroupColorId) => void
-  setGroupLocked: (groupId: string, locked: boolean) => void
-  ungroup: (groupId: string) => void
-  removeTileFromGroup: (tileId: string) => void
 
   bringToFront: (tileId: string) => number
 
@@ -363,7 +276,6 @@ interface CanvasStore {
 
 export const useCanvasStore = create<CanvasStore>((set, get) => ({
   tiles: [],
-  groups: [],
   viewport: { tx: 0, ty: 0, zoom: 1 },
   nextZIndex: 1,
   focusedTileId: null,
@@ -410,25 +322,24 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
 
   restoreState: (state) => set(() => {
     const inputTiles = state.tiles.filter(isSupportedTile)
-    const normalized = buildNormalizedGroupedState(inputTiles, state.groups ?? [])
+    const normalizedTiles = inputTiles.map(normalizeTile)
     const viewport = normalizeFiniteViewport(state.viewport)
     const fullviewActiveTileId =
       state.fullviewActiveTileId ??
       state.focusedTileId ??
-      normalized.tiles[0]?.id ??
+      normalizedTiles[0]?.id ??
       null
-    warnCanvasWorldNormalization('restore', state, normalized.tiles, viewport)
+    warnCanvasWorldNormalization('restore', state, normalizedTiles, viewport)
 
     return {
-      tiles: normalized.tiles,
-      groups: normalized.groups,
+      tiles: normalizedTiles,
       viewport,
       nextZIndex: state.nextZIndex,
       focusedTileId: state.focusedTileId ?? null,
       viewMode: normalizeViewMode(state.viewMode),
       boardVisible: state.boardVisible !== false,
       fullviewActiveTileId,
-      splitViewState: normalizeSplitViewState(state.splitViewState, normalized.tiles, state.focusedTileId ?? null, fullviewActiveTileId),
+      splitViewState: normalizeSplitViewState(state.splitViewState, normalizedTiles, state.focusedTileId ?? null, fullviewActiveTileId),
       gridViewState: { ...EMPTY_GRID_VIEW_STATE },
       selectedTileIds: [],
       terminalTitles: {},
@@ -480,9 +391,6 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
 
     return {
       tiles: s.tiles.filter(t => t.id !== tileId),
-      groups: s.groups
-        .map((group) => ({ ...group, tileIds: group.tileIds.filter(id => id !== tileId) }))
-        .filter((group) => group.tileIds.length > 0),
       focusedTileId: s.focusedTileId === tileId ? null : s.focusedTileId,
       fullviewActiveTileId: s.fullviewActiveTileId === tileId ? null : s.fullviewActiveTileId,
       splitViewState: {
@@ -683,136 +591,6 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
 
   selectTiles: (tileIds) => set({ selectedTileIds: tileIds }),
 
-  createGroup: (groupInput, tileIds) => {
-    const state = get()
-    const nextIds = Array.from(new Set((tileIds ?? state.selectedTileIds).filter((tileId) => state.tiles.some((tile) => tile.id === tileId))))
-    if (nextIds.length < 2) return null
-    if (getGroupingBlockedReason(state.tiles, state.groups, nextIds)) return null
-    const nextColorIndex = get().groups.length % GROUP_COLOR_ORDER.length
-
-    const group = normalizeGroup({
-      id: `group-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      name: groupInput.name,
-      colorId: groupInput.colorId ?? GROUP_COLOR_ORDER[nextColorIndex] ?? DEFAULT_GROUP_COLOR,
-      tileIds: nextIds,
-      locked: groupInput.locked,
-    })
-
-    set((s) => {
-      const selected = new Set(nextIds)
-      const nextTiles = s.tiles.map((tile) => (
-        selected.has(tile.id)
-          ? { ...pinFileTileForGrouping(tile), groupId: group.id }
-          : tile
-      ))
-      const remainingGroups = s.groups
-        .map((entry) => ({ ...entry, tileIds: entry.tileIds.filter((tileId) => !selected.has(tileId)) }))
-        .filter((entry) => entry.tileIds.length > 0)
-      const normalized = buildNormalizedGroupedState(nextTiles, [...remainingGroups, group])
-
-      return {
-        tiles: normalized.tiles,
-        groups: normalized.groups,
-        selectedTileIds: nextIds,
-      }
-    })
-
-    return group
-  },
-
-  addTilesToGroup: (groupId, tileIds) => set((s) => {
-    const targetGroup = s.groups.find((group) => group.id === groupId)
-    if (!targetGroup) return {}
-
-    const nextIds = Array.from(new Set(tileIds.filter((tileId) => s.tiles.some((tile) => tile.id === tileId))))
-    if (nextIds.length === 0) return {}
-    if (getGroupingBlockedReason(s.tiles, s.groups, nextIds, groupId)) return {}
-
-    const selected = new Set(nextIds)
-    const nextTiles = s.tiles.map((tile) => (
-      selected.has(tile.id)
-        ? { ...pinFileTileForGrouping(tile), groupId }
-        : tile
-    ))
-    const nextGroups = s.groups
-      .map((group) => (
-        group.id === groupId
-          ? { ...group, tileIds: [...group.tileIds, ...nextIds] }
-          : { ...group, tileIds: group.tileIds.filter((tileId) => !selected.has(tileId)) }
-      ))
-      .filter((group) => group.tileIds.length > 0)
-    const normalized = buildNormalizedGroupedState(nextTiles, nextGroups)
-    const updatedGroup = normalized.groups.find((group) => group.id === groupId)
-
-    return {
-      tiles: normalized.tiles,
-      groups: normalized.groups,
-      selectedTileIds: updatedGroup?.tileIds ?? s.selectedTileIds,
-    }
-  }),
-
-  updateGroup: (groupId, patch) => set((s) => ({
-    groups: s.groups.map((group) => (
-      group.id === groupId
-        ? normalizeGroup({
-            ...group,
-            ...patch,
-            tileIds: group.tileIds,
-          })
-        : group
-    )),
-  })),
-
-  setGroupColor: (groupId, colorId) => set((s) => ({
-    groups: s.groups.map((group) => (
-      group.id === groupId
-        ? { ...group, colorId }
-        : group
-    )),
-  })),
-
-  setGroupLocked: (groupId, locked) => set((s) => ({
-    groups: s.groups.map((group) => (
-      group.id === groupId
-        ? { ...group, locked }
-        : group
-    )),
-  })),
-
-  ungroup: (groupId) => set((s) => ({
-    groups: s.groups.filter((group) => group.id !== groupId),
-    tiles: s.tiles.map((tile) => (
-      tile.groupId === groupId
-        ? { ...tile, groupId: undefined }
-        : tile
-    )),
-    selectedTileIds: s.selectedTileIds,
-  })),
-
-  removeTileFromGroup: (tileId) => set((s) => {
-    const tile = s.tiles.find((entry) => entry.id === tileId)
-    if (!tile?.groupId) return {}
-
-    const nextTiles = s.tiles.map((entry) => (
-      entry.id === tileId
-        ? { ...entry, groupId: undefined }
-        : entry
-    ))
-    const nextGroups = s.groups
-      .map((group) => (
-        group.id === tile.groupId
-          ? { ...group, tileIds: group.tileIds.filter((groupTileId) => groupTileId !== tileId) }
-          : group
-      ))
-      .filter((group) => group.tileIds.length > 0)
-    const normalized = buildNormalizedGroupedState(nextTiles, nextGroups)
-
-    return {
-      tiles: normalized.tiles,
-      groups: normalized.groups,
-    }
-  }),
-
   bringToFront: (tileId) => {
     const { nextZIndex } = get()
     set((s) => ({
@@ -833,28 +611,27 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   }),
   restoreWorkspaceState: (id, name, config = normalizeWorkspaceConfig({}), state) => set(() => {
     const normalizedConfig = normalizeWorkspaceConfig(config)
-    const normalized = buildNormalizedGroupedState(state.tiles, state.groups ?? [])
+    const normalizedTiles = state.tiles.map(normalizeTile)
     const viewport = normalizeFiniteViewport(state.viewport)
     const fullviewActiveTileId =
       state.fullviewActiveTileId ??
       state.focusedTileId ??
-      state.tiles[0]?.id ??
+      normalizedTiles[0]?.id ??
       null
-    warnCanvasWorldNormalization('workspace restore', state, normalized.tiles, viewport)
+    warnCanvasWorldNormalization('workspace restore', state, normalizedTiles, viewport)
 
     return {
       activeWorkspaceId: id,
       activeWorkspaceName: name,
       activeWorkspaceConfig: normalizedConfig,
-      tiles: normalized.tiles,
-      groups: normalized.groups,
+      tiles: normalizedTiles,
       viewport,
       nextZIndex: state.nextZIndex,
       focusedTileId: state.focusedTileId ?? null,
       viewMode: normalizeViewMode(state.viewMode),
       boardVisible: state.boardVisible !== false,
       fullviewActiveTileId,
-      splitViewState: normalizeSplitViewState(state.splitViewState, normalized.tiles, state.focusedTileId ?? null, fullviewActiveTileId),
+      splitViewState: normalizeSplitViewState(state.splitViewState, normalizedTiles, state.focusedTileId ?? null, fullviewActiveTileId),
       gridViewState: { ...EMPTY_GRID_VIEW_STATE },
       selectedTileIds: [],
       terminalTitles: {},
@@ -871,7 +648,6 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       activeWorkspaceName: name,
       activeWorkspaceConfig: normalizedConfig,
       tiles: normalized.tiles,
-      groups: [],
       viewport: { tx: 0, ty: 0, zoom: 1 },
       nextZIndex: normalized.nextZIndex,
       focusedTileId: normalized.focusedTileId,

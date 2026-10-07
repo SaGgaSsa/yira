@@ -47,7 +47,6 @@ export function isCleanReusableFilePreview(tile: TileState): boolean {
   return isFileTile(tile) &&
     tile.filePreview === true &&
     !hasDraftDivergence(tile) &&
-    !tile.groupId &&
     tile.floating?.detached !== true
 }
 
@@ -74,10 +73,6 @@ export function pinFileTileForRename(tile: TileState, label: string): TileState 
     ...pinFileTile(tile),
     label,
   }
-}
-
-export function pinFileTileForGrouping(tile: TileState): TileState {
-  return pinFileTile(tile)
 }
 
 export function pinFileTileForDetach(tile: TileState): TileState {

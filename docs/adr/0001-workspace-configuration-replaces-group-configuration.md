@@ -1,6 +1,6 @@
 # Workspace Configuration Replaces Group Configuration
 
-Status: accepted
+Status: accepted (the optional groups capability was later removed entirely)
 
 Yira's primary working unit is the workspace, so folders and initial terminal commands belong to workspace configuration rather than to groups. Groups remain an optional app-wide capability for visual organization only, disabled by default; when disabled, existing group data is preserved but neither shown nor applied behaviorally.
 

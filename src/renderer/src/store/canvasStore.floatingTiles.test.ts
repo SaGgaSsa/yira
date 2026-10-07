@@ -16,7 +16,6 @@ function tile(id: string, zIndex: number): TileState {
 
 const canvasState: CanvasState = {
   tiles: [tile('one', 1), tile('two', 2)],
-  groups: [],
   viewport: { tx: 0, ty: 0, zoom: 1 },
   nextZIndex: 3,
   focusedTileId: 'two',

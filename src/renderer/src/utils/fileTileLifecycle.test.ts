@@ -3,7 +3,6 @@ import {
   isCleanReusableFilePreview,
   pinFileTileForDetach,
   pinFileTileForDraft,
-  pinFileTileForGrouping,
   pinFileTileForRename,
   planFileTileOpen,
   createFileTileOpenRequestTracker,
@@ -111,16 +110,14 @@ if (
 
 for (const structuralPreview of [
   fileTile('draft', { fileDraft: 'edited' }),
-  fileTile('grouped', { groupId: 'group-1' }),
   fileTile('detached', { floating: { detached: true } }),
 ]) {
   if (isCleanReusableFilePreview(structuralPreview)) {
-    throw new Error('draft, grouped, and detached previews must not be reusable')
+    throw new Error('draft and detached previews must not be reusable')
   }
 }
 const created = planFileTileOpen([
   fileTile('draft', { fileDraft: 'edited' }),
-  fileTile('grouped', { groupId: 'group-1' }),
   fileTile('detached', { floating: { detached: true } }),
 ], proposed)
 if (created.kind !== 'create' || created.tile.id !== 'new-file' || created.tile.label !== 'new.ts') {
@@ -146,8 +143,8 @@ if (pinFileTileForDraft(preview, 'edited').filePreview !== false || pinFileTileF
 if (pinFileTileForRename(preview, 'Renamed').filePreview !== false || pinFileTileForRename(preview, 'Renamed').label !== 'Renamed') {
   throw new Error('renaming a preview must pin it and retain the title')
 }
-if (pinFileTileForGrouping(preview).filePreview !== false || pinFileTileForDetach(preview).filePreview !== false) {
-  throw new Error('grouping or detaching a preview must pin it')
+if (pinFileTileForDetach(preview).filePreview !== false) {
+  throw new Error('detaching a preview must pin it')
 }
 
 const requestTracker = createFileTileOpenRequestTracker()

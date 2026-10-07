@@ -19,7 +19,6 @@ Yira is a desktop app that keeps the model small: a workspace owns the flow, til
 - **Board View:** Workspace task board with status columns.
 - **Board MCP server:** Exposes board tasks through the `yira-board-mcp` command.
 - **Terminal history:** Save shell history under the workspace for supported shells.
-- **Optional groups:** Group tiles on the canvas when groups are enabled.
 
 ## Download
 

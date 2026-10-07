@@ -5,7 +5,6 @@ const state: CanvasState = {
   tiles: [
     { id: 'terminal', type: 'terminal', x: 0, y: 0, width: 900, height: 400, zIndex: 1 },
   ],
-  groups: [],
   viewport: { tx: 0, ty: 0, zoom: 1 },
   nextZIndex: 2,
   focusedTileId: null,

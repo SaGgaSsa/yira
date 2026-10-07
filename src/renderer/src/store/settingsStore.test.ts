@@ -13,7 +13,6 @@ test('createUserSettingsDraft isolates nested changes from the active settings',
     tiles: {
       creationAvailability: { ...DEFAULT_USER_SETTINGS.tiles.creationAvailability },
     },
-    groups: { ...DEFAULT_USER_SETTINGS.groups },
     shortcuts: { ...DEFAULT_USER_SETTINGS.shortcuts },
   }
 
@@ -23,7 +22,6 @@ test('createUserSettingsDraft isolates nested changes from the active settings',
   draft.notifications.attentionDelayEnabled = false
   draft.notifications.desktopAlertsEnabled = false
   draft.tiles.creationAvailability.note = false
-  draft.groups.enabled = true
   draft.shortcuts.newAgentSession = 'Alt+K'
 
   assert.equal(active.browser.homeUrl, 'about:blank')
@@ -31,7 +29,6 @@ test('createUserSettingsDraft isolates nested changes from the active settings',
   assert.equal(active.notifications.attentionDelayEnabled, true)
   assert.equal(active.notifications.desktopAlertsEnabled, true)
   assert.equal(active.tiles.creationAvailability.note, true)
-  assert.equal(active.groups.enabled, false)
   assert.equal(active.shortcuts.newAgentSession, 'Ctrl+N')
 })
 
@@ -70,17 +67,7 @@ test('applySettings persists the complete draft before replacing the active sett
   })
 
   try {
-    useSettingsStore.setState({
-      ...DEFAULT_USER_SETTINGS,
-      browser: { ...DEFAULT_USER_SETTINGS.browser },
-      terminal: { ...DEFAULT_USER_SETTINGS.terminal },
-      notifications: { ...DEFAULT_USER_SETTINGS.notifications },
-      tiles: {
-        creationAvailability: { ...DEFAULT_USER_SETTINGS.tiles.creationAvailability },
-      },
-      groups: { ...DEFAULT_USER_SETTINGS.groups },
-      loaded: true,
-    })
+    useSettingsStore.setState({ loaded: true })
 
     const draft: UserSettings = {
       ...DEFAULT_USER_SETTINGS,
@@ -111,7 +98,6 @@ test('applySettings persists the complete draft before replacing the active sett
           timer: true,
         },
       },
-      groups: { enabled: true },
       shortcuts: { newAgentSession: 'Alt+K' },
     }
 
@@ -143,8 +129,8 @@ test('applySettings persists the complete draft before replacing the active sett
     assert.deepEqual(state.terminal, draft.terminal)
     assert.deepEqual(state.notifications, draft.notifications)
     assert.deepEqual(state.tiles, draft.tiles)
-    assert.deepEqual(state.groups, draft.groups)
     assert.deepEqual(state.shortcuts, draft.shortcuts)
+    assert.equal('groups' in state, false)
   } finally {
     Object.defineProperty(globalThis, 'window', {
       configurable: true,

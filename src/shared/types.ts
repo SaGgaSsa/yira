@@ -586,9 +586,6 @@ export interface UserSettings {
   tiles: {
     creationAvailability: TileCreationAvailability
   }
-  groups: {
-    enabled: boolean
-  }
   shortcuts: {
     newAgentSession: string
   }
@@ -626,9 +623,6 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
       browser: true,
       timer: false,
     },
-  },
-  groups: {
-    enabled: false,
   },
   shortcuts: {
     newAgentSession: 'Ctrl+N',
@@ -941,51 +935,6 @@ export const NOTE_FONTS: Record<NoteFont, string> = {
   handwritten: '"Dancing Script", "Pacifico", cursive',
 }
 
-export type GroupColorId = 'blue' | 'green' | 'amber' | 'rose' | 'slate'
-
-export const GROUP_COLOR_ORDER: GroupColorId[] = ['blue', 'green', 'amber', 'rose', 'slate']
-
-export const GROUP_COLORS: Record<GroupColorId, { swatch: string; border: string; background: string; text: string }> = {
-  blue: {
-    swatch: '#4a9eff',
-    border: '#4a9effcc',
-    background: 'rgba(74, 158, 255, 0.10)',
-    text: '#7db6ff',
-  },
-  green: {
-    swatch: '#2fbf71',
-    border: '#2fbf71cc',
-    background: 'rgba(47, 191, 113, 0.10)',
-    text: '#74dca0',
-  },
-  amber: {
-    swatch: '#f0a53a',
-    border: '#f0a53acc',
-    background: 'rgba(240, 165, 58, 0.10)',
-    text: '#ffc875',
-  },
-  rose: {
-    swatch: '#e56b8c',
-    border: '#e56b8ccc',
-    background: 'rgba(229, 107, 140, 0.10)',
-    text: '#f2a1b8',
-  },
-  slate: {
-    swatch: '#8a94a6',
-    border: '#8a94a6cc',
-    background: 'rgba(138, 148, 166, 0.10)',
-    text: '#c3cad4',
-  },
-}
-
-export interface TileGroup {
-  id: string
-  name: string
-  colorId: GroupColorId
-  tileIds: string[]
-  locked?: boolean
-}
-
 export interface TileSizePreset {
   defaultWidth: number
   defaultHeight: number
@@ -1072,7 +1021,6 @@ export interface TileState {
   locked?: boolean
   notificationsMuted?: boolean
   radiusIndex?: number
-  groupId?: string
   floating?: TileFloatingState
 
   // Terminal-specific
@@ -1118,7 +1066,6 @@ export interface TileState {
 
 export interface CanvasState {
   tiles: TileState[]
-  groups: TileGroup[]
   viewport: Viewport
   nextZIndex: number
   focusedTileId: string | null
