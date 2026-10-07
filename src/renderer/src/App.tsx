@@ -368,11 +368,14 @@ function AppContent(): React.ReactElement {
   const clearTerminalTitle = useCanvasStore((s) => s.clearTerminalTitle)
   const clearAllTerminalAttention = useCanvasStore((s) => s.clearAllTerminalAttention)
   const activeWorkspaceType: WorkspaceType = activeWorkspaceConfig.type
+  const [sessionActiveWorkspaceIds, setSessionActiveWorkspaceIds] = useState<Set<string>>(new Set())
   const agentsView = useAgentsView({
     workspaceId: activeWorkspaceId,
     workspaceConfig: activeWorkspaceConfig,
     agents: agentSettings,
     newSessionShortcut: newAgentSessionShortcut,
+    // With no active workspace only the home screen exists, so the shortcut does nothing.
+    newSessionShortcutEnabled: sessionActiveWorkspaceIds.size > 0,
   })
   // Read through a ref so activateWorkspace stays stable while sessions change;
   // a new identity would rerun the startup load and drop unsaved tiles.
@@ -480,7 +483,6 @@ function AppContent(): React.ReactElement {
   const [remoteSshAvailable, setRemoteSshAvailable] = useState(false)
   const [showWorkspaceManager, setShowWorkspaceManager] = useState(false)
   const [workspaceMetadata, setWorkspaceMetadata] = useState<WorkspaceMetadata[]>([])
-  const [sessionActiveWorkspaceIds, setSessionActiveWorkspaceIds] = useState<Set<string>>(new Set())
   const [pendingWorkspaceDeactivationIds, setPendingWorkspaceDeactivationIds] = useState<Set<string>>(new Set())
   const [boardState, setBoardState] = useState<BoardState>(EMPTY_BOARD_STATE)
   const [showSettings, setShowSettings] = useState(false)

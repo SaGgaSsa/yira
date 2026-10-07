@@ -10,6 +10,8 @@ interface UseAgentsViewOptions {
   workspaceConfig: WorkspaceConfig
   agents: UserSettings['agents']
   newSessionShortcut: string
+  /** When false the shortcut is ignored, for example while only the home screen is available. */
+  newSessionShortcutEnabled?: boolean
 }
 
 export interface AgentsViewState {
@@ -54,6 +56,7 @@ export function useAgentsView({
   workspaceConfig,
   agents,
   newSessionShortcut,
+  newSessionShortcutEnabled = true,
 }: UseAgentsViewOptions): AgentsViewState {
   const sessionSnapshot = useAgentSessionSnapshot(Boolean(workspaceId))
   const selectedProvider = getEffectiveAgentProvider(workspaceConfig, agents)
@@ -121,6 +124,7 @@ export function useAgentsView({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
+      if (!newSessionShortcutEnabled) return
       if (isShortcutCaptureTarget(event.target) || !matchesShortcut(event, newSessionShortcut)) return
 
       event.preventDefault()
@@ -129,7 +133,7 @@ export function useAgentsView({
     }
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [handleNewSessionShortcut, newSessionShortcut])
+  }, [handleNewSessionShortcut, newSessionShortcut, newSessionShortcutEnabled])
 
   const toggle = useCallback(() => {
     if (!effectiveProvider) return
