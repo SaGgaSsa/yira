@@ -17,7 +17,10 @@ import { TerminalRuntimeProvider, useTerminalRuntimeContext } from './components
 import { AppDialog, type ConfirmDialogOptions, type PromptDialogOptions } from './components/AppDialog'
 import { WorkspaceDialog, type WorkspaceDialogRequest, type WorkspaceDialogValue } from './components/WorkspaceDialog'
 import { WorkspaceManagementDialog } from './components/WorkspaceManagementDialog'
-import { WorkspaceListItem } from './components/WorkspaceListItem'
+import { ActiveWorkspaceEntry } from './components/ActiveWorkspaceEntry'
+import { InactiveWorkspaceRow } from './components/InactiveWorkspaceRow'
+import { WorkspaceSidebarSection } from './components/WorkspaceSidebarSection'
+import { WorkspaceHome } from './components/WorkspaceHome'
 import { WorkspaceActivityView } from './components/WorkspaceActivityView'
 import { AgentsView } from './components/AgentsView'
 import { ActivityPalette } from './components/ActivityPalette'
@@ -88,6 +91,10 @@ import { getTileTypeLabel } from './components/TileContent'
 import { resolveWorkspaceFocusTarget } from './utils/workspaceFocus'
 import { mergeWorkspaceSelectionResult } from './utils/workspaceSelectionActions'
 import { getWorkspaceSidebarOrder } from './utils/workspaceOrdering'
+import {
+  getActiveSidebarWorkspaces,
+  getInactiveSidebarWorkspaces,
+} from './utils/workspaceSidebarSections'
 import { getInitialWorkspaceDialogCopy, getWorkspaceDialogCopy } from './utils/workspaceDialogCopy'
 import { buildTileConfigurationMenuItems } from './components/tileConfigurationMenu'
 import { createFileTileOpenRequestTracker, deriveFileTileTitle, planFileTileOpen } from './utils/fileTileLifecycle'
@@ -99,7 +106,7 @@ import {
   pruneWorkspaceTerminalRuntimes,
 } from './utils/terminalRuntimeCleanup'
 import type { TerminalSessionTarget } from '@shared/terminalSessionIdentity'
-import { Terminal, StickyNote, SlidersHorizontal, Download, X, Plus } from 'lucide-react'
+import { Terminal, StickyNote, SlidersHorizontal, Download, X, Plus, House } from 'lucide-react'
 
 const EMPTY_BOARD_STATE: BoardState = {
   enabled: false,
@@ -481,6 +488,10 @@ function AppContent(): React.ReactElement {
   const [showJsonEditor, setShowJsonEditor] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [activityOpen, setActivityOpen] = useState(false)
+  const [homeOpen, setHomeOpen] = useState(true)
+  const [activeSectionExpanded, setActiveSectionExpanded] = useState(true)
+  const [inactiveSectionExpanded, setInactiveSectionExpanded] = useState(true)
+  const [expandedActiveWorkspaceIds, setExpandedActiveWorkspaceIds] = useState<Set<string>>(new Set())
   const [agentsMaximizedSessionId, setAgentsMaximizedSessionId] = useState<string | null>(null)
   // A maximized agent session hides the sidebar without changing its saved state.
   const agentSessionMaximized = agentsMaximizedSessionId !== null && agentsView.isOpen && !activityOpen
@@ -497,7 +508,8 @@ function AppContent(): React.ReactElement {
   const pendingAgentSessionSourceRef = useRef('')
   useEffect(() => {
     if (agentsView.sessionDialogOpen) setActivityOpen(false)
-  }, [agentsView.sessionDialogOpen])
+    if (activityOpen || agentsView.isOpen || agentsView.sessionDialogOpen) setHomeOpen(false)
+  }, [activityOpen, agentsView.isOpen, agentsView.sessionDialogOpen])
   useEffect(() => {
     if (!pendingAgentSession) return
     if (activeWorkspaceId === pendingAgentSession.workspaceId) {
@@ -725,6 +737,8 @@ function AppContent(): React.ReactElement {
   ) => {
     if (!workspace) return
 
+    setHomeOpen(false)
+
     const transitionId = ++workspaceTransitionRef.current
 
     if (autosaveTimerRef.current) {
@@ -777,6 +791,13 @@ function AppContent(): React.ReactElement {
     }
 
     markWorkspaceSessionActive(workspace.id)
+    setExpandedActiveWorkspaceIds((current) => {
+      if (current.has(workspace.id)) return current
+
+      const next = new Set(current)
+      next.add(workspace.id)
+      return next
+    })
     const retainedAgentSessionTiles = agentSessionSnapshotRef.current.sessions
       .filter((session) => session.workspaceId === workspace.id && session.surface === 'agents-view')
       .map((session) => ({ id: session.tileId, type: 'terminal' as const }))
@@ -885,25 +906,23 @@ function AppContent(): React.ReactElement {
   // Load workspaces on mount
   useEffect(() => {
     console.log('[App] Loading workspaces and shell profiles...')
-    Promise.all([
-      refreshWorkspaceMetadata(),
-      window.electron.workspace.getActive(),
-    ]).then(([list, active]) => {
+    refreshWorkspaceMetadata().then((list) => {
       console.log('[App] Workspaces:', list)
 
-      if (active) {
-        void activateWorkspace(active, { persistCurrent: false, updateMain: false })
-        return
-      }
-
-      if (list[0]) {
-        void activateWorkspace(list[0], { persistCurrent: false })
-        return
-      }
-
       skipNextAutosaveRef.current = true
-      setWorkspace('', '', { type: 'canvas', workspacePanelOpen: true, sourceControlViewMode: 'list', sourceControlRepositoryPaths: [], agentProviders: createDefaultAgentProvidersConfig() })
+      setWorkspace('', '', {
+        type: 'canvas',
+        workspacePanelOpen: true,
+        sourceControlViewMode: 'list',
+        sourceControlRepositoryPaths: [],
+        agentProviders: createDefaultAgentProvidersConfig(),
+      })
       restoreState(createEmptyCanvasState())
+      setBoardState(EMPTY_BOARD_STATE)
+      setHomeOpen(true)
+
+      if (list.length > 0) return
+
       const dialogCopy = startupFirstWorkspaceDialogCopyRef.current
       setWorkspaceEditor({
         mode: 'create',
@@ -934,10 +953,11 @@ function AppContent(): React.ReactElement {
     }).catch((err) => console.error('[App] Error loading shell profiles:', err))
     window.electron.terminal.sshAvailable().then(setRemoteSshAvailable)
       .catch((err) => console.error('[App] Error checking SSH client:', err))
-  }, [activateWorkspace, refreshWorkspaceMetadata, restoreState, setProfiles, setWorkspace])
+  }, [refreshWorkspaceMetadata, restoreState, setProfiles, setWorkspace])
 
   const switchWorkspace = useCallback(
     (workspace: WorkspaceMetadata) => {
+      setHomeOpen(false)
       recordWorkspaceSelection(workspace.id)
       if (workspace.id === activeWorkspaceId) return
 
@@ -1042,7 +1062,7 @@ function AppContent(): React.ReactElement {
     selectTiles,
     setFullviewActiveTileId,
     setSplitViewState,
-    activityOpen,
+    activityOpen: activityOpen || homeOpen,
     agentsViewOpen: agentsView.isOpen,
     onCloseAgentsView: agentsView.close,
     onClosePicker: () => {
@@ -1051,6 +1071,7 @@ function AppContent(): React.ReactElement {
       setShowSettings(false)
       setTileMenu(null)
       setTileEditor(null)
+      setHomeOpen(false)
       closeActiveDialog()
     },
   })
@@ -1063,12 +1084,80 @@ function AppContent(): React.ReactElement {
     () => getWorkspaceSidebarOrder(workspaceMetadata),
     [workspaceMetadata],
   )
+  const activeSidebarWorkspaces = useMemo(
+    () => getActiveSidebarWorkspaces(workspaceMetadata, sessionActiveWorkspaceIds),
+    [sessionActiveWorkspaceIds, workspaceMetadata],
+  )
+  const inactiveSidebarWorkspaces = useMemo(
+    () => getInactiveSidebarWorkspaces(workspaceMetadata, sessionActiveWorkspaceIds),
+    [sessionActiveWorkspaceIds, workspaceMetadata],
+  )
+  const toggleActiveWorkspaceExpanded = useCallback((workspaceId: string) => {
+    setExpandedActiveWorkspaceIds((current) => {
+      const next = new Set(current)
+      if (next.has(workspaceId)) next.delete(workspaceId)
+      else next.add(workspaceId)
+      return next
+    })
+  }, [])
+  const previousActiveWorkspaceCountRef = useRef(activeSidebarWorkspaces.length)
+  useEffect(() => {
+    const hadActiveWorkspace = previousActiveWorkspaceCountRef.current > 0
+    const hasActiveWorkspace = activeSidebarWorkspaces.length > 0
+    if (!hasActiveWorkspace) {
+      setInactiveSectionExpanded(true)
+    } else if (!hadActiveWorkspace) {
+      setInactiveSectionExpanded(false)
+    }
+    previousActiveWorkspaceCountRef.current = activeSidebarWorkspaces.length
+  }, [activeSidebarWorkspaces.length])
+
   const agentSessionWorkspaces = useMemo(
     () => sidebarWorkspaces.filter((workspace) => (
       workspace.id === activeWorkspaceId || sessionActiveWorkspaceIds.has(workspace.id)
     )),
     [activeWorkspaceId, sessionActiveWorkspaceIds, sidebarWorkspaces],
   )
+
+  const unloadActiveWorkspace = useCallback(async (workspaceId: string): Promise<boolean> => {
+    const state = useCanvasStore.getState()
+    if (state.activeWorkspaceId !== workspaceId) return false
+
+    const transitionId = ++workspaceTransitionRef.current
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current)
+      autosaveTimerRef.current = null
+    }
+
+    await saveToDisk(workspaceId, state.activeWorkspaceConfig.type)
+    if (transitionId !== workspaceTransitionRef.current
+      || useCanvasStore.getState().activeWorkspaceId !== workspaceId) return false
+
+    await window.electron.floating.closeWorkspace(workspaceId)
+    if (transitionId !== workspaceTransitionRef.current
+      || useCanvasStore.getState().activeWorkspaceId !== workspaceId) return false
+
+    floatingRestoreRef.current = { workspaceId: null, detachedTileIds: new Set() }
+    skipNextAutosaveRef.current = true
+    setBoardState(EMPTY_BOARD_STATE)
+    setWorkspace('', '', {
+      type: 'canvas',
+      workspacePanelOpen: true,
+      sourceControlViewMode: 'list',
+      sourceControlRepositoryPaths: [],
+      agentProviders: createDefaultAgentProvidersConfig(),
+    })
+    restoreState(createEmptyCanvasState())
+    agentsView.close()
+    agentsView.closeSessionDialog()
+    setActivityOpen(false)
+    setShowProfilePicker(false)
+    setShowNotePicker(false)
+    setAgentsMaximizedSessionId(null)
+    setHomeOpen(true)
+    return true
+  }, [agentsView.close, agentsView.closeSessionDialog, restoreState, saveToDisk, setWorkspace])
+
   const deactivateWorkspace = useCallback(async (workspace: WorkspaceMetadata) => {
     if (pendingWorkspaceDeactivationIds.has(workspace.id)) return
 
@@ -1084,16 +1173,21 @@ function AppContent(): React.ReactElement {
 
       setPendingWorkspaceDeactivationIds((current) => new Set(current).add(workspace.id))
 
-      if (workspace.id === activeWorkspaceId) {
-        const nextWorkspace = sidebarWorkspaces.find((entry) => (
-          entry.id !== workspace.id && sessionActiveWorkspaceIds.has(entry.id)
-        )) ?? sidebarWorkspaces.find((entry) => entry.id !== workspace.id)
+      if (useCanvasStore.getState().activeWorkspaceId === workspace.id) {
+        const nextWorkspace = activeSidebarWorkspaces
+          .filter((entry) => entry.id !== workspace.id)
+          .slice(-1)[0]
 
-        if (!nextWorkspace) return
-
-        recordWorkspaceSelection(nextWorkspace.id)
-        await activateWorkspace(nextWorkspace)
+        if (nextWorkspace) {
+          recordWorkspaceSelection(nextWorkspace.id)
+          await activateWorkspace(nextWorkspace)
+        } else {
+          const unloaded = await unloadActiveWorkspace(workspace.id)
+          if (!unloaded && useCanvasStore.getState().activeWorkspaceId === workspace.id) return
+        }
       }
+
+      if (useCanvasStore.getState().activeWorkspaceId === workspace.id) return
 
       await registry.destroyWorkspace(workspace.id)
       await window.electron.terminal.closeWorkspace(workspace.id)
@@ -1110,7 +1204,7 @@ function AppContent(): React.ReactElement {
         return next
       })
     }
-  }, [activeWorkspaceId, activateWorkspace, clearWorkspaceAttentionCount, pendingWorkspaceDeactivationIds, recordWorkspaceSelection, registry, requestConfirm, sessionActiveWorkspaceIds, sidebarWorkspaces, t, unmarkWorkspaceSessionActive])
+  }, [activeSidebarWorkspaces, activateWorkspace, clearWorkspaceAttentionCount, pendingWorkspaceDeactivationIds, recordWorkspaceSelection, registry, requestConfirm, t, unloadActiveWorkspace, unmarkWorkspaceSessionActive])
   const terminalAttentionCounts = useMemo(() => {
     if (!terminalAttentionEnabled) return {}
 
@@ -1554,11 +1648,15 @@ function AppContent(): React.ReactElement {
 
   const openActivityWorkspace = useCallback((workspace: WorkspaceMetadata) => {
     agentsView.close()
+    agentsView.closeSessionDialog()
     setActivityOpen(false)
+    setHomeOpen(false)
     switchWorkspace(workspace)
-  }, [agentsView.close, switchWorkspace])
+  }, [agentsView.close, agentsView.closeSessionDialog, switchWorkspace])
 
   const openAgentsViewSession = useCallback((workspaceId: string, tileId: string) => {
+    setHomeOpen(false)
+    agentsView.closeSessionDialog()
     if (workspaceId === activeWorkspaceId) {
       agentsView.openForSession(tileId)
       return
@@ -1572,7 +1670,7 @@ function AppContent(): React.ReactElement {
     setActivityOpen(false)
     agentsView.close()
     switchWorkspace(workspace)
-  }, [activeWorkspaceId, agentsView.close, agentsView.openForSession, sidebarWorkspaces, switchWorkspace])
+  }, [activeWorkspaceId, agentsView.close, agentsView.closeSessionDialog, agentsView.openForSession, sidebarWorkspaces, switchWorkspace])
 
   const handleAgentSessionCreated = useCallback((result: AgentSessionCreateResult) => {
     openAgentsViewSession(result.workspaceId, result.tileId)
@@ -1580,7 +1678,9 @@ function AppContent(): React.ReactElement {
 
   const goToWorkspaceTerminal = useCallback((workspace: WorkspaceMetadata, tileId: string | null) => {
     agentsView.close()
+    agentsView.closeSessionDialog()
     setActivityOpen(false)
+    setHomeOpen(false)
     void (async () => {
       try {
         if (workspace.id !== useCanvasStore.getState().activeWorkspaceId) {
@@ -1609,7 +1709,7 @@ function AppContent(): React.ReactElement {
         console.error('[App] Failed to navigate to workspace terminal:', error)
       }
     })()
-  }, [activateWorkspace, agentsView.close, focusTile, focusTileInFullview, recordWorkspaceSelection, selectTiles, setFullviewActiveTileId])
+  }, [activateWorkspace, agentsView.close, agentsView.closeSessionDialog, focusTile, focusTileInFullview, recordWorkspaceSelection, selectTiles, setFullviewActiveTileId])
 
   useEffect(() => {
     return window.electron.agents.onAlert((event) => {
@@ -1898,6 +1998,28 @@ function AppContent(): React.ReactElement {
       },
     })
   }, [t])
+
+  const openHome = useCallback(() => {
+    agentsView.close()
+    agentsView.closeSessionDialog()
+    setActivityOpen(false)
+    setShowProfilePicker(false)
+    setShowNotePicker(false)
+    setAgentsMaximizedSessionId(null)
+    setHomeOpen(true)
+  }, [agentsView.close, agentsView.closeSessionDialog])
+
+  const selectWorkspaceFromHome = useCallback((workspace: WorkspaceMetadata) => {
+    agentsView.close()
+    agentsView.closeSessionDialog()
+    setActivityOpen(false)
+    switchWorkspace(workspace)
+  }, [agentsView.close, agentsView.closeSessionDialog, switchWorkspace])
+
+  const selectInactiveWorkspace = useCallback((workspace: WorkspaceMetadata) => {
+    setInactiveSectionExpanded(false)
+    selectWorkspaceFromHome(workspace)
+  }, [selectWorkspaceFromHome])
 
   const createTerminalFromSidebar = useCallback(() => {
     if (availableProfiles.length <= 1 && defaultProfile && !remoteTerminalConfigured) {
@@ -2239,6 +2361,8 @@ function AppContent(): React.ReactElement {
       ? `${boardReviewCount} board ${boardReviewCount === 1 ? 'task' : 'tasks'} waiting for review`
       : undefined,
   }
+  const showWorkspaceHome = (homeOpen || !activeWorkspaceId) && !activityOpen && !agentsView.isOpen
+  const workspaceHomeNow = Date.now()
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-bg-primary text-text-primary">
@@ -2261,6 +2385,8 @@ function AppContent(): React.ReactElement {
         activityOpen={activityOpen}
         onToggleActivity={() => {
           agentsView.close()
+          agentsView.closeSessionDialog()
+          setHomeOpen(false)
           setActivityOpen((value) => !value)
         }}
         agentsViewAvailable={Boolean(activeWorkspaceId && agentsView.effectiveProvider)}
@@ -2268,7 +2394,9 @@ function AppContent(): React.ReactElement {
         agentSessionCount={agentsView.sessions.length}
         agentAttentionCount={countAgentsViewAttention(agentsView.sessions)}
         onToggleAgentsView={() => {
+          setHomeOpen(false)
           setActivityOpen(false)
+          agentsView.closeSessionDialog()
           // The button selects the Agents view like the other view buttons and always shows every session.
           setAgentsMaximizedSessionId(null)
           if (!agentsView.isOpen) agentsView.toggle()
@@ -2281,6 +2409,7 @@ function AppContent(): React.ReactElement {
         onSetViewMode={(mode) => {
           const overlayOpen = agentsView.isOpen || activityOpen
           agentsView.close()
+          setHomeOpen(false)
           setActivityOpen(false)
           // Leaving Agents or Activity for the view underneath restores it as it was,
           // instead of toggling it (split orientation, canvas/grid swap).
@@ -2370,12 +2499,14 @@ function AppContent(): React.ReactElement {
               </div>
             )}
 
-            <TileCreationSelector {...tileCreationSelectorProps} />
+            {activeWorkspaceId && !homeOpen && (
+              <TileCreationSelector {...tileCreationSelectorProps} />
+            )}
           </div>
         }
       >
         <div className="flex h-full flex-col bg-bg-secondary">
-          <div className="flex-1 px-3 py-4">
+          <div className="flex min-h-0 flex-1 flex-col px-3 py-4">
             <div className="mb-3 flex items-center justify-between px-2">
               <span className="nd-label text-text-secondary">{t('sidebar.workspaces')}</span>
               <div className="flex items-center gap-1">
@@ -2387,6 +2518,15 @@ function AppContent(): React.ReactElement {
                   aria-label={t('app.newWorkspace')}
                 >
                   <Plus size={14} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text-display"
+                  onClick={openHome}
+                  title={t('sidebar.home')}
+                  aria-label={t('sidebar.home')}
+                >
+                  <House size={14} aria-hidden="true" />
                 </button>
                 <button
                   type="button"
@@ -2406,32 +2546,73 @@ function AppContent(): React.ReactElement {
                 <div className="mt-3 text-sm text-text-disabled">{t('sidebar.emptyWorkspaces')}</div>
               </div>
             ) : (
-              <div className="space-y-2">
-                {sidebarWorkspaces.map((workspace) => (
-                  <WorkspaceListItem
-                    key={workspace.id}
-                    workspace={workspace}
-                    active={workspace.id === activeWorkspaceId}
-                    sessionActive={sessionActiveWorkspaceIds.has(workspace.id)}
-                    attentionCount={workspaceAttentionCounts[workspace.id] ?? 0}
-                    recentOutputCount={recentOutputCounts[workspace.id] ?? 0}
-                    className="w-full transition-colors"
-                    onClick={() => {
-                      agentsView.close()
-                      setActivityOpen(false)
-                      switchWorkspace(workspace)
-                    }}
-                    onConfigure={() => openWorkspaceEditor(workspace)}
-                    onFocus={() => {
-                      agentsView.close()
-                      setActivityOpen(false)
-                      recordWorkspaceSelection(workspace.id)
-                      void activateWorkspace(workspace, { activationMode: 'focus-last' })
-                    }}
-                    onDeactivate={() => void deactivateWorkspace(workspace)}
-                    deactivatePending={pendingWorkspaceDeactivationIds.has(workspace.id) || sidebarWorkspaces.length < 2}
-                  />
-                ))}
+              <div className="flex min-h-0 flex-1 flex-col">
+                <WorkspaceSidebarSection
+                  title={t('sidebar.activeSection')}
+                  count={activeSidebarWorkspaces.length}
+                  expanded={activeSectionExpanded}
+                  onToggle={() => setActiveSectionExpanded((expanded) => !expanded)}
+                  className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto"
+                >
+                  {activeSidebarWorkspaces.length === 0 ? (
+                    <div className="px-2 py-2 text-sm text-text-disabled">
+                      {t('sidebar.noActiveWorkspaces')}
+                    </div>
+                  ) : (
+                    <div className="min-h-0 flex-1 space-y-1 pr-1">
+                      {activeSidebarWorkspaces.map((workspace) => (
+                        <ActiveWorkspaceEntry
+                          key={workspace.id}
+                          workspace={workspace}
+                          sessions={agentsView.snapshot.sessions}
+                          expanded={expandedActiveWorkspaceIds.has(workspace.id)}
+                          onToggleExpanded={() => toggleActiveWorkspaceExpanded(workspace.id)}
+                          onOpenAgent={openActivityPaletteAgent}
+                          active={workspace.id === activeWorkspaceId}
+                          sessionActive={sessionActiveWorkspaceIds.has(workspace.id)}
+                          attentionCount={workspaceAttentionCounts[workspace.id] ?? 0}
+                          recentOutputCount={recentOutputCounts[workspace.id] ?? 0}
+                          onClick={() => {
+                            agentsView.close()
+                            agentsView.closeSessionDialog()
+                            setActivityOpen(false)
+                            switchWorkspace(workspace)
+                          }}
+                          onConfigure={() => openWorkspaceEditor(workspace)}
+                          onFocus={() => {
+                            agentsView.close()
+                            agentsView.closeSessionDialog()
+                            setActivityOpen(false)
+                            recordWorkspaceSelection(workspace.id)
+                            void activateWorkspace(workspace, { activationMode: 'focus-last' })
+                          }}
+                          onDeactivate={() => void deactivateWorkspace(workspace)}
+                          deactivatePending={pendingWorkspaceDeactivationIds.has(workspace.id)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </WorkspaceSidebarSection>
+                <WorkspaceSidebarSection
+                  title={t('sidebar.inactiveSection')}
+                  count={inactiveSidebarWorkspaces.length}
+                  expanded={inactiveSectionExpanded}
+                  onToggle={() => setInactiveSectionExpanded((expanded) => !expanded)}
+                  className="shrink-0"
+                >
+                  {inactiveSidebarWorkspaces.length > 0 && (
+                    <div className="max-h-[40vh] overflow-y-auto pr-1">
+                      {inactiveSidebarWorkspaces.map((workspace) => (
+                        <InactiveWorkspaceRow
+                          key={workspace.id}
+                          workspace={workspace}
+                          now={workspaceHomeNow}
+                          onSelect={selectInactiveWorkspace}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </WorkspaceSidebarSection>
               </div>
             )}
           </div>
@@ -2478,9 +2659,9 @@ function AppContent(): React.ReactElement {
             <div className="flex min-h-0 flex-1 overflow-hidden">
               <div
                 className="min-w-0 flex-1 overflow-hidden"
-                hidden={activityOpen || agentsView.isOpen}
-                aria-hidden={activityOpen || agentsView.isOpen}
-                inert={activityOpen || agentsView.isOpen}
+                hidden={activityOpen || agentsView.isOpen || showWorkspaceHome}
+                aria-hidden={activityOpen || agentsView.isOpen || showWorkspaceHome}
+                inert={activityOpen || agentsView.isOpen || showWorkspaceHome}
               >
               <div className="flex h-full min-h-0 overflow-hidden">
               <div className="relative min-w-0 flex flex-1 flex-col overflow-hidden">
@@ -2637,6 +2818,13 @@ function AppContent(): React.ReactElement {
                   onOpenBrowserTile={(url) => addBrowser(url)}
                   onOpenFileTile={openFileTile}
                 />
+              ) : showWorkspaceHome ? (
+                <WorkspaceHome
+                  workspaces={inactiveSidebarWorkspaces}
+                  now={workspaceHomeNow}
+                  onSelectWorkspace={selectWorkspaceFromHome}
+                  onCreateWorkspace={openCreateWorkspaceDialog}
+                />
               ) : null}
             </div>
           ) : activityOpen ? (
@@ -2649,9 +2837,14 @@ function AppContent(): React.ReactElement {
               onOpenSettings={openSettings}
               agents={agentSettings}
             />
-          ) : (
-            <div className="flex flex-1 items-center justify-center bg-bg-primary" />
-          )}
+          ) : showWorkspaceHome ? (
+            <WorkspaceHome
+              workspaces={inactiveSidebarWorkspaces}
+              now={workspaceHomeNow}
+              onSelectWorkspace={selectWorkspaceFromHome}
+              onCreateWorkspace={openCreateWorkspaceDialog}
+            />
+          ) : null}
       </div>
       </div>
 
