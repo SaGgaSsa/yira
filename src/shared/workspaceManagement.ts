@@ -94,6 +94,7 @@ export function applyWorkspaceManagementChanges({
         remoteTerminal: entry.remoteTerminal,
         agentProvider: entry.agentProvider,
         agentProviders: mergeAgentProvidersConfig(existing.config.agentProviders, entry.agentProviders),
+        customScripts: existing.config.customScripts,
       })
 
       return {

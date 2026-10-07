@@ -92,6 +92,38 @@ test('persists workspace agent provider through load, create, and update normali
   assert.equal(cleared.config.agentProvider, undefined)
 })
 
+test('preserves, creates, replaces, and clears custom workspace scripts', () => {
+  const customScripts = [
+    { id: 'local-dev', name: 'Local dev', command: 'npm run dev' },
+  ]
+  const loaded = normalizeWorkspace({
+    id: 'custom-scripts-loaded',
+    name: 'Loaded',
+    config: normalizeWorkspaceConfig({ customScripts }),
+  })
+  assert.deepEqual(loaded.config.customScripts, customScripts)
+
+  const createInput = { name: 'Custom scripts created', customScripts }
+  const created = createWorkspaceFromInput(createInput)
+  assert.deepEqual(created.config.customScripts, customScripts)
+
+  const existing = workspace('custom-scripts-updated')
+  existing.config = normalizeWorkspaceConfig({ customScripts })
+  const preserved = updateWorkspace(existing, { config: { workspacePanelOpen: false } })
+  assert.deepEqual(preserved.config.customScripts, customScripts)
+
+  const replaced = updateWorkspace(preserved, {
+    config: { customScripts: [{ id: 'test', name: 'Test', command: 'npm test' }] },
+  })
+  assert.deepEqual(replaced.config.customScripts, [{ id: 'test', name: 'Test', command: 'npm test' }])
+
+  const clearedWithEmptyList = updateWorkspace(replaced, { config: { customScripts: [] } })
+  assert.equal(clearedWithEmptyList.config.customScripts, undefined)
+
+  const clearedWithUndefined = updateWorkspace(preserved, { config: { customScripts: undefined } })
+  assert.equal(clearedWithUndefined.config.customScripts, undefined)
+})
+
 test('normalizes and preserves workspace selection metadata', () => {
   const loaded = normalizeWorkspace({
     id: 'selection-loaded',

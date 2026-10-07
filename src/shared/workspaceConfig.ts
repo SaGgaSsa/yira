@@ -10,6 +10,7 @@ import {
   type WakeOnLanConfig,
   type WorkspaceConfig,
   type WorkspaceConfigInput,
+  type WorkspaceCustomScript,
   type WorkspaceType,
 } from './types'
 
@@ -143,6 +144,46 @@ function normalizeAgentArgs(value: unknown): string[] {
     })
 }
 
+const MAX_CUSTOM_SCRIPTS = 50
+const MAX_CUSTOM_SCRIPT_ID_LENGTH = 64
+const MAX_CUSTOM_SCRIPT_NAME_LENGTH = 80
+const MAX_CUSTOM_SCRIPT_COMMAND_LENGTH = 2000
+const CUSTOM_SCRIPT_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/
+
+function normalizeCustomScripts(value: unknown): WorkspaceCustomScript[] | undefined {
+  if (!Array.isArray(value)) return undefined
+
+  const scripts: WorkspaceCustomScript[] = []
+  const seenIds = new Set<string>()
+
+  for (const candidate of value) {
+    if (!isRecord(candidate)
+      || typeof candidate.id !== 'string'
+      || typeof candidate.name !== 'string'
+      || typeof candidate.command !== 'string') continue
+
+    const id = candidate.id.trim()
+    const name = candidate.name.trim()
+    const command = candidate.command.trim()
+
+    if (!CUSTOM_SCRIPT_ID_PATTERN.test(id)
+      || id.length > MAX_CUSTOM_SCRIPT_ID_LENGTH
+      || !name
+      || name.length > MAX_CUSTOM_SCRIPT_NAME_LENGTH
+      || name.includes('\u0000')
+      || !command
+      || command.length > MAX_CUSTOM_SCRIPT_COMMAND_LENGTH
+      || /[\u0000\r\n]/.test(command)
+      || seenIds.has(id)) continue
+
+    seenIds.add(id)
+    scripts.push({ id, name, command })
+    if (scripts.length >= MAX_CUSTOM_SCRIPTS) break
+  }
+
+  return scripts.length > 0 ? scripts : undefined
+}
+
 export function normalizeAgentProviderConfig(value: unknown): AgentProviderConfig {
   const config = isRecord(value) ? value : undefined
   return {
@@ -201,5 +242,6 @@ export function normalizeWorkspaceConfig(config: WorkspaceConfigInput | undefine
     remoteTerminal: normalizeRemoteTerminal(config?.remoteTerminal),
     agentProvider: normalizeWorkspaceAgentProvider(config?.agentProvider),
     agentProviders: normalizeAgentProvidersConfig(config?.agentProviders),
+    customScripts: normalizeCustomScripts(config?.customScripts),
   }
 }
