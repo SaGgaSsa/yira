@@ -11,6 +11,7 @@ import type {
   ShellProfile,
   TerminalCreateOptions,
   TerminalCreateResult,
+  TerminalExitEvent,
 } from '@shared/types'
 import type { TerminalSessionIdentity, TerminalSessionTarget } from '@shared/terminalSessionIdentity'
 import type { TerminalDaemonSpawn } from '@shared/terminalDaemonProtocol'
@@ -34,6 +35,7 @@ import { buildAgentTerminalLaunch, type AgentTerminalLaunch } from '../agents/te
 import { agentSessionExists, buildAgentCommand, normalizeResumeId } from '../agents/providers'
 import {
   buildAgentShellCommand,
+  buildWorkspaceScriptShellCommand,
   resolveAgentShellProfile,
   type AgentShellProfileId,
 } from '../agents/shellLaunch'
@@ -109,9 +111,54 @@ const persistentTerminalSessions = new PersistentTerminalSessions({
     if (alert && getEnabledAgentProviders().includes(alert.provider)) agentAlerts.report(alert)
     else agentAlerts.clearOnFocus(identity.tileId)
   },
-  onAgentExit: (identity) => agentAlerts.clearOnDestroy(identity.tileId),
-  onAgentDestroyed: (identity) => agentAlerts.clearOnDestroy(identity.tileId),
+  onAgentExit: (identity) => {
+    agentAlerts.clearOnDestroy(identity.tileId)
+    publishWorkspaceScriptSessionExit(identity)
+  },
+  onAgentDestroyed: (identity) => {
+    agentAlerts.clearOnDestroy(identity.tileId)
+    if (identity.tileId.startsWith('script-')) {
+      publishWorkspaceScriptSessionDestroyed({ workspaceId: identity.workspaceId, tileId: identity.tileId })
+    }
+  },
 })
+
+export type WorkspaceScriptSessionEvent =
+  | { type: 'exit'; target: TerminalSessionTarget; exitEvent?: TerminalExitEvent }
+  | { type: 'destroyed'; target: TerminalSessionTarget }
+
+const workspaceScriptSessionListeners = new Set<(event: WorkspaceScriptSessionEvent) => void>()
+const workspaceScriptSessionTargets = new Map<string, TerminalSessionTarget>()
+
+function workspaceScriptSessionKey(target: TerminalSessionTarget): string {
+  return JSON.stringify([target.workspaceId, target.tileId])
+}
+
+function publishWorkspaceScriptSessionEvent(event: WorkspaceScriptSessionEvent): void {
+  for (const listener of [...workspaceScriptSessionListeners]) {
+    try { listener(event) } catch { /* Scripts IPC listeners must not affect terminal lifecycle. */ }
+  }
+}
+
+function publishWorkspaceScriptSessionExit(identity: TerminalSessionIdentity): void {
+  if (!identity.tileId.startsWith('script-')) return
+  const target = { workspaceId: identity.workspaceId, tileId: identity.tileId }
+  workspaceScriptSessionTargets.set(workspaceScriptSessionKey(target), target)
+  void persistentTerminalSessions.snapshot(identity).then((snapshot) => {
+    publishWorkspaceScriptSessionEvent({
+      type: 'exit',
+      target,
+      ...(snapshot.exitEvent ? { exitEvent: snapshot.exitEvent } : {}),
+    })
+  }).catch(() => {
+    publishWorkspaceScriptSessionEvent({ type: 'exit', target })
+  })
+}
+
+function publishWorkspaceScriptSessionDestroyed(target: TerminalSessionTarget): void {
+  workspaceScriptSessionTargets.delete(workspaceScriptSessionKey(target))
+  publishWorkspaceScriptSessionEvent({ type: 'destroyed', target })
+}
 
 export interface AgentsViewLaunchSpec {
   provider: AgentProvider
@@ -289,7 +336,103 @@ export function stopTerminalProcessActivityMonitor(): void {
 }
 
 export function destroyWorkspaceTerminalSessions(workspaceId: string): Promise<void> {
-  return persistentTerminalSessions.destroyWorkspace(workspaceId)
+  return destroyWorkspaceSessions(workspaceId, true)
+}
+
+async function getKnownWorkspaceScriptSessionTargets(workspaceId: string): Promise<TerminalSessionTarget[]> {
+  const targets = new Map<string, TerminalSessionTarget>()
+  for (const target of workspaceScriptSessionTargets.values()) {
+    if (target.workspaceId === workspaceId) targets.set(workspaceScriptSessionKey(target), target)
+  }
+
+  await persistentTerminalSessions.hydrate()
+  for (const processRoot of persistentTerminalSessions.listRunningTerminalProcesses()) {
+    if (processRoot.workspaceId !== workspaceId || !processRoot.tileId.startsWith('script-')) continue
+    const target = { workspaceId, tileId: processRoot.tileId }
+    targets.set(workspaceScriptSessionKey(target), target)
+    workspaceScriptSessionTargets.set(workspaceScriptSessionKey(target), target)
+  }
+  return [...targets.values()]
+}
+
+async function destroyWorkspaceSessions(workspaceId: string, permanent: boolean): Promise<void> {
+  const scriptTargets = await getKnownWorkspaceScriptSessionTargets(workspaceId)
+  if (permanent) await persistentTerminalSessions.destroyWorkspace(workspaceId)
+  else await persistentTerminalSessions.closeWorkspace(workspaceId)
+  for (const target of scriptTargets) publishWorkspaceScriptSessionDestroyed(target)
+}
+
+/** List hydrated, running script PTYs so scripts IPC can recover them after a restart. */
+export async function listWorkspaceScriptSessions(workspaceId: string): Promise<TerminalSessionTarget[]> {
+  const normalizedWorkspaceId = normalizeAgentOpaqueId(workspaceId)
+  if (!normalizedWorkspaceId) throw new Error('Invalid script workspace id')
+  await persistentTerminalSessions.hydrate()
+  const targets: TerminalSessionTarget[] = []
+  for (const processRoot of persistentTerminalSessions.listRunningTerminalProcesses()) {
+    if (processRoot.workspaceId !== normalizedWorkspaceId || !processRoot.tileId.startsWith('script-')) continue
+    const target = { workspaceId: normalizedWorkspaceId, tileId: processRoot.tileId }
+    workspaceScriptSessionTargets.set(workspaceScriptSessionKey(target), target)
+    targets.push(target)
+  }
+  return targets
+}
+
+export function subscribeWorkspaceScriptSessionEvents(
+  listener: (event: WorkspaceScriptSessionEvent) => void,
+): () => void {
+  workspaceScriptSessionListeners.add(listener)
+  return () => workspaceScriptSessionListeners.delete(listener)
+}
+
+export async function createWorkspaceScriptSession(
+  target: TerminalSessionTarget,
+  spec: { command: string; cwd: string },
+): Promise<TerminalCreateResult> {
+  const runtimeTarget = normalizeTerminalSessionTarget(target, true)
+  if (!runtimeTarget.tileId.startsWith('script-')) throw new Error('Invalid script tile id')
+  if (!spec || typeof spec.command !== 'string' || typeof spec.cwd !== 'string' || !spec.cwd.trim()) {
+    throw new Error('Invalid workspace script launch')
+  }
+
+  const existing = await persistentTerminalSessions.attach(runtimeTarget)
+  if (existing?.exitEvent) {
+    await persistentTerminalSessions.destroyCurrent(runtimeTarget)
+    publishWorkspaceScriptSessionDestroyed(runtimeTarget)
+  }
+
+  const snapshot = await persistentTerminalSessions.create(runtimeTarget, () => {
+    const shellProfile = resolveCompatibleAgentShellProfile()
+    const shellArgs = buildWorkspaceScriptShellCommand({
+      shellProfileId: shellProfile.id,
+      command: spec.command,
+      platform: process.platform,
+    })
+    const profileArgs = shellProfile.args.filter((arg) => (
+      arg.toLowerCase() !== '-noprofile' && arg !== '--login' && arg !== '-l'
+    ))
+    const environment = daemonSpawnEnvironment()
+    if (environment.FORCE_COLOR === undefined) environment.FORCE_COLOR = '1'
+
+    return {
+      target: { ...runtimeTarget },
+      executable: shellProfile.shell,
+      args: [...profileArgs, ...shellArgs],
+      cwd: spec.cwd,
+      env: environment,
+      cols: 120,
+      rows: 30,
+      local: true,
+    }
+  })
+  workspaceScriptSessionTargets.set(workspaceScriptSessionKey(runtimeTarget), runtimeTarget)
+  return terminalResultFromSnapshot(snapshot)
+}
+
+export async function destroyWorkspaceScriptSession(target: TerminalSessionTarget): Promise<void> {
+  const runtimeTarget = normalizeTerminalSessionTarget(target, true)
+  if (!runtimeTarget.tileId.startsWith('script-')) throw new Error('Invalid script tile id')
+  await persistentTerminalSessions.destroyCurrent(runtimeTarget)
+  publishWorkspaceScriptSessionDestroyed(runtimeTarget)
 }
 
 export async function createAgentsViewSession(
@@ -517,6 +660,12 @@ export function registerTerminalIPC(): void {
       }
       return terminalResultFromSnapshot(existing)
     }
+    if (runtimeTarget.tileId.startsWith('script-')) {
+      // Script output views only attach; a missing script session must never become a plain shell.
+      const existing = await persistentTerminalSessions.attach(runtimeTarget)
+      if (!existing) throw new Error('Workspace script session is no longer available')
+      return terminalResultFromSnapshot(existing)
+    }
     const snapshot = await persistentTerminalSessions.create(
       runtimeTarget,
       () => buildTerminalDaemonSpawn(runtimeTarget, options),
@@ -550,18 +699,32 @@ export function registerTerminalIPC(): void {
   })
 
   ipcMain.handle('terminal:destroy', async (_, identity: TerminalSessionIdentity) => {
-    await persistentTerminalSessions.destroy(normalizeTerminalSessionIdentity(identity))
+    const runtimeIdentity = normalizeTerminalSessionIdentity(identity)
+    await persistentTerminalSessions.destroy(runtimeIdentity)
+    if (runtimeIdentity.tileId.startsWith('script-')) {
+      const target = {
+        workspaceId: runtimeIdentity.workspaceId,
+        tileId: runtimeIdentity.tileId,
+      }
+      const remainingSession = await persistentTerminalSessions.attach(target)
+      if (!remainingSession) publishWorkspaceScriptSessionDestroyed(target)
+    }
   })
 
   ipcMain.handle('terminal:destroyCurrent', async (_, target: TerminalSessionTarget) => {
-    await persistentTerminalSessions.destroyCurrent(normalizeTerminalSessionTarget(target, false))
+    const runtimeTarget = normalizeTerminalSessionTarget(target, false)
+    if (runtimeTarget.tileId.startsWith('script-')) {
+      await destroyWorkspaceScriptSession(runtimeTarget)
+      return
+    }
+    await persistentTerminalSessions.destroyCurrent(runtimeTarget)
   })
 
   ipcMain.handle('terminal:closeWorkspace', async (_, workspaceId: string) => {
     if (typeof workspaceId !== 'string' || !workspaceId.trim()) {
       throw new Error('Invalid workspace id')
     }
-    await persistentTerminalSessions.closeWorkspace(workspaceId)
+    await destroyWorkspaceSessions(workspaceId, false)
   })
 
   ipcMain.handle('terminal:detach', async (event, identity: TerminalSessionIdentity) => {

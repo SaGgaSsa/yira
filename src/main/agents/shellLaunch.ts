@@ -13,6 +13,12 @@ export interface AgentShellCommandInput {
   exitWithAgent?: boolean
 }
 
+export interface WorkspaceScriptShellCommandInput {
+  shellProfileId: AgentShellProfileId
+  command: string
+  platform: NodeJS.Platform
+}
+
 const POSIX_SHELLS: readonly AgentShellProfileId[] = ['bash', 'zsh', 'fish']
 const PROMPT_ENVIRONMENT_VARIABLE = 'YIRA_AGENT_PROMPT'
 
@@ -124,4 +130,41 @@ export function buildAgentShellCommand(input: AgentShellCommandInput): {
     initialCommand: input.exitWithAgent ? `exec ${command}` : command,
     env,
   }
+}
+
+/**
+ * Build a one-shot command invocation that loads the user's shell environment
+ * and then exits with the command's status. POSIX shells use interactive login
+ * mode so PATH setup from both login and interactive profiles is available.
+ */
+export function buildWorkspaceScriptShellCommand(input: WorkspaceScriptShellCommandInput): string[] {
+  if (!input || typeof input.command !== 'string' || !input.command.trim()) {
+    throw new Error('Invalid workspace script command')
+  }
+  if (/[\r\n\u0000]/.test(input.command)) {
+    throw new Error('Workspace script command must be a single line')
+  }
+
+  if (input.shellProfileId === 'powershell') {
+    if (input.platform !== 'win32') throw new Error('PowerShell is only available on Windows')
+    const encodedScript = Buffer.from(input.command, 'utf8').toString('base64')
+    const command = [
+      '$global:LASTEXITCODE = $null',
+      `$scriptText = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encodedScript}'))`,
+      '& ([scriptblock]::Create($scriptText))',
+      '$scriptSucceeded = $?',
+      '$scriptExitCode = $global:LASTEXITCODE',
+      'if ($scriptSucceeded) { exit 0 }',
+      'if ($null -ne $scriptExitCode) { exit $scriptExitCode }',
+      'exit 1',
+    ].join('; ')
+    return ['-EncodedCommand', Buffer.from(command, 'utf16le').toString('base64')]
+  }
+
+  if (!POSIX_SHELLS.includes(input.shellProfileId)) {
+    throw new Error('Unsupported workspace script shell')
+  }
+
+  // The shell receives command as one spawn argument; no shell-level quoting is needed.
+  return ['--login', '-i', '-c', input.command]
 }

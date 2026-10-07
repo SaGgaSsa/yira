@@ -24,6 +24,7 @@ import { clearWindowAttention, registerNotificationIPC } from './ipc/notificatio
 import { registerWindowIPC, type WindowClosePreparationBridge } from './ipc/window'
 import { registerFloatingTilesIPC } from './ipc/floatingTiles'
 import { registerAgentsIPC } from './ipc/agents'
+import { registerScriptsIPC } from './ipc/scripts'
 import { AgentUsageService } from './agentUsage'
 import { AgentUsageDetailsService } from './agentUsageDetails'
 import { AgentUsageIndex } from './agentUsageIndex'
@@ -287,6 +288,7 @@ app.whenReady().then(async () => {
   })
   registerCanvasIPC()
   registerTerminalIPC()
+  registerScriptsIPC()
   void hydrateTerminalSessions().catch((error) => {
     console.warn('[main] terminal session hydration failed:', error instanceof Error ? error.message : String(error))
   })

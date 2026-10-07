@@ -2,7 +2,11 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import type { ShellProfile } from '@shared/types'
-import { buildAgentShellCommand, resolveAgentShellProfile } from './shellLaunch'
+import {
+  buildAgentShellCommand,
+  buildWorkspaceScriptShellCommand,
+  resolveAgentShellProfile,
+} from './shellLaunch'
 
 const shellProfiles: ShellProfile[] = [
   { id: 'powershell', label: 'PowerShell', shell: 'powershell.exe', args: [], available: true },
@@ -135,4 +139,38 @@ test('rejects PowerShell arguments with quote, percent, or line break characters
       platform: 'win32',
     }), /PowerShell cannot pass safely/)
   }
+})
+
+test('runs workspace scripts in a profile-loading PowerShell command and propagates native exit codes', () => {
+  const args = buildWorkspaceScriptShellCommand({
+    shellProfileId: 'powershell',
+    command: 'npm run dev',
+    platform: 'win32',
+  })
+  const script = Buffer.from(args[1], 'base64').toString('utf16le')
+
+  assert.equal(args[0], '-EncodedCommand')
+  assert.match(script, /\$global:LASTEXITCODE = \$null/)
+  assert.match(script, /FromBase64String\('[A-Za-z0-9+/=]+'\)/)
+  assert.match(script, /& \(\[scriptblock\]::Create\(\$scriptText\)\)/)
+  assert.match(script, /exit \$scriptExitCode/)
+  assert.match(script, /if \(\$scriptSucceeded\) \{ exit 0 \}/)
+})
+
+test('runs POSIX workspace scripts through interactive login shells and rejects multiline commands', () => {
+  assert.deepEqual(buildWorkspaceScriptShellCommand({
+    shellProfileId: 'bash',
+    command: 'npm run dev',
+    platform: 'linux',
+  }), ['--login', '-i', '-c', 'npm run dev'])
+  assert.deepEqual(buildWorkspaceScriptShellCommand({
+    shellProfileId: 'zsh',
+    command: 'pnpm run dev',
+    platform: 'darwin',
+  }), ['--login', '-i', '-c', 'pnpm run dev'])
+  assert.throws(() => buildWorkspaceScriptShellCommand({
+    shellProfileId: 'bash',
+    command: 'npm run dev\nrm -rf .',
+    platform: 'linux',
+  }), /single line/)
 })

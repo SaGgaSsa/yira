@@ -58,6 +58,8 @@ import type {
   AgentSessionTranscriptQuery,
   AgentSessionTranscriptResult,
   AgentUsageSnapshot,
+  WorkspaceScriptRun,
+  WorkspaceScriptsSnapshot,
   AgentUsageDetailsSnapshot,
   AgentUsageHistoryRequest,
   AgentUsageHistorySnapshot,
@@ -114,6 +116,14 @@ interface ElectronWorld {
     history: (query?: AgentSessionHistoryQuery) => Promise<AgentSessionHistoryResult>
     queryHistory: (query?: AgentSessionHistoryQuery) => Promise<AgentSessionHistoryResult>
     historyTranscript: (query: AgentSessionTranscriptQuery) => Promise<AgentSessionTranscriptResult>
+  }
+  scripts: {
+    snapshot: (workspaceId: string) => Promise<WorkspaceScriptsSnapshot>
+    run: (input: { workspaceId: string; scriptId: string }) => Promise<WorkspaceScriptRun>
+    stop: (input: { workspaceId: string; scriptId: string }) => Promise<void>
+    subscribe: (workspaceId: string) => Promise<string | false>
+    unsubscribe: (token: string) => Promise<boolean>
+    onChanged: (callback: (snapshot: WorkspaceScriptsSnapshot) => void) => () => void
   }
   settings: {
     load: () => Promise<UserSettings | null>

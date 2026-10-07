@@ -45,6 +45,8 @@ import type {
   WorkspaceCreateInput,
   WorkspaceGitDiffResult,
   WorkspaceManagementCommitInput,
+  WorkspaceScriptRun,
+  WorkspaceScriptsSnapshot,
   WorkspaceType,
   WorkspaceUpdatePatch,
 } from '@shared/types'
@@ -118,6 +120,25 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.invoke('agents:history', query) as Promise<AgentSessionHistoryResult>,
     historyTranscript: (query: AgentSessionTranscriptQuery) =>
       ipcRenderer.invoke('agents:history:transcript', query) as Promise<AgentSessionTranscriptResult>,
+  },
+
+  // Workspace scripts run in persistent daemon PTYs without renderer terminal tiles.
+  scripts: {
+    snapshot: (workspaceId: string) =>
+      ipcRenderer.invoke('scripts:snapshot', workspaceId) as Promise<WorkspaceScriptsSnapshot>,
+    run: (input: { workspaceId: string; scriptId: string }) =>
+      ipcRenderer.invoke('scripts:run', input) as Promise<WorkspaceScriptRun>,
+    stop: (input: { workspaceId: string; scriptId: string }) =>
+      ipcRenderer.invoke('scripts:stop', input) as Promise<void>,
+    subscribe: (workspaceId: string) =>
+      ipcRenderer.invoke('scripts:subscribe', workspaceId) as Promise<string | false>,
+    unsubscribe: (token: string) =>
+      ipcRenderer.invoke('scripts:unsubscribe', token) as Promise<boolean>,
+    onChanged: (callback: (snapshot: WorkspaceScriptsSnapshot) => void) => {
+      const handler = (_event: unknown, snapshot: WorkspaceScriptsSnapshot) => callback(snapshot)
+      ipcRenderer.on('scripts:changed', handler)
+      return () => ipcRenderer.removeListener('scripts:changed', handler)
+    },
   },
 
   // Settings
