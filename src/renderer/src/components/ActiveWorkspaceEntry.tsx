@@ -28,27 +28,26 @@ export function ActiveWorkspaceEntry({
 
   return (
     <div className={className}>
-      <div className="flex min-w-0 items-center gap-1">
-        <button
-          type="button"
-          aria-label={workspace.name}
-          aria-expanded={expanded}
-          title={workspace.name}
-          onClick={onToggleExpanded}
-          className="inline-flex h-7 w-6 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-hover-bg hover:text-text-display focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--interactive)]"
-        >
-          <ChevronDown
-            size={13}
-            aria-hidden="true"
-            className={`transition-transform ${expanded ? '' : '-rotate-90'}`}
-          />
-        </button>
-        <WorkspaceListItem
-          {...workspaceListItemProps}
-          workspace={workspace}
-          className="min-w-0 flex-1"
-        />
-      </div>
+      <WorkspaceListItem
+        {...workspaceListItemProps}
+        workspace={workspace}
+        leading={(
+          <button
+            type="button"
+            aria-label={workspace.name}
+            aria-expanded={expanded}
+            title={workspace.name}
+            onClick={onToggleExpanded}
+            className="inline-flex h-6 w-6 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-hover-bg hover:text-text-display focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--interactive)]"
+          >
+            <ChevronDown
+              size={13}
+              aria-hidden="true"
+              className={`transition-transform ${expanded ? '' : '-rotate-90'}`}
+            />
+          </button>
+        )}
+      />
       {expanded ? (
         <WorkspaceAgentTree
           workspace={workspace}
@@ -56,7 +55,7 @@ export function ActiveWorkspaceEntry({
           onOpenAgent={onOpenAgent}
         />
       ) : (
-        <div className="ml-10 mt-1">
+        <div className="ml-7 mt-1">
           <WorkspaceAgentSummary {...summary} />
         </div>
       )}
