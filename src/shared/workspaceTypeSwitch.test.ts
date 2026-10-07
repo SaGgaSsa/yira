@@ -21,7 +21,6 @@ function tile(id: string, zIndex: number, patch: Partial<TileState> = {}): TileS
 function canvasState(tiles: TileState[], boardVisible = true): CanvasState {
   return {
     tiles,
-    groups: [],
     viewport: { tx: 12, ty: 24, zoom: 0.75 },
     nextZIndex: 20,
     focusedTileId: tiles[0]?.id ?? null,
@@ -65,7 +64,7 @@ if (firstCanvas.boardVisible !== true) throw new Error('new Canvas state must sh
 if (firstCanvas.tiles.map((entry) => entry.id).join(',') !== 'one,two') {
   throw new Error('first Grid to Canvas switch must keep shared tiles')
 }
-if (firstCanvas.groups.length !== 0 || firstCanvas.splitViewState?.leftTileIds.length !== 0) {
+if (firstCanvas.splitViewState?.leftTileIds.length !== 0) {
   throw new Error('first Grid to Canvas switch must not invent Canvas-only layout state')
 }
 

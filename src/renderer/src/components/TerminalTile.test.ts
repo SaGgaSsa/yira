@@ -396,7 +396,6 @@ const terminalTile: TileState = {
 
 const canvasState: CanvasState = {
   tiles: [terminalTile],
-  groups: [],
   viewport: { tx: 0, ty: 0, zoom: 1 },
   nextZIndex: 2,
   focusedTileId: null,

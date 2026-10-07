@@ -1,5 +1,6 @@
 import { useCanvasStore } from './canvasStore'
 import type { CanvasState } from '@shared/types'
+import { normalizeCanvasStateForJson } from '@/utils/canvasStateNormalization'
 
 const state: CanvasState = {
   tiles: [
@@ -25,7 +26,6 @@ const state: CanvasState = {
       fileMarkdownView: 'live',
     } as unknown as CanvasState['tiles'][number],
   ],
-  groups: [],
   viewport: { tx: 0, ty: 0, zoom: 1 },
   nextZIndex: 7,
   focusedTileId: null,
@@ -144,3 +144,34 @@ for (const tileId of expected.keys()) {
     throw new Error(`updated ${tileId} must clamp to ${size.width}x${size.height}, got ${tile.width}x${tile.height}`)
   }
 }
+
+const legacyState = {
+  ...state,
+  tiles: [
+    {
+      id: 'legacy-grouped',
+      type: 'terminal',
+      x: 0,
+      y: 0,
+      width: 900,
+      height: 400,
+      zIndex: 1,
+      groupId: 'legacy-group',
+    },
+  ],
+  groups: [
+    {
+      id: 'legacy-group',
+      name: 'Old group',
+      colorId: 'blue',
+      tileIds: ['legacy-grouped'],
+      locked: true,
+    },
+  ],
+} as unknown as CanvasState
+
+useCanvasStore.getState().restoreState(normalizeCanvasStateForJson(legacyState))
+
+const legacyGroupedTile = useCanvasStore.getState().tiles.find((tile) => tile.id === 'legacy-grouped')
+if (!legacyGroupedTile) throw new Error('restoring legacy grouped canvas state must keep its tile')
+if ('groupId' in legacyGroupedTile) throw new Error('restoring legacy canvas state must discard tile group references')

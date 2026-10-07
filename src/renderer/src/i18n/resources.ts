@@ -41,7 +41,6 @@ type TranslationResources = {
     crashReload: string
   }
   sidebar: {
-    groups: string
     workspaces: string
     workspaceCount_one: string
     workspaceCount_other: string
@@ -332,8 +331,6 @@ type TranslationResources = {
     gridAndSnapping: string
     gridSize: string
     gridVisible: string
-    groupsCapability: string
-    groupsCapabilityDescription: string
     homeUrl: string
     interfaceFontSize: string
     keyboardShortcutCatalog: string
@@ -647,10 +644,6 @@ type TranslationResources = {
   }
   canvas: {
     clearSelection: string
-    group: string
-    groupColor: string
-    lockGroup: string
-    unlockGroup: string
     showAll: string
   }
   board: {
@@ -694,15 +687,9 @@ type TranslationResources = {
     openExternally: string
     webSurface: string
     createWorkspaceContent: string
-    groupColor: string
     moveTile: string
     resizeSplit: string
-    groupSettings: string
-    groupName: string
-    untitledGroup: string
     color: string
-    lockGroup: string
-    lockGroupDescription: string
     loadingNote: string
     noteUntitled: string
     noteEdited: string
@@ -773,10 +760,6 @@ type TranslationResources = {
     selectAll: string
     gridFull: string
     gridFullMessage: string
-    createGroup: string
-    editGroup: string
-    ungroupTiles: string
-    ungroupTilesMessage: string
     refreshTerminal: string
     refreshTerminalMessage: string
     refreshBrowser: string
@@ -795,10 +778,6 @@ type TranslationResources = {
     rejectTaskMessage: string
     requiredNote: string
     show: string
-    editGroupAction: string
-    ungroup: string
-    removeTileFromGroup: string
-    removeTileFromGroupMessage: string
     updateReady: string
     restartUpdateMessage: string
     downloadingUpdate: string
@@ -809,14 +788,11 @@ type TranslationResources = {
     tileTypeFile: string
     yiraTile: string
     tileComingSoon: string
-    createGroupConfirm: string
-    saveGroup: string
     saveTile: string
     keepRunning: string
     keepCurrent: string
     keepEditing: string
     keepTask: string
-    keepInGroup: string
     remove: string
     updateProgress: string
     downloadingUpdateUnknown: string
@@ -846,7 +822,6 @@ type TranslationResources = {
     thisTile: string
     closeTileMessage: string
     keepOpen: string
-    keepGroup: string
     ready: string
     missing: string
     richNote: string
@@ -898,7 +873,6 @@ const en: TranslationResources = {
     crashReload: 'Reload window',
   },
   sidebar: {
-    groups: 'Groups',
     workspaces: 'Workspaces',
     workspaceCount_one: '{{count}} workspace',
     workspaceCount_other: '{{count}} workspaces',
@@ -1189,8 +1163,6 @@ const en: TranslationResources = {
     gridAndSnapping: 'Grid and snapping',
     gridSize: 'Grid size',
     gridVisible: 'Grid visible',
-    groupsCapability: 'Groups capability',
-    groupsCapabilityDescription: 'Show visual groups and apply group locks.',
     homeUrl: 'Home URL',
     interfaceFontSize: 'Interface font size',
     keyboardShortcutCatalog: 'Keyboard Shortcut catalog',
@@ -1504,10 +1476,6 @@ const en: TranslationResources = {
   },
   canvas: {
     clearSelection: 'Clear Selection',
-    group: 'Group',
-    groupColor: 'Group color',
-    lockGroup: 'Lock group',
-    unlockGroup: 'Unlock group',
     showAll: 'Show All',
   },
   board: {
@@ -1551,15 +1519,9 @@ const en: TranslationResources = {
     openExternally: 'Open externally',
     webSurface: 'Web Surface',
     createWorkspaceContent: 'Create a terminal, note, browser, timer, or workspace board.',
-    groupColor: 'Group color',
     moveTile: 'Move tile',
     resizeSplit: 'Resize split',
-    groupSettings: 'Group Settings',
-    groupName: 'Group name',
-    untitledGroup: 'Untitled Group',
     color: 'Color',
-    lockGroup: 'Lock group',
-    lockGroupDescription: 'Prevent moving or resizing the group and its tiles.',
     loadingNote: 'Loading note...',
     noteUntitled: 'Untitled',
     noteEdited: 'Edited {{time}}',
@@ -1630,10 +1592,6 @@ const en: TranslationResources = {
     selectAll: 'Select All',
     gridFull: 'Grid is full',
     gridFullMessage: 'Grid workspaces can contain at most {{count}} tiles.',
-    createGroup: 'Create group',
-    editGroup: 'Edit group',
-    ungroupTiles: 'Ungroup tiles',
-    ungroupTilesMessage: 'Ungroup "{{name}}" and keep its tiles separate on the canvas?',
     refreshTerminal: 'Refresh terminal',
     refreshTerminalMessage: 'Refresh "{{label}}"? This restarts the terminal and stops any running process in that session.',
     refreshBrowser: 'Refresh browser tile',
@@ -1652,10 +1610,6 @@ const en: TranslationResources = {
     rejectTaskMessage: 'Explain why "{{title}}" is returning to In Progress.',
     requiredNote: 'Required note',
     show: 'Show',
-    editGroupAction: 'Edit Group',
-    ungroup: 'Ungroup',
-    removeTileFromGroup: 'Remove tile from group',
-    removeTileFromGroupMessage: 'Remove "{{tile}}" from "{{group}}"? The tile will be moved outside the group frame.',
     updateReady: 'Update {{version}} is ready',
     restartUpdateMessage: 'Restart Yira to install the downloaded version.',
     downloadingUpdate: 'Downloading update {{version}}',
@@ -1666,14 +1620,11 @@ const en: TranslationResources = {
     tileTypeFile: 'File',
     yiraTile: 'Yira Tile',
     tileComingSoon: '{{tile}} coming soon',
-    createGroupConfirm: 'Create Group',
-    saveGroup: 'Save Group',
     saveTile: 'Save {{tile}}',
     keepRunning: 'Keep Running',
     keepCurrent: 'Keep Current',
     keepEditing: 'Keep Editing',
     keepTask: 'Keep Task',
-    keepInGroup: 'Keep In Group',
     remove: 'Remove',
     updateProgress: '{{percent}}% completed in the background.',
     downloadingUpdateUnknown: 'Downloading update',
@@ -1703,7 +1654,6 @@ const en: TranslationResources = {
     thisTile: 'this tile',
     closeTileMessage: 'Close "{{label}}"? Any running session or unsaved surface state may be lost.',
     keepOpen: 'Keep Open',
-    keepGroup: 'Keep Group',
     ready: 'Ready',
     missing: 'Missing',
     richNote: 'Rich Note',
@@ -1755,7 +1705,6 @@ const es: TranslationResources = {
     crashReload: 'Recargar ventana',
   },
   sidebar: {
-    groups: 'Grupos',
     workspaces: 'Espacios de trabajo',
     workspaceCount_one: '{{count}} espacio de trabajo',
     workspaceCount_other: '{{count}} espacios de trabajo',
@@ -2046,8 +1995,6 @@ const es: TranslationResources = {
     gridAndSnapping: 'Cuadrícula y ajuste',
     gridSize: 'Tamaño de cuadrícula',
     gridVisible: 'Cuadrícula visible',
-    groupsCapability: 'Función de grupos',
-    groupsCapabilityDescription: 'Muestra grupos visuales y aplica bloqueos de grupo.',
     homeUrl: 'URL de inicio',
     interfaceFontSize: 'Tamaño de fuente de la interfaz',
     keyboardShortcutCatalog: 'Catálogo de atajos de teclado',
@@ -2361,10 +2308,6 @@ const es: TranslationResources = {
   },
   canvas: {
     clearSelection: 'Limpiar selección',
-    group: 'Agrupar',
-    groupColor: 'Color del grupo',
-    lockGroup: 'Bloquear grupo',
-    unlockGroup: 'Desbloquear grupo',
     showAll: 'Mostrar todo',
   },
   board: {
@@ -2408,15 +2351,9 @@ const es: TranslationResources = {
     openExternally: 'Abrir externamente',
     webSurface: 'Superficie web',
     createWorkspaceContent: 'Crea una terminal, una nota, un navegador, un temporizador o un tablero del espacio de trabajo.',
-    groupColor: 'Color del grupo',
     moveTile: 'Mover panel',
     resizeSplit: 'Cambiar tamaño de la división',
-    groupSettings: 'Configuración del grupo',
-    groupName: 'Nombre del grupo',
-    untitledGroup: 'Grupo sin título',
     color: 'Color',
-    lockGroup: 'Bloquear grupo',
-    lockGroupDescription: 'Evita mover o cambiar el tamaño del grupo y sus paneles.',
     loadingNote: 'Cargando nota...',
     noteUntitled: 'Sin título',
     noteEdited: 'Editado {{time}}',
@@ -2487,10 +2424,6 @@ const es: TranslationResources = {
     selectAll: 'Seleccionar todo',
     gridFull: 'La cuadrícula está llena',
     gridFullMessage: 'Los espacios de trabajo en cuadrícula admiten hasta {{count}} paneles.',
-    createGroup: 'Crear grupo',
-    editGroup: 'Editar grupo',
-    ungroupTiles: 'Separar paneles del grupo',
-    ungroupTilesMessage: '¿Separar "{{name}}" y dejar sus paneles sueltos en el lienzo?',
     refreshTerminal: 'Actualizar terminal',
     refreshTerminalMessage: '¿Actualizar "{{label}}"? Esto reiniciará la terminal y detendrá los procesos que estén en esa sesión.',
     refreshBrowser: 'Actualizar panel del navegador',
@@ -2509,10 +2442,6 @@ const es: TranslationResources = {
     rejectTaskMessage: 'Explica por qué "{{title}}" vuelve a En curso.',
     requiredNote: 'Nota obligatoria',
     show: 'Mostrar',
-    editGroupAction: 'Editar grupo',
-    ungroup: 'Separar del grupo',
-    removeTileFromGroup: 'Quitar panel del grupo',
-    removeTileFromGroupMessage: '¿Quitar "{{tile}}" de "{{group}}"? El panel quedará fuera del marco del grupo.',
     updateReady: 'La actualización {{version}} está lista',
     restartUpdateMessage: 'Reinicia Yira para instalar la versión descargada.',
     downloadingUpdate: 'Descargando la actualización {{version}}',
@@ -2523,14 +2452,11 @@ const es: TranslationResources = {
     tileTypeFile: 'Archivo',
     yiraTile: 'Panel de Yira',
     tileComingSoon: '{{tile}} estará disponible próximamente',
-    createGroupConfirm: 'Crear grupo',
-    saveGroup: 'Guardar grupo',
     saveTile: 'Guardar {{tile}}',
     keepRunning: 'Seguir ejecutando',
     keepCurrent: 'Conservar actual',
     keepEditing: 'Seguir editando',
     keepTask: 'Conservar tarea',
-    keepInGroup: 'Mantener en el grupo',
     remove: 'Quitar',
     updateProgress: '{{percent}}% completado en segundo plano.',
     downloadingUpdateUnknown: 'Descargando actualización',
@@ -2560,7 +2486,6 @@ const es: TranslationResources = {
     thisTile: 'este panel',
     closeTileMessage: '¿Cerrar "{{label}}"? Se podría perder una sesión en curso o el estado de una superficie sin guardar.',
     keepOpen: 'Mantener abierto',
-    keepGroup: 'Mantener grupo',
     ready: 'Disponible',
     missing: 'No disponible',
     richNote: 'Nota con formato',

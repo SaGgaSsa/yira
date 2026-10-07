@@ -29,7 +29,6 @@ export interface SettingsState extends UserSettings {
   setNotificationAttentionDelayEnabled: (enabled: boolean) => void
   setDesktopAlertsEnabled: (enabled: boolean) => void
   setTileCreationAvailable: (type: ConfigurableTileCreationType, available: boolean) => void
-  setGroupsEnabled: (enabled: boolean) => void
   setNewAgentSessionShortcut: (shortcut: string) => void
   applySettings: (settings: UserSettings) => Promise<void>
   loadSettings: () => Promise<void>
@@ -58,7 +57,6 @@ export function createUserSettingsDraft(settings: UserSettings): UserSettings {
     tiles: {
       creationAvailability: { ...settings.tiles.creationAvailability },
     },
-    groups: { ...settings.groups },
     shortcuts: { ...settings.shortcuts },
   }
 }
@@ -96,7 +94,6 @@ function scheduleSave() {
           ...state.tiles.creationAvailability,
         },
       },
-      groups: { enabled: state.groups.enabled },
       shortcuts: { ...state.shortcuts },
     }
     window.electron.settings.save(settings)
@@ -200,11 +197,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     scheduleSave()
   },
 
-  setGroupsEnabled: (enabled) => {
-    set((state) => ({ groups: { ...state.groups, enabled } }))
-    scheduleSave()
-  },
-
   setNewAgentSessionShortcut: (shortcut) => {
     const normalized = normalizeAccelerator(shortcut) ?? DEFAULT_USER_SETTINGS.shortcuts.newAgentSession
     set((state) => ({ shortcuts: { ...state.shortcuts, newAgentSession: normalized } }))
@@ -232,7 +224,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       tiles: {
         creationAvailability: { ...normalized.tiles.creationAvailability },
       },
-      groups: { ...normalized.groups },
       shortcuts: { ...normalized.shortcuts },
     })
     await i18n.changeLanguage(normalized.language)
@@ -289,9 +280,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
               ...normalized.tiles.creationAvailability,
             },
           },
-          groups: {
-            enabled: normalized.groups.enabled,
-          },
           shortcuts: { ...normalized.shortcuts },
           loaded: true,
         })
@@ -341,7 +329,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           ...state.tiles.creationAvailability,
         },
       },
-      groups: { enabled: state.groups.enabled },
       shortcuts: { ...state.shortcuts },
     }
     window.electron.settings.save(settings)

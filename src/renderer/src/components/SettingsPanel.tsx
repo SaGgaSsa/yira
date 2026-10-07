@@ -160,7 +160,6 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
   const attentionDelayEnabled = draft.notifications.attentionDelayEnabled
   const desktopAlertsEnabled = draft.notifications.desktopAlertsEnabled
   const tileCreationAvailability = draft.tiles.creationAvailability
-  const groupsEnabled = draft.groups.enabled
   const setAgentEnabled = (provider: AgentProvider, enabled: boolean) => setDraft((current) => ({
     ...current,
     agents: { ...current.agents, [provider]: { enabled } },
@@ -207,7 +206,6 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
       },
     },
   }))
-  const setGroupsEnabled = (enabled: boolean) => setDraft((current) => ({ ...current, groups: { enabled } }))
   const handleAgentShortcutCapture = (event: React.KeyboardEvent<HTMLInputElement>) => {
     event.preventDefault()
     event.stopPropagation()
@@ -713,14 +711,6 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
                 checked={updateDiagnosticsEnabled}
                 onChange={(event) => setUpdateDiagnosticsEnabled(event.target.checked)}
               />
-            </label>
-
-            <label className="flex items-center justify-between gap-4 rounded-[20px] border border-border-visible bg-bg-primary px-4 py-4">
-              <span>
-                <span className="nd-label block text-text-display">{t('settings.groupsCapability')}</span>
-                <span className="mt-2 block text-sm leading-6 text-text-secondary">{t('settings.groupsCapabilityDescription')}</span>
-              </span>
-              <input type="checkbox" checked={groupsEnabled} onChange={(event) => setGroupsEnabled(event.target.checked)} />
             </label>
 
             <button

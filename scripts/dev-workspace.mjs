@@ -9,7 +9,6 @@ const DEV_DATA_DIRECTORY_NAME = '.yira-dev'
 function createCanvasState(tiles, focusedTileId) {
   return {
     tiles,
-    groups: [],
     viewport: { tx: 0, ty: 0, zoom: 0.8 },
     nextZIndex: tiles.length + 1,
     focusedTileId,

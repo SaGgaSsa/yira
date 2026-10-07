@@ -15,7 +15,6 @@ import { BoardView } from './components/BoardView'
 import { FloatingTileWindow } from './components/FloatingTileWindow'
 import { TerminalRuntimeProvider, useTerminalRuntimeContext } from './components/TerminalRuntimeProvider'
 import { AppDialog, type ConfirmDialogOptions, type PromptDialogOptions } from './components/AppDialog'
-import { GroupEditorDialog, type GroupEditorRequest, type GroupEditorValue } from './components/GroupEditorDialog'
 import { WorkspaceDialog, type WorkspaceDialogRequest, type WorkspaceDialogValue } from './components/WorkspaceDialog'
 import { WorkspaceManagementDialog } from './components/WorkspaceManagementDialog'
 import { WorkspaceListItem } from './components/WorkspaceListItem'
@@ -35,8 +34,27 @@ import { useTheme } from './hooks/useTheme'
 import { useFontSize } from './hooks/useFontSize'
 import { resolveSidebarCollapsedForActivity } from './utils/emptyWorkspaceView'
 import { useUpdateStore } from './store/updateStore'
-import { findMergeTargetGroup, getGroupingBlockedReason } from './utils/grouping'
-import { GRID_MAX_TILES, GROUP_COLOR_ORDER, getDefaultTileSize, type AgentActiveSession, type AgentSessionCreateResult, type AgentSessionHistoryItem, type AgentUsageSnapshot, type BoardState, type BoardTask, type FileTileOpenOptions, type TileState, type CanvasState, type GridWorkspaceState, type Workspace, type WorkspaceMetadata, type TileGroup, type ViewMode, type SplitPanelId, type SplitViewState, type WorkspaceManagementEntry, type WorkspaceType } from '@shared/types'
+import {
+  GRID_MAX_TILES,
+  getDefaultTileSize,
+  type AgentActiveSession,
+  type AgentSessionCreateResult,
+  type AgentSessionHistoryItem,
+  type AgentUsageSnapshot,
+  type BoardState,
+  type BoardTask,
+  type FileTileOpenOptions,
+  type TileState,
+  type CanvasState,
+  type GridWorkspaceState,
+  type Workspace,
+  type WorkspaceMetadata,
+  type ViewMode,
+  type SplitPanelId,
+  type SplitViewState,
+  type WorkspaceManagementEntry,
+  type WorkspaceType,
+} from '@shared/types'
 import { createDefaultAgentProvidersConfig } from '@shared/workspaceConfig'
 import { createEmptyGridWorkspaceState, normalizeGridWorkspaceState } from '@shared/gridWorkspaceState'
 import {
@@ -81,9 +99,8 @@ import {
   pruneWorkspaceTerminalRuntimes,
 } from './utils/terminalRuntimeCleanup'
 import type { TerminalSessionTarget } from '@shared/terminalSessionIdentity'
-import { Terminal, StickyNote, SlidersHorizontal, Trash2, Pencil, Lock, Columns, Download, X, Plus } from 'lucide-react'
+import { Terminal, StickyNote, SlidersHorizontal, Download, X, Plus } from 'lucide-react'
 
-const GROUP_SHOW_TOP_PADDING = 42
 const EMPTY_BOARD_STATE: BoardState = {
   enabled: false,
   tasks: [],
@@ -92,7 +109,6 @@ const EMPTY_BOARD_STATE: BoardState = {
 function createEmptyCanvasState(): CanvasState {
   return {
     tiles: [],
-    groups: [],
     viewport: { tx: 0, ty: 0, zoom: 1 },
     nextZIndex: 1,
     focusedTileId: null,
@@ -110,16 +126,15 @@ function createEmptyCanvasState(): CanvasState {
   }
 }
 
-type CanvasSnapshotSource = Pick<ReturnType<typeof useCanvasStore.getState>, 'tiles' | 'groups' | 'viewport' | 'nextZIndex' | 'focusedTileId' | 'viewMode' | 'fullviewActiveTileId' | 'boardVisible' | 'splitViewState'>
+type CanvasSnapshotSource = Pick<
+  ReturnType<typeof useCanvasStore.getState>,
+  'tiles' | 'viewport' | 'nextZIndex' | 'focusedTileId' | 'viewMode' | 'fullviewActiveTileId' | 'boardVisible' | 'splitViewState'
+>
 type GridSnapshotSource = Pick<ReturnType<typeof useCanvasStore.getState>, 'tiles' | 'nextZIndex' | 'focusedTileId' | 'viewMode' | 'fullviewActiveTileId' | 'boardVisible' | 'gridViewState' | 'splitViewState'>
 
 function createCanvasSnapshot(source: CanvasSnapshotSource): CanvasState {
   return {
     tiles: source.tiles.map((tile) => ({ ...tile })),
-    groups: source.groups.map((group) => ({
-      ...group,
-      tileIds: [...group.tileIds],
-    })),
     viewport: { ...source.viewport },
     nextZIndex: source.nextZIndex,
     focusedTileId: source.focusedTileId,
@@ -251,19 +266,6 @@ type ConfirmDialogState = {
 
 type ActiveDialogState = PromptDialogState | ConfirmDialogState | null
 
-type GroupEditorState =
-  | {
-      mode: 'create'
-      tileIds: string[]
-      request: GroupEditorRequest
-    }
-  | {
-      mode: 'edit'
-      groupId: string
-      request: GroupEditorRequest
-    }
-  | null
-
 type TileEditorState = {
   tileId: string
   request: TileEditorRequest
@@ -318,14 +320,12 @@ function AppContent(): React.ReactElement {
   const installUpdate = useUpdateStore((s) => s.installUpdate)
   const agentSettings = useSettingsStore((s) => s.agents)
   const newAgentSessionShortcut = useSettingsStore((s) => s.shortcuts.newAgentSession)
-  const groupsEnabled = useSettingsStore((s) => s.groups.enabled)
   const terminalAttentionEnabled = useSettingsStore((s) => s.terminal.attentionEnabled)
   const tileCreationAvailability = useSettingsStore((s) => s.tiles.creationAvailability)
 
   // Canvas state
   const tiles = useCanvasStore((s) => s.tiles)
   const viewport = useCanvasStore((s) => s.viewport)
-  const groups = useCanvasStore((s) => s.groups)
   const nextZIndex = useCanvasStore((s) => s.nextZIndex)
   const focusedTileId = useCanvasStore((s) => s.focusedTileId)
   const selectedTileIds = useCanvasStore((s) => s.selectedTileIds)
@@ -345,11 +345,6 @@ function AppContent(): React.ReactElement {
   const updateTile = useCanvasStore((s) => s.updateTile)
   const focusTile = useCanvasStore((s) => s.focusTile)
   const selectTiles = useCanvasStore((s) => s.selectTiles)
-  const createGroup = useCanvasStore((s) => s.createGroup)
-  const addTilesToGroup = useCanvasStore((s) => s.addTilesToGroup)
-  const updateGroup = useCanvasStore((s) => s.updateGroup)
-  const setGroupLocked = useCanvasStore((s) => s.setGroupLocked)
-  const ungroup = useCanvasStore((s) => s.ungroup)
   const setWorkspace = useCanvasStore((s) => s.setWorkspace)
   const restoreWorkspaceState = useCanvasStore((s) => s.restoreWorkspaceState)
   const restoreGridWorkspaceState = useCanvasStore((s) => s.restoreGridWorkspaceState)
@@ -518,13 +513,11 @@ function AppContent(): React.ReactElement {
   }, [activeWorkspaceId, agentsView.effectiveProvider, agentsView.openForSession, pendingAgentSession])
   const sidebarBeforeActivityRef = useRef(false)
   const previousActivityOpenRef = useRef(false)
-  const [groupEditor, setGroupEditor] = useState<GroupEditorState>(null)
   const [workspaceEditor, setWorkspaceEditor] = useState<WorkspaceEditorState>(null)
   const [tileEditor, setTileEditor] = useState<TileEditorState>(null)
   const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState<string | null>(null)
   const [tileRefreshKeys, setTileRefreshKeys] = useState<Record<string, number>>({})
   const [tileMenu, setTileMenu] = useState<{ tileId: string; x: number; y: number } | null>(null)
-  const [groupMenu, setGroupMenu] = useState<{ groupId: string; x: number; y: number } | null>(null)
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const workspaceTransitionRef = useRef(0)
   const previousSidebarWorkspaceIdRef = useRef(activeWorkspaceId)
@@ -629,7 +622,6 @@ function AppContent(): React.ReactElement {
   const currentCanvasState = useMemo(
     () => createCanvasSnapshot({
       tiles,
-      groups,
       viewport,
       nextZIndex,
       focusedTileId,
@@ -638,7 +630,7 @@ function AppContent(): React.ReactElement {
       boardVisible,
       splitViewState,
     }),
-    [tiles, groups, viewport, nextZIndex, focusedTileId, viewMode, fullviewActiveTileId, boardVisible, splitViewState],
+    [tiles, viewport, nextZIndex, focusedTileId, viewMode, fullviewActiveTileId, boardVisible, splitViewState],
   )
   const currentGridState = useMemo(
     () => createGridSnapshot({
@@ -1022,7 +1014,7 @@ function AppContent(): React.ReactElement {
     }
 
     scheduleSave()
-  }, [tiles, groups, viewport, nextZIndex, viewMode, fullviewActiveTileId, splitViewState, gridViewState, activeWorkspaceId, scheduleSave])
+  }, [tiles, viewport, nextZIndex, viewMode, fullviewActiveTileId, splitViewState, gridViewState, activeWorkspaceId, scheduleSave])
 
   useEffect(() => {
     if (!showProfilePicker && !showNotePicker) return
@@ -1058,8 +1050,6 @@ function AppContent(): React.ReactElement {
       setShowWorkspaceManager(false)
       setShowSettings(false)
       setTileMenu(null)
-      setGroupMenu(null)
-      setGroupEditor(null)
       setTileEditor(null)
       closeActiveDialog()
     },
@@ -1069,7 +1059,6 @@ function AppContent(): React.ReactElement {
   const defaultProfile = availableProfiles.find((p) => p.id === 'bash') ??
     availableProfiles.find((p) => p.id === 'zsh') ??
     availableProfiles.find((p) => p.available)
-  const effectiveGroups = groupsEnabled ? groups : []
   const sidebarWorkspaces = useMemo(
     () => getWorkspaceSidebarOrder(workspaceMetadata),
     [workspaceMetadata],
@@ -1497,130 +1486,6 @@ function AppContent(): React.ReactElement {
     setViewMode(transition.viewMode)
   }, [activeWorkspaceType, attachedTiles, boardState.enabled, focusTile, focusedTileId, fullviewActiveTileId, openBoard, selectTiles, setFullviewActiveTileId, setSplitViewState, setViewMode, splitViewState, switchWorkspaceType, viewMode])
 
-  const mergeTargetGroup = useMemo(
-    () => findMergeTargetGroup(attachedTiles, effectiveGroups, selectedTileIds),
-    [attachedTiles, effectiveGroups, selectedTileIds],
-  )
-
-  const groupingBlockedReason = useMemo(
-    () => getGroupingBlockedReason(attachedTiles, effectiveGroups, selectedTileIds, mergeTargetGroup?.id),
-    [attachedTiles, effectiveGroups, selectedTileIds, mergeTargetGroup],
-  )
-
-  const handleCreateGroupFromSelection = useCallback(() => {
-    if (!groupsEnabled) return
-    if (groupingBlockedReason) return
-
-    if (mergeTargetGroup) {
-      addTilesToGroup(mergeTargetGroup.id, selectedTileIds)
-      return
-    }
-
-    if (selectedTileIds.length < 2) return
-    setGroupEditor({
-      mode: 'create',
-      tileIds: [...selectedTileIds],
-      request: {
-        title: t('ui.createGroup'),
-        confirmLabel: t('ui.createGroupConfirm'),
-        value: {
-          name: t('ui.untitledGroup'),
-          colorId: GROUP_COLOR_ORDER[groups.length % GROUP_COLOR_ORDER.length] ?? GROUP_COLOR_ORDER[0],
-          locked: false,
-        },
-      },
-    })
-  }, [addTilesToGroup, groupingBlockedReason, groups.length, groupsEnabled, mergeTargetGroup, selectedTileIds, t])
-
-  const openGroupEditor = useCallback((group: TileGroup) => {
-    setGroupMenu(null)
-    setGroupEditor({
-      mode: 'edit',
-      groupId: group.id,
-      request: {
-        title: t('ui.editGroup'),
-        confirmLabel: t('ui.saveGroup'),
-        value: {
-          name: group.name,
-          colorId: group.colorId,
-          locked: Boolean(group.locked),
-        },
-      },
-    })
-  }, [t])
-
-  const handleConfirmGroupEditor = useCallback((value: GroupEditorValue) => {
-    if (!groupEditor) return
-
-    const nextGroup = {
-      name: value.name,
-      colorId: value.colorId,
-      locked: value.locked,
-    }
-
-    if (groupEditor.mode === 'create') {
-      createGroup(nextGroup, groupEditor.tileIds)
-    } else {
-      updateGroup(groupEditor.groupId, nextGroup)
-    }
-
-    setGroupEditor(null)
-  }, [createGroup, groupEditor, updateGroup])
-
-  const handleUngroup = useCallback(async (group: TileGroup) => {
-    const confirmed = await requestConfirm({
-      title: t('ui.ungroupTiles'),
-      message: t('ui.ungroupTilesMessage', { name: group.name }),
-      confirmLabel: t('ui.ungroup'),
-      cancelLabel: t('ui.keepGroup'),
-      danger: true,
-    })
-    if (!confirmed) return
-    ungroup(group.id)
-  }, [requestConfirm, t, ungroup])
-
-  const handleToggleGroupLock = useCallback((group: TileGroup) => {
-    setGroupLocked(group.id, !group.locked)
-  }, [setGroupLocked])
-
-  const getGroupBounds = useCallback((group: TileGroup) => {
-    const groupTiles = tiles.filter((tile) => group.tileIds.includes(tile.id))
-    if (groupTiles.length === 0) return null
-
-    return {
-      tileIds: groupTiles.map((tile) => tile.id),
-      minX: Math.min(...groupTiles.map((tile) => tile.x)),
-      minY: Math.min(...groupTiles.map((tile) => tile.y)),
-      maxX: Math.max(...groupTiles.map((tile) => tile.x + tile.width)),
-      maxY: Math.max(...groupTiles.map((tile) => tile.y + tile.height)),
-    }
-  }, [tiles])
-
-  const handleShowGroup = useCallback((group: TileGroup) => {
-    const bounds = getGroupBounds(group)
-    if (!bounds) return
-
-    setGroupMenu(null)
-    selectTiles(bounds.tileIds)
-    focusTile(null)
-
-    const fitGroupBounds = () => {
-      getCanvasMethods()?.fitViewToBounds(bounds, { top: GROUP_SHOW_TOP_PADDING })
-    }
-
-    if (viewMode === 'canvas') {
-      fitGroupBounds()
-      return
-    }
-
-    setViewMode('canvas')
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        fitGroupBounds()
-      })
-    })
-  }, [focusTile, getGroupBounds, selectTiles, setViewMode, viewMode])
-
   const openTileEditor = useCallback((tile: TileState) => {
     setTileMenu(null)
     setTileEditor({
@@ -1670,7 +1535,6 @@ function AppContent(): React.ReactElement {
 
   const openTileConfigurationMenu = useCallback((tileId: string, trigger: HTMLElement) => {
     const rect = trigger.getBoundingClientRect()
-    setGroupMenu(null)
     setTileMenu({ tileId, x: rect.left, y: rect.bottom + 6 })
   }, [])
 
@@ -2120,7 +1984,6 @@ function AppContent(): React.ReactElement {
   }, [activeWorkspaceId, requestPrompt, t])
 
   const activeTileMenu = tileMenu ? tiles.find((tile) => tile.id === tileMenu.tileId) ?? null : null
-  const activeGroupMenu = groupsEnabled && groupMenu ? effectiveGroups.find((group) => group.id === groupMenu.groupId) ?? null : null
   const tileMenuItems: MenuItem[] = activeTileMenu
     ? buildTileConfigurationMenuItems({
         tile: activeTileMenu,
@@ -2133,33 +1996,6 @@ function AppContent(): React.ReactElement {
         translate: (key) => t(key),
       })
     : []
-  const groupMenuItems: MenuItem[] = activeGroupMenu ? [
-    {
-      label: t('ui.show'),
-      icon: Columns,
-      action: () => handleShowGroup(activeGroupMenu),
-    },
-    {
-      label: t('ui.editGroupAction'),
-      icon: Pencil,
-      action: () => {
-        openGroupEditor(activeGroupMenu)
-      },
-    },
-    {
-      label: activeGroupMenu.locked ? t('ui.unlock') : t('ui.lock'),
-      icon: Lock,
-      action: () => handleToggleGroupLock(activeGroupMenu),
-    },
-    {
-      label: t('ui.ungroup'),
-      icon: Trash2,
-      danger: true,
-      action: () => {
-        void handleUngroup(activeGroupMenu)
-      },
-    },
-  ] : []
   const sortedTiles = sortedAttachedTiles
 
   useEffect(() => {
@@ -2307,16 +2143,6 @@ function AppContent(): React.ReactElement {
     })
     activateSplitTile(targetPanel, tileId)
   }, [activateSplitTile, setSplitViewState, splitViewState])
-
-  const confirmRemoveTileFromGroup = useCallback(async (tile: TileState, group: TileGroup) => {
-    return requestConfirm({
-      title: t('ui.removeTileFromGroup'),
-      message: t('ui.removeTileFromGroupMessage', { tile: tile.label ?? t('ui.thisTile'), group: group.name }),
-      confirmLabel: t('ui.remove'),
-      cancelLabel: t('ui.keepInGroup'),
-      danger: true,
-    })
-  }, [requestConfirm, t])
 
   const currentUpdateBannerKey = updateStatus === 'downloaded'
     ? `downloaded:${updateAvailableVersion ?? 'ready'}`
@@ -2737,18 +2563,12 @@ function AppContent(): React.ReactElement {
                     canCreateNote={canCreateNote}
                     canCreateBrowser={canCreateBrowser}
                     canCreateTimer={canCreateTimer}
-                    onCreateGroupFromSelection={() => {
-                      void handleCreateGroupFromSelection()
-                    }}
-                    groupsEnabled={activeWorkspaceType === 'canvas' && groupsEnabled}
                     onDeleteTile={deleteTile}
                     onConfigureTile={(tile, x, y) => {
-                      setGroupMenu(null)
                       setTileMenu({ tileId: tile.id, x, y })
                     }}
                     onFocusTileInView={focusTileInFullview}
                     onDetachTile={detachTile}
-                    onConfirmRemoveFromGroup={confirmRemoveTileFromGroup}
                     tileRefreshKeys={tileRefreshKeys}
                     viewMode={viewMode}
                     fullviewActiveTileId={fullviewActiveTileId}
@@ -2883,23 +2703,10 @@ function AppContent(): React.ReactElement {
           onClose={() => setTileMenu(null)}
         />
       )}
-      {groupMenu && activeGroupMenu && (
-        <ContextMenu
-          x={groupMenu.x}
-          y={groupMenu.y}
-          items={groupMenuItems}
-          onClose={() => setGroupMenu(null)}
-        />
-      )}
       <AppDialog
         request={activeDialog?.request ?? null}
         onCancel={closeActiveDialog}
         onConfirm={confirmActiveDialog}
-      />
-      <GroupEditorDialog
-        request={groupEditor?.request ?? null}
-        onCancel={() => setGroupEditor(null)}
-        onConfirm={handleConfirmGroupEditor}
       />
       <WorkspaceDialog
         request={workspaceEditor?.request ?? null}

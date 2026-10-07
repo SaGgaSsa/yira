@@ -2,7 +2,6 @@ import { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useCanvasStore } from '@/store/canvasStore'
 import { useSettingsStore } from '@/store/settingsStore'
-import { findSelectedGroup, getGroupAnchorTile } from '@/utils/grouping'
 import { buildDuplicateTerminalTile, insertDuplicateIntoSplitPanel } from '@/utils/duplicateTerminalTile'
 import { getBrowserTileUrl } from '@/utils/browserUrl'
 import type { ConfirmDialogOptions } from '@/components/AppDialog'
@@ -42,11 +41,9 @@ export function useCanvasActions({ requestConfirm, destroyTerminalRuntime }: Use
   const { t } = useTranslation()
   const browserHomeUrl = useSettingsStore((s) => s.browser.homeUrl)
   const tileCreationAvailability = useSettingsStore((s) => s.tiles.creationAvailability)
-  const groupsEnabled = useSettingsStore((s) => s.groups.enabled)
   const gridSize = useSettingsStore((s) => s.gridSize)
   const snapToGrid = useSettingsStore((s) => s.snapToGrid)
   const addTile = useCanvasStore((s) => s.addTile)
-  const addTilesToGroup = useCanvasStore((s) => s.addTilesToGroup)
   const removeTile = useCanvasStore((s) => s.removeTile)
   const updateTile = useCanvasStore((s) => s.updateTile)
   const focusTile = useCanvasStore((s) => s.focusTile)
@@ -82,18 +79,6 @@ export function useCanvasActions({ requestConfirm, destroyTerminalRuntime }: Use
   const getSpawnPos = useCallback(
     (w: number, h: number, offset: number) => {
       const state = useCanvasStore.getState()
-      const selectedGroup = groupsEnabled ? findSelectedGroup(state.groups, state.selectedTileIds) : null
-      const groupAnchor = selectedGroup
-        ? getGroupAnchorTile(selectedGroup, state.tiles, state.focusedTileId)
-        : null
-
-      if (groupAnchor) {
-        return {
-          x: snapCoordinate(groupAnchor.x + groupAnchor.width + offset),
-          y: snapCoordinate(groupAnchor.y),
-        }
-      }
-
       const focusedTile = state.tiles.find((t) => t.id === state.focusedTileId)
       if (focusedTile) {
         // Spawn to the right of the focused tile
@@ -125,38 +110,25 @@ export function useCanvasActions({ requestConfirm, destroyTerminalRuntime }: Use
         y: snapCoordinate(cy),
       }
     },
-    [gridSize, groupsEnabled, snapCoordinate, snapToGrid],
+    [snapCoordinate],
   )
 
   const finalizeAddedTile = useCallback(
-    (tile: TileState, targetGroupId?: string) => {
+    (tile: TileState) => {
       if (!canAddTileToActiveWorkspace()) return false
 
       addTile(tile)
-
-      if (targetGroupId) {
-        addTilesToGroup(targetGroupId, [tile.id])
-      }
-
       focusTile(tile.id)
-
-      if (targetGroupId) {
-        const nextGroup = useCanvasStore.getState().groups.find((group) => group.id === targetGroupId)
-        selectTiles(nextGroup?.tileIds ?? [tile.id])
-      } else {
-        selectTiles([tile.id])
-      }
-
+      selectTiles([tile.id])
       bringToFront(tile.id)
       return true
     },
-    [addTile, addTilesToGroup, bringToFront, focusTile, selectTiles, canAddTileToActiveWorkspace],
+    [addTile, bringToFront, focusTile, selectTiles, canAddTileToActiveWorkspace],
   )
 
   const addTerminal = useCallback(
     (profileId: ShellProfileId, agent?: TerminalAgentMetadata) => {
       const state = useCanvasStore.getState()
-      const targetGroup = groupsEnabled ? findSelectedGroup(state.groups, state.selectedTileIds) : null
       const size = getDefaultTileSize('terminal')
       const pos = getSpawnPos(size.width, size.height, 40)
 
@@ -170,18 +142,16 @@ export function useCanvasActions({ requestConfirm, destroyTerminalRuntime }: Use
         zIndex: state.nextZIndex,
         shellProfileId: profileId,
         ...(agent ? { agent } : {}),
-        groupId: targetGroup?.id,
       }
 
-      if (!finalizeAddedTile(tile, targetGroup?.id)) return null
+      if (!finalizeAddedTile(tile)) return null
       return tile.id
     },
-    [finalizeAddedTile, getSpawnPos, groupsEnabled],
+    [finalizeAddedTile, getSpawnPos],
   )
 
   const addRemoteTerminal = useCallback(() => {
     const state = useCanvasStore.getState()
-    const targetGroup = groupsEnabled ? findSelectedGroup(state.groups, state.selectedTileIds) : null
     const size = getDefaultTileSize('terminal')
     const pos = getSpawnPos(size.width, size.height, 40)
 
@@ -195,9 +165,8 @@ export function useCanvasActions({ requestConfirm, destroyTerminalRuntime }: Use
       zIndex: state.nextZIndex,
       shellProfileId: 'bash',
       terminalConnection: 'remote-ssh',
-      groupId: targetGroup?.id,
-    }, targetGroup?.id)
-  }, [finalizeAddedTile, getSpawnPos, groupsEnabled])
+    })
+  }, [finalizeAddedTile, getSpawnPos])
 
   const duplicateTerminalTile = useCallback(
     (sourceTileId: string, options: { splitPanel?: SplitPanelId } = {}) => {
@@ -205,11 +174,10 @@ export function useCanvasActions({ requestConfirm, destroyTerminalRuntime }: Use
 
       const state = useCanvasStore.getState()
       const source = state.tiles.find((tile) => tile.id === sourceTileId)
-      if (!source) return null
+      if (!source || source.type !== 'terminal') return null
 
       const tile = buildDuplicateTerminalTile({
         source,
-        groups: groupsEnabled ? state.groups : [],
         id: generateId(),
         position: {
           x: snapCoordinate(source.x + 40),
@@ -220,10 +188,6 @@ export function useCanvasActions({ requestConfirm, destroyTerminalRuntime }: Use
       if (!tile) return null
 
       addTile(tile)
-
-      if (tile.groupId) {
-        addTilesToGroup(tile.groupId, [tile.id])
-      }
 
       if (options.splitPanel) {
         const nextSplitViewState = insertDuplicateIntoSplitPanel(
@@ -240,14 +204,13 @@ export function useCanvasActions({ requestConfirm, destroyTerminalRuntime }: Use
 
       return tile.id
     },
-    [addTile, addTilesToGroup, bringToFront, focusTile, groupsEnabled, selectTiles, setSplitViewState, snapCoordinate, canAddTileToActiveWorkspace],
+    [addTile, bringToFront, focusTile, selectTiles, setSplitViewState, snapCoordinate, canAddTileToActiveWorkspace],
   )
 
   const addBrowser = useCallback((url?: string) => {
     if (!tileCreationAvailability.browser) return
 
     const state = useCanvasStore.getState()
-    const targetGroup = groupsEnabled ? findSelectedGroup(state.groups, state.selectedTileIds) : null
     const size = getDefaultTileSize('browser')
     const pos = getSpawnPos(size.width, size.height, 40)
 
@@ -260,17 +223,15 @@ export function useCanvasActions({ requestConfirm, destroyTerminalRuntime }: Use
       height: size.height,
       zIndex: state.nextZIndex,
       browserUrl: getBrowserTileUrl(url, browserHomeUrl),
-      groupId: targetGroup?.id,
     }
-    finalizeAddedTile(tile, targetGroup?.id)
-  }, [browserHomeUrl, finalizeAddedTile, getSpawnPos, groupsEnabled, tileCreationAvailability.browser])
+    finalizeAddedTile(tile)
+  }, [browserHomeUrl, finalizeAddedTile, getSpawnPos, tileCreationAvailability.browser])
 
   const addNote = useCallback(
     (kind: NoteKind, color?: NoteColor) => {
       if (!tileCreationAvailability.note) return
 
       const state = useCanvasStore.getState()
-      const targetGroup = groupsEnabled ? findSelectedGroup(state.groups, state.selectedTileIds) : null
       const size = getDefaultTileSize('note')
       const pos = getSpawnPos(size.width, size.height, 40)
 
@@ -287,18 +248,16 @@ export function useCanvasActions({ requestConfirm, destroyTerminalRuntime }: Use
         noteContent: '',
         noteKind: kind,
         ...(kind === 'markdown' ? { markdown: '', markdownView: 'live' as const } : {}),
-        groupId: targetGroup?.id,
       }
-      finalizeAddedTile(tile, targetGroup?.id)
+      finalizeAddedTile(tile)
     },
-    [finalizeAddedTile, getSpawnPos, groupsEnabled, tileCreationAvailability.note],
+    [finalizeAddedTile, getSpawnPos, tileCreationAvailability.note],
   )
 
   const addTimer = useCallback(() => {
     if (!tileCreationAvailability.timer) return
 
     const state = useCanvasStore.getState()
-    const targetGroup = groupsEnabled ? findSelectedGroup(state.groups, state.selectedTileIds) : null
     const size = getDefaultTileSize('timer')
     const pos = getSpawnPos(size.width, size.height, 40)
     const defaultDurationMs = 25 * 60 * 1000
@@ -314,10 +273,9 @@ export function useCanvasActions({ requestConfirm, destroyTerminalRuntime }: Use
       timerDurationMs: defaultDurationMs,
       timerRemainingMs: defaultDurationMs,
       timerStatus: 'idle',
-      groupId: targetGroup?.id,
     }
-    finalizeAddedTile(tile, targetGroup?.id)
-  }, [finalizeAddedTile, getSpawnPos, groupsEnabled, tileCreationAvailability.timer])
+    finalizeAddedTile(tile)
+  }, [finalizeAddedTile, getSpawnPos, tileCreationAvailability.timer])
 
   const deleteTile = useCallback(
     async (tileId: string): Promise<boolean> => {

@@ -9,6 +9,7 @@ export const MAX_FONT_SIZE_PX = 36
 export type LegacyFontSize = 'small' | 'medium' | 'large'
 
 type RawUserSettings = Omit<Partial<UserSettings>, 'terminal' | 'agents' | 'notifications' | 'updateDiagnosticsEnabled' | 'updateDiagnosticsMigrationComplete'> & {
+  groups?: unknown
   fontSize?: unknown
   terminal?: Partial<UserSettings['terminal']>
   notifications?: Partial<UserSettings['notifications']>
@@ -40,7 +41,13 @@ export function clampFontSizePx(value: unknown, fallback = DEFAULT_USER_SETTINGS
 export function normalizeUserSettings(raw: RawUserSettings = {}): UserSettings {
   const legacyFontSize = isLegacyFontSize(raw.fontSize) ? LEGACY_FONT_SIZE_PX[raw.fontSize] : undefined
   const fontFallback = legacyFontSize ?? DEFAULT_USER_SETTINGS.interfaceFontSizePx
-  const { fontSize: _legacyFontSize, updateDiagnosticsEnabled, updateDiagnosticsMigrationComplete, ...settings } = raw
+  const {
+    fontSize: _legacyFontSize,
+    groups: _legacyGroups,
+    updateDiagnosticsEnabled,
+    updateDiagnosticsMigrationComplete,
+    ...settings
+  } = raw
   const diagnosticsMigrationComplete = updateDiagnosticsMigrationComplete === true
   const rawCreationAvailability = raw.tiles?.creationAvailability as Record<string, unknown> | undefined
   const getCreationAvailability = (type: ConfigurableTileCreationType) => {
@@ -89,10 +96,6 @@ export function normalizeUserSettings(raw: RawUserSettings = {}): UserSettings {
         browser: getCreationAvailability('browser'),
         timer: getCreationAvailability('timer'),
       },
-    },
-    groups: {
-      ...DEFAULT_USER_SETTINGS.groups,
-      ...(raw.groups ?? {}),
     },
   }
 }

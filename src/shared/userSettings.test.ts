@@ -67,6 +67,7 @@ if (clamped.interfaceFontSizePx !== 10) throw new Error('interface font must cla
 if (clamped.tileFontSizePx !== 36) throw new Error('tile font must clamp to maximum')
 
 const legacy = normalizeUserSettings({ groups: { enabled: true } })
+if ('groups' in legacy) throw new Error('legacy tile group settings must be discarded')
 if (legacy.terminal.attentionEnabled !== true) throw new Error('legacy settings must migrate terminal attention on')
 if (legacy.notifications.attentionDelayEnabled !== true) throw new Error('legacy settings must migrate native attention delay on')
 if (legacy.notifications.desktopAlertsEnabled !== true) throw new Error('legacy settings must migrate desktop agent alerts on')

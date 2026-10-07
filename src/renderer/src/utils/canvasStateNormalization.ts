@@ -12,6 +12,7 @@ function isSupportedTile(tile: CanvasState['tiles'][number]): boolean {
 }
 
 export function normalizeCanvasStateForJson(state: CanvasState): CanvasState {
+  const { groups: _legacyGroups, ...stateWithoutLegacyGroups } = state as CanvasState & { groups?: unknown }
   const viewMode: ViewMode = state.viewMode === 'canvas' || state.viewMode === 'fullview' || state.viewMode === 'splitview'
     ? state.viewMode
     : 'fullview'
@@ -38,30 +39,28 @@ export function normalizeCanvasStateForJson(state: CanvasState): CanvasState {
     orientation: normalizeSplitOrientation(state.splitViewState?.orientation),
   }
 
-  const groups = (state.groups ?? [])
-    .map((group) => ({
-      ...group,
-      tileIds: group.tileIds.filter((tileId) => tileIds.has(tileId)),
-    }))
-    .filter((group) => group.tileIds.length > 0)
-
   return {
-    ...state,
+    ...stateWithoutLegacyGroups,
     tiles: tiles.map((tile) => {
       const size = normalizeTileSize(tile.type, tile)
-      const { hideTitlebar: _hideTitlebar, fileRevealRequest: _fileRevealRequest, ...tileWithoutTitlebar } = tile as typeof tile & { hideTitlebar?: unknown }
-      const normalizedNote = tileWithoutTitlebar.type !== 'note'
-        ? tileWithoutTitlebar
-        : normalizeNoteKind(tileWithoutTitlebar.noteKind) === 'markdown'
+      const {
+        hideTitlebar: _hideTitlebar,
+        groupId: _legacyGroupId,
+        fileRevealRequest: _fileRevealRequest,
+        ...tileWithoutLegacyFields
+      } = tile as typeof tile & { hideTitlebar?: unknown; groupId?: unknown }
+      const normalizedNote = tileWithoutLegacyFields.type !== 'note'
+        ? tileWithoutLegacyFields
+        : normalizeNoteKind(tileWithoutLegacyFields.noteKind) === 'markdown'
           ? {
-              ...tileWithoutTitlebar,
+              ...tileWithoutLegacyFields,
               noteKind: 'markdown' as const,
-              markdown: typeof tileWithoutTitlebar.markdown === 'string' ? tileWithoutTitlebar.markdown : '',
-              markdownView: normalizeMarkdownViewMode(tileWithoutTitlebar.markdownView),
+              markdown: typeof tileWithoutLegacyFields.markdown === 'string' ? tileWithoutLegacyFields.markdown : '',
+              markdownView: normalizeMarkdownViewMode(tileWithoutLegacyFields.markdownView),
             }
-          : tileWithoutTitlebar.noteKind === undefined
-            ? tileWithoutTitlebar
-            : { ...tileWithoutTitlebar, noteKind: 'rich' as const }
+          : tileWithoutLegacyFields.noteKind === undefined
+            ? tileWithoutLegacyFields
+            : { ...tileWithoutLegacyFields, noteKind: 'rich' as const }
       const normalizedFile = normalizedNote.type === 'files'
         ? { ...normalizedNote, fileMarkdownView: normalizeFileMarkdownViewMode(normalizedNote.fileMarkdownView) }
         : normalizedNote
@@ -71,7 +70,6 @@ export function normalizeCanvasStateForJson(state: CanvasState): CanvasState {
         height: size.height,
       })
     }),
-    groups,
     viewport: normalizeFiniteViewport(state.viewport),
     viewMode,
     focusedTileId: state.focusedTileId && tileIds.has(state.focusedTileId) ? state.focusedTileId : null,
@@ -87,7 +85,6 @@ export function normalizeCanvasStateForJson(state: CanvasState): CanvasState {
 export function createEmptyCanvasState(): CanvasState {
   return {
     tiles: [],
-    groups: [],
     viewport: { tx: 0, ty: 0, zoom: 1 },
     nextZIndex: 1,
     focusedTileId: null,

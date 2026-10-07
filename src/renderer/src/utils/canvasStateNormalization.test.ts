@@ -27,10 +27,6 @@ const state: CanvasState = {
       fileMarkdownView: 'preview',
     } as unknown as CanvasState['tiles'][number],
   ],
-  groups: [
-    { id: 'keep', name: 'Keep', colorId: 'blue', tileIds: ['terminal', 'files'] },
-    { id: 'drop', name: 'Drop', colorId: 'blue', tileIds: ['legacy-files'] },
-  ],
   viewport: { tx: 0, ty: 0, zoom: 1 },
   nextZIndex: 9,
   focusedTileId: null,
@@ -46,7 +42,17 @@ const state: CanvasState = {
   },
 }
 
-const normalized = normalizeCanvasStateForJson(state)
+const legacyState = {
+  ...state,
+  tiles: state.tiles.map((tile) => tile.id === 'terminal'
+    ? { ...tile, groupId: 'legacy-group' }
+    : tile),
+  groups: [
+    { id: 'legacy-group', name: 'Old group', colorId: 'blue', tileIds: ['terminal'] },
+  ],
+} as unknown as CanvasState
+
+const normalized = normalizeCanvasStateForJson(legacyState)
 const expected = new Map([
   ['terminal', { width: 900, height: 400 }],
   ['note', { width: 900, height: 800 }],
@@ -60,8 +66,12 @@ const expected = new Map([
 if (normalized.tiles.some((tile) => tile.id === 'kanban' || tile.id === 'legacy-files')) {
   throw new Error('legacy pathless files and kanban tiles must be dropped from normalized canvas JSON')
 }
-if (normalized.groups.length !== 1 || normalized.groups[0]?.tileIds.join(',') !== 'terminal,files') {
-  throw new Error('canvas normalization must preserve groups for path-backed file tiles only')
+if ('groups' in normalized) {
+  throw new Error('canvas normalization must discard legacy groups')
+}
+const normalizedTerminal = normalized.tiles.find((tile) => tile.id === 'terminal')
+if (!normalizedTerminal || 'groupId' in normalizedTerminal) {
+  throw new Error('canvas normalization must discard legacy tile group references')
 }
 if (!normalized.splitViewState?.leftTileIds.includes('files') || normalized.splitViewState?.rightTileIds.includes('legacy-files')) {
   throw new Error('canvas normalization must preserve only path-backed file references in split layout')

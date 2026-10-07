@@ -1,8 +1,7 @@
-import type { SplitPanelId, SplitViewState, TileGroup, TileState } from '@shared/types'
+import type { SplitPanelId, SplitViewState, TileState } from '@shared/types'
 
 interface DuplicateTerminalTileOptions {
   source: TileState
-  groups: TileGroup[]
   id: string
   position: Pick<TileState, 'x' | 'y'>
   zIndex: number
@@ -10,17 +9,11 @@ interface DuplicateTerminalTileOptions {
 
 export function buildDuplicateTerminalTile({
   source,
-  groups,
   id,
   position,
   zIndex,
 }: DuplicateTerminalTileOptions): TileState | null {
   if (source.type !== 'terminal') return null
-
-  const sourceGroup = source.groupId
-    ? groups.find((group) => group.id === source.groupId)
-    : null
-  const targetGroupId = sourceGroup && !sourceGroup.locked ? sourceGroup.id : undefined
 
   return {
     id,
@@ -36,7 +29,6 @@ export function buildDuplicateTerminalTile({
     label: source.label,
     radiusIndex: source.radiusIndex,
     locked: false,
-    groupId: targetGroupId,
   }
 }
 
