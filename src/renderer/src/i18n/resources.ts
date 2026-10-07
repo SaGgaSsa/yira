@@ -51,6 +51,7 @@ type TranslationResources = {
     home: string
     activeSection: string
     inactiveSection: string
+    noActiveWorkspaces: string
   }
   workspaceHome: {
     title: string
@@ -911,6 +912,7 @@ const en: TranslationResources = {
     home: 'Home',
     activeSection: 'Active',
     inactiveSection: 'Inactive',
+    noActiveWorkspaces: 'No active workspaces',
   },
   workspaceHome: {
     title: 'What are you working on?',
@@ -1771,6 +1773,7 @@ const es: TranslationResources = {
     home: 'Inicio',
     activeSection: 'Activos',
     inactiveSection: 'Inactivos',
+    noActiveWorkspaces: 'Ningún workspace activo',
   },
   workspaceHome: {
     title: '¿Con qué vas a trabajar?',

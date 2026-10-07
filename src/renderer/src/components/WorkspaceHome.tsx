@@ -28,7 +28,7 @@ export function WorkspaceHome({
   const { t } = useTranslation()
 
   return (
-    <main className="h-full min-h-0 overflow-y-auto">
+    <main className="h-full min-h-0 min-w-0 flex-1 overflow-y-auto">
       <div className="mx-auto flex min-h-full w-full max-w-[760px] flex-col justify-center gap-7 px-6 py-12">
         <header className="flex flex-col gap-3">
           <h1 className="nd-display text-4xl text-text-display">
