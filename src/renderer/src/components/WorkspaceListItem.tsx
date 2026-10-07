@@ -8,6 +8,8 @@ import { WorkspaceGitDiff } from './WorkspaceGitDiff'
 
 export interface WorkspaceListItemProps {
   workspace: WorkspaceMetadata
+  /** Rendered inside the card, before the name (the collapse toggle). */
+  leading?: React.ReactNode
   active?: boolean
   sessionActive?: boolean
   onClick: () => void
@@ -20,6 +22,7 @@ export interface WorkspaceListItemProps {
 
 export function WorkspaceListItem({
   workspace,
+  leading,
   active = false,
   sessionActive = false,
   onClick,
@@ -51,8 +54,9 @@ export function WorkspaceListItem({
         borderColor: highlighted ? 'var(--text-display)' : 'var(--border)',
       }}
     >
+      {leading && <div className="flex shrink-0 items-center pl-1.5">{leading}</div>}
       <button
-        className="flex h-full min-w-0 flex-1 items-center px-3 py-2.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        className={`flex h-full min-w-0 flex-1 items-center py-2.5 pr-3 text-left ${leading ? 'pl-1' : 'pl-3'} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent`}
         onClick={onClick}
         title={workspace.name}
         type="button"
