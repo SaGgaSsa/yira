@@ -375,9 +375,9 @@ export function AgentSessionDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="agent-session-dialog-title"
-        className="w-full max-w-2xl overflow-hidden rounded-[20px] border border-border-visible bg-bg-secondary shadow-2xl"
+        className="flex h-[min(820px,calc(100vh-2rem))] w-[min(1240px,calc(100vw-2rem))] flex-col overflow-hidden rounded-[20px] border border-border-visible bg-bg-secondary shadow-2xl"
       >
-        <div className="flex items-start gap-4 border-b border-border px-6 py-5">
+        <div className="flex shrink-0 items-start gap-4 border-b border-border px-6 py-5">
           {onBack && (
             <button
               type="button"
@@ -409,15 +409,16 @@ export function AgentSessionDialog({
         </div>
 
         <form
+          className="flex min-h-0 flex-1 flex-col"
           onSubmit={(event) => {
             event.preventDefault()
             void createSession()
           }}
         >
-          <div className="space-y-4 px-6 py-5">
-            <div className="space-y-3">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 px-6 py-5">
+            <div className="flex min-h-0 flex-1 flex-col gap-3">
               {promptImages.length > 0 && (
-                <div className="flex flex-wrap gap-2 pt-1">
+                <div className="flex shrink-0 flex-wrap gap-2 pt-1">
                   {promptImages.map((image) => (
                     <div
                       key={image.id}
@@ -454,7 +455,7 @@ export function AgentSessionDialog({
               )}
               <textarea
                 ref={promptRef}
-                className="min-h-36 w-full resize-y rounded-xl border border-border-visible bg-bg-primary px-4 py-3 text-sm leading-6 text-text-primary outline-none focus:border-text-secondary"
+                className="min-h-36 w-full flex-1 resize-none rounded-xl border border-border-visible bg-bg-primary px-4 py-3 text-sm leading-6 text-text-primary outline-none focus:border-text-secondary"
                 value={prompt}
                 onChange={(event) => setPrompt(event.target.value)}
                 onPaste={handlePromptPaste}
@@ -481,7 +482,7 @@ export function AgentSessionDialog({
                 {t('agentsView.noUsableWorkspace')}
               </p>
             ) : selectedWorkspace && selectedProvider ? (
-              <div className="flex flex-wrap items-center justify-start gap-2">
+              <div className="flex shrink-0 flex-wrap items-center justify-start gap-2">
                 <WorkspacePickerMenu
                   options={usableWorkspaces.map(({ workspace }) => ({
                     id: workspace.id,
@@ -539,7 +540,7 @@ export function AgentSessionDialog({
                   >
                     <input
                       type="checkbox"
-                      className="h-3.5 w-3.5 accent-accent"
+                      className="h-3.5 w-3.5 accent-[var(--text-primary)]"
                       checked={worktree}
                       disabled={isSubmitting}
                       title={t('agentsView.worktreeDescription')}
@@ -551,10 +552,10 @@ export function AgentSessionDialog({
               </div>
             ) : null}
 
-            {error && <p role="alert" className="rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
+            {error && <p role="alert" className="shrink-0 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
           </div>
 
-          <div className="flex items-center justify-end gap-3 border-t border-border px-6 py-4">
+          <div className="flex shrink-0 items-center justify-end gap-3 border-t border-border px-6 py-4">
             <button
               type="button"
               className="rounded-full border border-border-visible px-4 py-2 text-sm text-text-secondary transition-colors hover:bg-hover-bg disabled:opacity-50"

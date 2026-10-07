@@ -52,7 +52,7 @@ interface ListRowActionButtonProps {
 function ListRowActionButton({ title, onClick, children, pressed, disabled = false, workspaceVariant = false }: ListRowActionButtonProps): React.ReactElement {
   return (
     <button
-      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display disabled:cursor-not-allowed disabled:opacity-50 ${workspaceVariant ? 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent' : ''}`}
+      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display disabled:cursor-not-allowed disabled:opacity-50 ${workspaceVariant ? 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--interactive)]' : ''}`}
       onMouseDown={(event) => event.stopPropagation()}
       onClick={(event) => {
         event.stopPropagation()
@@ -139,7 +139,7 @@ export function ListRow({
           }}
     >
       <button
-        className={`flex h-full items-center gap-2 px-3 py-2.5 ${isWorkspace ? 'min-w-0 flex-1' : `w-full ${actionPaddingClass}`} ${isWorkspace ? 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent' : ''}`}
+        className={`flex h-full items-center gap-2 px-3 py-2.5 ${isWorkspace ? 'min-w-0 flex-1' : `w-full ${actionPaddingClass}`} ${isWorkspace ? 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--interactive)]' : ''}`}
         onClick={onClick}
         onDoubleClick={onDoubleClick}
         title={label}
