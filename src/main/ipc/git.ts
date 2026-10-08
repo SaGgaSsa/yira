@@ -16,6 +16,14 @@ function mutationPaths(relativePath: string, originalPath?: string): string[] {
   return originalPath && originalPath !== relativePath ? [relativePath, originalPath] : [relativePath]
 }
 
+function changePaths(changes: GitFileChange[]): string[] {
+  if (!Array.isArray(changes) || changes.length === 0) throw new Error('At least one change is required')
+  return changes.flatMap((change) => {
+    if (!change || typeof change !== 'object') throw new Error('Change must be an object')
+    return mutationPaths(change.path, change.originalPath)
+  })
+}
+
 function discardPaths(changes: GitFileChange[]): GitDiscardPaths {
   if (!Array.isArray(changes) || changes.length === 0) throw new Error('At least one change is required')
   const trackedPaths: string[] = []
@@ -164,6 +172,12 @@ export function createGitIPCHandlers(dependencies: GitIPCDependencies): Record<s
     },
     'git:unstage': async (_event: unknown, workspaceId: string, repositoryPath: string, relativePath: string, originalPath?: string) => {
       await dependencies.unstageGitFiles(await resolveRepository(workspaceId, repositoryPath), mutationPaths(relativePath, originalPath))
+    },
+    'git:stageChanges': async (_event: unknown, workspaceId: string, repositoryPath: string, changes: GitFileChange[]) => {
+      await dependencies.stageGitFiles(await resolveRepository(workspaceId, repositoryPath), changePaths(changes))
+    },
+    'git:unstageChanges': async (_event: unknown, workspaceId: string, repositoryPath: string, changes: GitFileChange[]) => {
+      await dependencies.unstageGitFiles(await resolveRepository(workspaceId, repositoryPath), changePaths(changes))
     },
     'git:discard': async (_event: unknown, workspaceId: string, repositoryPath: string, changes: GitFileChange[]) => {
       await (dependencies.discardGitChanges ?? discardGitChanges)(await resolveRepository(workspaceId, repositoryPath), discardPaths(changes))

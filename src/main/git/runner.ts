@@ -358,7 +358,9 @@ export async function stageGitFiles(
 ): Promise<void> {
   if (relativePaths.length === 0) throw new Error('At least one path is required')
   const resolvedPaths = await Promise.all(relativePaths.map((relativePath) => resolveGitTargetPath(rootPathInput, relativePath)))
-  await runGitAtRoot(resolvedPaths[0].rootPath, ['add', '--', ...resolvedPaths.map(({ relativePath }) => relativePath)], executor)
+  for (const chunk of chunkPaths(resolvedPaths.map(({ relativePath }) => relativePath))) {
+    await runGitAtRoot(resolvedPaths[0].rootPath, ['add', '--', ...chunk], executor)
+  }
 }
 
 export async function unstageGitFile(
@@ -376,7 +378,9 @@ export async function unstageGitFiles(
 ): Promise<void> {
   if (relativePaths.length === 0) throw new Error('At least one path is required')
   const resolvedPaths = await Promise.all(relativePaths.map((relativePath) => resolveGitTargetPath(rootPathInput, relativePath)))
-  await runGitAtRoot(resolvedPaths[0].rootPath, ['restore', '--staged', '--', ...resolvedPaths.map(({ relativePath }) => relativePath)], executor)
+  for (const chunk of chunkPaths(resolvedPaths.map(({ relativePath }) => relativePath))) {
+    await runGitAtRoot(resolvedPaths[0].rootPath, ['restore', '--staged', '--', ...chunk], executor)
+  }
 }
 
 export interface GitDiscardPaths {
