@@ -124,15 +124,24 @@ function FileChangeRow({ change, staged, depth, displayPath, disabled, onToggle,
   )
 }
 
-function TreeChangeRow({ node, staged, depth, disabled, onToggle, onDiscard, onOpenDiff }: {
+function folderChanges(node: SourceControlTreeNode<GitFileChange>): GitFileChange[] {
+  return [
+    ...(node.entry ? [node.entry] : []),
+    ...(node.children ?? []).flatMap(folderChanges),
+  ]
+}
+
+function TreeChangeRow({ node, staged, depth, disabled, onToggle, onToggleAll, onDiscard, onOpenDiff }: {
   node: SourceControlTreeNode<GitFileChange>
   staged: boolean
   depth: number
   disabled: boolean
   onToggle: (change: GitFileChange, staged: boolean) => void
+  onToggleAll: (changes: GitFileChange[], staged: boolean) => void
   onDiscard: (changes: GitFileChange[]) => void
   onOpenDiff: (change: GitFileChange, staged: boolean) => void
 }): React.ReactElement {
+  const { t } = useTranslation()
   if (node.entry) {
     return <FileChangeRow change={node.entry} staged={staged} depth={depth} displayPath={false} disabled={disabled} onToggle={onToggle} onDiscard={onDiscard} onOpenDiff={onOpenDiff} />
   }
@@ -142,10 +151,22 @@ function TreeChangeRow({ node, staged, depth, disabled, onToggle, onDiscard, onO
       <div className="flex items-center gap-1.5 py-1.5 pr-3 text-sm text-text-secondary" style={{ paddingLeft: `${12 + depth * 16}px` }}>
         <ChevronDown size={14} className="shrink-0" />
         <Folder size={14} className="shrink-0" />
-        <span className="min-w-0 truncate">{node.name}</span>
+        <span className="min-w-0 flex-1 truncate">{node.name}</span>
+        {depth === 0 && (
+          <button
+            type="button"
+            className={rowActionClassName}
+            onClick={() => onToggleAll(folderChanges(node), staged)}
+            disabled={disabled}
+            title={staged ? t('sourceControl.unstageFolder', { path: node.path }) : t('sourceControl.stageFolder', { path: node.path })}
+            aria-label={staged ? t('sourceControl.unstageFolder', { path: node.path }) : t('sourceControl.stageFolder', { path: node.path })}
+          >
+            {staged ? <SquareMinus size={15} /> : <SquarePlus size={15} />}
+          </button>
+        )}
       </div>
       {node.children?.map((child) => (
-        <TreeChangeRow key={child.path} node={child} staged={staged} depth={depth + 1} disabled={disabled} onToggle={onToggle} onDiscard={onDiscard} onOpenDiff={onOpenDiff} />
+        <TreeChangeRow key={child.path} node={child} staged={staged} depth={depth + 1} disabled={disabled} onToggle={onToggle} onToggleAll={onToggleAll} onDiscard={onDiscard} onOpenDiff={onOpenDiff} />
       ))}
     </>
   )
@@ -197,7 +218,7 @@ function ChangeSection({ title, changes, staged, viewMode, disabled, onToggle, o
       ) : viewMode === 'tree' ? (
         <div>
           {buildSourceControlTree(changes).map((node) => (
-            <TreeChangeRow key={node.path} node={node} staged={staged} depth={0} disabled={disabled} onToggle={onToggle} onDiscard={onDiscard} onOpenDiff={onOpenDiff} />
+            <TreeChangeRow key={node.path} node={node} staged={staged} depth={0} disabled={disabled} onToggle={onToggle} onToggleAll={onToggleAll} onDiscard={onDiscard} onOpenDiff={onOpenDiff} />
           ))}
         </div>
       ) : (
