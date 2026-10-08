@@ -82,6 +82,7 @@ import { resolveViewModeTransition } from './utils/viewModeTransition'
 import {
   resolveSidebarCollapsedAfterWorkspaceViewChange,
   shouldKeepSidebarOpenForWorkspace,
+  shouldHideWorkspacePanelForView,
 } from './utils/emptyWorkspaceView'
 import { normalizeCanvasStateForJson } from './utils/canvasStateNormalization'
 import {
@@ -498,6 +499,8 @@ function AppContent(): React.ReactElement {
   // A maximized agent session hides the sidebar without changing its saved state.
   const agentSessionMaximized = agentsMaximizedSessionId !== null && agentsView.isOpen && !activityOpen
   const sidebarHidden = sidebarCollapsed || agentSessionMaximized
+  // Focus view and a maximized agent session also hide the workspace panel without changing its saved state.
+  const [workspacePanelHiddenByFocus, setWorkspacePanelHiddenByFocus] = useState(false)
   const toggleSidebar = useCallback(() => {
     if (agentSessionMaximized) {
       setAgentsMaximizedSessionId(null)
@@ -600,6 +603,10 @@ function AppContent(): React.ReactElement {
       viewMode,
       shouldKeepSidebarOpen,
     ))
+  }, [activeWorkspaceId, shouldKeepSidebarOpen, viewMode])
+
+  useEffect(() => {
+    setWorkspacePanelHiddenByFocus(shouldHideWorkspacePanelForView(viewMode, shouldKeepSidebarOpen))
   }, [activeWorkspaceId, shouldKeepSidebarOpen, viewMode])
 
   useEffect(() => {
@@ -1277,6 +1284,9 @@ function AppContent(): React.ReactElement {
   const boardReviewLabel = boardReviewCount > 0 ? (boardReviewCount > 9 ? '9+' : String(boardReviewCount)) : null
   const workspaceRootPath = activeWorkspaceConfig.rootFolderPath?.trim() ?? ''
   const hasWorkspacePanel = Boolean(workspaceRootPath)
+  const workspacePanelVisible = activeWorkspaceConfig.workspacePanelOpen
+    && !(workspacePanelHiddenByFocus && !agentsView.isOpen)
+    && !agentSessionMaximized
   const closeBoard = useCallback(() => {
     setBoardVisible(false)
     setViewMode(activeWorkspaceType === 'grid' ? 'gridview' : 'fullview')
@@ -1346,14 +1356,19 @@ function AppContent(): React.ReactElement {
 
   const toggleWorkspacePanel = useCallback(() => {
     if (!activeWorkspaceId || !hasWorkspacePanel) return
+    // In focus view the button reveals the hidden panel instead of changing the saved preference.
+    if (workspacePanelHiddenByFocus) {
+      setWorkspacePanelHiddenByFocus(false)
+      if (activeWorkspaceConfig.workspacePanelOpen) return
+    }
 
     void window.electron.workspace.update(activeWorkspaceId, {
-      config: { workspacePanelOpen: !activeWorkspaceConfig.workspacePanelOpen },
+      config: { workspacePanelOpen: workspacePanelHiddenByFocus || !activeWorkspaceConfig.workspacePanelOpen },
     }).then((updatedWorkspace) => {
       if (!updatedWorkspace) return
       handleWorkspaceConfigUpdated(updatedWorkspace)
     })
-  }, [activeWorkspaceConfig.workspacePanelOpen, activeWorkspaceId, handleWorkspaceConfigUpdated, hasWorkspacePanel])
+  }, [activeWorkspaceConfig.workspacePanelOpen, activeWorkspaceId, handleWorkspaceConfigUpdated, hasWorkspacePanel, workspacePanelHiddenByFocus])
 
   // Zoom toggle: switch between 100% and previous zoom
   const handleZoomToggle = useCallback(() => {
@@ -2412,7 +2427,7 @@ function AppContent(): React.ReactElement {
         agentProvider={activeWorkspaceConfig.agentProvider}
         agentUsage={agentUsage}
         hasWorkspacePanel={hasWorkspacePanel}
-        workspacePanelOpen={activeWorkspaceConfig.workspacePanelOpen}
+        workspacePanelOpen={workspacePanelVisible}
         onToggleWorkspacePanel={toggleWorkspacePanel}
         onSetViewMode={(mode) => {
           const overlayOpen = agentsView.isOpen || activityOpen
@@ -2810,7 +2825,7 @@ function AppContent(): React.ReactElement {
                   onCreateWorkspace={openCreateWorkspaceDialog}
                 />
               ) : null}
-              {hasWorkspacePanel && activeWorkspaceConfig.workspacePanelOpen && (
+              {hasWorkspacePanel && workspacePanelVisible && (
                 // Outside the tile wrapper so it stays visible beside the Agents view.
                 <div
                   className="flex min-h-0 shrink-0"

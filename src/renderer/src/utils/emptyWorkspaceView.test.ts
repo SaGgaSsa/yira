@@ -2,6 +2,7 @@ import {
   resolveSidebarCollapsedAfterWorkspaceViewChange,
   resolveSidebarCollapsedForActivity,
   shouldKeepSidebarOpenForWorkspace,
+  shouldHideWorkspacePanelForView,
 } from './emptyWorkspaceView'
 
 const collapsedOnOpen = resolveSidebarCollapsedForActivity(false, true, false, false)
@@ -52,4 +53,14 @@ if (resolveSidebarCollapsedAfterWorkspaceViewChange(true, 'workspace-a', 'worksp
 
 if (!resolveSidebarCollapsedAfterWorkspaceViewChange(true, 'workspace-a', 'workspace-a', 'canvas', false)) {
   throw new Error('non-fullview changes must preserve the current sidebar state')
+}
+
+if (!shouldHideWorkspacePanelForView('fullview', false)) {
+  throw new Error('focus view must hide the workspace panel')
+}
+if (shouldHideWorkspacePanelForView('fullview', true)) {
+  throw new Error('focus view must keep the workspace panel for an empty workspace')
+}
+if (shouldHideWorkspacePanelForView('gridview', false) || shouldHideWorkspacePanelForView('splitview', false)) {
+  throw new Error('only focus view hides the workspace panel')
 }
