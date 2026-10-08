@@ -33,6 +33,19 @@ export function getActiveWindowTitle(state: {
     return getTileWindowTitle(sessionTile, state.terminalTitles, session.title?.trim() || state.activeWorkspaceName)
   }
 
+  const activeTileId = getVisibleActiveTileId(state)
+  const tile = getAttachedTiles(state.tiles).find((candidate) => candidate.id === activeTileId) ?? null
+  return getTileWindowTitle(tile, state.terminalTitles, state.activeWorkspaceName)
+}
+
+/** Tile the user is looking at in the current view mode, or null when none is focused. */
+export function getVisibleActiveTileId(state: {
+  tiles: TileState[]
+  viewMode: ViewMode
+  focusedTileId: string | null
+  fullviewActiveTileId: string | null
+  splitViewState: SplitViewState
+}): string | null {
   const tiles = getAttachedTiles(state.tiles)
   let activeTileId = state.focusedTileId
   if (state.viewMode === 'board') activeTileId = null
@@ -43,6 +56,5 @@ export function getActiveWindowTitle(state: {
       ? state.splitViewState.activeRightTileId
       : state.splitViewState.activeLeftTileId
   }
-  const tile = tiles.find((candidate) => candidate.id === activeTileId) ?? null
-  return getTileWindowTitle(tile, state.terminalTitles, state.activeWorkspaceName)
+  return tiles.some((candidate) => candidate.id === activeTileId) ? activeTileId : null
 }

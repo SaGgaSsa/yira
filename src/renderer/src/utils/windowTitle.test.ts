@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { TileState, ViewMode } from '@shared/types'
-import { getActiveWindowTitle, getTileWindowTitle } from './windowTitle'
+import { getActiveWindowTitle, getTileWindowTitle, getVisibleActiveTileId } from './windowTitle'
 
 const terminal: TileState = {
   id: 'terminal-1', type: 'terminal', x: 0, y: 0, width: 640, height: 420, zIndex: 1,
@@ -77,4 +77,13 @@ test('follows the agent session shown in the agents view instead of the hidden t
     ...state, agentsViewSession: { tileId: 'agent-1' }, terminalTitles: { 'agent-1': '⠋' },
   }), 'Project - Yira')
   assert.equal(getActiveWindowTitle({ ...state, agentsViewSession: null }), 'Project - Yira')
+})
+
+test('reports the visible active tile per view mode', () => {
+  assert.equal(getVisibleActiveTileId({ ...state, viewMode: 'canvas' }), terminal.id)
+  assert.equal(getVisibleActiveTileId({ ...state, viewMode: 'board' }), null)
+  assert.equal(getVisibleActiveTileId({
+    ...state, viewMode: 'splitview', splitViewState: { ...state.splitViewState, focusedPanel: 'right' },
+  }), note.id)
+  assert.equal(getVisibleActiveTileId({ ...state, focusedTileId: 'missing' }), null)
 })

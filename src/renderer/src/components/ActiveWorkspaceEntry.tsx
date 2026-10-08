@@ -11,6 +11,8 @@ export interface ActiveWorkspaceEntryProps extends Omit<WorkspaceListItemProps, 
   expanded: boolean
   onToggleExpanded: () => void
   onOpenAgent: (workspace: WorkspaceMetadata, session: AgentActiveSession) => void
+  /** Tile of the agent shown on screen, only set for the active workspace. */
+  focusedAgentTileId?: string | null
   className?: string
 }
 
@@ -20,6 +22,7 @@ export function ActiveWorkspaceEntry({
   expanded,
   onToggleExpanded,
   onOpenAgent,
+  focusedAgentTileId = null,
   className = '',
   ...workspaceListItemProps
 }: ActiveWorkspaceEntryProps): React.ReactElement {
@@ -52,6 +55,7 @@ export function ActiveWorkspaceEntry({
         <WorkspaceAgentTree
           workspace={workspace}
           sessions={workspaceSessions}
+          focusedTileId={focusedAgentTileId}
           onOpenAgent={onOpenAgent}
         />
       ) : (
