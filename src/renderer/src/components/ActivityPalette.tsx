@@ -41,7 +41,7 @@ export interface ActivityPaletteProps {
   focusRequestId: number
   shortcutLabel: string
   onClose: () => void
-  onNewSession: () => void
+  onNewSession: (workspaceId?: string) => void
   onBack: () => void
   onCreated: (result: AgentSessionCreateResult) => void
   onOpenAgent: (workspace: WorkspaceMetadata, session: AgentActiveSession) => void
@@ -95,7 +95,7 @@ interface ActivityStepProps {
   groups: ActivityPaletteGroup[]
   shortcutLabel: string
   onClose: () => void
-  onNewSession: () => void
+  onNewSession: (workspaceId?: string) => void
   onOpenAgent: (workspace: WorkspaceMetadata, session: AgentActiveSession) => void
 }
 
@@ -183,7 +183,7 @@ function ActivityStep({
           <button
             type="button"
             className="inline-flex h-9 shrink-0 items-center gap-2 rounded-full border border-border-visible px-3 text-sm text-text-display transition-colors hover:bg-hover-bg"
-            onClick={onNewSession}
+            onClick={() => onNewSession()}
           >
             <Plus size={14} aria-hidden="true" />
             {t('activityPalette.newSession')}
@@ -206,7 +206,7 @@ function ActivityStep({
             <button
               type="button"
               className="inline-flex items-center gap-2 rounded-full border border-text-display px-4 py-2 text-sm text-text-display transition-colors hover:bg-bg-primary"
-              onClick={onNewSession}
+              onClick={() => onNewSession()}
             >
               <Plus size={15} aria-hidden="true" />
               {t('activityPalette.newSession')}
@@ -231,6 +231,7 @@ function ActivityStep({
                 shortcutLabel={shortcutLabel}
                 onSelect={setSelectedId}
                 onOpen={openAgent}
+                onNewSession={onNewSession}
               />
             ))}
           </div>
@@ -255,6 +256,7 @@ interface WorkspaceCardProps {
   shortcutLabel: string
   onSelect: (sessionId: string) => void
   onOpen: (workspace: WorkspaceMetadata, session: AgentActiveSession) => void
+  onNewSession: (workspaceId: string) => void
 }
 
 function WorkspaceCard({
@@ -265,6 +267,7 @@ function WorkspaceCard({
   shortcutLabel,
   onSelect,
   onOpen,
+  onNewSession,
 }: WorkspaceCardProps): React.ReactElement {
   const { t } = useTranslation()
   const hasInput = group.needsInputCount > 0
@@ -291,7 +294,18 @@ function WorkspaceCard({
           className={`h-2 w-2 shrink-0 rounded-full ${dotClass}`}
           aria-hidden="true"
         />
-        <h3 className="min-w-0 flex-1 truncate text-sm text-text-display">{workspaceName}</h3>
+        <h3 className="flex min-w-0 flex-1">
+          <button
+            type="button"
+            data-activity-palette-new-session={group.workspace.id}
+            className="group inline-flex min-w-0 max-w-full items-center gap-1.5 rounded text-left text-sm text-text-display hover:underline"
+            title={t('activityPalette.newSessionInWorkspace', { workspace: workspaceName })}
+            onClick={() => onNewSession(group.workspace.id)}
+          >
+            <span className="truncate">{workspaceName}</span>
+            <Plus size={13} aria-hidden="true" className="shrink-0 text-text-muted opacity-0 transition-opacity group-hover:opacity-100" />
+          </button>
+        </h3>
         <span className="nd-label shrink-0 text-text-muted">{cardSummary}</span>
       </div>
       <div className="flex flex-col gap-1 p-2">

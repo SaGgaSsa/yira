@@ -31,7 +31,8 @@ export interface AgentsViewState {
   close: () => void
   openForSession: (tileId: string) => void
   openNewSessionDialog: () => void
-  showNewSessionStep: () => void
+  /** Opens the new-session step, preselecting `workspaceId` when given. */
+  showNewSessionStep: (workspaceId?: string) => void
   backToActivity: () => void
   closeSessionDialog: () => void
 }
@@ -89,11 +90,11 @@ export function useAgentsView({
     }))
   }, [workspaceId])
 
-  const showNewSessionStep = useCallback(() => {
+  const showNewSessionStep = useCallback((targetWorkspaceId?: string) => {
     setSessionDialogRequest((current) => ({
       step: 'new-session',
       fromActivity: current ? current.step === 'activity' || current.fromActivity : false,
-      initialWorkspaceId: workspaceId || null,
+      initialWorkspaceId: targetWorkspaceId || workspaceId || null,
       requestId: (current?.requestId ?? 0) + 1,
     }))
   }, [workspaceId])

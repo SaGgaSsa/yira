@@ -287,6 +287,7 @@ type TranslationResources = {
     footerMove: string
     footerOpen: string
     footerNewSession: string
+    newSessionInWorkspace: string
     footerClose: string
   }
   agentAlert: {
@@ -1166,6 +1167,7 @@ const en: TranslationResources = {
     footerMove: 'move between agents',
     footerOpen: 'go to the terminal',
     footerNewSession: 'new session',
+    newSessionInWorkspace: 'New session in {{workspace}}',
     footerClose: 'close',
   },
   settings: {
@@ -1999,6 +2001,7 @@ const es: TranslationResources = {
     footerMove: 'moverse entre agentes',
     footerOpen: 'ir a la terminal',
     footerNewSession: 'nueva sesión',
+    newSessionInWorkspace: 'Nueva sesión en {{workspace}}',
     footerClose: 'cerrar',
   },
   agents: {
