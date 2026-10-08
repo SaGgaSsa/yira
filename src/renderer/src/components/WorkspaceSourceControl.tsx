@@ -252,6 +252,12 @@ export function WorkspaceSourceControl({
         } else {
           await window.electron.git.stage(requestWorkspaceId, repositoryPath, repositoryAction.change.path, repositoryAction.change.originalPath)
         }
+      } else if (repositoryAction.type === 'toggleAll') {
+        if (repositoryAction.staged) {
+          await window.electron.git.unstageChanges(requestWorkspaceId, repositoryPath, repositoryAction.changes)
+        } else {
+          await window.electron.git.stageChanges(requestWorkspaceId, repositoryPath, repositoryAction.changes)
+        }
       } else if (repositoryAction.type === 'discard') {
         await window.electron.git.discard(requestWorkspaceId, repositoryPath, repositoryAction.changes)
       } else if (repositoryAction.type === 'commit') {

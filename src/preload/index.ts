@@ -216,6 +216,8 @@ contextBridge.exposeInMainWorld('electron', {
     fileDiff: (workspaceId: string, repositoryPath: string, relativePath: string, staged: boolean, originalPath?: string) => ipcRenderer.invoke('git:fileDiff', workspaceId, repositoryPath, relativePath, staged, originalPath) as Promise<GitFileDiffContent>,
     stage: (workspaceId: string, repositoryPath: string, relativePath: string, originalPath?: string) => ipcRenderer.invoke('git:stage', workspaceId, repositoryPath, relativePath, originalPath),
     unstage: (workspaceId: string, repositoryPath: string, relativePath: string, originalPath?: string) => ipcRenderer.invoke('git:unstage', workspaceId, repositoryPath, relativePath, originalPath),
+    stageChanges: (workspaceId: string, repositoryPath: string, changes: GitFileChange[]) => ipcRenderer.invoke('git:stageChanges', workspaceId, repositoryPath, changes),
+    unstageChanges: (workspaceId: string, repositoryPath: string, changes: GitFileChange[]) => ipcRenderer.invoke('git:unstageChanges', workspaceId, repositoryPath, changes),
     discard: (workspaceId: string, repositoryPath: string, changes: GitFileChange[]) => ipcRenderer.invoke('git:discard', workspaceId, repositoryPath, changes),
     commit: (workspaceId: string, repositoryPath: string, message: string) => ipcRenderer.invoke('git:commit', workspaceId, repositoryPath, message),
     fetch: (workspaceId: string, repositoryPath: string) => ipcRenderer.invoke('git:fetch', workspaceId, repositoryPath),

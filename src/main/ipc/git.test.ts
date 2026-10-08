@@ -499,3 +499,38 @@ test('calculates a real multimodule workspace diff without a root repository or 
     await rm(rootPath, { recursive: true, force: true })
   }
 })
+
+test('stages and unstages every listed change, including rename sources, in one call', async () => {
+  const ipcMain = new FakeIpcMain()
+  const { registerGitIPC } = loadGitIPC(ipcMain)
+  const staged: Array<{ root: string; paths: string[] }> = []
+  const unstaged: Array<{ root: string; paths: string[] }> = []
+  registerGitIPC(ipcMain, {
+    getWorkspaceGitConfigById: async () => ({ rootFolderPath: '/workspace', sourceControlRepositoryPaths: ['.'] }),
+    discoverGitRepositories: async () => [],
+    resolveConfiguredGitRepository: async () => ({ absolutePath: '/workspace', relativePath: '.', repository: { relativePath: '.', name: 'workspace' } }),
+    getGitStatus: async () => statusResult(),
+    getGitCommitHistory: async () => historyResult(),
+    getGitDiffSummary: async () => ({ additions: 0, deletions: 0, available: true }),
+    stageGitFiles: async (root, paths) => { staged.push({ root, paths }) },
+    unstageGitFiles: async (root, paths) => { unstaged.push({ root, paths }) },
+    commitGitChanges: async () => undefined,
+    fetchGitRepository: async () => undefined,
+    pullGitRepository: async () => undefined,
+    pushGitRepository: async () => undefined,
+    syncGitRepository: async () => undefined,
+  })
+
+  const changes = [
+    { path: 'src/a.ts', status: 'modified' },
+    { path: 'src/new.ts', status: 'renamed', originalPath: 'src/old.ts' },
+    { path: 'notes/', status: 'untracked' },
+  ]
+  await ipcMain.invoke('git:stageChanges', 'workspace-a', '.', changes)
+  await ipcMain.invoke('git:unstageChanges', 'workspace-a', '.', changes)
+
+  const expectedPaths = ['src/a.ts', 'src/new.ts', 'src/old.ts', 'notes/']
+  assert.deepEqual(staged, [{ root: '/workspace', paths: expectedPaths }])
+  assert.deepEqual(unstaged, [{ root: '/workspace', paths: expectedPaths }])
+  await assert.rejects(ipcMain.invoke('git:stageChanges', 'workspace-a', '.', []), /change/)
+})

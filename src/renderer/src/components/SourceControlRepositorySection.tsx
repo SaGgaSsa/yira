@@ -28,6 +28,7 @@ import { i18n } from '@/i18n'
 
 export type SourceControlAction =
   | { type: 'toggle'; change: GitFileChange; staged: boolean }
+  | { type: 'toggleAll'; changes: GitFileChange[]; staged: boolean }
   | { type: 'discard'; changes: GitFileChange[] }
   | { type: 'commit'; message: string }
   | { type: 'sync' }
@@ -150,13 +151,14 @@ function TreeChangeRow({ node, staged, depth, disabled, onToggle, onDiscard, onO
   )
 }
 
-function ChangeSection({ title, changes, staged, viewMode, disabled, onToggle, onDiscard, onOpenDiff }: {
+function ChangeSection({ title, changes, staged, viewMode, disabled, onToggle, onToggleAll, onDiscard, onOpenDiff }: {
   title: string
   changes: GitFileChange[]
   staged: boolean
   viewMode: SourceControlViewMode
   disabled: boolean
   onToggle: (change: GitFileChange, staged: boolean) => void
+  onToggleAll: (changes: GitFileChange[], staged: boolean) => void
   onDiscard: (changes: GitFileChange[]) => void
   onOpenDiff: (change: GitFileChange, staged: boolean) => void
 }): React.ReactElement {
@@ -175,6 +177,18 @@ function ChangeSection({ title, changes, staged, viewMode, disabled, onToggle, o
             aria-label={t('sourceControl.discardAll')}
           >
             <Undo2 size={15} />
+          </button>
+        )}
+        {changes.length > 0 && (
+          <button
+            type="button"
+            className={rowActionClassName}
+            onClick={() => onToggleAll(changes, staged)}
+            disabled={disabled}
+            title={staged ? t('sourceControl.unstageAll') : t('sourceControl.stageAll')}
+            aria-label={staged ? t('sourceControl.unstageAll') : t('sourceControl.stageAll')}
+          >
+            {staged ? <SquareMinus size={15} /> : <SquarePlus size={15} />}
           </button>
         )}
       </div>
@@ -461,6 +475,7 @@ export function SourceControlRepositorySection({
                 viewMode={viewMode}
                 disabled={Boolean(pendingAction)}
                 onToggle={(change, staged) => onAction({ type: 'toggle', change, staged })}
+                onToggleAll={(changes, staged) => onAction({ type: 'toggleAll', changes, staged })}
                 onDiscard={(changes) => onAction({ type: 'discard', changes })}
                 onOpenDiff={onOpenDiff}
               />
@@ -471,6 +486,7 @@ export function SourceControlRepositorySection({
                 viewMode={viewMode}
                 disabled={Boolean(pendingAction)}
                 onToggle={(change, staged) => onAction({ type: 'toggle', change, staged })}
+                onToggleAll={(changes, staged) => onAction({ type: 'toggleAll', changes, staged })}
                 onDiscard={(changes) => onAction({ type: 'discard', changes })}
                 onOpenDiff={onOpenDiff}
               />

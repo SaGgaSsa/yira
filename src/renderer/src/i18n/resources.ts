@@ -563,6 +563,8 @@ type TranslationResources = {
     unstageFile: string
     stagePath: string
     unstagePath: string
+    stageAll: string
+    unstageAll: string
     discardFile: string
     discardPath: string
     discardAll: string
@@ -1435,6 +1437,8 @@ const en: TranslationResources = {
     unstageFile: 'Unstage file',
     stagePath: 'Stage {{path}}',
     unstagePath: 'Unstage {{path}}',
+    stageAll: 'Stage all changes',
+    unstageAll: 'Unstage all changes',
     discardFile: 'Discard changes',
     discardPath: 'Discard changes in {{path}}',
     discardAll: 'Discard all changes',
@@ -2307,6 +2311,8 @@ const es: TranslationResources = {
     unstageFile: 'Quitar archivo de los preparados',
     stagePath: 'Preparar {{path}}',
     unstagePath: 'Quitar {{path}} de los preparados',
+    stageAll: 'Preparar todos los cambios',
+    unstageAll: 'Quitar todos los cambios de los preparados',
     discardFile: 'Descartar cambios',
     discardPath: 'Descartar cambios en {{path}}',
     discardAll: 'Descartar todos los cambios',
