@@ -27,3 +27,8 @@ export function resolveSidebarCollapsedForActivity(
   if (activityOpen && !nextActivityOpen) return { collapsed: previousCollapsed, previousCollapsed }
   return { collapsed: currentCollapsed, previousCollapsed }
 }
+
+/** Focus view hides the workspace panel while the workspace has tiles to focus on. */
+export function shouldHideWorkspacePanelForView(viewMode: ViewMode, shouldKeepSidebarOpen: boolean): boolean {
+  return viewMode === 'fullview' && !shouldKeepSidebarOpen
+}
