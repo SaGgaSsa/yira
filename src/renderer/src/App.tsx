@@ -2773,31 +2773,6 @@ function AppContent(): React.ReactElement {
                 )}
                 </div>
               </div>
-              {hasWorkspacePanel && activeWorkspaceConfig.workspacePanelOpen && (
-                <WorkspacePanel
-                  rootPath={workspaceRootPath}
-                  workspaceId={activeWorkspaceId}
-                  sourceControlRepositoryPaths={activeWorkspaceConfig.sourceControlRepositoryPaths}
-                  sourceControlViewMode={activeWorkspaceConfig.sourceControlViewMode}
-                  onWorkspaceUpdated={handleWorkspaceConfigUpdated}
-                  activeFilePath={activeFilePath}
-                  onOpenFile={openFileTile}
-                  onOpenDiff={(repositoryPath, change, staged) => {
-                    const path = repositoryPath === '.' ? change.path : `${repositoryPath}/${change.path}`
-                    void openFileTile(path, { diff: { repositoryPath, path: change.path, originalPath: change.originalPath, staged } }).catch((error: unknown) => {
-                      console.error('[App] Failed to open Git diff tile:', error)
-                    })
-                  }}
-                  agentProvider={agentsView.effectiveProvider}
-                  agentProviders={activeWorkspaceConfig.agentProviders}
-                  tiles={tiles}
-                  terminalTitles={terminalTitles}
-                  onFocusTile={focusAgentTile}
-                  onOpenAgentsSession={agentsView.openForSession}
-                  onResumeInTile={resumeHistoryInTile}
-                  onOpenWorkspaceSettings={openActiveWorkspaceEditor}
-                />
-              )}
               </div>
               </div>
               {activityOpen ? (
@@ -2811,6 +2786,7 @@ function AppContent(): React.ReactElement {
                   agents={agentSettings}
                 />
               ) : agentsView.isOpen && agentsView.effectiveProvider ? (
+                <div className="flex min-h-0 min-w-0 flex-1">
                 <AgentsView
                   workspaceId={activeWorkspaceId}
                   workspaceConfig={activeWorkspaceConfig}
@@ -2825,6 +2801,7 @@ function AppContent(): React.ReactElement {
                   onOpenBrowserTile={(url) => addBrowser(url)}
                   onOpenFileTile={openFileTile}
                 />
+                </div>
               ) : showWorkspaceHome ? (
                 <WorkspaceHome
                   workspaces={inactiveSidebarWorkspaces}
@@ -2833,6 +2810,39 @@ function AppContent(): React.ReactElement {
                   onCreateWorkspace={openCreateWorkspaceDialog}
                 />
               ) : null}
+              {hasWorkspacePanel && activeWorkspaceConfig.workspacePanelOpen && (
+                // Outside the tile wrapper so it stays visible beside the Agents view.
+                <div
+                  className="flex min-h-0 shrink-0"
+                  hidden={activityOpen || showWorkspaceHome}
+                  aria-hidden={activityOpen || showWorkspaceHome}
+                  inert={activityOpen || showWorkspaceHome}
+                >
+                  <WorkspacePanel
+                    rootPath={workspaceRootPath}
+                    workspaceId={activeWorkspaceId}
+                    sourceControlRepositoryPaths={activeWorkspaceConfig.sourceControlRepositoryPaths}
+                    sourceControlViewMode={activeWorkspaceConfig.sourceControlViewMode}
+                    onWorkspaceUpdated={handleWorkspaceConfigUpdated}
+                    activeFilePath={activeFilePath}
+                    onOpenFile={openFileTile}
+                    onOpenDiff={(repositoryPath, change, staged) => {
+                      const path = repositoryPath === '.' ? change.path : `${repositoryPath}/${change.path}`
+                      void openFileTile(path, { diff: { repositoryPath, path: change.path, originalPath: change.originalPath, staged } }).catch((error: unknown) => {
+                        console.error('[App] Failed to open Git diff tile:', error)
+                      })
+                    }}
+                    agentProvider={agentsView.effectiveProvider}
+                    agentProviders={activeWorkspaceConfig.agentProviders}
+                    tiles={tiles}
+                    terminalTitles={terminalTitles}
+                    onFocusTile={focusAgentTile}
+                    onOpenAgentsSession={agentsView.openForSession}
+                    onResumeInTile={resumeHistoryInTile}
+                    onOpenWorkspaceSettings={openActiveWorkspaceEditor}
+                  />
+                </div>
+              )}
             </div>
           ) : activityOpen ? (
             <WorkspaceActivityView
