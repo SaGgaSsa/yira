@@ -71,7 +71,7 @@ import { sanitizeAgentCwd } from './utils/agentPanel'
 import { getAttachedTiles, isTileDetached, selectFloatingTileWindowOpenRequests } from '@shared/floatingTiles'
 import { refreshGridTileContent } from './utils/gridTileRefresh'
 import { DEFAULT_SPLIT_ORIENTATION, toggleSplitOrientation } from './utils/splitViewState'
-import { getActiveWindowTitle } from './utils/windowTitle'
+import { getActiveWindowTitle, getVisibleActiveTileId } from './utils/windowTitle'
 import { getAgentSessionTitles } from './utils/terminalDisplayTitle'
 import {
   buildAgentAlertNotificationText,
@@ -617,6 +617,12 @@ function AppContent(): React.ReactElement {
       ?? (sessions.length === 1 ? sessions[0] : undefined)
     return session ? { tileId: session.tileId, title: session.title } : null
   }, [activityOpen, agentsView.focusedSessionId, agentsView.isOpen, agentsView.sessions])
+
+  const focusedAgentTileId = useMemo(() => {
+    if (activityOpen) return null
+    if (agentsViewTitleSession !== undefined) return agentsViewTitleSession?.tileId ?? null
+    return getVisibleActiveTileId({ tiles, viewMode, focusedTileId, fullviewActiveTileId, splitViewState })
+  }, [activityOpen, agentsViewTitleSession, focusedTileId, fullviewActiveTileId, splitViewState, tiles, viewMode])
 
   const windowTitle = useMemo(() => getActiveWindowTitle({
     tiles,
@@ -2570,6 +2576,7 @@ function AppContent(): React.ReactElement {
                           expanded={expandedActiveWorkspaceIds.has(workspace.id)}
                           onToggleExpanded={() => toggleActiveWorkspaceExpanded(workspace.id)}
                           onOpenAgent={openActivityPaletteAgent}
+                          focusedAgentTileId={workspace.id === activeWorkspaceId ? focusedAgentTileId : null}
                           active={workspace.id === activeWorkspaceId}
                           sessionActive={sessionActiveWorkspaceIds.has(workspace.id)}
                           onClick={() => {

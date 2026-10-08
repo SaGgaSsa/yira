@@ -7,6 +7,8 @@ export interface WorkspaceAgentTreeProps {
   workspace: WorkspaceMetadata
   /** Entries must already be filtered and ordered by getWorkspaceAgentEntries. */
   sessions: readonly AgentActiveSession[]
+  /** Tile of the agent shown on screen; its row is marked as current. */
+  focusedTileId?: string | null
   onOpenAgent: (workspace: WorkspaceMetadata, session: AgentActiveSession) => void
 }
 
@@ -25,6 +27,7 @@ function getStatusDotClass(status: AgentActiveSession['status']): string {
 export function WorkspaceAgentTree({
   workspace,
   sessions,
+  focusedTileId = null,
   onOpenAgent,
 }: WorkspaceAgentTreeProps): React.ReactElement | null {
   const { t } = useTranslation()
@@ -36,6 +39,7 @@ export function WorkspaceAgentTree({
         const providerName = t(session.provider === 'claude' ? 'agentsView.claude' : 'agentsView.codex')
         const sessionName = getAgentSessionTitle(session) || providerName
         const statusLabel = getStatusLabel(session.status, t)
+        const focused = focusedTileId !== null && session.tileId === focusedTileId
 
         return (
           <button
@@ -43,15 +47,16 @@ export function WorkspaceAgentTree({
             type="button"
             data-workspace-agent-session={session.sessionId}
             aria-label={`${sessionName}, ${statusLabel}`}
+            aria-current={focused ? 'true' : undefined}
             title={sessionName}
             onClick={() => onOpenAgent(workspace, session)}
-            className="flex min-w-0 items-start gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-hover-bg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--interactive)]"
+            className={`flex min-w-0 items-start gap-2 rounded-lg px-2 py-1.5 text-left transition-colors ${focused ? 'bg-active-bg shadow-[inset_2px_0_0_var(--text-display)]' : 'hover:bg-hover-bg'} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--interactive)]`}
           >
             <span className="mt-1.5 flex h-2 w-2 shrink-0 items-center justify-center">
               <span className={`h-2 w-2 rounded-full ${getStatusDotClass(session.status)}`} aria-hidden="true" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm text-text-primary">{sessionName}</span>
+              <span className={`block truncate text-sm ${focused ? 'font-medium text-text-display' : 'text-text-primary'}`}>{sessionName}</span>
               <span className="nd-caption block truncate text-text-muted">{statusLabel}</span>
             </span>
           </button>
