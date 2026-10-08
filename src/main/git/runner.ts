@@ -379,6 +379,55 @@ export async function unstageGitFiles(
   await runGitAtRoot(resolvedPaths[0].rootPath, ['restore', '--staged', '--', ...resolvedPaths.map(({ relativePath }) => relativePath)], executor)
 }
 
+export interface GitDiscardPaths {
+  trackedPaths: string[]
+  untrackedPaths: string[]
+}
+
+// Keeps each command well under the Windows command line limit.
+function chunkPaths(paths: string[], maxLength = 8_000): string[][] {
+  const chunks: string[][] = []
+  let current: string[] = []
+  let currentLength = 0
+  for (const path of paths) {
+    if (current.length > 0 && currentLength + path.length + 1 > maxLength) {
+      chunks.push(current)
+      current = []
+      currentLength = 0
+    }
+    current.push(path)
+    currentLength += path.length + 1
+  }
+  if (current.length > 0) chunks.push(current)
+  return chunks
+}
+
+/**
+ * Discards working tree changes. Tracked files go back to their index version
+ * and untracked files are deleted. This cannot be undone.
+ */
+export async function discardGitChanges(
+  rootPathInput: string,
+  { trackedPaths, untrackedPaths }: GitDiscardPaths,
+  executor: GitCommandExecutor = execGitCommand,
+): Promise<void> {
+  if (trackedPaths.length === 0 && untrackedPaths.length === 0) throw new Error('At least one path is required')
+  const rootPath = await resolveGitRootPath(rootPathInput)
+  const resolveAll = async (paths: string[]): Promise<string[]> => (
+    await Promise.all(paths.map((relativePath) => resolveGitTargetPath(rootPath, relativePath)))
+  ).map(({ relativePath }) => relativePath)
+  const tracked = await resolveAll(trackedPaths)
+  const untracked = await resolveAll(untrackedPaths)
+
+  for (const chunk of chunkPaths(tracked)) {
+    await runGitAtRoot(rootPath, ['restore', '--worktree', '--', ...chunk], executor)
+  }
+  // `clean` only removes untracked entries, so a stale status cannot delete tracked files.
+  for (const chunk of chunkPaths(untracked)) {
+    await runGitAtRoot(rootPath, ['clean', '-f', '-d', '--', ...chunk], executor)
+  }
+}
+
 function validateCommitMessage(message: string): string {
   if (typeof message !== 'string') throw new Error('Commit message must be text')
   const trimmed = message.trim()

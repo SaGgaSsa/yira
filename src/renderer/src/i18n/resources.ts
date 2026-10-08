@@ -563,6 +563,18 @@ type TranslationResources = {
     unstageFile: string
     stagePath: string
     unstagePath: string
+    discardFile: string
+    discardPath: string
+    discardAll: string
+    discardFileTitle: string
+    discardFileMessage: string
+    discardDeleteFileMessage: string
+    discardAllTitle: string
+    discardAllMessage: string
+    discardAllWithUntrackedMessage: string
+    discardAllUntrackedMessage: string
+    discardWarning: string
+    discardConfirm: string
     loadStatusError: string
     loadHistoryErrorFallback: string
     onlyChanged: string
@@ -1423,6 +1435,18 @@ const en: TranslationResources = {
     unstageFile: 'Unstage file',
     stagePath: 'Stage {{path}}',
     unstagePath: 'Unstage {{path}}',
+    discardFile: 'Discard changes',
+    discardPath: 'Discard changes in {{path}}',
+    discardAll: 'Discard all changes',
+    discardFileTitle: 'Discard changes?',
+    discardFileMessage: 'The changes in {{path}} will be lost.',
+    discardDeleteFileMessage: 'The untracked file {{path}} will be deleted.',
+    discardAllTitle: 'Discard all changes?',
+    discardAllMessage: 'The unstaged changes in {{count}} files will be lost.',
+    discardAllWithUntrackedMessage: 'The unstaged changes in {{count}} files will be lost and {{untracked}} untracked files will be deleted.',
+    discardAllUntrackedMessage: '{{count}} untracked files will be deleted.',
+    discardWarning: 'This action cannot be undone.',
+    discardConfirm: 'Discard',
     loadStatusError: 'Unable to load source control status',
     loadHistoryErrorFallback: 'Unable to load commit history',
     onlyChanged: 'Only changed',
@@ -2283,6 +2307,18 @@ const es: TranslationResources = {
     unstageFile: 'Quitar archivo de los preparados',
     stagePath: 'Preparar {{path}}',
     unstagePath: 'Quitar {{path}} de los preparados',
+    discardFile: 'Descartar cambios',
+    discardPath: 'Descartar cambios en {{path}}',
+    discardAll: 'Descartar todos los cambios',
+    discardFileTitle: '¿Descartar cambios?',
+    discardFileMessage: 'Se perderán los cambios en {{path}}.',
+    discardDeleteFileMessage: 'Se eliminará el archivo sin seguimiento {{path}}.',
+    discardAllTitle: '¿Descartar todos los cambios?',
+    discardAllMessage: 'Se perderán los cambios sin preparar de {{count}} archivos.',
+    discardAllWithUntrackedMessage: 'Se perderán los cambios sin preparar de {{count}} archivos y se eliminarán {{untracked}} archivos sin seguimiento.',
+    discardAllUntrackedMessage: 'Se eliminarán {{count}} archivos sin seguimiento.',
+    discardWarning: 'Esta acción no se puede deshacer.',
+    discardConfirm: 'Descartar',
     loadStatusError: 'No se pudo cargar el estado del control de código fuente',
     loadHistoryErrorFallback: 'No se pudo cargar el historial de commits',
     onlyChanged: 'Solo con cambios',

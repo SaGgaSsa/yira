@@ -12,6 +12,7 @@ import {
   RefreshCw,
   SquareMinus,
   SquarePlus,
+  Undo2,
 } from 'lucide-react'
 import type {
   GitCommitHistoryResult,
@@ -27,6 +28,7 @@ import { i18n } from '@/i18n'
 
 export type SourceControlAction =
   | { type: 'toggle'; change: GitFileChange; staged: boolean }
+  | { type: 'discard'; changes: GitFileChange[] }
   | { type: 'commit'; message: string }
   | { type: 'sync' }
 
@@ -67,13 +69,16 @@ function statusLabel(status: GitFileChange['status']): string {
   }[status]
 }
 
-function FileChangeRow({ change, staged, depth, displayPath, disabled, onToggle, onOpenDiff }: {
+const rowActionClassName = 'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-text-secondary hover:bg-hover-bg hover:text-text-display disabled:opacity-50'
+
+function FileChangeRow({ change, staged, depth, displayPath, disabled, onToggle, onDiscard, onOpenDiff }: {
   change: GitFileChange
   staged: boolean
   depth: number
   displayPath: boolean
   disabled: boolean
   onToggle: (change: GitFileChange, staged: boolean) => void
+  onDiscard: (changes: GitFileChange[]) => void
   onOpenDiff: (change: GitFileChange, staged: boolean) => void
 }): React.ReactElement {
   const { t } = useTranslation()
@@ -92,9 +97,21 @@ function FileChangeRow({ change, staged, depth, displayPath, disabled, onToggle,
       <span className="min-w-0 flex-1 truncate font-mono text-xs">
         {displayPath ? change.path : change.path.split('/').at(-1)}
       </span>
+      {!staged && (
+        <button
+          type="button"
+          className={rowActionClassName}
+          onClick={(event) => { event.stopPropagation(); onDiscard([change]) }}
+          disabled={disabled}
+          title={t('sourceControl.discardFile')}
+          aria-label={t('sourceControl.discardPath', { path: change.path })}
+        >
+          <Undo2 size={15} />
+        </button>
+      )}
       <button
         type="button"
-        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-text-secondary hover:bg-hover-bg hover:text-text-display disabled:opacity-50"
+        className={rowActionClassName}
         onClick={(event) => { event.stopPropagation(); onToggle(change, staged) }}
         disabled={disabled}
         title={staged ? t('sourceControl.unstageFile') : t('sourceControl.stageFile')}
@@ -106,16 +123,17 @@ function FileChangeRow({ change, staged, depth, displayPath, disabled, onToggle,
   )
 }
 
-function TreeChangeRow({ node, staged, depth, disabled, onToggle, onOpenDiff }: {
+function TreeChangeRow({ node, staged, depth, disabled, onToggle, onDiscard, onOpenDiff }: {
   node: SourceControlTreeNode<GitFileChange>
   staged: boolean
   depth: number
   disabled: boolean
   onToggle: (change: GitFileChange, staged: boolean) => void
+  onDiscard: (changes: GitFileChange[]) => void
   onOpenDiff: (change: GitFileChange, staged: boolean) => void
 }): React.ReactElement {
   if (node.entry) {
-    return <FileChangeRow change={node.entry} staged={staged} depth={depth} displayPath={false} disabled={disabled} onToggle={onToggle} onOpenDiff={onOpenDiff} />
+    return <FileChangeRow change={node.entry} staged={staged} depth={depth} displayPath={false} disabled={disabled} onToggle={onToggle} onDiscard={onDiscard} onOpenDiff={onOpenDiff} />
   }
 
   return (
@@ -126,37 +144,52 @@ function TreeChangeRow({ node, staged, depth, disabled, onToggle, onOpenDiff }: 
         <span className="min-w-0 truncate">{node.name}</span>
       </div>
       {node.children?.map((child) => (
-        <TreeChangeRow key={child.path} node={child} staged={staged} depth={depth + 1} disabled={disabled} onToggle={onToggle} onOpenDiff={onOpenDiff} />
+        <TreeChangeRow key={child.path} node={child} staged={staged} depth={depth + 1} disabled={disabled} onToggle={onToggle} onDiscard={onDiscard} onOpenDiff={onOpenDiff} />
       ))}
     </>
   )
 }
 
-function ChangeSection({ title, changes, staged, viewMode, disabled, onToggle, onOpenDiff }: {
+function ChangeSection({ title, changes, staged, viewMode, disabled, onToggle, onDiscard, onOpenDiff }: {
   title: string
   changes: GitFileChange[]
   staged: boolean
   viewMode: SourceControlViewMode
   disabled: boolean
   onToggle: (change: GitFileChange, staged: boolean) => void
+  onDiscard: (changes: GitFileChange[]) => void
   onOpenDiff: (change: GitFileChange, staged: boolean) => void
 }): React.ReactElement {
   const { t } = useTranslation()
   return (
     <section className="border-b border-border py-2 last:border-b-0">
-      <div className="nd-label px-4 py-1.5 text-text-secondary">{title} ({changes.length})</div>
+      <div className="flex items-center gap-2 py-1 pl-4 pr-3">
+        <span className="nd-label min-w-0 flex-1 truncate py-0.5 text-text-secondary">{title} ({changes.length})</span>
+        {!staged && changes.length > 0 && (
+          <button
+            type="button"
+            className={rowActionClassName}
+            onClick={() => onDiscard(changes)}
+            disabled={disabled}
+            title={t('sourceControl.discardAll')}
+            aria-label={t('sourceControl.discardAll')}
+          >
+            <Undo2 size={15} />
+          </button>
+        )}
+      </div>
       {changes.length === 0 ? (
         <div className="px-4 py-2 text-xs text-text-disabled">{t('sourceControl.noChanges')}</div>
       ) : viewMode === 'tree' ? (
         <div>
           {buildSourceControlTree(changes).map((node) => (
-            <TreeChangeRow key={node.path} node={node} staged={staged} depth={0} disabled={disabled} onToggle={onToggle} onOpenDiff={onOpenDiff} />
+            <TreeChangeRow key={node.path} node={node} staged={staged} depth={0} disabled={disabled} onToggle={onToggle} onDiscard={onDiscard} onOpenDiff={onOpenDiff} />
           ))}
         </div>
       ) : (
         <div>
           {changes.map((change) => (
-            <FileChangeRow key={change.path} change={change} staged={staged} depth={0} displayPath disabled={disabled} onToggle={onToggle} onOpenDiff={onOpenDiff} />
+            <FileChangeRow key={change.path} change={change} staged={staged} depth={0} displayPath disabled={disabled} onToggle={onToggle} onDiscard={onDiscard} onOpenDiff={onOpenDiff} />
           ))}
         </div>
       )}
@@ -428,6 +461,7 @@ export function SourceControlRepositorySection({
                 viewMode={viewMode}
                 disabled={Boolean(pendingAction)}
                 onToggle={(change, staged) => onAction({ type: 'toggle', change, staged })}
+                onDiscard={(changes) => onAction({ type: 'discard', changes })}
                 onOpenDiff={onOpenDiff}
               />
               <ChangeSection
@@ -437,6 +471,7 @@ export function SourceControlRepositorySection({
                 viewMode={viewMode}
                 disabled={Boolean(pendingAction)}
                 onToggle={(change, staged) => onAction({ type: 'toggle', change, staged })}
+                onDiscard={(changes) => onAction({ type: 'discard', changes })}
                 onOpenDiff={onOpenDiff}
               />
               <div className="border-t border-border p-3">

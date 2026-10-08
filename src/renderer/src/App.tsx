@@ -2838,6 +2838,7 @@ function AppContent(): React.ReactElement {
                     terminalTitles={terminalTitles}
                     onFocusTile={focusAgentTile}
                     onOpenAgentsSession={agentsView.openForSession}
+                    requestConfirm={requestConfirm}
                     onResumeInTile={resumeHistoryInTile}
                     onOpenWorkspaceSettings={openActiveWorkspaceEditor}
                   />

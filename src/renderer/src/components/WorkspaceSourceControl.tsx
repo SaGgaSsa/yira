@@ -3,6 +3,7 @@ import { GitBranch, List, ListFilter, RefreshCw, TreePine } from 'lucide-react'
 import type { GitCommitHistoryResult, GitFileChange, GitRepository, GitStatusResult, SourceControlViewMode, Workspace } from '@shared/types'
 import { useTranslation } from 'react-i18next'
 import { SourceControlRepositorySection, type RepositoryAction } from './SourceControlRepositorySection'
+import type { ConfirmDialogOptions } from './AppDialog'
 
 interface WorkspaceSourceControlProps {
   workspaceId: string
@@ -11,6 +12,7 @@ interface WorkspaceSourceControlProps {
   onWorkspaceUpdated: (workspace: Workspace) => void
   onOpenWorkspaceSettings: (initialTab?: 'sourceControl') => void
   onOpenDiff: (repositoryPath: string, change: GitFileChange, staged: boolean) => void
+  requestConfirm: (options: ConfirmDialogOptions) => Promise<boolean>
 }
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -49,6 +51,7 @@ export function WorkspaceSourceControl({
   onWorkspaceUpdated,
   onOpenWorkspaceSettings,
   onOpenDiff,
+  requestConfirm,
 }: WorkspaceSourceControlProps): React.ReactElement {
   const { t } = useTranslation()
   const [repositories, setRepositories] = useState<GitRepository[]>([])
@@ -211,6 +214,28 @@ export function WorkspaceSourceControl({
     const actionKey = `${requestWorkspaceId}\u0000${repositoryPath}`
     if (workspaceRef.current !== requestWorkspaceId || pendingActionsRef.current.has(actionKey)) return
 
+    if (repositoryAction.type === 'discard') {
+      const { changes } = repositoryAction
+      if (changes.length === 0) return
+      const untrackedCount = changes.filter((change) => change.status === 'untracked').length
+      const [singleChange] = changes
+      const message = changes.length === 1
+        ? t(singleChange.status === 'untracked' ? 'sourceControl.discardDeleteFileMessage' : 'sourceControl.discardFileMessage', { path: singleChange.path })
+        : untrackedCount === changes.length
+          ? t('sourceControl.discardAllUntrackedMessage', { count: untrackedCount })
+          : untrackedCount > 0
+            ? t('sourceControl.discardAllWithUntrackedMessage', { count: changes.length - untrackedCount, untracked: untrackedCount })
+            : t('sourceControl.discardAllMessage', { count: changes.length })
+      const confirmed = await requestConfirm({
+        title: changes.length === 1 ? t('sourceControl.discardFileTitle') : t('sourceControl.discardAllTitle'),
+        message,
+        warning: t('sourceControl.discardWarning'),
+        confirmLabel: t('sourceControl.discardConfirm'),
+        danger: true,
+      })
+      if (!confirmed || workspaceRef.current !== requestWorkspaceId || pendingActionsRef.current.has(actionKey)) return
+    }
+
     pendingActionsRef.current.add(actionKey)
     // Actions run from an open section. Pin it open so it does not collapse
     // when the repository runs out of changes (for example after a commit).
@@ -227,6 +252,8 @@ export function WorkspaceSourceControl({
         } else {
           await window.electron.git.stage(requestWorkspaceId, repositoryPath, repositoryAction.change.path, repositoryAction.change.originalPath)
         }
+      } else if (repositoryAction.type === 'discard') {
+        await window.electron.git.discard(requestWorkspaceId, repositoryPath, repositoryAction.changes)
       } else if (repositoryAction.type === 'commit') {
         await window.electron.git.commit(requestWorkspaceId, repositoryPath, repositoryAction.message)
       } else {
@@ -250,7 +277,8 @@ export function WorkspaceSourceControl({
     } catch (error) {
       if (workspaceRef.current === requestWorkspaceId) {
         setActionErrors((current) => ({ ...current, [repositoryPath]: errorMessage(error, t('sourceControl.loadStatusError')) }))
-        setRetryActions((current) => ({ ...current, [repositoryPath]: repositoryAction }))
+        // A retry would skip the confirmation, so a failed discard is not retryable.
+        setRetryActions((current) => ({ ...current, [repositoryPath]: repositoryAction.type === 'discard' ? undefined : repositoryAction }))
       }
     } finally {
       pendingActionsRef.current.delete(actionKey)
@@ -258,7 +286,7 @@ export function WorkspaceSourceControl({
         setPendingActions((current) => ({ ...current, [repositoryPath]: undefined }))
       }
     }
-  }, [loadRepositoryHistory, refreshRepositoryStatus, repositories, t, workspaceId])
+  }, [loadRepositoryHistory, refreshRepositoryStatus, repositories, requestConfirm, t, workspaceId])
 
   const handleViewModeChange = useCallback((viewMode: SourceControlViewMode) => {
     if (viewMode === sourceControlViewMode) return
