@@ -15,6 +15,7 @@ import { getEffectiveAgentProvider } from '@/utils/effectiveAgent'
 import { WorkspaceExplorer } from './WorkspaceExplorer'
 import { WorkspaceSourceControl } from './WorkspaceSourceControl'
 import { useSidePanelWidth } from '@/hooks/useSidePanelWidth'
+import type { ConfirmDialogOptions } from './AppDialog'
 
 type WorkspacePanelTab = 'explorer' | 'agents' | 'source-control'
 
@@ -35,6 +36,7 @@ interface WorkspacePanelProps {
   onOpenAgentsSession: (tileId: string) => void
   onResumeInTile?: (item: AgentSessionHistoryItem) => void
   onOpenWorkspaceSettings: (initialTab?: 'sourceControl') => void
+  requestConfirm: (options: ConfirmDialogOptions) => Promise<boolean>
 }
 
 export function WorkspacePanel({
@@ -54,6 +56,7 @@ export function WorkspacePanel({
   onOpenAgentsSession,
   onResumeInTile,
   onOpenWorkspaceSettings,
+  requestConfirm,
 }: WorkspacePanelProps): React.ReactElement {
   const agents = useSettingsStore((state) => state.agents)
   const effectiveAgentProvider = getEffectiveAgentProvider({ agentProvider }, agents)
@@ -138,6 +141,7 @@ export function WorkspacePanel({
             onWorkspaceUpdated={onWorkspaceUpdated}
             onOpenWorkspaceSettings={onOpenWorkspaceSettings}
             onOpenDiff={onOpenDiff}
+            requestConfirm={requestConfirm}
           />
         )}
       </div>

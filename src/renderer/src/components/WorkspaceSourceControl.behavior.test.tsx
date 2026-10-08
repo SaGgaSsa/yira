@@ -224,6 +224,7 @@ test('keeps healthy Git status visible when history loading fails', async () => 
       onWorkspaceUpdated: () => undefined,
       onOpenWorkspaceSettings: () => undefined,
       onOpenDiff: (...args: unknown[]) => { openedDiffs.push(args) },
+      requestConfirm: async () => false,
     }),
   ))
 

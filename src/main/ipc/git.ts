@@ -1,8 +1,8 @@
 import { ipcMain } from 'electron'
-import type { GitCommitHistoryResult, GitFileDiffContent, GitRepository, GitStatusResult, WorkspaceGitDiffResult } from '@shared/types'
+import type { GitCommitHistoryResult, GitFileChange, GitFileDiffContent, GitRepository, GitStatusResult, WorkspaceGitDiffResult } from '@shared/types'
 import { getGitDiffSummary, getGitFileDiffContent } from '../git/diff'
 import { discoverGitRepositories, resolveConfiguredGitRepository } from '../git/repositories'
-import { commitGitChanges, fetchGitRepository, getGitCommitHistory, getGitStatus, pullGitRepository, pushGitRepository, stageGitFiles, syncGitRepository, unstageGitFiles } from '../git/runner'
+import { commitGitChanges, discardGitChanges, type GitDiscardPaths, fetchGitRepository, getGitCommitHistory, getGitStatus, pullGitRepository, pushGitRepository, stageGitFiles, syncGitRepository, unstageGitFiles } from '../git/runner'
 import { getWorkspaceGitConfigById } from './workspace'
 
 interface WorkspaceGitConfig {
@@ -14,6 +14,19 @@ function mutationPaths(relativePath: string, originalPath?: string): string[] {
   if (typeof relativePath !== 'string') throw new Error('Path must be a string')
   if (originalPath !== undefined && typeof originalPath !== 'string') throw new Error('Original path must be a string')
   return originalPath && originalPath !== relativePath ? [relativePath, originalPath] : [relativePath]
+}
+
+function discardPaths(changes: GitFileChange[]): GitDiscardPaths {
+  if (!Array.isArray(changes) || changes.length === 0) throw new Error('At least one change is required')
+  const trackedPaths: string[] = []
+  const untrackedPaths: string[] = []
+  for (const change of changes) {
+    if (!change || typeof change !== 'object') throw new Error('Change must be an object')
+    const paths = mutationPaths(change.path, change.originalPath)
+    if (change.status === 'untracked') untrackedPaths.push(...paths)
+    else trackedPaths.push(...paths)
+  }
+  return { trackedPaths, untrackedPaths }
 }
 
 function safeGitError(error: unknown): string {
@@ -38,6 +51,7 @@ export interface GitIPCDependencies {
   getGitFileDiffContent?: typeof getGitFileDiffContent
   stageGitFiles: typeof stageGitFiles
   unstageGitFiles: typeof unstageGitFiles
+  discardGitChanges?: typeof discardGitChanges
   commitGitChanges: typeof commitGitChanges
   fetchGitRepository: typeof fetchGitRepository
   pullGitRepository: typeof pullGitRepository
@@ -151,6 +165,9 @@ export function createGitIPCHandlers(dependencies: GitIPCDependencies): Record<s
     'git:unstage': async (_event: unknown, workspaceId: string, repositoryPath: string, relativePath: string, originalPath?: string) => {
       await dependencies.unstageGitFiles(await resolveRepository(workspaceId, repositoryPath), mutationPaths(relativePath, originalPath))
     },
+    'git:discard': async (_event: unknown, workspaceId: string, repositoryPath: string, changes: GitFileChange[]) => {
+      await (dependencies.discardGitChanges ?? discardGitChanges)(await resolveRepository(workspaceId, repositoryPath), discardPaths(changes))
+    },
     'git:commit': async (_event: unknown, workspaceId: string, repositoryPath: string, message: string) => {
       await dependencies.commitGitChanges(await resolveRepository(workspaceId, repositoryPath), message)
     },
@@ -179,6 +196,7 @@ const defaultGitIPCDependencies: GitIPCDependencies = {
   getGitFileDiffContent,
   stageGitFiles,
   unstageGitFiles,
+  discardGitChanges,
   commitGitChanges,
   fetchGitRepository,
   pullGitRepository,

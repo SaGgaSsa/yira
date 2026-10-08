@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
-import { mkdtemp, mkdir, realpath, rm, symlink, writeFile } from 'fs/promises'
+import { mkdtemp, mkdir, readFile, realpath, rm, symlink, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { basename, join } from 'path'
 import { promisify } from 'node:util'
@@ -17,6 +17,7 @@ import {
   syncGitRepository,
   stageGitFiles,
   stageGitFile,
+  discardGitChanges,
   unstageGitFile,
   getGitCommitHistory,
   parseGitCommitLog,
@@ -484,5 +485,52 @@ test('resolves only a configured live Git root inside the workspace', async () =
   } finally {
     await rm(rootPath, { recursive: true, force: true })
     await rm(outsidePath, { recursive: true, force: true })
+  }
+})
+
+test('discards tracked edits and deletes untracked files without touching staged content', async () => {
+  const rootPath = await mkdtemp(join(tmpdir(), 'yira-git-discard-'))
+  const git = (...args: string[]) => execFileAsync('git', ['-C', rootPath, ...args])
+  try {
+    await initGitRepository(rootPath)
+    await git('config', 'user.email', 'test@example.com')
+    await git('config', 'user.name', 'Test')
+    await git('config', 'core.autocrlf', 'false')
+    await writeFile(join(rootPath, 'tracked.txt'), 'original\n')
+    await writeFile(join(rootPath, 'staged.txt'), 'original\n')
+    await writeFile(join(rootPath, 'removed.txt'), 'original\n')
+    await git('add', '.')
+    await git('commit', '--quiet', '-m', 'initial')
+
+    await writeFile(join(rootPath, 'tracked.txt'), 'edited\n')
+    await writeFile(join(rootPath, 'staged.txt'), 'staged\n')
+    await git('add', 'staged.txt')
+    await writeFile(join(rootPath, 'staged.txt'), 'staged and edited\n')
+    await rm(join(rootPath, 'removed.txt'))
+    await mkdir(join(rootPath, 'new-dir'))
+    await writeFile(join(rootPath, 'new-dir', 'file.txt'), 'new\n')
+    await writeFile(join(rootPath, 'new.txt'), 'new\n')
+    await writeFile(join(rootPath, 'kept.txt'), 'kept\n')
+
+    await discardGitChanges(rootPath, {
+      trackedPaths: ['tracked.txt', 'staged.txt', 'removed.txt'],
+      untrackedPaths: ['new-dir/', 'new.txt'],
+    })
+
+    assert.equal(await readFile(join(rootPath, 'tracked.txt'), 'utf8'), 'original\n')
+    assert.equal(await readFile(join(rootPath, 'staged.txt'), 'utf8'), 'staged\n')
+    assert.equal(await readFile(join(rootPath, 'removed.txt'), 'utf8'), 'original\n')
+    await assert.rejects(readFile(join(rootPath, 'new.txt'), 'utf8'))
+    await assert.rejects(readFile(join(rootPath, 'new-dir', 'file.txt'), 'utf8'))
+    assert.equal(await readFile(join(rootPath, 'kept.txt'), 'utf8'), 'kept\n')
+
+    const status = await getGitStatus(rootPath)
+    assert.deepEqual(status.staged.map((change) => change.path), ['staged.txt'])
+    assert.deepEqual(status.unstaged, [{ path: 'kept.txt', status: 'untracked' }])
+
+    await assert.rejects(discardGitChanges(rootPath, { trackedPaths: [], untrackedPaths: [] }), /path/)
+    await assert.rejects(discardGitChanges(rootPath, { trackedPaths: ['../outside.txt'], untrackedPaths: [] }), /traversal/)
+  } finally {
+    await rm(rootPath, { recursive: true, force: true })
   }
 })
