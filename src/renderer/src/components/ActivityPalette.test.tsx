@@ -507,6 +507,27 @@ test('the header button moves to the new session step with a way back', async ()
   }
 })
 
+test('clicking a workspace title opens the new session step for that workspace', async () => {
+  const { container, root, handle } = renderWithHook()
+
+  try {
+    await settle()
+    pressKey('n', { ctrlKey: true })
+    await settle()
+    const [titleButton] = findByAttribute(container, 'button', 'data-activity-palette-new-session')
+    assert.ok(titleButton)
+    const targetId = titleButton.getAttribute('data-activity-palette-new-session')
+    assert.notEqual(targetId, 'alpha')
+    click(titleButton)
+    await settle()
+    assert.equal(isNewSessionStepOpen(container), true)
+    assert.equal(handle.view?.sessionDialogInitialWorkspaceId, targetId)
+    assert.ok(findButton(container, 'Volver a Actividad'))
+  } finally {
+    root.unmount()
+  }
+})
+
 test('opening the new session step directly has no way back and Escape closes it', async () => {
   const { container, root, handle } = renderWithHook()
 
