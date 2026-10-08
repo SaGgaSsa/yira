@@ -200,18 +200,6 @@ function ChangeSection({ title, changes, staged, viewMode, disabled, onToggle, o
             <Undo2 size={15} />
           </button>
         )}
-        {changes.length > 0 && (
-          <button
-            type="button"
-            className={rowActionClassName}
-            onClick={() => onToggleAll(changes, staged)}
-            disabled={disabled}
-            title={staged ? t('sourceControl.unstageAll') : t('sourceControl.stageAll')}
-            aria-label={staged ? t('sourceControl.unstageAll') : t('sourceControl.stageAll')}
-          >
-            {staged ? <SquareMinus size={15} /> : <SquarePlus size={15} />}
-          </button>
-        )}
       </div>
       {changes.length === 0 ? (
         <div className="px-4 py-2 text-xs text-text-disabled">{t('sourceControl.noChanges')}</div>
