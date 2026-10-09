@@ -87,11 +87,13 @@ test('shows only missing script runs with script-prefixed terminal ids as other 
   const scripts = [packageScript('package:.:dev', 'dev')]
   const orphan = scriptRun('custom:removed', 'script-orphan', 'running')
   const unrelated = scriptRun('custom:legacy', 'terminal-legacy', 'running')
+  const adhoc = { ...scriptRun('adhoc:one-off', 'script-adhoc', 'running'), command: 'git pull' }
 
   assert.deepEqual(getOrphanWorkspaceScriptRuns(scripts, [
     scriptRun('package:.:dev', 'script-dev', 'running'),
     orphan,
     unrelated,
+    adhoc,
   ]), [orphan])
 })
 
@@ -101,11 +103,16 @@ test('renders grouped rows, run states, and an empty menu with an add-command ac
     scriptRun('package:.:dev', 'script-dev', 'running'),
     scriptRun('custom:clean', 'script-clean', 'exited', 4),
   ]
+  const adhocRun = {
+    ...scriptRun('adhoc:one-off', 'script-adhoc', 'exited', 0),
+    command: 'git pull',
+  }
   const markup = renderToStaticMarkup(
     <WorkspaceScriptsMenu
       groups={groupWorkspaceScripts(scripts, 'yira', 'Custom commands')}
       runsByScriptId={new Map(runs.map((run) => [run.scriptId, run]))}
       orphanRuns={[]}
+      adhocRuns={[adhocRun]}
       selectedScriptId="package:.:dev"
       pendingScriptId={null}
       loading={false}
@@ -113,12 +120,19 @@ test('renders grouped rows, run states, and an empty menu with an add-command ac
       onSelect={() => undefined}
       onRunOrStop={() => undefined}
       onStopOrphan={() => undefined}
+      onRunCommand={() => undefined}
+      onShowOutput={() => undefined}
+      onRunOrStopAdhoc={() => undefined}
+      onDismissAdhoc={() => undefined}
       onEditCommands={() => undefined}
     />,
   )
 
   assert.match(markup, /aria-label="yira"/)
+  assert.match(markup, /aria-label="Run a one-off command in this workspace"/)
   assert.match(markup, /aria-label="Custom commands"/)
+  assert.match(markup, /aria-label="Recent commands"/)
+  assert.match(markup, /git pull/)
   assert.match(markup, /data-script-id="package:\.:dev"/)
   assert.match(markup, /data-script-id="custom:clean"/)
   assert.match(markup, /Running/)
@@ -129,6 +143,7 @@ test('renders grouped rows, run states, and an empty menu with an add-command ac
       groups={[]}
       runsByScriptId={new Map()}
       orphanRuns={[]}
+      adhocRuns={[]}
       selectedScriptId={null}
       pendingScriptId={null}
       loading={false}
@@ -136,9 +151,15 @@ test('renders grouped rows, run states, and an empty menu with an add-command ac
       onSelect={() => undefined}
       onRunOrStop={() => undefined}
       onStopOrphan={() => undefined}
+      onRunCommand={() => undefined}
+      onShowOutput={() => undefined}
+      onRunOrStopAdhoc={() => undefined}
+      onDismissAdhoc={() => undefined}
       onEditCommands={() => undefined}
     />,
   )
+  assert.match(emptyMarkup, /aria-label="Run a one-off command in this workspace"/)
+  assert.match(emptyMarkup, /placeholder="Run a command, e\.g\. git pull"/)
   assert.match(emptyMarkup, /No package\.json scripts found/)
   assert.match(emptyMarkup, /Add command…/)
 })

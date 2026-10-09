@@ -156,6 +156,10 @@ type TranslationResources = {
     exited: string
     exitCode: string
     noPackageScripts: string
+    commandPlaceholder: string
+    commandInputLabel: string
+    recentCommands: string
+    dismissCommand: string
     runScript: string
     stopScript: string
     showOutput: string
@@ -1031,6 +1035,10 @@ const en: TranslationResources = {
     exited: 'Exited',
     exitCode: 'Exited with code {{code}}',
     noPackageScripts: 'No package.json scripts found in this workspace.',
+    commandPlaceholder: 'Run a command, e.g. git pull',
+    commandInputLabel: 'Run a one-off command in this workspace',
+    recentCommands: 'Recent commands',
+    dismissCommand: 'Dismiss',
     runScript: 'Run script',
     stopScript: 'Stop script',
     showOutput: 'Show output',
@@ -1906,6 +1914,10 @@ const es: TranslationResources = {
     exited: 'Finalizado',
     exitCode: 'Finalizó con código {{code}}',
     noPackageScripts: 'No se encontraron scripts en package.json para este espacio de trabajo.',
+    commandPlaceholder: 'Ejecutar un comando, ej. git pull',
+    commandInputLabel: 'Ejecutar un comando puntual en este espacio de trabajo',
+    recentCommands: 'Comandos recientes',
+    dismissCommand: 'Descartar',
     runScript: 'Ejecutar script',
     stopScript: 'Detener script',
     showOutput: 'Mostrar salida',

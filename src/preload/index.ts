@@ -137,6 +137,8 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.invoke('scripts:snapshot', workspaceId) as Promise<WorkspaceScriptsSnapshot>,
     run: (input: { workspaceId: string; scriptId: string }) =>
       ipcRenderer.invoke('scripts:run', input) as Promise<WorkspaceScriptRun>,
+    runCommand: (input: { workspaceId: string; command: string }) =>
+      ipcRenderer.invoke('scripts:runCommand', input) as Promise<WorkspaceScriptRun>,
     stop: (input: { workspaceId: string; scriptId: string }) =>
       ipcRenderer.invoke('scripts:stop', input) as Promise<void>,
     subscribe: (workspaceId: string) =>
