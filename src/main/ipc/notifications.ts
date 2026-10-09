@@ -10,7 +10,11 @@ import type {
 import { createWindowAttentionController } from '../windowAttention'
 
 const windowAttention = createWindowAttentionController()
-const agentAlertNotifications = new Set<Notification>()
+// One notification per tile. Linux and macOS keep shown notifications in the
+// notification center until the app closes them, so attending the tile or a
+// newer alert for it must close the previous one. Entries survive the 'close'
+// event because some servers emit it when the popup moves to the tray.
+const agentAlertNotifications = new Map<string, Notification>()
 const AGENT_ALERT_LAUNCH_PREFIX = 'yira-agent-alert:'
 
 function normalizeAgentAlertNotificationRequest(input: unknown): AgentAlertNotificationRequest | null {
@@ -99,6 +103,21 @@ export function clearWindowAttention(window: BrowserWindow): void {
   windowAttention.clear(window)
 }
 
+function forgetAgentAlertNotification(tileId: string, notification: Notification): void {
+  if (agentAlertNotifications.get(tileId) === notification) agentAlertNotifications.delete(tileId)
+}
+
+export function dismissAgentAlertNotification(tileId: string): void {
+  const notification = agentAlertNotifications.get(tileId)
+  if (!notification) return
+  agentAlertNotifications.delete(tileId)
+  try {
+    notification.close()
+  } catch {
+    // The notification server may already have dropped it.
+  }
+}
+
 export function registerNotificationIPC(getMainWindow: () => BrowserWindow | null): void {
   const usesToastActivation = process.platform === 'win32'
   if (usesToastActivation) {
@@ -131,6 +150,8 @@ export function registerNotificationIPC(getMainWindow: () => BrowserWindow | nul
     const request = normalizeAgentAlertNotificationRequest(input)
     if (!request || !Notification.isSupported()) return false
 
+    dismissAgentAlertNotification(request.tileId)
+
     let createdNotification: Notification | null = null
     try {
       const notification = new Notification({
@@ -140,10 +161,9 @@ export function registerNotificationIPC(getMainWindow: () => BrowserWindow | nul
         ...(usesToastActivation ? { toastXml: buildAgentAlertToastXml(request) } : {}),
       })
       createdNotification = notification
-      agentAlertNotifications.add(notification)
-      notification.on('close', () => agentAlertNotifications.delete(notification))
+      agentAlertNotifications.set(request.tileId, notification)
       notification.on('click', () => {
-        agentAlertNotifications.delete(notification)
+        forgetAgentAlertNotification(request.tileId, notification)
         // On Windows the activation handler already routes the click.
         if (usesToastActivation) return
         focusAgentAlertTarget(getEventWindow(event), {
@@ -155,7 +175,7 @@ export function registerNotificationIPC(getMainWindow: () => BrowserWindow | nul
       notification.show()
       return true
     } catch {
-      if (createdNotification) agentAlertNotifications.delete(createdNotification)
+      if (createdNotification) forgetAgentAlertNotification(request.tileId, createdNotification)
       return false
     }
   })
