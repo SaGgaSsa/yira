@@ -52,7 +52,8 @@ test('quotes fixed POSIX arguments and carries prompts only through the environm
   }).initialCommand, "'codex'")
 })
 
-test('POSIX agent commands replace the shell only when requested', () => {
+test('POSIX agent commands only use startup files when exit behavior is requested', () => {
+  const startupDir = '/tmp/yira-agent-shell'
   for (const shellProfileId of ['bash', 'zsh', 'fish'] as const) {
     const input = {
       shellProfileId,
@@ -65,22 +66,48 @@ test('POSIX agent commands replace the shell only when requested', () => {
       buildAgentShellCommand(input).initialCommand,
       "'claude' '--resume' 'session-1'",
     )
-    assert.equal(
-      buildAgentShellCommand({ ...input, exitWithAgent: true }).initialCommand,
-      "exec 'claude' '--resume' 'session-1'",
+    assert.throws(
+      () => buildAgentShellCommand({ ...input, exitWithAgent: true }),
+      /startup directory is required/,
     )
+
+    const exitCommand = buildAgentShellCommand({ ...input, exitWithAgent: true, startupDir })
+    assert.equal(exitCommand.initialCommand, undefined)
+    assert.equal(exitCommand.replaceProfileArgs, true)
+    assert.equal(exitCommand.env.YIRA_AGENT_COMMAND, "'claude' '--resume' 'session-1'")
+
+    if (shellProfileId === 'bash') {
+      assert.deepEqual(exitCommand.shellArgs, ['--rcfile', '/tmp/yira-agent-shell/bashrc', '-i'])
+    } else if (shellProfileId === 'zsh') {
+      assert.deepEqual(exitCommand.shellArgs, ['--login'])
+      assert.equal(exitCommand.env.ZDOTDIR, '/tmp/yira-agent-shell/zsh')
+    } else {
+      assert.deepEqual(exitCommand.shellArgs, [
+        '--init-command',
+        "source '/tmp/yira-agent-shell/agent.fish'",
+      ])
+    }
 
     const promptedInput = { ...input, prompt: 'Continue this task' }
     assert.equal(
       buildAgentShellCommand(promptedInput).initialCommand,
       "'claude' '--resume' 'session-1' \"$YIRA_AGENT_PROMPT\"",
     )
-    const promptedExit = buildAgentShellCommand({ ...promptedInput, exitWithAgent: true })
+    const promptedExit = buildAgentShellCommand({
+      ...promptedInput,
+      exitWithAgent: true,
+      startupDir,
+      ...(shellProfileId === 'zsh' ? { originalZdotdir: '/home/user/dotfiles' } : {}),
+    })
+    assert.equal(promptedExit.initialCommand, undefined)
     assert.equal(
-      promptedExit.initialCommand,
-      "exec 'claude' '--resume' 'session-1' \"$YIRA_AGENT_PROMPT\"",
+      promptedExit.env.YIRA_AGENT_COMMAND,
+      "'claude' '--resume' 'session-1' \"$YIRA_AGENT_PROMPT\"",
     )
-    assert.deepEqual(promptedExit.env, { YIRA_AGENT_PROMPT: 'Continue this task' })
+    assert.equal(promptedExit.env.YIRA_AGENT_PROMPT, 'Continue this task')
+    if (shellProfileId === 'zsh') {
+      assert.equal(promptedExit.env.YIRA_ORIGINAL_ZDOTDIR, '/home/user/dotfiles')
+    }
   }
 })
 
