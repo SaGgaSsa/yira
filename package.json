@@ -29,8 +29,7 @@
     "release:win": "npm run build && electron-builder --win --publish always",
     "dist:linux": "npm run build && electron-builder --linux --publish never",
     "release:linux": "npm run build && electron-builder --linux --publish always",
-    "preview": "electron-vite preview",
-    "postinstall": "electron-rebuild -f -w node-pty"
+    "preview": "electron-vite preview"
   },
   "keywords": [
     "terminal",
@@ -52,7 +51,6 @@
   "devDependencies": {
     "@electron-toolkit/tsconfig": "^2.0.0",
     "@electron-toolkit/utils": "^4.0.0",
-    "@electron/rebuild": "^4.2.0",
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
