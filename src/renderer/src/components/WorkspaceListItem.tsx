@@ -8,8 +8,10 @@ import { WorkspaceGitDiff } from './WorkspaceGitDiff'
 
 export interface WorkspaceListItemProps {
   workspace: WorkspaceMetadata
-  /** Rendered inside the card, before the name (the collapse toggle). */
+  /** Rendered inside the row, before the name (the collapse toggle). */
   leading?: React.ReactNode
+  /** Rendered after the name, before the git diff (the collapsed agent summary). */
+  trailing?: React.ReactNode
   active?: boolean
   sessionActive?: boolean
   onClick: () => void
@@ -23,6 +25,7 @@ export interface WorkspaceListItemProps {
 export function WorkspaceListItem({
   workspace,
   leading,
+  trailing,
   active = false,
   sessionActive = false,
   onClick,
@@ -38,6 +41,7 @@ export function WorkspaceListItem({
     workspace.config.rootFolderPath,
   )
   const highlighted = active || sessionActive
+  const menuOpen = menuPosition !== null
   const menuItems: MenuItem[] = [
     { label: t('workspace.configure'), icon: Settings, action: onConfigure },
     { label: t('workspace.focus'), icon: Maximize2, action: onFocus },
@@ -48,25 +52,22 @@ export function WorkspaceListItem({
 
   return (
     <div
-      className={`relative flex items-center rounded-2xl border ${highlighted ? '' : 'bg-bg-secondary hover:bg-hover-bg'} ${className}`.trim()}
-      style={{
-        background: highlighted ? 'var(--surface-raised)' : undefined,
-        borderColor: highlighted ? 'var(--text-display)' : 'var(--border)',
-      }}
+      className={`group relative flex h-7 items-center rounded-md ${active ? 'bg-bg-tertiary' : 'hover:bg-hover-bg'} ${className}`.trim()}
     >
-      {leading && <div className="flex shrink-0 items-center pl-1.5">{leading}</div>}
+      {leading && <div className="flex shrink-0 items-center pl-0.5">{leading}</div>}
       <button
-        className={`flex h-full min-w-0 flex-1 items-center py-2.5 pr-3 text-left ${leading ? 'pl-1' : 'pl-3'} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--interactive)]`}
+        className={`flex h-full min-w-0 flex-1 items-center pr-2 text-left ${leading ? 'pl-0.5' : 'pl-2'} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--interactive)]`}
         onClick={onClick}
         title={workspace.name}
         type="button"
       >
-        <span className={`min-w-0 truncate text-sm ${highlighted ? 'text-text-display' : 'text-text-secondary'}`}>
+        <span className={`min-w-0 truncate text-sm font-semibold ${active ? 'text-text-display' : highlighted ? 'text-text-primary' : 'text-text-secondary'}`}>
           {workspace.name}
         </span>
       </button>
 
-      <div className="flex shrink-0 items-center gap-1 pr-2">
+      <div className="flex shrink-0 items-center gap-1.5 pr-1">
+        {trailing}
         {hasWorkspaceGitDiff && (
           <WorkspaceGitDiff
             workspaceId={workspace.id}
@@ -76,7 +77,7 @@ export function WorkspaceListItem({
           />
         )}
         <button
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--interactive)]"
+          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded text-text-secondary transition-[opacity,color,background-color] hover:bg-hover-bg ${menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'} hover:text-text-display focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--interactive)]`}
           onMouseDown={(event) => event.stopPropagation()}
           onClick={(event) => {
             event.stopPropagation()
@@ -86,7 +87,7 @@ export function WorkspaceListItem({
           }}
           aria-label={t('workspace.actions')}
           aria-haspopup="menu"
-          aria-expanded={menuPosition !== null}
+          aria-expanded={menuOpen}
           title={t('workspace.actions')}
           type="button"
         >

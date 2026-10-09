@@ -9,6 +9,7 @@ import type {
   WorkspaceMetadata,
 } from '@shared/types'
 import type { ActivityPaletteStep } from '@/hooks/useAgentsView'
+import { useNow } from '@/hooks/useNow'
 import {
   ACTIVITY_PALETTE_GRID_TRACKS,
   buildActivityPaletteGroups,
@@ -74,15 +75,6 @@ function isButtonTarget(target: EventTarget | null): boolean {
   return typeof closest === 'function' && Boolean(closest.call(target, 'button'))
 }
 
-function useNow(): number {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    const interval = window.setInterval(() => setNow(Date.now()), ELAPSED_REFRESH_MS)
-    return () => window.clearInterval(interval)
-  }, [])
-  return now
-}
-
 function Keycap({ children }: { children: React.ReactNode }): React.ReactElement {
   return (
     <kbd className="rounded border border-border-visible px-1.5 py-0.5 font-mono text-[10px] text-text-secondary">
@@ -109,7 +101,7 @@ function ActivityStep({
   const { t } = useTranslation()
   const containerRef = useRef<HTMLDivElement | null>(null)
   const visibleSessions = useMemo(() => groups.flatMap((group) => group.sessions), [groups])
-  const now = useNow()
+  const now = useNow(ELAPSED_REFRESH_MS)
   const summary = summarizeActivityPalette(groups)
   const spans = getActivityPaletteCardSpans(groups.length)
   const [selectedId, setSelectedId] = useState<string | null>(null)

@@ -1,7 +1,13 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AgentActiveSession, WorkspaceMetadata } from '@shared/types'
+import { useNow } from '@/hooks/useNow'
+import { formatActivityElapsed } from '@/utils/activityPalette'
 import { getAgentSessionTitle } from '@/utils/terminalDisplayTitle'
+
+const ELAPSED_REFRESH_MS = 30_000
+// Spinner glyphs that Claude and Codex put in front of their terminal title.
+const TITLE_SPINNER_PREFIX = /^[·*✢-✽◐-◓⠀-⣿]+\s*/u
 
 export interface WorkspaceAgentTreeProps {
   workspace: WorkspaceMetadata
@@ -20,8 +26,12 @@ function getStatusLabel(status: AgentActiveSession['status'], translate: (key: s
 
 function getStatusDotClass(status: AgentActiveSession['status']): string {
   if (status === 'needs-input') return 'bg-warning'
-  if (status === 'done') return 'bg-text-display'
-  return 'bg-activity'
+  if (status === 'done') return 'border-[1.5px] border-text-secondary'
+  return 'bg-activity animate-pulse motion-reduce:animate-none'
+}
+
+function StatusDot({ status }: { status: AgentActiveSession['status'] }): React.ReactElement {
+  return <span className={`h-[7px] w-[7px] shrink-0 rounded-full ${getStatusDotClass(status)}`} aria-hidden="true" />
 }
 
 export function WorkspaceAgentTree({
@@ -31,15 +41,21 @@ export function WorkspaceAgentTree({
   onOpenAgent,
 }: WorkspaceAgentTreeProps): React.ReactElement | null {
   const { t } = useTranslation()
+  const now = useNow(ELAPSED_REFRESH_MS)
   if (sessions.length === 0) return null
 
   return (
-    <div className="ml-3 flex flex-col gap-0.5 border-l border-border pl-2">
+    <div className="mt-px flex flex-col gap-px">
       {sessions.map((session) => {
         const providerName = t(session.provider === 'claude' ? 'agentsView.claude' : 'agentsView.codex')
-        const sessionName = getAgentSessionTitle(session) || providerName
+        const sessionName = getAgentSessionTitle(session).replace(TITLE_SPINNER_PREFIX, '') || providerName
         const statusLabel = getStatusLabel(session.status, t)
         const focused = focusedTileId !== null && session.tileId === focusedTileId
+        const waiting = session.status === 'needs-input'
+        const done = session.status === 'done'
+        const nameClass = focused
+          ? 'font-medium text-text-display'
+          : waiting || done ? 'text-text-primary' : 'text-text-secondary'
 
         return (
           <button
@@ -48,17 +64,22 @@ export function WorkspaceAgentTree({
             data-workspace-agent-session={session.sessionId}
             aria-label={`${sessionName}, ${statusLabel}`}
             aria-current={focused ? 'true' : undefined}
-            title={sessionName}
+            title={`${sessionName} · ${statusLabel}`}
             onClick={() => onOpenAgent(workspace, session)}
-            className={`flex min-w-0 items-start gap-2 rounded-lg px-2 py-1.5 text-left transition-colors ${focused ? 'bg-active-bg shadow-[inset_2px_0_0_var(--text-display)]' : 'hover:bg-hover-bg'} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--interactive)]`}
+            className={`relative flex h-[26px] min-w-0 items-center gap-2 rounded-md pl-6 pr-1.5 text-left transition-colors ${focused ? 'bg-active-bg before:absolute before:inset-y-[5px] before:left-0 before:w-0.5 before:rounded-full before:bg-text-display' : 'hover:bg-hover-bg'} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--interactive)]`}
           >
-            <span className="mt-1.5 flex h-2 w-2 shrink-0 items-center justify-center">
-              <span className={`h-2 w-2 rounded-full ${getStatusDotClass(session.status)}`} aria-hidden="true" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className={`block truncate text-sm ${focused ? 'font-medium text-text-display' : 'text-text-primary'}`}>{sessionName}</span>
-              <span className="nd-caption block truncate text-text-muted">{statusLabel}</span>
-            </span>
+            <StatusDot status={session.status} />
+            <span className={`min-w-0 flex-1 truncate text-sm ${nameClass}`}>{sessionName}</span>
+            {waiting && (
+              <span className="shrink-0 font-mono text-[10px] text-warning">
+                {t('workspaceAgents.statusWaiting')}
+              </span>
+            )}
+            {done && (
+              <span className="shrink-0 font-mono text-[10px] tabular-nums text-text-muted">
+                {formatActivityElapsed(session.lastActivityAt, now)}
+              </span>
+            )}
           </button>
         )
       })}
@@ -80,23 +101,25 @@ export function WorkspaceAgentSummary({
   const { t } = useTranslation()
   if (needsInputCount <= 0 && doneCount <= 0 && workingCount <= 0) return null
 
+  const counts: Array<{ status: AgentActiveSession['status']; count: number; label: string }> = [
+    { status: 'needs-input', count: needsInputCount, label: t('workspaceAgents.waitingCount', { count: needsInputCount }) },
+    { status: 'done', count: doneCount, label: t('workspaceAgents.readyCount', { count: doneCount }) },
+    { status: 'working', count: workingCount, label: t('workspaceAgents.workingCount', { count: workingCount }) },
+  ]
+
   return (
-    <span className="flex shrink-0 items-center gap-1.5">
-      {needsInputCount > 0 && (
-        <span className="rounded-full border border-warning px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-warning">
-          {t('workspaceAgents.waitingCount', { count: needsInputCount })}
+    <span className="flex shrink-0 items-center gap-2">
+      {counts.filter(({ count }) => count > 0).map(({ status, count, label }) => (
+        <span
+          key={status}
+          className="inline-flex items-center gap-1 font-mono text-[10px] tabular-nums text-text-secondary"
+          aria-label={label}
+          title={label}
+        >
+          <StatusDot status={status} />
+          {count}
         </span>
-      )}
-      {doneCount > 0 && (
-        <span className="rounded-full border border-border-visible px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-text-display">
-          {t('workspaceAgents.readyCount', { count: doneCount })}
-        </span>
-      )}
-      {workingCount > 0 && (
-        <span className="rounded-full border border-activity px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-activity">
-          {t('workspaceAgents.workingCount', { count: workingCount })}
-        </span>
-      )}
+      ))}
     </span>
   )
 }
