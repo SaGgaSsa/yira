@@ -3,7 +3,6 @@ import { useSidePanelWidth } from '@/hooks/useSidePanelWidth'
 
 interface SidebarProps {
   collapsed: boolean
-  onToggle: () => void
   children?: React.ReactNode
   footer?: React.ReactNode
 }
