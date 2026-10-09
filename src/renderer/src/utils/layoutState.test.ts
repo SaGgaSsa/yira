@@ -16,6 +16,7 @@ function panelInput(overrides: Partial<PanelLayoutInput> = {}): PanelLayoutInput
     sidebarCollapsed: false,
     workspacePanelOpen: true,
     workspacePanelHiddenByFocus: false,
+    focusViewActive: false,
     maximizedSessionId: null,
     workspacePanelRevealedForSessionId: null,
     windowWidth: 1920,
@@ -39,6 +40,9 @@ function expectedLayout(overrides: Partial<PanelLayout> = {}): PanelLayout {
     workspacePanelShown: true,
     workspacePanelHiddenByWidth: false,
     narrowWindow: false,
+    workspacePanelRevealedInFocus: false,
+    workspacePanelRevealedForMaximizedSession: false,
+    workspacePanelRevealedInNarrowWindow: false,
     ...overrides,
   }
 }
@@ -60,6 +64,9 @@ function assertPanelLayout(
     'workspacePanelShown',
     'workspacePanelHiddenByWidth',
     'narrowWindow',
+    'workspacePanelRevealedInFocus',
+    'workspacePanelRevealedForMaximizedSession',
+    'workspacePanelRevealedInNarrowWindow',
   ]
 
   for (const key of keys) {
@@ -131,6 +138,7 @@ assertPanelLayout('Revealing the right panel hides the sidebar when space is ins
   workspacePanelVisible: true,
   workspacePanelShown: true,
   narrowWindow: true,
+  workspacePanelRevealedInNarrowWindow: true,
 })
 
 assertPanelLayout('Revealing the sidebar keeps it visible while the right panel stays hidden', {
@@ -190,7 +198,22 @@ assertPanelLayout('Focus hides the workspace panel', {
   workspacePanelShown: false,
 })
 
-assertPanelLayout('Revealing the Focus panel clears its suppression', {}, {})
+assertPanelLayout('Revealing the Focus panel clears its suppression', {
+  focusViewActive: true,
+}, {
+  workspacePanelRevealedInFocus: true,
+})
+
+assertPanelLayout('A Focus reveal does not count in Agents', {
+  mainView: 'agents',
+  focusViewActive: true,
+}, {
+  tilesHidden: true,
+})
+
+assertPanelLayout('A narrow-window override does not count as a reveal on a wide window', {
+  narrowOverride: { sidebar: false, workspacePanel: true },
+}, {})
 
 assertPanelLayout('Focus does not hide the panel in Agents', {
   mainView: 'agents',
@@ -223,6 +246,7 @@ assertPanelLayout('A reveal for the maximized session shows the panel', {
   workspacePanelSuppressed: false,
   workspacePanelVisible: true,
   workspacePanelShown: true,
+  workspacePanelRevealedForMaximizedSession: true,
 })
 
 assertPanelLayout('A reveal for another session keeps the panel hidden', {

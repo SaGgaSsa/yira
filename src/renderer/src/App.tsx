@@ -516,6 +516,7 @@ function AppContent(): React.ReactElement {
     sidebarCollapsed,
     workspacePanelOpen: activeWorkspaceConfig.workspacePanelOpen,
     workspacePanelHiddenByFocus,
+    focusViewActive: shouldHideWorkspacePanelForView(viewMode, shouldKeepSidebarOpen),
     maximizedSessionId: agentsMaximizedSessionId,
     workspacePanelRevealedForSessionId,
     windowWidth,
@@ -532,6 +533,9 @@ function AppContent(): React.ReactElement {
     workspacePanelShown,
     workspacePanelHiddenByWidth,
     narrowWindow,
+    workspacePanelRevealedInFocus,
+    workspacePanelRevealedForMaximizedSession,
+    workspacePanelRevealedInNarrowWindow,
   } = panelLayout
   useEffect(() => {
     if (narrowWindow) return
@@ -1396,6 +1400,13 @@ function AppContent(): React.ReactElement {
 
   const toggleWorkspacePanel = useCallback(() => {
     if (!activeWorkspaceId || !hasWorkspacePanel) return
+    // Hiding a temporarily revealed panel undoes the reveal and keeps the saved preference.
+    if (workspacePanelRevealedInFocus || workspacePanelRevealedForMaximizedSession || workspacePanelRevealedInNarrowWindow) {
+      if (workspacePanelRevealedInFocus) setWorkspacePanelHiddenByFocus(true)
+      if (workspacePanelRevealedForMaximizedSession) setWorkspacePanelRevealedForSessionId(null)
+      if (workspacePanelRevealedInNarrowWindow) setNarrowOverride((current) => ({ ...current, workspacePanel: false }))
+      return
+    }
     const revealWithNarrowOverride = !workspacePanelVisible
       && narrowWindow
       && (mainView === 'workspace' || mainView === 'agents')
@@ -1420,7 +1431,7 @@ function AppContent(): React.ReactElement {
       if (!updatedWorkspace) return
       handleWorkspaceConfigUpdated(updatedWorkspace)
     })
-  }, [activeWorkspaceConfig.workspacePanelOpen, activeWorkspaceId, agentSessionMaximized, agentsMaximizedSessionId, handleWorkspaceConfigUpdated, hasWorkspacePanel, mainView, narrowWindow, workspacePanelHiddenByWidth, workspacePanelSuppressed, workspacePanelVisible])
+  }, [activeWorkspaceConfig.workspacePanelOpen, activeWorkspaceId, agentSessionMaximized, agentsMaximizedSessionId, handleWorkspaceConfigUpdated, hasWorkspacePanel, mainView, narrowWindow, workspacePanelHiddenByWidth, workspacePanelRevealedForMaximizedSession, workspacePanelRevealedInFocus, workspacePanelRevealedInNarrowWindow, workspacePanelSuppressed, workspacePanelVisible])
 
   // Zoom toggle: switch between 100% and previous zoom
   const handleZoomToggle = useCallback(() => {
