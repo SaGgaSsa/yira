@@ -35,6 +35,8 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useAgentsView } from './hooks/useAgentsView'
 import { useTheme } from './hooks/useTheme'
 import { useFontSize } from './hooks/useFontSize'
+import { useSidePanelWidth } from './hooks/useSidePanelWidth'
+import { useWindowWidth } from './hooks/useWindowWidth'
 import { resolveSidebarCollapsedForActivity } from './utils/emptyWorkspaceView'
 import { resolveMainView, resolvePanelLayout } from './utils/layoutState'
 import { useUpdateStore } from './store/updateStore'
@@ -303,6 +305,8 @@ function isPromptDialog(dialog: PromptDialogState | ConfirmDialogState): dialog 
 }
 
 function AppContent(): React.ReactElement {
+  const windowWidth = useWindowWidth()
+  const [sidePanelWidth] = useSidePanelWidth()
   const terminalProcessActivity = useTerminalProcessActivity()
   const {
     registry,
@@ -491,6 +495,7 @@ function AppContent(): React.ReactElement {
   const [settingsSection, setSettingsSection] = useState<SettingsSectionId>('appearance')
   const [showJsonEditor, setShowJsonEditor] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [narrowOverride, setNarrowOverride] = useState({ sidebar: false, workspacePanel: false })
   const [activityOpen, setActivityOpen] = useState(false)
   const [homeOpen, setHomeOpen] = useState(true)
   const [activeSectionExpanded, setActiveSectionExpanded] = useState(true)
@@ -513,23 +518,40 @@ function AppContent(): React.ReactElement {
     workspacePanelHiddenByFocus,
     maximizedSessionId: agentsMaximizedSessionId,
     workspacePanelRevealedForSessionId,
+    windowWidth,
+    sidePanelWidth,
+    narrowOverride,
   })
   const {
     agentSessionMaximized,
     sidebarHidden,
+    sidebarHiddenByWidth,
     tilesHidden,
     workspacePanelSuppressed,
     workspacePanelVisible,
     workspacePanelShown,
+    workspacePanelHiddenByWidth,
+    narrowWindow,
   } = panelLayout
+  useEffect(() => {
+    if (narrowWindow) return
+    setNarrowOverride((current) => current.sidebar || current.workspacePanel
+      ? { sidebar: false, workspacePanel: false }
+      : current)
+  }, [narrowWindow])
   const toggleSidebar = useCallback(() => {
+    if (sidebarHiddenByWidth) {
+      setNarrowOverride((current) => current.sidebar ? current : { ...current, sidebar: true })
+      return
+    }
+    setNarrowOverride((current) => current.sidebar ? { ...current, sidebar: false } : current)
     if (agentSessionMaximized) {
       setAgentsMaximizedSessionId(null)
       setSidebarCollapsed(false)
       return
     }
     setSidebarCollapsed((collapsed) => !collapsed)
-  }, [agentSessionMaximized])
+  }, [agentSessionMaximized, sidebarHiddenByWidth])
   const [pendingAgentSession, setPendingAgentSession] = useState<{ workspaceId: string; tileId: string } | null>(null)
   const pendingAgentSessionSourceRef = useRef('')
   useEffect(() => {
@@ -1374,11 +1396,22 @@ function AppContent(): React.ReactElement {
 
   const toggleWorkspacePanel = useCallback(() => {
     if (!activeWorkspaceId || !hasWorkspacePanel) return
+    const revealWithNarrowOverride = !workspacePanelVisible
+      && narrowWindow
+      && (mainView === 'workspace' || mainView === 'agents')
+    const keepNarrowOverride = workspacePanelHiddenByWidth || revealWithNarrowOverride
+    if (keepNarrowOverride) {
+      setNarrowOverride((current) => current.workspacePanel ? current : { ...current, workspacePanel: true })
+    }
     // While suppressed, the button reveals the panel instead of flipping the saved preference.
     if (workspacePanelSuppressed) {
       setWorkspacePanelHiddenByFocus(false)
       if (agentSessionMaximized) setWorkspacePanelRevealedForSessionId(agentsMaximizedSessionId)
       if (activeWorkspaceConfig.workspacePanelOpen) return
+    }
+    if (keepNarrowOverride && activeWorkspaceConfig.workspacePanelOpen) return
+    if (!keepNarrowOverride) {
+      setNarrowOverride((current) => current.workspacePanel ? { ...current, workspacePanel: false } : current)
     }
 
     void window.electron.workspace.update(activeWorkspaceId, {
@@ -1387,7 +1420,7 @@ function AppContent(): React.ReactElement {
       if (!updatedWorkspace) return
       handleWorkspaceConfigUpdated(updatedWorkspace)
     })
-  }, [activeWorkspaceConfig.workspacePanelOpen, activeWorkspaceId, agentSessionMaximized, agentsMaximizedSessionId, handleWorkspaceConfigUpdated, hasWorkspacePanel, workspacePanelSuppressed, workspacePanelVisible])
+  }, [activeWorkspaceConfig.workspacePanelOpen, activeWorkspaceId, agentSessionMaximized, agentsMaximizedSessionId, handleWorkspaceConfigUpdated, hasWorkspacePanel, mainView, narrowWindow, workspacePanelHiddenByWidth, workspacePanelSuppressed, workspacePanelVisible])
 
   // Zoom toggle: switch between 100% and previous zoom
   const handleZoomToggle = useCallback(() => {
