@@ -26,6 +26,7 @@ interface TopBarProps {
   onToggleActivity: () => void
   agentsViewAvailable: boolean
   agentsViewOpen: boolean
+  homeOpen: boolean
   agentSessionCount: number
   agentAttentionCount: number
   onToggleAgentsView: () => void
@@ -104,6 +105,7 @@ export function TopBar({
   onToggleActivity,
   agentsViewAvailable,
   agentsViewOpen,
+  homeOpen,
   agentSessionCount,
   agentAttentionCount,
   onToggleAgentsView,
@@ -122,8 +124,8 @@ export function TopBar({
   const zoomPercent = Math.round(zoom * 100)
   const SplitIcon = splitOrientation === 'horizontal' ? SplitSquareVertical : SplitSquareHorizontal
   const isGridWorkspace = workspaceType === 'grid'
-  // With Agents or Activity on top, a view button returns to that view instead of toggling it.
-  const overlayOpen = agentsViewOpen || activityOpen
+  // With Agents, Activity or Home on top, no view button is selected and the tile controls are hidden.
+  const overlayOpen = agentsViewOpen || activityOpen || homeOpen
 
   return (
     <header className="window-titlebar nd-panel relative flex shrink-0 items-center border-x-0 border-t-0">
@@ -156,13 +158,13 @@ export function TopBar({
 
           <div className="absolute left-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1 rounded-md border border-border-visible bg-bg-secondary px-0.5 top-1/2">
             <SegmentedButton
-              active={!agentsViewOpen && viewMode === 'fullview'}
+              active={!overlayOpen && viewMode === 'fullview'}
               label={t('shortcuts.focus')}
               icon={Columns}
               onClick={() => onSetViewMode('fullview')}
             />
             <SegmentedButton
-              active={!agentsViewOpen && viewMode === 'splitview'}
+              active={!overlayOpen && viewMode === 'splitview'}
               label={t('shortcuts.split')}
               title={splitOrientation === 'horizontal' ? 'Split top/bottom' : 'Split left/right'}
               icon={SplitIcon}
@@ -171,7 +173,7 @@ export function TopBar({
             />
             {isGridWorkspace ? (
               <SegmentedButton
-                active={!agentsViewOpen && viewMode === 'gridview'}
+                active={!overlayOpen && viewMode === 'gridview'}
                 label={t('shortcuts.grid')}
                 title={viewMode === 'gridview' ? t('workspace.canvas') : t('shortcuts.grid')}
                 icon={Grid3X3}
@@ -179,7 +181,7 @@ export function TopBar({
               />
             ) : (
               <SegmentedButton
-                active={!agentsViewOpen && viewMode === 'canvas'}
+                active={!overlayOpen && viewMode === 'canvas'}
                 label={t('shortcuts.canvas')}
                 title={viewMode === 'canvas' ? t('shortcuts.grid') : t('shortcuts.canvas')}
                 icon={LayoutGrid}
@@ -188,7 +190,7 @@ export function TopBar({
             )}
             {boardEnabled && boardVisible && (
               <SegmentedButton
-                active={!agentsViewOpen && viewMode === 'board'}
+                active={!overlayOpen && viewMode === 'board'}
                 label={t('tile.board')}
                 icon={ClipboardList}
                 badgeCount={boardReviewCount}
@@ -223,7 +225,7 @@ export function TopBar({
           </div>
 
           <div className="ml-auto flex items-center justify-end gap-1">
-            {!isGridWorkspace && !activityOpen && !agentsViewOpen && (
+            {!isGridWorkspace && !overlayOpen && (
               <>
                 <button
                   className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
@@ -254,7 +256,7 @@ export function TopBar({
               />
             )}
 
-            {hasWorkspacePanel && !activityOpen && (
+            {hasWorkspacePanel && !activityOpen && !homeOpen && (
               <button
                 className={`inline-flex h-7 w-7 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display ${workspacePanelOpen ? 'text-text-display' : ''}`}
                 onClick={onToggleWorkspacePanel}

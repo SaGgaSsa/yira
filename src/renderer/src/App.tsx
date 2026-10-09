@@ -501,6 +501,7 @@ function AppContent(): React.ReactElement {
   const sidebarHidden = sidebarCollapsed || agentSessionMaximized
   // Focus view and a maximized agent session also hide the workspace panel without changing its saved state.
   const [workspacePanelHiddenByFocus, setWorkspacePanelHiddenByFocus] = useState(false)
+  const [workspacePanelRevealedForSessionId, setWorkspacePanelRevealedForSessionId] = useState<string | null>(null)
   const toggleSidebar = useCallback(() => {
     if (agentSessionMaximized) {
       setAgentsMaximizedSessionId(null)
@@ -1285,7 +1286,9 @@ function AppContent(): React.ReactElement {
   const workspaceRootPath = activeWorkspaceConfig.rootFolderPath?.trim() ?? ''
   const hasWorkspacePanel = Boolean(workspaceRootPath)
   // Focus view (outside Agents) and a maximized agent session hide the panel without changing the saved preference.
-  const workspacePanelSuppressed = (workspacePanelHiddenByFocus && !agentsView.isOpen) || agentSessionMaximized
+  // Revealing it during a maximized session lasts until another session is maximized.
+  const workspacePanelSuppressed = (workspacePanelHiddenByFocus && !agentsView.isOpen)
+    || (agentSessionMaximized && workspacePanelRevealedForSessionId !== agentsMaximizedSessionId)
   const workspacePanelVisible = activeWorkspaceConfig.workspacePanelOpen && !workspacePanelSuppressed
   const closeBoard = useCallback(() => {
     setBoardVisible(false)
@@ -1359,7 +1362,7 @@ function AppContent(): React.ReactElement {
     // While suppressed, the button reveals the panel instead of flipping the saved preference.
     if (workspacePanelSuppressed) {
       setWorkspacePanelHiddenByFocus(false)
-      if (agentSessionMaximized) setAgentsMaximizedSessionId(null)
+      if (agentSessionMaximized) setWorkspacePanelRevealedForSessionId(agentsMaximizedSessionId)
       if (activeWorkspaceConfig.workspacePanelOpen) return
     }
 
@@ -1369,7 +1372,7 @@ function AppContent(): React.ReactElement {
       if (!updatedWorkspace) return
       handleWorkspaceConfigUpdated(updatedWorkspace)
     })
-  }, [activeWorkspaceConfig.workspacePanelOpen, activeWorkspaceId, agentSessionMaximized, handleWorkspaceConfigUpdated, hasWorkspacePanel, workspacePanelSuppressed, workspacePanelVisible])
+  }, [activeWorkspaceConfig.workspacePanelOpen, activeWorkspaceId, agentSessionMaximized, agentsMaximizedSessionId, handleWorkspaceConfigUpdated, hasWorkspacePanel, workspacePanelSuppressed, workspacePanelVisible])
 
   // Zoom toggle: switch between 100% and previous zoom
   const handleZoomToggle = useCallback(() => {
@@ -2387,6 +2390,7 @@ function AppContent(): React.ReactElement {
   }
   const showWorkspaceHome = (homeOpen || !activeWorkspaceId) && !activityOpen && !agentsView.isOpen
   const tilesHidden = activityOpen || agentsView.isOpen || showWorkspaceHome
+  const workspacePanelShown = workspacePanelVisible && !activityOpen && !showWorkspaceHome
   const workspaceHomeNow = Date.now()
 
   return (
@@ -2416,6 +2420,7 @@ function AppContent(): React.ReactElement {
         }}
         agentsViewAvailable={Boolean(activeWorkspaceId && agentsView.effectiveProvider)}
         agentsViewOpen={agentsView.isOpen}
+        homeOpen={showWorkspaceHome}
         agentSessionCount={agentsView.sessions.length}
         agentAttentionCount={countAgentsViewAttention(agentsView.sessions)}
         onToggleAgentsView={() => {
@@ -2432,11 +2437,11 @@ function AppContent(): React.ReactElement {
         workspacePanelOpen={workspacePanelVisible}
         onToggleWorkspacePanel={toggleWorkspacePanel}
         onSetViewMode={(mode) => {
-          const overlayOpen = agentsView.isOpen || activityOpen
+          const overlayOpen = agentsView.isOpen || activityOpen || showWorkspaceHome
           agentsView.close()
           setHomeOpen(false)
           setActivityOpen(false)
-          // Leaving Agents or Activity for the view underneath restores it as it was,
+          // Leaving Agents, Activity or Home for the view underneath restores it as it was,
           // instead of toggling it (split orientation, canvas/grid swap).
           if (overlayOpen && mode === viewMode) return
           handleSetViewMode(mode)
@@ -2450,7 +2455,6 @@ function AppContent(): React.ReactElement {
       {/* Sidebar — below the native title bar */}
       <Sidebar
         collapsed={sidebarHidden}
-        onToggle={toggleSidebar}
         footer={
           <div ref={footerRef} className="relative border-t border-border bg-bg-secondary px-3 py-3">
             {showProfilePicker && (
@@ -2822,13 +2826,13 @@ function AppContent(): React.ReactElement {
                   onCreateWorkspace={openCreateWorkspaceDialog}
                 />
               ) : null}
-              {hasWorkspacePanel && workspacePanelVisible && (
+              {hasWorkspacePanel && (
                 // Outside the tile wrapper so it stays visible beside the Agents view.
-                // Hidden with a class: the `hidden` attribute loses to Tailwind's `flex`.
+                // Stays mounted while hidden so it keeps its selected tab.
                 <div
-                  className={`${activityOpen || showWorkspaceHome ? 'hidden' : 'flex'} min-h-0 shrink-0`}
-                  aria-hidden={activityOpen || showWorkspaceHome}
-                  inert={activityOpen || showWorkspaceHome}
+                  className={`${workspacePanelShown ? 'flex' : 'hidden'} min-h-0 shrink-0`}
+                  aria-hidden={!workspacePanelShown}
+                  inert={!workspacePanelShown}
                 >
                   <WorkspacePanel
                     rootPath={workspaceRootPath}
