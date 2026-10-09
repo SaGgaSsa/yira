@@ -30,6 +30,7 @@ import { buildRemoteSshLaunch } from '../remote-ssh'
 import { ensureRemoteSshReady } from '../remote-host-readiness'
 import { SemanticAgentAlertState } from '../agentAlerts'
 import { getEnabledAgentProviders } from './settings'
+import { dismissAgentAlertNotification } from './notifications'
 import { agentSessionRegistry } from '../agents/registry'
 import { normalizeAgentOpaqueId } from '../agents/query'
 import { buildAgentTerminalLaunch, type AgentTerminalLaunch } from '../agents/terminal'
@@ -725,7 +726,9 @@ export function registerTerminalIPC(getWindow: () => BrowserWindow | null): void
   })
 
   ipcMain.handle('terminal:acknowledgeAgentAlert', async (_, identity: TerminalSessionIdentity) => {
-    await persistentTerminalSessions.acknowledge(normalizeTerminalSessionIdentity(identity))
+    const normalized = normalizeTerminalSessionIdentity(identity)
+    dismissAgentAlertNotification(normalized.tileId)
+    await persistentTerminalSessions.acknowledge(normalized)
   })
 
   ipcMain.handle('terminal:setAgentAlertsEnabled', (_, enabled: boolean) => {
