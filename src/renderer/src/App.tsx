@@ -1284,9 +1284,9 @@ function AppContent(): React.ReactElement {
   const boardReviewLabel = boardReviewCount > 0 ? (boardReviewCount > 9 ? '9+' : String(boardReviewCount)) : null
   const workspaceRootPath = activeWorkspaceConfig.rootFolderPath?.trim() ?? ''
   const hasWorkspacePanel = Boolean(workspaceRootPath)
-  const workspacePanelVisible = activeWorkspaceConfig.workspacePanelOpen
-    && !(workspacePanelHiddenByFocus && !agentsView.isOpen)
-    && !agentSessionMaximized
+  // Focus view (outside Agents) and a maximized agent session hide the panel without changing the saved preference.
+  const workspacePanelSuppressed = (workspacePanelHiddenByFocus && !agentsView.isOpen) || agentSessionMaximized
+  const workspacePanelVisible = activeWorkspaceConfig.workspacePanelOpen && !workspacePanelSuppressed
   const closeBoard = useCallback(() => {
     setBoardVisible(false)
     setViewMode(activeWorkspaceType === 'grid' ? 'gridview' : 'fullview')
@@ -1356,19 +1356,20 @@ function AppContent(): React.ReactElement {
 
   const toggleWorkspacePanel = useCallback(() => {
     if (!activeWorkspaceId || !hasWorkspacePanel) return
-    // In focus view the button reveals the hidden panel instead of changing the saved preference.
-    if (workspacePanelHiddenByFocus) {
+    // While suppressed, the button reveals the panel instead of flipping the saved preference.
+    if (workspacePanelSuppressed) {
       setWorkspacePanelHiddenByFocus(false)
+      if (agentSessionMaximized) setAgentsMaximizedSessionId(null)
       if (activeWorkspaceConfig.workspacePanelOpen) return
     }
 
     void window.electron.workspace.update(activeWorkspaceId, {
-      config: { workspacePanelOpen: workspacePanelHiddenByFocus || !activeWorkspaceConfig.workspacePanelOpen },
+      config: { workspacePanelOpen: !workspacePanelVisible },
     }).then((updatedWorkspace) => {
       if (!updatedWorkspace) return
       handleWorkspaceConfigUpdated(updatedWorkspace)
     })
-  }, [activeWorkspaceConfig.workspacePanelOpen, activeWorkspaceId, handleWorkspaceConfigUpdated, hasWorkspacePanel, workspacePanelHiddenByFocus])
+  }, [activeWorkspaceConfig.workspacePanelOpen, activeWorkspaceId, agentSessionMaximized, handleWorkspaceConfigUpdated, hasWorkspacePanel, workspacePanelSuppressed, workspacePanelVisible])
 
   // Zoom toggle: switch between 100% and previous zoom
   const handleZoomToggle = useCallback(() => {
@@ -2385,6 +2386,7 @@ function AppContent(): React.ReactElement {
       : undefined,
   }
   const showWorkspaceHome = (homeOpen || !activeWorkspaceId) && !activityOpen && !agentsView.isOpen
+  const tilesHidden = activityOpen || agentsView.isOpen || showWorkspaceHome
   const workspaceHomeNow = Date.now()
 
   return (
@@ -2680,13 +2682,10 @@ function AppContent(): React.ReactElement {
         {activeWorkspaceId ? (
             <div className="flex min-h-0 flex-1 overflow-hidden">
               <div
-                className="min-w-0 flex-1 overflow-hidden"
-                hidden={activityOpen || agentsView.isOpen || showWorkspaceHome}
-                aria-hidden={activityOpen || agentsView.isOpen || showWorkspaceHome}
-                inert={activityOpen || agentsView.isOpen || showWorkspaceHome}
+                className={`${tilesHidden ? 'hidden' : 'flex'} relative min-w-0 flex-1 flex-col overflow-hidden`}
+                aria-hidden={tilesHidden}
+                inert={tilesHidden}
               >
-              <div className="flex h-full min-h-0 overflow-hidden">
-              <div className="relative min-w-0 flex flex-1 flex-col overflow-hidden">
                 {viewMode === 'splitview' && (
                 <SplitviewPanel
                   tiles={sortedTiles}
@@ -2788,8 +2787,6 @@ function AppContent(): React.ReactElement {
                 )}
                 </div>
               </div>
-              </div>
-              </div>
               {activityOpen ? (
                 <WorkspaceActivityView
                   cards={activityCards}
@@ -2827,9 +2824,9 @@ function AppContent(): React.ReactElement {
               ) : null}
               {hasWorkspacePanel && workspacePanelVisible && (
                 // Outside the tile wrapper so it stays visible beside the Agents view.
+                // Hidden with a class: the `hidden` attribute loses to Tailwind's `flex`.
                 <div
-                  className="flex min-h-0 shrink-0"
-                  hidden={activityOpen || showWorkspaceHome}
+                  className={`${activityOpen || showWorkspaceHome ? 'hidden' : 'flex'} min-h-0 shrink-0`}
                   aria-hidden={activityOpen || showWorkspaceHome}
                   inert={activityOpen || showWorkspaceHome}
                 >
