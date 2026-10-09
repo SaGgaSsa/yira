@@ -184,3 +184,11 @@ test('classifies agent input so only a submitted line starts a turn', () => {
   assert.equal(classifyAgentInput('\u001b'), 'interrupt')
   assert.equal(classifyAgentInput('\u0003'), 'interrupt')
 })
+
+test('classifies a mouse click as typing but ignores release, motion and wheel reports', () => {
+  assert.equal(classifyAgentInput('\u001b[<0;12;5M'), 'typing')
+  assert.equal(classifyAgentInput('\u001b[<2;12;5M'), 'typing')
+  assert.equal(classifyAgentInput('\u001b[<0;12;5m'), null)
+  assert.equal(classifyAgentInput('\u001b[<32;12;5M'), null)
+  assert.equal(classifyAgentInput('\u001b[<64;12;5M'), null)
+})
