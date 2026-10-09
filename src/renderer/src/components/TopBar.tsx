@@ -254,7 +254,7 @@ export function TopBar({
               />
             )}
 
-            {hasWorkspacePanel && !activityOpen && !agentsViewOpen && (
+            {hasWorkspacePanel && !activityOpen && (
               <button
                 className={`inline-flex h-7 w-7 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display ${workspacePanelOpen ? 'text-text-display' : ''}`}
                 onClick={onToggleWorkspacePanel}
