@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Tailwind 3 lets display utilities such as `flex` override the `hidden` attribute.
+   Make the attribute always hide, as Tailwind 4 does. */
+[hidden]:where(:not([hidden='until-found'])) {
+  display: none !important;
+}
+
 @font-face {
   font-family: 'Doto';
   src: url('./assets/fonts/Doto-VariableFont_ROND,wght.ttf') format('truetype');
