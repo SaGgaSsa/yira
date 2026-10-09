@@ -36,6 +36,7 @@ import { useAgentsView } from './hooks/useAgentsView'
 import { useTheme } from './hooks/useTheme'
 import { useFontSize } from './hooks/useFontSize'
 import { resolveSidebarCollapsedForActivity } from './utils/emptyWorkspaceView'
+import { resolveMainView, resolvePanelLayout } from './utils/layoutState'
 import { useUpdateStore } from './store/updateStore'
 import {
   GRID_MAX_TILES,
@@ -496,12 +497,31 @@ function AppContent(): React.ReactElement {
   const [inactiveSectionExpanded, setInactiveSectionExpanded] = useState(true)
   const [expandedActiveWorkspaceIds, setExpandedActiveWorkspaceIds] = useState<Set<string>>(new Set())
   const [agentsMaximizedSessionId, setAgentsMaximizedSessionId] = useState<string | null>(null)
-  // A maximized agent session hides the sidebar without changing its saved state.
-  const agentSessionMaximized = agentsMaximizedSessionId !== null && agentsView.isOpen && !activityOpen
-  const sidebarHidden = sidebarCollapsed || agentSessionMaximized
   // Focus view and a maximized agent session also hide the workspace panel without changing its saved state.
   const [workspacePanelHiddenByFocus, setWorkspacePanelHiddenByFocus] = useState(false)
   const [workspacePanelRevealedForSessionId, setWorkspacePanelRevealedForSessionId] = useState<string | null>(null)
+  const mainView = resolveMainView({
+    hasWorkspace: Boolean(activeWorkspaceId),
+    activityOpen,
+    agentsViewOpen: agentsView.isOpen,
+    homeOpen,
+  })
+  const panelLayout = resolvePanelLayout({
+    mainView,
+    sidebarCollapsed,
+    workspacePanelOpen: activeWorkspaceConfig.workspacePanelOpen,
+    workspacePanelHiddenByFocus,
+    maximizedSessionId: agentsMaximizedSessionId,
+    workspacePanelRevealedForSessionId,
+  })
+  const {
+    agentSessionMaximized,
+    sidebarHidden,
+    tilesHidden,
+    workspacePanelSuppressed,
+    workspacePanelVisible,
+    workspacePanelShown,
+  } = panelLayout
   const toggleSidebar = useCallback(() => {
     if (agentSessionMaximized) {
       setAgentsMaximizedSessionId(null)
@@ -1285,11 +1305,6 @@ function AppContent(): React.ReactElement {
   const boardReviewLabel = boardReviewCount > 0 ? (boardReviewCount > 9 ? '9+' : String(boardReviewCount)) : null
   const workspaceRootPath = activeWorkspaceConfig.rootFolderPath?.trim() ?? ''
   const hasWorkspacePanel = Boolean(workspaceRootPath)
-  // Focus view (outside Agents) and a maximized agent session hide the panel without changing the saved preference.
-  // Revealing it during a maximized session lasts until another session is maximized.
-  const workspacePanelSuppressed = (workspacePanelHiddenByFocus && !agentsView.isOpen)
-    || (agentSessionMaximized && workspacePanelRevealedForSessionId !== agentsMaximizedSessionId)
-  const workspacePanelVisible = activeWorkspaceConfig.workspacePanelOpen && !workspacePanelSuppressed
   const closeBoard = useCallback(() => {
     setBoardVisible(false)
     setViewMode(activeWorkspaceType === 'grid' ? 'gridview' : 'fullview')
@@ -2388,9 +2403,6 @@ function AppContent(): React.ReactElement {
       ? `${boardReviewCount} board ${boardReviewCount === 1 ? 'task' : 'tasks'} waiting for review`
       : undefined,
   }
-  const showWorkspaceHome = (homeOpen || !activeWorkspaceId) && !activityOpen && !agentsView.isOpen
-  const tilesHidden = activityOpen || agentsView.isOpen || showWorkspaceHome
-  const workspacePanelShown = workspacePanelVisible && !activityOpen && !showWorkspaceHome
   const workspaceHomeNow = Date.now()
 
   return (
@@ -2411,7 +2423,7 @@ function AppContent(): React.ReactElement {
         canSplitView={attachedTiles.length >= 2}
         sidebarCollapsed={sidebarHidden}
         onToggleSidebar={toggleSidebar}
-        activityOpen={activityOpen}
+        mainView={mainView}
         onToggleActivity={() => {
           agentsView.close()
           agentsView.closeSessionDialog()
@@ -2419,8 +2431,6 @@ function AppContent(): React.ReactElement {
           setActivityOpen((value) => !value)
         }}
         agentsViewAvailable={Boolean(activeWorkspaceId && agentsView.effectiveProvider)}
-        agentsViewOpen={agentsView.isOpen}
-        homeOpen={showWorkspaceHome}
         agentSessionCount={agentsView.sessions.length}
         agentAttentionCount={countAgentsViewAttention(agentsView.sessions)}
         onToggleAgentsView={() => {
@@ -2437,7 +2447,7 @@ function AppContent(): React.ReactElement {
         workspacePanelOpen={workspacePanelVisible}
         onToggleWorkspacePanel={toggleWorkspacePanel}
         onSetViewMode={(mode) => {
-          const overlayOpen = agentsView.isOpen || activityOpen || showWorkspaceHome
+          const overlayOpen = mainView !== 'workspace'
           agentsView.close()
           setHomeOpen(false)
           setActivityOpen(false)
@@ -2683,14 +2693,14 @@ function AppContent(): React.ReactElement {
           </div>
         )}
 
-        {activeWorkspaceId ? (
-            <div className="flex min-h-0 flex-1 overflow-hidden">
-              <div
-                className={`${tilesHidden ? 'hidden' : 'flex'} relative min-w-0 flex-1 flex-col overflow-hidden`}
-                aria-hidden={tilesHidden}
-                inert={tilesHidden}
-              >
-                {viewMode === 'splitview' && (
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          {activeWorkspaceId && (
+            <div
+              className={`${tilesHidden ? 'hidden' : 'flex'} relative min-w-0 flex-1 flex-col overflow-hidden`}
+              aria-hidden={tilesHidden}
+              inert={tilesHidden}
+            >
+              {viewMode === 'splitview' && (
                 <SplitviewPanel
                   tiles={sortedTiles}
                   splitViewState={splitViewState}
@@ -2718,7 +2728,7 @@ function AppContent(): React.ReactElement {
                 />
               )}
 
-                <div className="relative min-h-0 flex-1">
+              <div className="relative min-h-0 flex-1">
                 {viewMode === 'board' && boardEnabled && boardVisible ? (
                   <BoardView
                     workspaceId={activeWorkspaceId}
@@ -2789,79 +2799,10 @@ function AppContent(): React.ReactElement {
                     workspaceRootPath={workspaceRootPath}
                   />
                 )}
-                </div>
               </div>
-              {activityOpen ? (
-                <WorkspaceActivityView
-                  cards={activityCards}
-                  agentUsage={agentUsage}
-                  workspaces={workspaceMetadata}
-                  onOpenWorkspace={openActivityWorkspace}
-                  onGoToTerminal={goToWorkspaceTerminal}
-                  onOpenSettings={openSettings}
-                  agents={agentSettings}
-                />
-              ) : agentsView.isOpen && agentsView.effectiveProvider ? (
-                <div className="flex min-h-0 min-w-0 flex-1">
-                <AgentsView
-                  workspaceId={activeWorkspaceId}
-                  workspaceConfig={activeWorkspaceConfig}
-                  sessions={agentsView.sessions}
-                  focusedSessionId={agentsView.focusedSessionId}
-                  onFocusSession={agentsView.openForSession}
-                  maximizedSessionId={agentsMaximizedSessionId}
-                  onMaximizedSessionChange={setAgentsMaximizedSessionId}
-                  onCloseSession={(session) => { void closeAgentsSession(session) }}
-                  onNewSession={agentsView.openNewSessionDialog}
-                  shortcutLabel={newAgentSessionShortcut}
-                  onOpenBrowserTile={(url) => addBrowser(url)}
-                  onOpenFileTile={openFileTile}
-                />
-                </div>
-              ) : showWorkspaceHome ? (
-                <WorkspaceHome
-                  workspaces={inactiveSidebarWorkspaces}
-                  now={workspaceHomeNow}
-                  onSelectWorkspace={selectWorkspaceFromHome}
-                  onCreateWorkspace={openCreateWorkspaceDialog}
-                />
-              ) : null}
-              {hasWorkspacePanel && (
-                // Outside the tile wrapper so it stays visible beside the Agents view.
-                // Stays mounted while hidden so it keeps its selected tab.
-                <div
-                  className={`${workspacePanelShown ? 'flex' : 'hidden'} min-h-0 shrink-0`}
-                  aria-hidden={!workspacePanelShown}
-                  inert={!workspacePanelShown}
-                >
-                  <WorkspacePanel
-                    rootPath={workspaceRootPath}
-                    workspaceId={activeWorkspaceId}
-                    sourceControlRepositoryPaths={activeWorkspaceConfig.sourceControlRepositoryPaths}
-                    sourceControlViewMode={activeWorkspaceConfig.sourceControlViewMode}
-                    onWorkspaceUpdated={handleWorkspaceConfigUpdated}
-                    activeFilePath={activeFilePath}
-                    onOpenFile={openFileTile}
-                    onOpenDiff={(repositoryPath, change, staged) => {
-                      const path = repositoryPath === '.' ? change.path : `${repositoryPath}/${change.path}`
-                      void openFileTile(path, { diff: { repositoryPath, path: change.path, originalPath: change.originalPath, staged } }).catch((error: unknown) => {
-                        console.error('[App] Failed to open Git diff tile:', error)
-                      })
-                    }}
-                    agentProvider={agentsView.effectiveProvider}
-                    agentProviders={activeWorkspaceConfig.agentProviders}
-                    tiles={tiles}
-                    terminalTitles={terminalTitles}
-                    onFocusTile={focusAgentTile}
-                    onOpenAgentsSession={agentsView.openForSession}
-                    requestConfirm={requestConfirm}
-                    onResumeInTile={resumeHistoryInTile}
-                    onOpenWorkspaceSettings={openActiveWorkspaceEditor}
-                  />
-                </div>
-              )}
             </div>
-          ) : activityOpen ? (
+          )}
+          {mainView === 'activity' && (
             <WorkspaceActivityView
               cards={activityCards}
               agentUsage={agentUsage}
@@ -2871,14 +2812,68 @@ function AppContent(): React.ReactElement {
               onOpenSettings={openSettings}
               agents={agentSettings}
             />
-          ) : showWorkspaceHome ? (
+          )}
+          {mainView === 'agents' && activeWorkspaceId && agentsView.effectiveProvider && (
+            <div className="flex min-h-0 min-w-0 flex-1">
+              <AgentsView
+                workspaceId={activeWorkspaceId}
+                workspaceConfig={activeWorkspaceConfig}
+                sessions={agentsView.sessions}
+                focusedSessionId={agentsView.focusedSessionId}
+                onFocusSession={agentsView.openForSession}
+                maximizedSessionId={agentsMaximizedSessionId}
+                onMaximizedSessionChange={setAgentsMaximizedSessionId}
+                onCloseSession={(session) => { void closeAgentsSession(session) }}
+                onNewSession={agentsView.openNewSessionDialog}
+                shortcutLabel={newAgentSessionShortcut}
+                onOpenBrowserTile={(url) => addBrowser(url)}
+                onOpenFileTile={openFileTile}
+              />
+            </div>
+          )}
+          {mainView === 'home' && (
             <WorkspaceHome
               workspaces={inactiveSidebarWorkspaces}
               now={workspaceHomeNow}
               onSelectWorkspace={selectWorkspaceFromHome}
               onCreateWorkspace={openCreateWorkspaceDialog}
             />
-          ) : null}
+          )}
+          {activeWorkspaceId && hasWorkspacePanel && (
+            // Outside the tile wrapper so it stays visible beside the Agents view.
+            // Stays mounted while hidden so it keeps its selected tab.
+            <div
+              className={`${workspacePanelShown ? 'flex' : 'hidden'} min-h-0 shrink-0`}
+              aria-hidden={!workspacePanelShown}
+              inert={!workspacePanelShown}
+            >
+              <WorkspacePanel
+                rootPath={workspaceRootPath}
+                workspaceId={activeWorkspaceId}
+                sourceControlRepositoryPaths={activeWorkspaceConfig.sourceControlRepositoryPaths}
+                sourceControlViewMode={activeWorkspaceConfig.sourceControlViewMode}
+                onWorkspaceUpdated={handleWorkspaceConfigUpdated}
+                activeFilePath={activeFilePath}
+                onOpenFile={openFileTile}
+                onOpenDiff={(repositoryPath, change, staged) => {
+                  const path = repositoryPath === '.' ? change.path : `${repositoryPath}/${change.path}`
+                  void openFileTile(path, { diff: { repositoryPath, path: change.path, originalPath: change.originalPath, staged } }).catch((error: unknown) => {
+                    console.error('[App] Failed to open Git diff tile:', error)
+                  })
+                }}
+                agentProvider={agentsView.effectiveProvider}
+                agentProviders={activeWorkspaceConfig.agentProviders}
+                tiles={tiles}
+                terminalTitles={terminalTitles}
+                onFocusTile={focusAgentTile}
+                onOpenAgentsSession={agentsView.openForSession}
+                requestConfirm={requestConfirm}
+                onResumeInTile={resumeHistoryInTile}
+                onOpenWorkspaceSettings={openActiveWorkspaceEditor}
+              />
+            </div>
+          )}
+        </div>
       </div>
       </div>
 
