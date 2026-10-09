@@ -125,6 +125,7 @@ interface ElectronWorld {
   scripts: {
     snapshot: (workspaceId: string) => Promise<WorkspaceScriptsSnapshot>
     run: (input: { workspaceId: string; scriptId: string }) => Promise<WorkspaceScriptRun>
+    runCommand: (input: { workspaceId: string; command: string }) => Promise<WorkspaceScriptRun>
     stop: (input: { workspaceId: string; scriptId: string }) => Promise<void>
     subscribe: (workspaceId: string) => Promise<string | false>
     unsubscribe: (token: string) => Promise<boolean>

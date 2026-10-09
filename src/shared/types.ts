@@ -409,6 +409,8 @@ export interface WorkspaceScriptRun {
   /** Terminal session tile id, always prefixed with `script-`. */
   tileId: string
   state: WorkspaceScriptRunState
+  /** Command for an ad-hoc execution; absent for discovered scripts. */
+  command?: string
   exitCode?: number
   startedAt: string
 }

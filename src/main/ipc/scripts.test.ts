@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import { createRequire } from 'node:module'
+import { resolve } from 'node:path'
 import test from 'node:test'
 
 import type {
@@ -241,6 +242,125 @@ test('run destroys an exited session and starts a replacement', async () => {
   assert.equal(replacement.state, 'running')
   assert.equal(harness.destroyed.length, 1)
   assert.equal(harness.created.length, 2)
+})
+
+test('runCommand trims the command, uses the workspace root, and survives live-session reconciliation', async () => {
+  const harness = createHarness()
+  const sender = new FakeWebContents(12)
+  const run = await harness.ipcMain.call('scripts:runCommand', sender, {
+    workspaceId: 'workspace-a',
+    command: '  git pull  ',
+  }) as WorkspaceScriptRun
+
+  assert.match(run.scriptId, /^adhoc:/)
+  assert.equal(run.command, 'git pull')
+  assert.deepEqual(harness.created, [{
+    target: { workspaceId: 'workspace-a', tileId: workspaceScriptTileId(run.scriptId) },
+    command: 'git pull',
+    cwd: resolve('/workspace'),
+  }])
+
+  const snapshot = await harness.ipcMain.call('scripts:snapshot', sender, 'workspace-a') as WorkspaceScriptsSnapshot
+  assert.equal(snapshot.runs[0].scriptId, run.scriptId)
+  assert.equal(snapshot.runs[0].command, 'git pull')
+})
+
+test('runCommand rejects empty, multiline, and overlong commands', async () => {
+  const harness = createHarness()
+  const sender = new FakeWebContents(13)
+  const invalidCommands = ['  ', 'git pull\nnpm install', 'x'.repeat(4097)]
+
+  for (const command of invalidCommands) {
+    await assert.rejects(
+      () => harness.ipcMain.call('scripts:runCommand', sender, {
+        workspaceId: 'workspace-a',
+        command,
+      }) as Promise<unknown>,
+      /Invalid workspace command/,
+    )
+  }
+  assert.equal(harness.created.length, 0)
+})
+
+test('run re-executes a known ad-hoc command with its existing tile id', async () => {
+  const harness = createHarness()
+  const sender = new FakeWebContents(14)
+  const first = await harness.ipcMain.call('scripts:runCommand', sender, {
+    workspaceId: 'workspace-a',
+    command: 'npm install foo',
+  }) as WorkspaceScriptRun
+  harness.liveSessions.splice(0)
+  harness.emitSessionEvent({
+    type: 'exit',
+    target: { workspaceId: 'workspace-a', tileId: first.tileId },
+    exitEvent: { exitCode: 0 },
+  })
+
+  const replacement = await harness.ipcMain.call('scripts:run', sender, {
+    workspaceId: 'workspace-a',
+    scriptId: first.scriptId,
+  }) as WorkspaceScriptRun
+
+  assert.equal(replacement.scriptId, first.scriptId)
+  assert.equal(replacement.tileId, first.tileId)
+  assert.equal(replacement.command, 'npm install foo')
+  assert.deepEqual(harness.created.map((entry) => entry.command), ['npm install foo', 'npm install foo'])
+  assert.equal(harness.destroyed.length, 1)
+})
+
+test('stop discards an ad-hoc run and its definition', async () => {
+  const harness = createHarness()
+  const sender = new FakeWebContents(15)
+  const run = await harness.ipcMain.call('scripts:runCommand', sender, {
+    workspaceId: 'workspace-a',
+    command: 'git pull',
+  }) as WorkspaceScriptRun
+
+  await harness.ipcMain.call('scripts:stop', sender, {
+    workspaceId: 'workspace-a',
+    scriptId: run.scriptId,
+  })
+  const snapshot = await harness.ipcMain.call('scripts:snapshot', sender, 'workspace-a') as WorkspaceScriptsSnapshot
+
+  assert.deepEqual(snapshot.runs, [])
+  await assert.rejects(
+    () => harness.ipcMain.call('scripts:run', sender, {
+      workspaceId: 'workspace-a',
+      scriptId: run.scriptId,
+    }) as Promise<unknown>,
+    /Workspace script was not found/,
+  )
+})
+
+test('the ad-hoc run limit discards the oldest exited session', async () => {
+  const harness = createHarness()
+  const sender = new FakeWebContents(16)
+  const firstEight: WorkspaceScriptRun[] = []
+
+  for (let index = 0; index < 8; index += 1) {
+    const run = await harness.ipcMain.call('scripts:runCommand', sender, {
+      workspaceId: 'workspace-a',
+      command: `echo ${index}`,
+    }) as WorkspaceScriptRun
+    firstEight.push(run)
+    harness.liveSessions.splice(harness.liveSessions.findIndex((session) => session.tileId === run.tileId), 1)
+    harness.emitSessionEvent({
+      type: 'exit',
+      target: { workspaceId: 'workspace-a', tileId: run.tileId },
+      exitEvent: { exitCode: 0 },
+    })
+  }
+
+  const newest = await harness.ipcMain.call('scripts:runCommand', sender, {
+    workspaceId: 'workspace-a',
+    command: 'echo newest',
+  }) as WorkspaceScriptRun
+  const snapshot = await harness.ipcMain.call('scripts:snapshot', sender, 'workspace-a') as WorkspaceScriptsSnapshot
+
+  assert.equal(harness.destroyed.some((target) => target.tileId === firstEight[0].tileId), true)
+  assert.equal(snapshot.runs.length, 8)
+  assert.equal(snapshot.runs.some((run) => run.scriptId === firstEight[0].scriptId), false)
+  assert.equal(snapshot.runs.some((run) => run.scriptId === newest.scriptId), true)
 })
 
 test('stop destroys a run and emits a changed snapshot', async () => {

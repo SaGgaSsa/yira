@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { promises as fs } from 'node:fs'
+import { homedir } from 'node:os'
+import { resolve } from 'node:path'
 import { ipcMain, type WebContents } from 'electron'
 
 import type {
@@ -24,6 +26,8 @@ import {
 import { getWorkspaceAgentConfigById } from './workspace'
 
 export const SCRIPTS_CHANGED_CHANNEL = 'scripts:changed'
+const WORKSPACE_ADHOC_SCRIPT_PREFIX = 'adhoc:'
+const MAX_ADHOC_RUNS_PER_WORKSPACE = 8
 
 type WorkspaceScriptsConfig = Pick<WorkspaceConfig, 'rootFolderPath' | 'sourceControlRepositoryPaths' | 'customScripts'>
 
@@ -45,6 +49,12 @@ interface ScriptsSubscription {
   tail: Promise<void>
 }
 
+interface WorkspaceAdhocScriptDefinition {
+  scriptId: string
+  command: string
+  cwd: string
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
@@ -60,6 +70,19 @@ function normalizeScriptId(value: unknown): string {
     throw new Error('Invalid workspace script id')
   }
   return value
+}
+
+function normalizeWorkspaceCommand(value: unknown): string {
+  if (typeof value !== 'string') throw new Error('Invalid workspace command')
+  const command = value.trim()
+  if (!command || command.length > 4096 || /[\u0000-\u001f\u007f]/.test(command)) {
+    throw new Error('Invalid workspace command')
+  }
+  return command
+}
+
+function isWorkspaceAdhocScriptId(scriptId: string): boolean {
+  return scriptId.startsWith(WORKSPACE_ADHOC_SCRIPT_PREFIX)
 }
 
 function runKey(workspaceId: string, scriptId: string): string {
@@ -104,6 +127,7 @@ export function registerScriptsIPC(options: ScriptsIPCOptions = {}): void {
   const subscribeSessionEvents = options.subscribeSessionEvents ?? subscribeWorkspaceScriptSessionEvents
 
   const runs = new Map<string, WorkspaceScriptRun>()
+  const adhocDefinitions = new Map<string, WorkspaceAdhocScriptDefinition>()
   const pendingRuns = new Map<string, Promise<WorkspaceScriptRun>>()
   const pendingExits = new Map<string, number | undefined>()
   const suppressedDestroyTargets = new Set<string>()
@@ -142,12 +166,16 @@ export function registerScriptsIPC(options: ScriptsIPCOptions = {}): void {
 
     for (const target of liveSessions) {
       if (target.workspaceId !== workspaceId || !/^script-[0-9a-f]{24}$/.test(target.tileId)) continue
+      const workspaceKeyPrefix = `[${JSON.stringify(workspaceId)},`
+      const adhocDefinition = [...adhocDefinitions.entries()].find(([key, definition]) => (
+        key.startsWith(workspaceKeyPrefix) && workspaceScriptTileId(definition.scriptId) === target.tileId
+      ))?.[1]
       const script = discoveredByTile.get(target.tileId)
-      const scriptId = script?.id ?? target.tileId
+      const scriptId = adhocDefinition?.scriptId ?? script?.id ?? target.tileId
       const key = runKey(workspaceId, scriptId)
       for (const [previousKey, previousRun] of runs) {
         if (previousRun.tileId === target.tileId && previousKey !== key
-          && previousKey.startsWith(`[${JSON.stringify(workspaceId)},`)) {
+          && previousKey.startsWith(workspaceKeyPrefix)) {
           runs.delete(previousKey)
         }
       }
@@ -157,7 +185,36 @@ export function registerScriptsIPC(options: ScriptsIPCOptions = {}): void {
         tileId: target.tileId,
         state: 'running',
         startedAt: previous?.state === 'running' ? previous.startedAt : new Date().toISOString(),
+        ...(adhocDefinition ? { command: adhocDefinition.command } : {}),
       })
+    }
+  }
+
+  async function trimAdhocRuns(workspaceId: string): Promise<void> {
+    const workspaceKeyPrefix = `[${JSON.stringify(workspaceId)},`
+    while (true) {
+      const adhocRuns = [...runs.entries()].filter(([key, run]) => (
+        key.startsWith(workspaceKeyPrefix) && run.command !== undefined
+      ))
+      if (adhocRuns.length <= MAX_ADHOC_RUNS_PER_WORKSPACE) return
+
+      const oldestExited = adhocRuns
+        .filter(([, run]) => run.state === 'exited')
+        .sort((left, right) => left[1].startedAt.localeCompare(right[1].startedAt))[0]
+      if (!oldestExited) return
+
+      const [key, run] = oldestExited
+      const target = { workspaceId, tileId: run.tileId }
+      const destroyKey = targetKey(target)
+      suppressedDestroyTargets.add(destroyKey)
+      try {
+        await destroySession(target)
+      } finally {
+        suppressedDestroyTargets.delete(destroyKey)
+      }
+      runs.delete(key)
+      adhocDefinitions.delete(key)
+      pendingExits.delete(destroyKey)
     }
   }
 
@@ -201,6 +258,9 @@ export function registerScriptsIPC(options: ScriptsIPCOptions = {}): void {
       }
       if (!matched) pendingExits.set(key, normalizeExitCode(event.exitEvent?.exitCode))
       emitWorkspaceSnapshot(event.target.workspaceId)
+      void trimAdhocRuns(event.target.workspaceId)
+        .then(() => emitWorkspaceSnapshot(event.target.workspaceId))
+        .catch(() => undefined)
       return
     }
 
@@ -221,13 +281,17 @@ export function registerScriptsIPC(options: ScriptsIPCOptions = {}): void {
     if (pending) return pending
 
     const operation = (async () => {
-      const scripts = await discoverForWorkspace(workspaceId)
+      const adhocDefinition = adhocDefinitions.get(key)
+      if (isWorkspaceAdhocScriptId(scriptId) && !adhocDefinition) {
+        throw new Error('Workspace script was not found')
+      }
+      const scripts = adhocDefinition ? [] : await discoverForWorkspace(workspaceId)
       const script = scripts.find((candidate) => candidate.id === scriptId)
-      if (!script) throw new Error('Workspace script was not found')
+      if (!adhocDefinition && !script) throw new Error('Workspace script was not found')
       const current = runs.get(key)
       if (current?.state === 'running') return current
 
-      const tileId = workspaceScriptTileId(script.id)
+      const tileId = workspaceScriptTileId(scriptId)
       const target = { workspaceId, tileId }
       const previous = current
       if (previous?.state === 'exited') {
@@ -243,7 +307,10 @@ export function registerScriptsIPC(options: ScriptsIPCOptions = {}): void {
 
       const startedAt = new Date().toISOString()
       try {
-        const result = await createSession(target, { command: script.command, cwd: script.cwd })
+        const result = await createSession(target, {
+          command: adhocDefinition?.command ?? script!.command,
+          cwd: adhocDefinition?.cwd ?? script!.cwd,
+        })
         const hasPendingExit = pendingExits.has(targetKey(target))
         const pendingExit = pendingExits.get(targetKey(target))
         pendingExits.delete(targetKey(target))
@@ -253,9 +320,11 @@ export function registerScriptsIPC(options: ScriptsIPCOptions = {}): void {
           tileId,
           state: result.exitEvent || hasPendingExit ? 'exited' : 'running',
           startedAt,
+          ...(adhocDefinition ? { command: adhocDefinition.command } : {}),
           ...(exitCode !== undefined ? { exitCode } : {}),
         }
         runs.set(key, run)
+        if (adhocDefinition) await trimAdhocRuns(workspaceId)
         emitWorkspaceSnapshot(workspaceId)
         return run
       } catch (error) {
@@ -283,6 +352,27 @@ export function registerScriptsIPC(options: ScriptsIPCOptions = {}): void {
     return runScript(workspaceId, scriptId)
   })
 
+  ipc.handle('scripts:runCommand', async (_event, input: unknown): Promise<WorkspaceScriptRun> => {
+    if (!isRecord(input)) throw new Error('Invalid workspace command')
+    const workspaceId = normalizeWorkspaceId(input.workspaceId)
+    const command = normalizeWorkspaceCommand(input.command)
+    const config = await workspaceConfig(workspaceId)
+    const scriptId = `${WORKSPACE_ADHOC_SCRIPT_PREFIX}${randomUUID()}`
+    const key = runKey(workspaceId, scriptId)
+    const definition: WorkspaceAdhocScriptDefinition = {
+      scriptId,
+      command,
+      cwd: config?.rootFolderPath ? resolve(config.rootFolderPath) : homedir(),
+    }
+    adhocDefinitions.set(key, definition)
+    try {
+      return await runScript(workspaceId, scriptId)
+    } catch (error) {
+      if (!runs.has(key)) adhocDefinitions.delete(key)
+      throw error
+    }
+  })
+
   ipc.handle('scripts:stop', async (_event, input: unknown): Promise<void> => {
     if (!isRecord(input)) throw new Error('Invalid workspace script input')
     const workspaceId = normalizeWorkspaceId(input.workspaceId)
@@ -293,13 +383,16 @@ export function registerScriptsIPC(options: ScriptsIPCOptions = {}): void {
 
     const snapshot = await buildSnapshot(workspaceId)
     const knownRun = runs.get(key)
+    const adhocDefinition = adhocDefinitions.get(key)
     const script = snapshot.scripts.find((candidate) => candidate.id === scriptId)
     const orphanTileId = /^script-[0-9a-f]{24}$/.test(scriptId) ? scriptId : undefined
-    if (!knownRun && !script && !orphanTileId) throw new Error('Workspace script was not found')
+    if (!knownRun && !script && !orphanTileId && !adhocDefinition) throw new Error('Workspace script was not found')
 
     const target = {
       workspaceId,
-      tileId: knownRun?.tileId ?? (script ? workspaceScriptTileId(script.id) : orphanTileId!),
+      tileId: knownRun?.tileId ?? (script ? workspaceScriptTileId(script.id) : adhocDefinition
+        ? workspaceScriptTileId(adhocDefinition.scriptId)
+        : orphanTileId!),
     }
     const destroyKey = targetKey(target)
     suppressedDestroyTargets.add(destroyKey)
@@ -311,6 +404,7 @@ export function registerScriptsIPC(options: ScriptsIPCOptions = {}): void {
     for (const [runId, run] of runs) {
       if (run.tileId === target.tileId && runId.startsWith(`[${JSON.stringify(workspaceId)},`)) runs.delete(runId)
     }
+    if (isWorkspaceAdhocScriptId(scriptId)) adhocDefinitions.delete(key)
     pendingExits.delete(destroyKey)
     emitWorkspaceSnapshot(workspaceId)
   })

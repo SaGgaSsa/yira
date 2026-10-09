@@ -21,6 +21,7 @@ export interface WorkspaceScriptGroup {
 }
 
 type WorkspaceScriptRunStatus = 'idle' | 'running' | 'success' | 'error' | 'exited'
+const ADHOC_PENDING_SCRIPT_ID = 'adhoc:pending'
 
 const selectionStorageKey = (workspaceId: string): string => `yira:workspace-script-selection:${workspaceId}`
 
@@ -104,7 +105,9 @@ export function getOrphanWorkspaceScriptRuns(
   runs: WorkspaceScriptRun[],
 ): WorkspaceScriptRun[] {
   const scriptIds = new Set(scripts.map((script) => script.id))
-  return runs.filter((run) => !scriptIds.has(run.scriptId) && run.tileId.startsWith('script-'))
+  return runs.filter((run) => (
+    run.command === undefined && !scriptIds.has(run.scriptId) && run.tileId.startsWith('script-')
+  ))
 }
 
 function getWorkspaceRootLabel(rootFolderPath: string | undefined, fallback: string): string {
@@ -135,6 +138,7 @@ interface WorkspaceScriptsMenuProps {
   groups: WorkspaceScriptGroup[]
   runsByScriptId: Map<string, WorkspaceScriptRun>
   orphanRuns: WorkspaceScriptRun[]
+  adhocRuns: WorkspaceScriptRun[]
   selectedScriptId: string | null
   pendingScriptId: string | null
   loading: boolean
@@ -142,6 +146,10 @@ interface WorkspaceScriptsMenuProps {
   onSelect: (scriptId: string) => void
   onRunOrStop: (script: WorkspaceScript, run: WorkspaceScriptRun | null) => void
   onStopOrphan: (run: WorkspaceScriptRun) => void
+  onRunCommand: (command: string) => void
+  onShowOutput: (run: WorkspaceScriptRun) => void
+  onRunOrStopAdhoc: (run: WorkspaceScriptRun) => void
+  onDismissAdhoc: (run: WorkspaceScriptRun) => void
   onEditCommands: () => void
 }
 
@@ -149,6 +157,7 @@ export function WorkspaceScriptsMenu({
   groups,
   runsByScriptId,
   orphanRuns,
+  adhocRuns,
   selectedScriptId,
   pendingScriptId,
   loading,
@@ -156,14 +165,136 @@ export function WorkspaceScriptsMenu({
   onSelect,
   onRunOrStop,
   onStopOrphan,
+  onRunCommand,
+  onShowOutput,
+  onRunOrStopAdhoc,
+  onDismissAdhoc,
   onEditCommands,
 }: WorkspaceScriptsMenuProps): React.ReactElement {
   const { t } = useTranslation()
   const hasScripts = groups.some((group) => group.scripts.length > 0)
   const isEmpty = !hasScripts && orphanRuns.length === 0
+  const [commandInput, setCommandInput] = useState('')
+  const [historyIndex, setHistoryIndex] = useState<number | null>(null)
+  const commandDraft = useRef('')
+
+  const handleCommandKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      const command = commandInput.trim()
+      if (!command) return
+      onRunCommand(command)
+      setCommandInput('')
+      setHistoryIndex(null)
+      commandDraft.current = ''
+      return
+    }
+
+    if (event.key === 'ArrowUp' && adhocRuns.length > 0) {
+      event.preventDefault()
+      if (historyIndex === null) {
+        commandDraft.current = commandInput
+        setHistoryIndex(0)
+        setCommandInput(adhocRuns[0].command ?? '')
+        return
+      }
+      const nextIndex = Math.min(historyIndex + 1, adhocRuns.length - 1)
+      setHistoryIndex(nextIndex)
+      setCommandInput(adhocRuns[nextIndex].command ?? '')
+      return
+    }
+
+    if (event.key === 'ArrowDown' && historyIndex !== null) {
+      event.preventDefault()
+      if (historyIndex === 0) {
+        setHistoryIndex(null)
+        setCommandInput(commandDraft.current)
+        return
+      }
+      const nextIndex = historyIndex - 1
+      setHistoryIndex(nextIndex)
+      setCommandInput(adhocRuns[nextIndex].command ?? '')
+    }
+  }
 
   return (
     <div role="menu" aria-label={t('scripts.title')} className="w-[min(360px,calc(100vw-24px))] overflow-hidden rounded-lg border border-border-visible bg-bg-secondary p-1.5 shadow-xl">
+      <div className="flex items-center gap-2 rounded-md border border-border bg-bg-primary px-2.5 py-2">
+        <TerminalSquare size={13} className="shrink-0 text-text-secondary" />
+        <input
+          type="text"
+          autoFocus
+          aria-label={t('scripts.commandInputLabel')}
+          placeholder={t('scripts.commandPlaceholder')}
+          className="min-w-0 flex-1 bg-transparent font-mono text-xs text-text-display outline-none placeholder:text-text-disabled disabled:opacity-50"
+          value={commandInput}
+          onChange={(event) => {
+            setCommandInput(event.target.value)
+            setHistoryIndex(null)
+          }}
+          onKeyDown={handleCommandKeyDown}
+          disabled={pendingScriptId === ADHOC_PENDING_SCRIPT_ID}
+        />
+      </div>
+
+      {adhocRuns.length > 0 && (
+        <div role="group" aria-label={t('scripts.recentCommands')} className="mb-1 border-b border-border pb-1">
+          <div className="px-2.5 pb-1 pt-2 font-mono text-[10px] uppercase tracking-[0.08em] text-text-disabled">
+            {t('scripts.recentCommands')}
+          </div>
+          {adhocRuns.map((run) => {
+            const status = getWorkspaceScriptRunStatus(run)
+            const running = run.state === 'running'
+            const pending = pendingScriptId === run.scriptId
+            return (
+              <div
+                key={run.scriptId}
+                className="flex items-center gap-1 rounded-md"
+                data-adhoc-script-id={run.scriptId}
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 py-1.5 text-left hover:bg-hover-bg"
+                  onClick={() => onShowOutput(run)}
+                  title={run.command}
+                >
+                  <span className="min-w-0 flex-1 truncate font-mono text-xs text-text-display">
+                    {run.command}
+                  </span>
+                  <span className={`inline-flex shrink-0 items-center gap-1 text-[10px] ${statusTextClass(status)}`}>
+                    <span className={`size-1.5 rounded-full ${statusDotClass(status)}`} />
+                    <span>{getRunStatusLabel(run, t)}</span>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-text-secondary transition-colors hover:bg-bg-primary hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
+                  onClick={() => onRunOrStopAdhoc(run)}
+                  disabled={pending}
+                  title={t(running ? 'scripts.stopScript' : 'scripts.runScript')}
+                  aria-label={`${t(running ? 'scripts.stopScript' : 'scripts.runScript')} ${run.command}`}
+                >
+                  {running ? <Square size={12} /> : <Play size={12} />}
+                </button>
+                {!running && (
+                  <button
+                    type="button"
+                    className="mr-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-text-secondary transition-colors hover:bg-bg-primary hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
+                    onClick={() => onDismissAdhoc(run)}
+                    disabled={pending}
+                    title={t('scripts.dismissCommand')}
+                    aria-label={`${t('scripts.dismissCommand')} ${run.command}`}
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
       {loading && <div className="px-2.5 py-3 text-xs text-text-disabled">{t('common.loading')}</div>}
       {!loading && isEmpty && (
         <div className="px-2.5 py-3">
@@ -302,6 +433,7 @@ export function WorkspaceRunControl({
   }))
   const containerRef = useRef<HTMLDivElement>(null)
   const receivedSnapshotUpdateRef = useRef(false)
+  const adhocRunPendingRef = useRef(false)
 
   useEffect(() => {
     let active = true
@@ -376,6 +508,15 @@ export function WorkspaceRunControl({
   }, [runs])
   const selectedRun = selectedScript ? runsByScriptId.get(selectedScript.id) ?? null : null
   const orphanRuns = useMemo(() => getOrphanWorkspaceScriptRuns(scripts, runs), [runs, scripts])
+  const adhocRuns = useMemo(() => (
+    runs
+      .filter((run) => run.command !== undefined)
+      .map((run, index) => ({ run, index }))
+      .sort((left, right) => (
+        right.run.startedAt.localeCompare(left.run.startedAt) || right.index - left.index
+      ))
+      .map(({ run }) => run)
+  ), [runs])
   const rootLabel = getWorkspaceRootLabel(workspaceConfig.rootFolderPath, t('scripts.packageJson'))
   const groups = useMemo(
     () => groupWorkspaceScripts(scripts, rootLabel, t('scripts.customCommands')),
@@ -438,6 +579,32 @@ export function WorkspaceRunControl({
     }
   }
 
+  const runCommand = async (command: string) => {
+    if (adhocRunPendingRef.current) return
+    adhocRunPendingRef.current = true
+    setPendingScriptId(ADHOC_PENDING_SCRIPT_ID)
+    setActionError(null)
+    try {
+      const nextRun = await window.electron.scripts.runCommand({ workspaceId, command })
+      setScriptSnapshot((current) => {
+        const base = current?.workspaceId === workspaceId
+          ? current
+          : { workspaceId, scripts: [], runs: [] }
+        return {
+          ...base,
+          runs: [...base.runs.filter((run) => run.scriptId !== nextRun.scriptId), nextRun],
+        }
+      })
+      setMenuOpen(false)
+      setOutputRunTileId(nextRun.tileId)
+    } catch (error) {
+      setActionError(getErrorMessage(error) || t('scripts.runFailed'))
+    } finally {
+      adhocRunPendingRef.current = false
+      setPendingScriptId((current) => current === ADHOC_PENDING_SCRIPT_ID ? null : current)
+    }
+  }
+
   const stopScript = async (scriptId: string, run?: WorkspaceScriptRun | null) => {
     if (run && outputRunTileId === run.tileId) setOutputRunTileId(null)
     setPendingScriptId(scriptId)
@@ -456,6 +623,11 @@ export function WorkspaceRunControl({
     else void runScript(script.id)
   }
 
+  const runOrStopAdhoc = (run: WorkspaceScriptRun) => {
+    if (run.state === 'running') void stopScript(run.scriptId, run)
+    else void runScript(run.scriptId)
+  }
+
   const handleEditCommands = () => {
     setMenuOpen(false)
     onEditCommands()
@@ -463,6 +635,7 @@ export function WorkspaceRunControl({
 
   const outputRun = runs.find((run) => run.tileId === outputRunTileId) ?? null
   const outputScript = outputRun ? scripts.find((script) => script.id === outputRun.scriptId) ?? null : null
+  const outputIsAdhoc = outputRun?.command !== undefined
 
   return (
     <div ref={containerRef} className="relative inline-flex h-7 items-center gap-0.5" data-testid="workspace-run-control">
@@ -511,6 +684,7 @@ export function WorkspaceRunControl({
             groups={groups}
             runsByScriptId={runsByScriptId}
             orphanRuns={orphanRuns}
+            adhocRuns={adhocRuns}
             selectedScriptId={selectedScriptId}
             pendingScriptId={pendingScriptId}
             loading={!currentSnapshot && !snapshotError}
@@ -518,6 +692,13 @@ export function WorkspaceRunControl({
             onSelect={selectScript}
             onRunOrStop={runOrStopScript}
             onStopOrphan={(run) => void stopScript(run.scriptId, run)}
+            onRunCommand={(command) => void runCommand(command)}
+            onShowOutput={(run) => {
+              setOutputRunTileId(run.tileId)
+              setMenuOpen(false)
+            }}
+            onRunOrStopAdhoc={runOrStopAdhoc}
+            onDismissAdhoc={(run) => void stopScript(run.scriptId, run)}
             onEditCommands={handleEditCommands}
           />
         </div>
@@ -531,7 +712,9 @@ export function WorkspaceRunControl({
         >
           <header className="flex h-9 shrink-0 items-center gap-2 border-b border-border px-2.5">
             <TerminalSquare size={13} className="shrink-0 text-text-secondary" />
-            <span className="min-w-0 flex-1 truncate text-xs text-text-display">{outputScript?.name ?? outputRun.scriptId}</span>
+            <span className="min-w-0 flex-1 truncate text-xs text-text-display">
+              {outputRun.command ?? outputScript?.name ?? outputRun.scriptId}
+            </span>
             <span className={`inline-flex shrink-0 items-center gap-1 text-[10px] ${statusTextClass(getWorkspaceScriptRunStatus(outputRun))}`}>
               <span className={`size-1.5 rounded-full ${statusDotClass(getWorkspaceScriptRunStatus(outputRun))}`} />
               <span>{getRunStatusLabel(outputRun, t)}</span>
@@ -541,9 +724,10 @@ export function WorkspaceRunControl({
               className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
               onClick={() => {
                 if (outputRun.state === 'running') void stopScript(outputRun.scriptId, outputRun)
-                else if (outputScript) void runScript(outputRun.scriptId, true)
+                else if (outputScript || outputIsAdhoc) void runScript(outputRun.scriptId, true)
               }}
-              disabled={pendingScriptId === outputRun.scriptId || (!outputScript && outputRun.state !== 'running')}
+              disabled={pendingScriptId === outputRun.scriptId
+                || (!outputScript && !outputIsAdhoc && outputRun.state !== 'running')}
               title={t(outputRun.state === 'running' ? 'scripts.stopScript' : 'scripts.restart')}
               aria-label={t(outputRun.state === 'running' ? 'scripts.stopScript' : 'scripts.restart')}
             >
