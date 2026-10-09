@@ -68,7 +68,8 @@ test('launches agent tiles through the compatible shell and exits with the agent
   assert.match(text, /const agentShellProfile = isAgent \? resolveCompatibleAgentShellProfile\(\) : undefined/)
   assert.match(text, /shellProfileId: agentShellProfile!\.id[\s\S]*?exitWithAgent: true/)
   assert.match(text, /executable: isRemoteSsh \? sshClient! : agentShellProfile \? agentShellProfile\.shell : profile!\.shell/)
-  assert.match(text, /: agentShellProfile\s+\? \[\.\.\.agentShellProfile\.args, \.\.\.\(agentShellCommand\?\.shellArgs \?\? \[\]\)\]/)
+  assert.match(text, /: agentShellProfile\s+\? agentShellArgs\(agentShellProfile, agentShellCommand\)/)
+  assert.match(text, /if \(launch\?\.replaceProfileArgs\) return \[\.\.\.\(launch\.shellArgs \?\? \[\]\)\]/)
   assert.match(text, /env: agentShellCommand \? \{ \.\.\.spawnEnv, \.\.\.agentShellCommand\.env \} : spawnEnv/)
   assert.match(text, /initialCommand = agentShellCommand\?\.initialCommand/)
   assert.match(text, /cwd: agentLaunch\?\.cwd \?\? terminalRoot\?\.cwd \?\? process\.cwd\(\)/)
@@ -84,7 +85,7 @@ test('launches Agents view sessions with exit behavior and PowerShell startup ar
 
   assert.ok(start >= 0 && end > start)
   assert.match(agentsViewSession, /platform: process\.platform,[\s\S]*?exitWithAgent: true,/)
-  assert.match(agentsViewSession, /args: \[\.\.\.shellProfile\.args, \.\.\.\(launch\.shellArgs \?\? \[\]\)\]/)
+  assert.match(agentsViewSession, /args: agentShellArgs\(shellProfile, launch\)/)
   assert.match(agentsViewSession, /\.\.\.\(launch\.initialCommand !== undefined \? \{ initialCommand: launch\.initialCommand \} : \{\}\)/)
 })
 

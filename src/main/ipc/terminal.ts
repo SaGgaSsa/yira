@@ -34,6 +34,7 @@ import { agentSessionRegistry } from '../agents/registry'
 import { normalizeAgentOpaqueId } from '../agents/query'
 import { buildAgentTerminalLaunch, type AgentTerminalLaunch } from '../agents/terminal'
 import { agentSessionExists, buildAgentCommand, normalizeResumeId } from '../agents/providers'
+import { ensureAgentShellStartupFiles } from '../agents/shellStartup'
 import {
   buildAgentShellCommand,
   buildWorkspaceScriptShellCommand,
@@ -231,6 +232,15 @@ function resolveCompatibleAgentShellProfile(): ShellProfile & { id: AgentShellPr
     throw new Error('No compatible shell is available for agent sessions')
   }
   return shellProfile as ShellProfile & { id: AgentShellProfileId }
+}
+
+// POSIX agent launches return complete args: bash ignores --rcfile under the profile's --login.
+function agentShellArgs(
+  shellProfile: ShellProfile,
+  launch: ReturnType<typeof buildAgentShellCommand> | null,
+): string[] {
+  if (launch?.replaceProfileArgs) return [...(launch.shellArgs ?? [])]
+  return [...shellProfile.args, ...(launch?.shellArgs ?? [])]
 }
 
 function remotePreparationKey(workspaceId: string, remoteTerminal: RemoteTerminalConfig): string {
@@ -472,6 +482,8 @@ export async function createAgentsViewSession(
   }
   const snapshot = await persistentTerminalSessions.create(runtimeTarget, async () => {
     const shellProfile = resolveCompatibleAgentShellProfile()
+    const startupDir = process.platform !== 'win32' ? join(YIRA_HOME, 'agent-shell') : undefined
+    if (startupDir) await ensureAgentShellStartupFiles(startupDir)
 
     const providerCommand = buildAgentCommand(spec.provider, providerConfig)
     const args = [...providerCommand.args]
@@ -488,6 +500,8 @@ export async function createAgentsViewSession(
       ...(!resumeSessionId && spec.prompt !== undefined ? { prompt: spec.prompt } : {}),
       platform: process.platform,
       exitWithAgent: true,
+      ...(startupDir ? { startupDir } : {}),
+      ...(process.env.ZDOTDIR !== undefined ? { originalZdotdir: process.env.ZDOTDIR } : {}),
     })
     const startedAt = new Date().toISOString()
     const agent = {
@@ -506,7 +520,7 @@ export async function createAgentsViewSession(
     return {
       target: { ...runtimeTarget },
       executable: shellProfile.shell,
-      args: [...shellProfile.args, ...(launch.shellArgs ?? [])],
+      args: agentShellArgs(shellProfile, launch),
       cwd: spec.cwd,
       env: { ...daemonSpawnEnvironment(), ...launch.env },
       cols: 80,
@@ -577,6 +591,8 @@ async function buildTerminalDaemonSpawn(
   let agentLaunch: AgentTerminalLaunch | null = null
   let agentShellCommand: ReturnType<typeof buildAgentShellCommand> | null = null
   if (isAgent) {
+    const startupDir = process.platform !== 'win32' ? join(YIRA_HOME, 'agent-shell') : undefined
+    if (startupDir) await ensureAgentShellStartupFiles(startupDir)
     const agentSessionId = options.agent!.sessionId
     agentLaunch = buildAgentTerminalLaunch({
       tileId: runtimeTarget.tileId,
@@ -594,13 +610,15 @@ async function buildTerminalDaemonSpawn(
       args: agentLaunch.args,
       platform: process.platform,
       exitWithAgent: true,
+      ...(startupDir ? { startupDir } : {}),
+      ...(process.env.ZDOTDIR !== undefined ? { originalZdotdir: process.env.ZDOTDIR } : {}),
     })
   }
 
   const args = isRemoteSsh
     ? buildRemoteSshLaunch(options.remoteTerminal!, options.remoteStartupCommand).args
     : agentShellProfile
-      ? [...agentShellProfile.args, ...(agentShellCommand?.shellArgs ?? [])]
+      ? agentShellArgs(agentShellProfile, agentShellCommand)
       : [...profile!.args]
   if (terminalRoot && !agentLaunch) args.push(...terminalRoot.spawnArgs)
   if (historySetup?.shellArgs && !isAgent && !isRemoteSsh) args.push(...historySetup.shellArgs)

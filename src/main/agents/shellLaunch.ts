@@ -1,4 +1,4 @@
-import { basename } from 'node:path/posix'
+import { basename, join } from 'node:path/posix'
 
 import type { ShellProfile } from '@shared/types'
 
@@ -11,6 +11,8 @@ export interface AgentShellCommandInput {
   prompt?: string
   platform: NodeJS.Platform
   exitWithAgent?: boolean
+  startupDir?: string
+  originalZdotdir?: string
 }
 
 export interface WorkspaceScriptShellCommandInput {
@@ -81,6 +83,7 @@ function validatePowerShellArguments(args: string[]): void {
 export function buildAgentShellCommand(input: AgentShellCommandInput): {
   initialCommand?: string
   shellArgs?: string[]
+  replaceProfileArgs?: boolean
   env: Record<string, string>
 } {
   if (!input || typeof input.command !== 'string' || !input.command) {
@@ -122,6 +125,39 @@ export function buildAgentShellCommand(input: AgentShellCommandInput): {
   if (input.exitWithAgent && input.shellProfileId === 'powershell') {
     return {
       shellArgs: ['-Command', `${command}; exit $LASTEXITCODE`],
+      env,
+    }
+  }
+
+  if (input.exitWithAgent && input.platform !== 'win32' && POSIX_SHELLS.includes(input.shellProfileId)) {
+    if (!input.startupDir) {
+      throw new Error('Agent shell startup directory is required')
+    }
+
+    env.YIRA_AGENT_COMMAND = command
+    if (input.shellProfileId === 'bash') {
+      return {
+        shellArgs: ['--rcfile', join(input.startupDir, 'bashrc'), '-i'],
+        replaceProfileArgs: true,
+        env,
+      }
+    }
+
+    if (input.shellProfileId === 'zsh') {
+      env.ZDOTDIR = join(input.startupDir, 'zsh')
+      if (input.originalZdotdir !== undefined) {
+        env.YIRA_ORIGINAL_ZDOTDIR = input.originalZdotdir
+      }
+      return {
+        shellArgs: ['--login'],
+        replaceProfileArgs: true,
+        env,
+      }
+    }
+
+    return {
+      shellArgs: ['--init-command', `source ${quoteFish(join(input.startupDir, 'agent.fish'))}`],
+      replaceProfileArgs: true,
       env,
     }
   }
