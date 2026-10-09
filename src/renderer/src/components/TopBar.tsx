@@ -2,6 +2,7 @@ import React from 'react'
 import { Settings, Grid3X3, LayoutGrid, Columns, PanelLeft, PanelRight, SplitSquareHorizontal, SplitSquareVertical, ClipboardList, Activity, Bot } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { AgentProvider, AgentUsageSnapshot, SplitOrientation, ViewMode, WorkspaceConfig, WorkspaceType } from '@shared/types'
+import type { MainView } from '../utils/layoutState'
 import { AgentUsageIndicator } from './AgentUsageIndicator'
 import { WorkspaceRunControl } from './WorkspaceRunControl'
 import { useSettingsStore } from '@/store/settingsStore'
@@ -22,11 +23,9 @@ interface TopBarProps {
   canSplitView: boolean
   sidebarCollapsed: boolean
   onToggleSidebar: () => void
-  activityOpen: boolean
+  mainView: MainView
   onToggleActivity: () => void
   agentsViewAvailable: boolean
-  agentsViewOpen: boolean
-  homeOpen: boolean
   agentSessionCount: number
   agentAttentionCount: number
   onToggleAgentsView: () => void
@@ -101,11 +100,9 @@ export function TopBar({
   canSplitView,
   sidebarCollapsed,
   onToggleSidebar,
-  activityOpen,
+  mainView,
   onToggleActivity,
   agentsViewAvailable,
-  agentsViewOpen,
-  homeOpen,
   agentSessionCount,
   agentAttentionCount,
   onToggleAgentsView,
@@ -124,8 +121,11 @@ export function TopBar({
   const zoomPercent = Math.round(zoom * 100)
   const SplitIcon = splitOrientation === 'horizontal' ? SplitSquareVertical : SplitSquareHorizontal
   const isGridWorkspace = workspaceType === 'grid'
+  const activityOpen = mainView === 'activity'
+  const agentsViewOpen = mainView === 'agents'
+  const homeOpen = mainView === 'home'
   // With Agents, Activity or Home on top, no view button is selected and the tile controls are hidden.
-  const overlayOpen = agentsViewOpen || activityOpen || homeOpen
+  const overlayOpen = mainView !== 'workspace'
 
   return (
     <header className="window-titlebar nd-panel relative flex shrink-0 items-center border-x-0 border-t-0">
