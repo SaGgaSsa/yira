@@ -1,5 +1,6 @@
 import type {
   TerminalDaemonAlert,
+  TerminalDaemonAgentState,
   TerminalDaemonEvent,
   TerminalDaemonMethods,
   TerminalDaemonSnapshot,
@@ -588,6 +589,7 @@ export class PersistentTerminalSessions {
     for (const event of pendingStateEvents) {
       if (!isEventForIdentity(event, snapshot.identity)) continue
       if (event.event === 'alert') this.applyAlert(record, event.alert)
+      else if (event.event === 'agent-state') this.applyAgentState(record, event.provider, event.state)
       else if (event.event === 'exit') {
         record.exited = true
         if (record.snapshot) record.snapshot = { ...record.snapshot, exitEvent: { ...event.exitEvent } }
@@ -614,13 +616,15 @@ export class PersistentTerminalSessions {
     if (event.sequence <= record.sequence) return
     record.sequence = event.sequence
     for (const capture of record.captures) capture.push(event)
-    if (event.event === 'alert' || event.event === 'exit') {
+    if (event.event === 'alert' || event.event === 'agent-state' || event.event === 'exit') {
       record.stateEvents.push(event)
       if (record.stateEvents.length > 256) record.stateEvents.splice(0, record.stateEvents.length - 256)
     }
 
     if (event.event === 'alert') {
       this.applyAlert(record, event.alert)
+    } else if (event.event === 'agent-state') {
+      this.applyAgentState(record, event.provider, event.state)
     } else if (event.event === 'exit') {
       record.exited = true
       record.snapshot = record.snapshot
@@ -632,7 +636,19 @@ export class PersistentTerminalSessions {
       if (record.agentRegistered) this.agentTitles.receive(identity.workspaceId, identity.tileId, event.data)
     }
 
-    for (const renderer of [...record.renderers]) this.sendEvent(renderer, event)
+    if (event.event !== 'agent-state') {
+      for (const renderer of [...record.renderers]) this.sendEvent(renderer, event)
+    }
+  }
+
+  private applyAgentState(
+    record: SessionRecord,
+    provider: TerminalDaemonAgentState['provider'],
+    state: TerminalDaemonAgentState['state'],
+  ): void {
+    if (state === 'working') {
+      this.registry.reportAgentWorking(provider, record.identity.tileId, record.identity.workspaceId)
+    }
   }
 
   private applyAlert(record: SessionRecord, alert: TerminalDaemonAlert | null): void {
@@ -719,7 +735,7 @@ export class PersistentTerminalSessions {
         sender.send(terminalSessionDataChannel(event.identity), event.data)
       } else if (event.event === 'exit') {
         sender.send(terminalSessionExitChannel(event.identity), event.exitEvent)
-      } else {
+      } else if (event.event === 'alert') {
         this.sendAlert(sender, event.identity, event.alert)
       }
     } catch {

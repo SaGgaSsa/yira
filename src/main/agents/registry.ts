@@ -6,7 +6,12 @@ import type {
   AgentSessionStatus,
 } from '@shared/types'
 import { normalizeAgentTerminalTitle } from '@shared/agentTerminalTitle'
-import { normalizeAgentAlert, SemanticAgentAlertState, type AgentAlert } from '../agentAlerts'
+import {
+  normalizeAgentAlert,
+  SemanticAgentAlertState,
+  type AgentAlert,
+  type AgentAlertKind,
+} from '../agentAlerts'
 import { normalizeAgentOpaqueId, isAgentProvider } from './query'
 import { normalizeResumeId } from './providers'
 
@@ -124,6 +129,9 @@ function normalizeRegistration(input: AgentSessionRegistration): AgentSessionReg
 export class AgentSessionRegistry {
   private readonly sessions = new Map<string, AgentActiveSession>()
 
+  /** Retains the last intervention kind across daemon alert-clear events. */
+  private readonly interventionKinds = new Map<string, AgentAlertKind>()
+
   private readonly subscribers = new Set<AgentSessionSnapshotSubscriber>()
 
   readonly alerts: SemanticAgentAlertState
@@ -140,6 +148,7 @@ export class AgentSessionRegistry {
     const currentTime = timestamp(this.now)
     const key = sessionKey(normalized.workspaceId, normalized.tileId)
     const previous = this.sessions.get(key)
+    if (previous && previous.sessionId !== normalized.sessionId) this.interventionKinds.delete(key)
     // Re-registering the same live session keeps the turn status it reached.
     const keptStatus = previous?.sessionId === normalized.sessionId && previous.status !== 'exited'
       ? previous.status
@@ -241,6 +250,7 @@ export class AgentSessionRegistry {
   markWorking(workspaceId: string, tileId: string): boolean {
     const session = this.get(workspaceId, tileId)
     if (!session || session.status === 'exited') return false
+    this.interventionKinds.delete(sessionKey(session.workspaceId, session.tileId))
     const changed = this.updateStatus(workspaceId, tileId, 'working')
     this.alerts.clearOnInput(tileId)
     return changed
@@ -248,7 +258,7 @@ export class AgentSessionRegistry {
 
   /**
    * Record user input and clear an intervention episode. Only a submitted
-   * line starts a turn; an interrupt ends one; typing keeps the status.
+   * line starts a turn; an interrupt ends one; typing starts a turn for a question.
    */
   recordActivity(workspaceId: string, tileId: string, input: AgentInputKind = 'submit'): boolean {
     const workspace = normalizeAgentOpaqueId(workspaceId)
@@ -256,9 +266,15 @@ export class AgentSessionRegistry {
     if (!workspace || !tile) return false
     const session = this.sessions.get(sessionKey(workspace, tile))
     if (!session || session.status === 'exited') return false
+    const key = sessionKey(workspace, tile)
+    const interventionKind = this.interventionKinds.get(key)
     if (input === 'submit') session.status = 'working'
     else if (input === 'interrupt' && session.status !== 'done') session.status = 'done'
+    else if (input === 'typing' && session.status === 'needs-input' && interventionKind === 'input') {
+      session.status = 'working'
+    }
     session.lastActivityAt = timestamp(this.now)
+    this.interventionKinds.delete(key)
     this.alerts.clearOnInput(tile)
     this.emit()
     return true
@@ -275,6 +291,7 @@ export class AgentSessionRegistry {
   markExited(workspaceId: string, tileId: string): boolean {
     const session = this.get(workspaceId, tileId)
     if (!session || session.status === 'exited') return false
+    this.interventionKinds.delete(sessionKey(session.workspaceId, session.tileId))
     const changed = this.updateStatus(workspaceId, tileId, 'exited')
     this.alerts.clearOnDestroy(tileId)
     return changed
@@ -289,14 +306,41 @@ export class AgentSessionRegistry {
         (workspaceId === undefined || session.workspaceId === workspaceId)
     })
     if (matching.length !== 1) return false
-    if (matching[0].status === 'exited') return false
-    if (!this.alerts.report(alert)) return false
     const session = matching[0]
+    if (session.status === 'exited') return false
+    const key = sessionKey(session.workspaceId, session.tileId)
+    if (alert.event === 'working') {
+      return this.reportAgentWorking(alert.provider, alert.tileId, session.workspaceId)
+    }
+    if (alert.event === 'completed' && this.interventionKinds.has(key)) return false
+    if (!this.alerts.report(alert)) return false
+    if (alert.event === 'permission' || alert.event === 'input') this.interventionKinds.set(key, alert.event)
     const status: AgentSessionStatus = alert.event === 'completed' ? 'done' : 'needs-input'
     // The alert is still retained by SemanticAgentAlertState even if the
     // runtime status was already equal; reporting itself remains meaningful.
     if (session.status === status) return true
     session.status = status
+    session.lastActivityAt = timestamp(this.now)
+    this.emit()
+    return true
+  }
+
+  /** Apply a working hook without allowing it to dismiss an active permission. */
+  reportAgentWorking(provider: AgentProvider, tileId: string, workspaceId: string): boolean {
+    const workspace = normalizeAgentOpaqueId(workspaceId)
+    const tile = normalizeAgentOpaqueId(tileId)
+    if (!workspace || !tile || !isAgentProvider(provider)) return false
+    const session = this.sessions.get(sessionKey(workspace, tile))
+    if (!session || session.status === 'exited' || session.provider !== provider) return false
+
+    const key = sessionKey(workspace, tile)
+    if (this.interventionKinds.get(key) === 'permission' || this.alerts.get(tile)?.event === 'permission') {
+      return false
+    }
+
+    this.interventionKinds.delete(key)
+    this.alerts.clearOnInput(tile)
+    session.status = 'working'
     session.lastActivityAt = timestamp(this.now)
     this.emit()
     return true
@@ -308,6 +352,7 @@ export class AgentSessionRegistry {
     if (!workspace || !tile) return false
     const removed = this.sessions.delete(sessionKey(workspace, tile))
     if (!removed) return false
+    this.interventionKinds.delete(sessionKey(workspace, tile))
     this.alerts.clearOnDestroy(tile)
     this.emit()
     return true
@@ -316,6 +361,7 @@ export class AgentSessionRegistry {
   clear(): void {
     if (this.sessions.size === 0) return
     for (const session of this.sessions.values()) this.alerts.clearOnDestroy(session.tileId)
+    this.interventionKinds.clear()
     this.sessions.clear()
     this.emit()
   }

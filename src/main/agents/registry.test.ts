@@ -86,6 +86,68 @@ test('typing keeps the status, a submit starts a turn and an interrupt ends it',
   assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'done')
 })
 
+test('question input falls back to working on typing even when daemon alert-clear arrives first', () => {
+  let now = 3_000
+  const registry = new AgentSessionRegistry({ now: () => now })
+  registry.register({ ...session, provider: 'claude' })
+
+  assert.equal(registry.reportAgentAlert({ provider: 'claude', event: 'input', tileId: 'tile-1' }), true)
+  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'needs-input')
+  registry.alerts.clearOnFocus('tile-1')
+
+  now += 100
+  assert.equal(registry.recordActivity('workspace-1', 'tile-1', 'typing'), true)
+  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'working')
+  assert.equal(registry.get('workspace-1', 'tile-1')?.lastActivityAt, new Date(now).toISOString())
+
+  assert.equal(registry.reportAgentAlert({ provider: 'claude', event: 'completed', tileId: 'tile-1' }), true)
+  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'done')
+})
+
+test('working hooks preserve permissions until submit, then completion marks done', () => {
+  const registry = new AgentSessionRegistry()
+  registry.register({ ...session, provider: 'claude' })
+
+  assert.equal(registry.reportAgentAlert({ provider: 'claude', event: 'permission', tileId: 'tile-1' }), true)
+  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'needs-input')
+  assert.equal(registry.reportAgentAlert({ provider: 'claude', event: 'working', tileId: 'tile-1' }), false)
+  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'needs-input')
+
+  assert.equal(registry.recordActivity('workspace-1', 'tile-1', 'submit'), true)
+  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'working')
+  assert.equal(registry.reportAgentAlert({ provider: 'claude', event: 'completed', tileId: 'tile-1' }), true)
+  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'done')
+})
+
+test('typing answers a permission while keeping needs-input until working arrives', () => {
+  const registry = new AgentSessionRegistry()
+  registry.register({ ...session, provider: 'claude' })
+
+  registry.reportAgentAlert({ provider: 'claude', event: 'permission', tileId: 'tile-1' })
+  registry.alerts.clearOnFocus('tile-1')
+  registry.recordActivity('workspace-1', 'tile-1', 'typing')
+
+  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'needs-input')
+  assert.equal(registry.reportAgentWorking('claude', 'tile-1', 'workspace-1'), true)
+  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'working')
+  assert.equal(registry.reportAgentWorking('claude', 'tile-1', 'workspace-1'), true)
+  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'working')
+  assert.equal(registry.reportAgentAlert({ provider: 'claude', event: 'completed', tileId: 'tile-1' }), true)
+  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'done')
+})
+
+test('completed after a typing response to a permission marks the session done', () => {
+  const registry = new AgentSessionRegistry()
+  registry.register({ ...session, provider: 'claude' })
+
+  registry.reportAgentAlert({ provider: 'claude', event: 'permission', tileId: 'tile-1' })
+  registry.recordActivity('workspace-1', 'tile-1', 'typing')
+
+  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'needs-input')
+  assert.equal(registry.reportAgentAlert({ provider: 'claude', event: 'completed', tileId: 'tile-1' }), true)
+  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'done')
+})
+
 test('re-registering the same live session keeps its status', () => {
   const registry = new AgentSessionRegistry()
   registry.register(session)

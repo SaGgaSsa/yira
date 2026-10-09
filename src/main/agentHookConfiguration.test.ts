@@ -125,7 +125,7 @@ test('Codex changed managed command is a conflict for install and uninstall', ()
   assert.equal(uninstall.text, changedText)
 })
 
-test('Claude installation writes documented Notification matcher groups', () => {
+test('Claude installation writes all six lifecycle and Notification groups', () => {
   const result = installClaudeHookConfiguration('{}', clientCommand)
 
   assert.equal(result.ok, true)
@@ -133,19 +133,35 @@ test('Claude installation writes documented Notification matcher groups', () => 
 
   const config = parse(result.text)
   assert.deepEqual(Object.keys(config), ['hooks'])
-  assert.equal(config.hooks.Notification.length, CLAUDE_HOOK_SPECS.length)
-  assert.deepEqual(
-    config.hooks.Notification.map((entry: any) => entry.matcher),
-    CLAUDE_HOOK_SPECS.map((spec) => spec.matcher),
-  )
-  assert.deepEqual(
-    config.hooks.Notification.map((entry: any) => entry.hooks[0].type),
-    ['command', 'command'],
-  )
-  assert.match(config.hooks.Notification[0].hooks[0].command, /--yira-managed-agent-hook=claude/)
-  assert.match(config.hooks.Notification[0].hooks[0].command, /--yira-normalized-event=completed/)
-  assert.match(config.hooks.Notification[1].hooks[0].command, /--yira-normalized-event=intervention/)
+  assert.deepEqual(Object.keys(config.hooks), [
+    'UserPromptSubmit',
+    'PostToolUse',
+    'Stop',
+    'StopFailure',
+    'Notification',
+  ])
+
+  for (const spec of CLAUDE_HOOK_SPECS) {
+    const matchingGroup = config.hooks[spec.event].find((entry: any) =>
+      spec.matcher === undefined ? !('matcher' in entry) : entry.matcher === spec.matcher,
+    )
+    assert.ok(matchingGroup, `missing ${spec.event} group`)
+    const expectedHook = {
+      type: 'command',
+      command: expectManagedCommand(spec.normalizedEvent),
+      ...(spec.async ? { async: true } : {}),
+    }
+    assert.deepEqual(matchingGroup, {
+      ...(spec.matcher === undefined ? {} : { matcher: spec.matcher }),
+      hooks: [expectedHook],
+    })
+  }
+  assert.equal(config.hooks.Notification.length, 2)
 })
+
+function expectManagedCommand(normalizedEvent: string): string {
+  return `${clientCommand} --yira-managed-agent-hook=claude --yira-normalized-event=${normalizedEvent}`
+}
 
 test('Claude installation preserves settings and unrelated Notification hooks', () => {
   const original = JSON.stringify({
@@ -166,7 +182,8 @@ test('Claude installation preserves settings and unrelated Notification hooks', 
 
   const config = parse(result.text)
   assert.equal(config.model, 'sonnet')
-  assert.deepEqual(config.hooks.Stop, [{ matcher: '', hooks: [{ type: 'command', command: 'stop-client' }] }])
+  assert.deepEqual(config.hooks.Stop[0], { matcher: '', hooks: [{ type: 'command', command: 'stop-client' }] })
+  assert.equal(config.hooks.Stop.length, 2)
   assert.deepEqual(config.hooks.Notification[0], {
     matcher: 'auth_success',
     hooks: [{ type: 'command', command: 'other-client' }],
@@ -188,6 +205,23 @@ test('Claude installation is idempotent and uninstall restores settings', () => 
   assert.deepEqual(parse(uninstalled.text), parse(original))
 })
 
+test('Claude reinstalls lifecycle hooks over a legacy Notification-only configuration', () => {
+  const priorInstall = parse(installClaudeHookConfiguration('{}', clientCommand).text)
+  for (const event of ['UserPromptSubmit', 'PostToolUse', 'Stop', 'StopFailure']) {
+    delete priorInstall.hooks[event]
+  }
+
+  const legacyText = JSON.stringify(priorInstall, null, 2)
+  const result = installClaudeHookConfiguration(legacyText, clientCommand)
+
+  assert.equal(result.status, 'installed')
+  const migrated = parse(result.text)
+  assert.equal(migrated.hooks.Notification.length, 2)
+  for (const event of ['UserPromptSubmit', 'PostToolUse', 'Stop', 'StopFailure']) {
+    assert.equal(migrated.hooks[event].length, 1)
+  }
+})
+
 test('Claude uninstall leaves unrelated Notification entries untouched', () => {
   const original = JSON.stringify({
     hooks: {
@@ -199,6 +233,22 @@ test('Claude uninstall leaves unrelated Notification entries untouched', () => {
 
   assert.equal(uninstalled.status, 'uninstalled')
   assert.deepEqual(parse(uninstalled.text), parse(original))
+})
+
+test('Claude uninstall removes all six managed groups and preserves user hooks', () => {
+  const original = JSON.stringify({
+    hooks: {
+      UserPromptSubmit: [{ hooks: [{ type: 'command', command: 'user-prompt-client' }] }],
+      Stop: [{ hooks: [{ type: 'command', command: 'user-stop-client' }] }],
+      Notification: [{ matcher: 'auth_success', hooks: [{ type: 'command', command: 'other-client' }] }],
+    },
+  }, null, 2)
+  const installed = installClaudeHookConfiguration(original, clientCommand)
+  const result = uninstallClaudeHookConfiguration(installed.text, clientCommand)
+
+  assert.equal(result.status, 'uninstalled')
+  assert.deepEqual(parse(result.text), parse(original))
+  assert.equal(hasManagedAgentHooks(result.text, 'claude'), false)
 })
 
 test('Claude malformed JSON is reported without overwriting text', () => {
@@ -224,7 +274,8 @@ test('Claude incompatible Notification structure is rejected', () => {
 test('Claude changed managed command is a conflict for install and uninstall', () => {
   const installed = installClaudeHookConfiguration('{}', clientCommand)
   const changed = parse(installed.text)
-  changed.hooks.Notification[0].hooks[0].command = `${clientCommand} --yira-managed-agent-hook=claude --yira-normalized-event=completed --changed`
+  changed.hooks.Notification[0].hooks[0].command =
+    `${clientCommand} --yira-managed-agent-hook=claude --yira-normalized-event=completed --changed`
   const changedText = JSON.stringify(changed, null, 2)
 
   const install = installClaudeHookConfiguration(changedText, clientCommand)
@@ -238,13 +289,47 @@ test('Claude changed managed command is a conflict for install and uninstall', (
   assert.equal(uninstall.changed, false)
 })
 
+test('Claude lifecycle hook without its required async flag is a conflict', () => {
+  const installed = installClaudeHookConfiguration('{}', clientCommand)
+  const changed = parse(installed.text)
+  delete changed.hooks.PostToolUse[0].hooks[0].async
+  const changedText = JSON.stringify(changed, null, 2)
+
+  const install = installClaudeHookConfiguration(changedText, clientCommand)
+  assert.equal(install.ok, false)
+  assert.equal(install.status, 'conflict')
+  assert.equal(install.changed, false)
+  assert.equal(install.text, changedText)
+
+  const uninstall = uninstallClaudeHookConfiguration(changedText, clientCommand)
+  assert.equal(uninstall.ok, false)
+  assert.equal(uninstall.status, 'conflict')
+  assert.equal(uninstall.changed, false)
+  assert.equal(uninstall.text, changedText)
+})
+
+test('managed Claude hook detection scans lifecycle event keys', () => {
+  const installed = parse(installClaudeHookConfiguration('{}', clientCommand).text)
+  delete installed.hooks.Notification
+
+  assert.equal(hasManagedAgentHooks(JSON.stringify(installed), 'claude'), true)
+})
+
 test('hook specs expose the source event mapping used by the managed commands', () => {
   assert.deepEqual(CODEX_HOOK_SPECS, [
     { event: 'Stop', normalizedEvent: 'completed' },
     { event: 'PermissionRequest', normalizedEvent: 'permission' },
   ])
   assert.deepEqual(CLAUDE_HOOK_SPECS, [
-    { matcher: 'idle_prompt|agent_completed', normalizedEvent: 'completed' },
-    { matcher: 'permission_prompt|elicitation_dialog|agent_needs_input', normalizedEvent: 'intervention' },
+    { event: 'UserPromptSubmit', async: true, normalizedEvent: 'working' },
+    { event: 'PostToolUse', matcher: '*', async: true, normalizedEvent: 'working' },
+    { event: 'Stop', async: true, normalizedEvent: 'completed' },
+    { event: 'StopFailure', async: true, normalizedEvent: 'completed' },
+    { event: 'Notification', matcher: 'idle_prompt|agent_completed', normalizedEvent: 'completed' },
+    {
+      event: 'Notification',
+      matcher: 'permission_prompt|elicitation_dialog|agent_needs_input',
+      normalizedEvent: 'intervention',
+    },
   ])
 })

@@ -4,13 +4,16 @@ export type AgentProvider = 'codex' | 'claude'
 /** Semantic hook kinds. PTY output is intentionally not part of this model. */
 export type AgentAlertKind = 'completed' | 'permission' | 'input'
 
+/** Semantic hook events also include a state transition that is not an alert. */
+export type AgentHookEvent = AgentAlertKind | 'working'
+
 /** Attention priority derived from an alert kind. */
 export type AgentAlertPriority = 'normal' | 'intervention'
 
 /** The only fields retained from an incoming agent hook envelope. */
 export interface AgentAlert {
   provider: AgentProvider
-  event: AgentAlertKind
+  event: AgentHookEvent
   tileId: string
 }
 
@@ -18,7 +21,8 @@ export interface AgentAlert {
 export type NormalizedAgentAlert = AgentAlert
 
 /** State retained for one terminal attention episode. */
-export interface AgentAlertState extends AgentAlert {
+export interface AgentAlertState extends Omit<AgentAlert, 'event'> {
+  event: AgentAlertKind
   priority: AgentAlertPriority
 }
 
@@ -38,7 +42,7 @@ export interface SemanticAgentAlertStateOptions {
 }
 
 const PROVIDERS: readonly AgentProvider[] = ['codex', 'claude']
-const KINDS: readonly AgentAlertKind[] = ['completed', 'permission', 'input']
+const KINDS: readonly AgentHookEvent[] = ['completed', 'permission', 'input', 'working']
 const MAX_TILE_ID_LENGTH = 256
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -117,6 +121,11 @@ export class SemanticAgentAlertState {
     const alert = normalizeAgentAlert(input)
     if (!alert) return false
 
+    if (alert.event === 'working') {
+      if (this.states.get(alert.tileId)?.event === 'permission') return false
+      return this.clear(alert.tileId)
+    }
+
     const current = this.states.get(alert.tileId)
     if (current?.priority === 'intervention' && alert.event === 'completed') {
       return false
@@ -125,11 +134,13 @@ export class SemanticAgentAlertState {
       return false
     }
 
+    const event = alert.event as AgentAlertKind
     const nextPriority = current?.priority === 'intervention'
       ? 'intervention'
-      : priorityFor(alert.event)
+      : priorityFor(event)
     const next: AgentAlertState = {
       ...alert,
+      event,
       priority: nextPriority,
     }
     this.states.set(alert.tileId, next)

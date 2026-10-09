@@ -29,6 +29,11 @@ export interface TerminalDaemonAlert {
   tileId: string
 }
 
+export interface TerminalDaemonAgentState {
+  provider: 'codex' | 'claude'
+  state: 'working'
+}
+
 export interface TerminalDaemonSpawn {
   target: TerminalSessionTarget
   executable: string
@@ -90,3 +95,4 @@ export type TerminalDaemonEvent =
   | { event: 'data'; identity: TerminalSessionIdentity; sequence: number; data: string }
   | { event: 'exit'; identity: TerminalSessionIdentity; sequence: number; exitEvent: TerminalExitEvent }
   | { event: 'alert'; identity: TerminalSessionIdentity; sequence: number; alert: TerminalDaemonAlert | null }
+  | ({ event: 'agent-state'; identity: TerminalSessionIdentity; sequence: number } & TerminalDaemonAgentState)

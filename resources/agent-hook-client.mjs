@@ -8,12 +8,12 @@ const args = Object.fromEntries(process.argv.slice(2).map((value) => {
 const provider = args['yira-managed-agent-hook']
 let event = args['yira-normalized-event']
 
-async function readHookEvent() {
+async function readNotificationType() {
   let text = ''
   for await (const chunk of process.stdin) text += chunk
   try {
     const value = JSON.parse(text)
-    return typeof value?.hook_event_name === 'string' ? value.hook_event_name : ''
+    return typeof value?.notification_type === 'string' ? value.notification_type : ''
   } catch {
     return ''
   }
@@ -21,9 +21,11 @@ async function readHookEvent() {
 
 async function main() {
   if ((provider !== 'codex' && provider !== 'claude') || !event) return
-  const sourceEvent = await readHookEvent()
-  if (event === 'intervention') event = sourceEvent === 'permission_prompt' ? 'permission' : 'input'
-  if (!['completed', 'permission', 'input'].includes(event)) return
+  if (event === 'intervention') {
+    const notificationType = await readNotificationType()
+    event = notificationType === 'permission_prompt' ? 'permission' : 'input'
+  }
+  if (!['completed', 'working', 'permission', 'input'].includes(event)) return
   const url = process.env.YIRA_AGENT_BRIDGE_URL
   const token = process.env.YIRA_AGENT_BRIDGE_TOKEN
   const tileId = process.env.YIRA_AGENT_TILE_ID

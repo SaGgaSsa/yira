@@ -71,6 +71,26 @@ test('does not downgrade an intervention episode when completion arrives later',
   })
 })
 
+test('working clears a non-permission alert without retaining an alert episode', () => {
+  const changes: Array<AgentAlertState | null> = []
+  const state = new SemanticAgentAlertState({ onChange: (_tileId, next) => changes.push(next) })
+
+  assert.equal(state.report({ provider: 'claude', event: 'input', tileId: 'working-tile' }), true)
+  assert.equal(state.report({ provider: 'claude', event: 'working', tileId: 'working-tile' }), true)
+  assert.equal(state.get('working-tile'), null)
+  assert.deepEqual(changes.at(-1), null)
+  assert.equal(state.report({ provider: 'claude', event: 'working', tileId: 'working-tile' }), false)
+})
+
+test('working does not clear a permission alert', () => {
+  const state = new SemanticAgentAlertState()
+  const permission: AgentAlert = { provider: 'claude', event: 'permission', tileId: 'permission-tile' }
+
+  assert.equal(state.report(permission), true)
+  assert.equal(state.report({ provider: 'claude', event: 'working', tileId: 'permission-tile' }), false)
+  assert.deepEqual(state.get('permission-tile'), { ...permission, priority: 'intervention' })
+})
+
 test('focus, input, and destroy clear attention for a tile', () => {
   const state = new SemanticAgentAlertState()
 

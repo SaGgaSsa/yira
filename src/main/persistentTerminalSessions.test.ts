@@ -284,6 +284,67 @@ test('hydrate restores agent metadata and maps alert and exit state', async () =
   assert.deepEqual(alerts[0], alert)
 })
 
+test('working state updates the registry without reaching the agent-alert callback', async () => {
+  const transport = new FakeTransport()
+  const registry = new AgentSessionRegistry({ now: () => 1_700_000_000_000 })
+  const agent = { provider: 'claude' as const, sessionId: 'resume-working', startedAt: '2024-01-01T00:00:00.000Z' }
+  transport.setHandler('attach', () => snapshot({ agent }))
+  const alerts: Array<TerminalDaemonAlert | null> = []
+  const sessions = createSessions(transport, {
+    registry,
+    onAgentAlert: (_identity, alert) => alerts.push(alert),
+  })
+  await sessions.attach(target)
+
+  transport.emitEvent({
+    event: 'alert',
+    identity: { ...identity },
+    sequence: 2,
+    alert: { provider: 'claude', event: 'input', tileId: identity.tileId },
+  })
+  transport.emitEvent({ event: 'alert', identity: { ...identity }, sequence: 3, alert: null })
+  transport.emitEvent({
+    event: 'agent-state',
+    identity: { ...identity },
+    sequence: 4,
+    provider: 'claude',
+    state: 'working',
+  })
+
+  assert.equal(registry.get(identity.workspaceId, identity.tileId)?.status, 'working')
+  assert.deepEqual(alerts, [
+    { provider: 'claude', event: 'input', tileId: identity.tileId },
+    null,
+  ])
+  assert.equal(registry.alerts.has(identity.tileId), false)
+})
+
+test('a later snapshot does not replay an old working event after an interrupt', async () => {
+  const transport = new FakeTransport()
+  const registry = new AgentSessionRegistry({ now: () => 1_700_000_000_000 })
+  const agent = { provider: 'claude' as const, sessionId: 'resume-interrupt', startedAt: '2024-01-01T00:00:00.000Z' }
+  let attachedSnapshot = snapshot({ agent })
+  transport.setHandler('attach', () => attachedSnapshot)
+  const sessions = createSessions(transport, { registry })
+  await sessions.attach(target)
+
+  transport.emitEvent({
+    event: 'agent-state',
+    identity: { ...identity },
+    sequence: 2,
+    provider: 'claude',
+    state: 'working',
+  })
+  assert.equal(registry.get(identity.workspaceId, identity.tileId)?.status, 'working')
+
+  registry.recordActivity(identity.workspaceId, identity.tileId, 'interrupt')
+  assert.equal(registry.get(identity.workspaceId, identity.tileId)?.status, 'done')
+  attachedSnapshot = snapshot({ agent, sequence: 2 })
+  await sessions.attach(target)
+
+  assert.equal(registry.get(identity.workspaceId, identity.tileId)?.status, 'done')
+})
+
 test('empty input does not restore working status or clear an agent alert', async () => {
   const transport = new FakeTransport()
   const registry = new AgentSessionRegistry({ now: () => 1_700_000_000_000 })

@@ -49,6 +49,12 @@ test('bridge accepts only authenticated semantic reports from registered local t
   assert.equal(accepted.status, 202)
   assert.deepEqual(reports, [{ provider: 'codex', event: 'completed', tileId: 'local-tile' }])
 
+  const working = await postJson(endpoint.url, endpoint.token, {
+    provider: 'claude', event: 'working', tileId: 'local-tile',
+  })
+  assert.equal(working.status, 202)
+  assert.deepEqual(reports.at(-1), { provider: 'claude', event: 'working', tileId: 'local-tile' })
+
   assert.equal((await postJson(endpoint.url, 'wrong', { provider: 'codex', event: 'completed', tileId: 'local-tile' })).status, 401)
   assert.equal((await postJson(endpoint.url, endpoint.token, { provider: 'codex', event: 'completed', tileId: 'remote-tile' })).status, 404)
   assert.equal((await postJson(endpoint.url, endpoint.token, { provider: 'codex', event: 'completed', tileId: 'unknown' })).status, 404)
