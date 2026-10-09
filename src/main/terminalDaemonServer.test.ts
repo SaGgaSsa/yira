@@ -179,6 +179,14 @@ async function request(
   }
 }
 
+async function waitForEventCount(messages: WireMessage[], event: string, count: number): Promise<void> {
+  const deadline = Date.now() + 5_000
+  while (messages.filter(message => message.event === event).length < count) {
+    if (Date.now() >= deadline) throw new Error(`Timed out waiting for ${event} event ${count}`)
+    await wait(5)
+  }
+}
+
 function spawnParams(target: { workspaceId: string; tileId: string }, extra: Record<string, unknown> = {}) {
   return {
     target,
@@ -971,6 +979,40 @@ test('routes hooks to the only local shell without agent metadata', async (t) =>
     created.identity,
   ))
   assert.deepEqual(snapshot.alert, { provider: 'claude', event: 'permission', tileId: 'shell' })
+
+  const stateEventsBeforePermissionWorking = client.messages.filter(message => message.event === 'agent-state').length
+  assert.equal(await postAlert(endpointUrl, bridgeToken, {
+    provider: 'claude', event: 'working', tileId: 'shell',
+  }), 202)
+  await waitForEventCount(client.messages, 'agent-state', stateEventsBeforePermissionWorking + 1)
+  const permissionSnapshot = snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    3,
+    'snapshot',
+    created.identity,
+  ))
+  assert.deepEqual(permissionSnapshot.alert, { provider: 'claude', event: 'permission', tileId: 'shell' })
+
+  assert.equal(await postAlert(endpointUrl, bridgeToken, {
+    provider: 'claude', event: 'input', tileId: 'shell',
+  }), 202)
+  const stateEventsBeforeInputWorking = client.messages.filter(message => message.event === 'agent-state').length
+  assert.equal(await postAlert(endpointUrl, bridgeToken, {
+    provider: 'claude', event: 'working', tileId: 'shell',
+  }), 202)
+  await waitForEventCount(client.messages, 'agent-state', stateEventsBeforeInputWorking + 1)
+  const workingSnapshot = snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    4,
+    'snapshot',
+    created.identity,
+  ))
+  assert.equal(workingSnapshot.alert, undefined)
+  assert.equal('agentState' in workingSnapshot, false)
 })
 
 function postAlert(url: string, token: string, body: unknown): Promise<number> {

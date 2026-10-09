@@ -39,9 +39,13 @@ export interface CodexHookSpec {
 }
 
 export interface ClaudeHookSpec {
-  /** Claude's documented regular-expression matcher for Notification hooks. */
-  readonly matcher: string
-  readonly normalizedEvent: 'completed' | 'intervention'
+  /** Claude's key under settings.json hooks. */
+  readonly event: 'UserPromptSubmit' | 'PostToolUse' | 'Stop' | 'StopFailure' | 'Notification'
+  /** Claude's documented regular-expression matcher, when this event uses one. */
+  readonly matcher?: string
+  /** Run this command hook in the background without blocking Claude. */
+  readonly async?: true
+  readonly normalizedEvent: 'completed' | 'intervention' | 'working'
 }
 
 /** Source events and normalized events installed for Codex. */
@@ -50,10 +54,18 @@ export const CODEX_HOOK_SPECS: readonly CodexHookSpec[] = [
   { event: 'PermissionRequest', normalizedEvent: 'permission' },
 ]
 
-/** Source matchers and normalized events installed for Claude Notification hooks. */
+/** Source events, optional matchers, and normalized events installed for Claude. */
 export const CLAUDE_HOOK_SPECS: readonly ClaudeHookSpec[] = [
-  { matcher: 'idle_prompt|agent_completed', normalizedEvent: 'completed' },
-  { matcher: 'permission_prompt|elicitation_dialog|agent_needs_input', normalizedEvent: 'intervention' },
+  { event: 'UserPromptSubmit', async: true, normalizedEvent: 'working' },
+  { event: 'PostToolUse', matcher: '*', async: true, normalizedEvent: 'working' },
+  { event: 'Stop', async: true, normalizedEvent: 'completed' },
+  { event: 'StopFailure', async: true, normalizedEvent: 'completed' },
+  { event: 'Notification', matcher: 'idle_prompt|agent_completed', normalizedEvent: 'completed' },
+  {
+    event: 'Notification',
+    matcher: 'permission_prompt|elicitation_dialog|agent_needs_input',
+    normalizedEvent: 'intervention',
+  },
 ]
 
 /**
@@ -134,12 +146,12 @@ export function uninstallCodexHookConfiguration(text: string, clientCommand: str
   return mutateConfiguration('codex', 'uninstall', text, clientCommand)
 }
 
-/** Install Yira-managed Notification matcher groups in Claude settings.json text. */
+/** Install Yira-managed lifecycle and Notification groups in Claude settings.json text. */
 export function installClaudeHookConfiguration(text: string, clientCommand: string): AgentHookMutationResult {
   return mutateConfiguration('claude', 'install', text, clientCommand)
 }
 
-/** Remove only untouched Yira-managed Claude Notification groups from settings.json text. */
+/** Remove only untouched Yira-managed Claude hook groups from settings.json text. */
 export function uninstallClaudeHookConfiguration(text: string, clientCommand: string): AgentHookMutationResult {
   return mutateConfiguration('claude', 'uninstall', text, clientCommand)
 }
@@ -156,7 +168,7 @@ export function hasManagedAgentHooks(text: string, provider: AgentHookProvider):
   if (!parsed.ok) return false
   const hooks = parsed.value.hooks
   if (!isJsonObject(hooks)) return false
-  const keys = provider === 'codex' ? CODEX_HOOK_SPECS.map((spec) => spec.event) : ['Notification']
+  const keys = provider === 'codex' ? CODEX_HOOK_SPECS.map((spec) => spec.event) : Object.keys(hooks)
   return keys.some((key) => {
     const entries = hooks[key]
     return Array.isArray(entries) && entries.some((entry) => {
@@ -209,9 +221,8 @@ function mutateConfiguration(
   let unsupportedMessage: string | null = null
 
   for (const spec of specs) {
-    // Codex keys its groups by source event. Claude follows the documented
-    // settings.json shape: all of these matchers live under Notification.
-    const key = provider === 'codex' ? (spec as CodexHookSpec).event : 'Notification'
+    // Both providers key hook groups by their source event in the configuration.
+    const key = spec.event
     const existing = existingHooks?.[key]
     if (existing === undefined) {
       plans.push({ key, spec, existing: undefined, managedIndices: [], needsAddition: operation === 'install' })
@@ -342,7 +353,10 @@ function inspectHookGroup(
       const identity = readManagedIdentity(hook.command)
       if (identity?.provider === provider) {
         if (identity.normalizedEvent === spec.normalizedEvent) matchingMarkerFound = true
-        else if (!isKnownNormalizedEvent(provider, identity.normalizedEvent)) malformedCurrentMarker = true
+        else if (!isKnownNormalizedEvent(provider, identity.normalizedEvent) ||
+          (provider === 'claude' && !isOtherNotificationEvent(spec, identity.normalizedEvent))) {
+          malformedCurrentMarker = true
+        }
       } else if (readManagedProvider(hook.command) === provider) {
         malformedCurrentMarker = true
       }
@@ -353,9 +367,9 @@ function inspectHookGroup(
 
   if (malformedCurrentMarker) return 'conflict'
 
-  // A Claude Notification array contains both normalized-event groups. A
+  // A Claude Notification array contains multiple normalized-event groups. A
   // managed group for the other event is unrelated to this spec, not a
-  // conflict. Matching markers with a changed command remain conflicts.
+  // conflict. Matching markers with a changed group remain conflicts.
   if (!matchingMarkerFound) return 'unrelated'
 
   const expectedCommand = buildManagedAgentHookCommand(clientCommand, provider, spec.normalizedEvent)
@@ -369,14 +383,19 @@ function isExactManagedEntry(
   spec: CodexHookSpec | ClaudeHookSpec,
   expectedCommand: string,
 ): boolean {
-  const expectedKeys = provider === 'codex' ? ['hooks'] : ['matcher', 'hooks']
+  const claudeSpec = provider === 'claude' ? spec as ClaudeHookSpec : null
+  const expectedKeys = provider === 'codex'
+    ? ['hooks']
+    : claudeSpec?.matcher === undefined ? ['hooks'] : ['matcher', 'hooks']
   if (!sameKeys(entry, expectedKeys)) return false
-  if (provider === 'claude' && entry.matcher !== (spec as ClaudeHookSpec).matcher) return false
+  if (claudeSpec?.matcher !== undefined && entry.matcher !== claudeSpec.matcher) return false
 
   const nestedHooks = entry.hooks
   if (!Array.isArray(nestedHooks) || nestedHooks.length !== 1) return false
   const hook = nestedHooks[0]
-  if (!isJsonObject(hook) || !sameKeys(hook, ['type', 'command'])) return false
+  const expectedHookKeys = claudeSpec?.async === true ? ['type', 'command', 'async'] : ['type', 'command']
+  if (!isJsonObject(hook) || !sameKeys(hook, expectedHookKeys)) return false
+  if (claudeSpec?.async === true && hook.async !== true) return false
   return hook.type === 'command' && hook.command === expectedCommand
 }
 
@@ -388,9 +407,11 @@ function makeManagedEntry(
   const hook = {
     type: 'command',
     command: buildManagedAgentHookCommand(clientCommand, provider, spec.normalizedEvent),
+    ...('async' in spec && spec.async === true ? { async: true } : {}),
   }
   if (provider === 'codex') return { hooks: [hook] }
-  return { matcher: (spec as ClaudeHookSpec).matcher, hooks: [hook] }
+  const claudeSpec = spec as ClaudeHookSpec
+  return claudeSpec.matcher === undefined ? { hooks: [hook] } : { matcher: claudeSpec.matcher, hooks: [hook] }
 }
 
 function hasManagedMarker(command: string): boolean {
@@ -419,6 +440,12 @@ function readManagedProvider(command: string): string | null {
 function isKnownNormalizedEvent(provider: AgentHookProvider, normalizedEvent: string): boolean {
   const specs = provider === 'codex' ? CODEX_HOOK_SPECS : CLAUDE_HOOK_SPECS
   return specs.some((spec) => spec.normalizedEvent === normalizedEvent)
+}
+
+function isOtherNotificationEvent(spec: CodexHookSpec | ClaudeHookSpec, normalizedEvent: string): boolean {
+  return 'event' in spec && spec.event === 'Notification' && CLAUDE_HOOK_SPECS.some((candidate) =>
+    candidate.event === 'Notification' && candidate.normalizedEvent === normalizedEvent,
+  )
 }
 
 function sameKeys(value: JsonObject, expected: readonly string[]): boolean {

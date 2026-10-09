@@ -21,7 +21,12 @@ import {
 } from '@shared/terminalSessionIdentity'
 import type { TerminalExitEvent } from '@shared/types'
 import { AgentAlertBridge } from './agentAlertBridge'
-import { SemanticAgentAlertState, type AgentAlertState } from './agentAlerts'
+import {
+  normalizeAgentAlert,
+  SemanticAgentAlertState,
+  type AgentAlert,
+  type AgentAlertState,
+} from './agentAlerts'
 import { DeferredTerminalStartupCommand } from './terminalStartupCommand'
 
 const daemonRequire = createRequire(import.meta.url)
@@ -745,7 +750,13 @@ class DaemonSession {
 
   reportAlert(alert: unknown): void {
     if (this.disposed || this.exitObserved) return
-    this.alertState.report(alert)
+    const hook = normalizeAgentAlert(alert)
+    if (!hook) return
+    this.alertState.report(hook)
+    if (hook.event !== 'working') return
+    void this.enqueue(() => {
+      if (!this.disposed) this.publishAgentState(hook.provider)
+    }).catch(() => undefined)
   }
 
   async write(data: string): Promise<void> {
@@ -952,6 +963,17 @@ class DaemonSession {
       identity: { ...this.identity },
       sequence: this.sequence,
       alert,
+    })
+  }
+
+  private publishAgentState(provider: AgentAlert['provider']): void {
+    this.sequence += 1
+    this.broadcast({
+      event: 'agent-state',
+      identity: { ...this.identity },
+      sequence: this.sequence,
+      provider,
+      state: 'working',
     })
   }
 
@@ -1443,7 +1465,7 @@ export class TerminalDaemonServer {
     this.agentAlertBridge.unregisterTerminal(target.tileId)
   }
 
-  private receiveAgentAlert(alert: AgentAlertState | { provider: 'codex' | 'claude'; event: 'completed' | 'permission' | 'input'; tileId: string }): void {
+  private receiveAgentAlert(alert: AgentAlert): void {
     const tileCandidates = [...this.sessions.values()].filter((session) => (
       session.spawn.local
       && !session.hasExited()

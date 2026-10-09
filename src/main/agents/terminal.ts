@@ -183,11 +183,21 @@ export function isTerminalProtocolReply(data: string): boolean {
 // return without submitting anything.
 const NON_SUBMIT_RETURNS = new RegExp(`${ESC}\\[200~[\\s\\S]*?(?:${ESC}\\[201~|$)|${ESC}\\r`, 'g')
 
+// An SGR mouse button press. Motion (32) and wheel (64) reports are not clicks.
+const SGR_MOUSE_PRESS = new RegExp(`^${ESC}\\[<(\\d+);\\d+;\\d+M$`)
+
+function isMouseClick(data: string): boolean {
+  const match = SGR_MOUSE_PRESS.exec(data)
+  return match !== null && (Number(match[1]) & (32 | 64)) === 0
+}
+
 /**
  * What a chunk of user input means for the agent's turn. Only Enter starts
  * a turn; Esc or Ctrl+C on their own interrupt it. Any other key is typing.
+ * A mouse click counts as typing too: Claude dialogs can be answered by clicking.
  */
 export function classifyAgentInput(data: string): AgentInputKind | null {
+  if (isMouseClick(data)) return 'typing'
   if (!data || isTerminalProtocolReply(data)) return null
   if (data === ESC || data === '\u0003') return 'interrupt'
   return data.replace(NON_SUBMIT_RETURNS, '').includes('\r') ? 'submit' : 'typing'
