@@ -14,6 +14,7 @@ import { GridView } from './components/GridView'
 import { BoardView } from './components/BoardView'
 import { FloatingTileWindow } from './components/FloatingTileWindow'
 import { TerminalRuntimeProvider, useTerminalRuntimeContext } from './components/TerminalRuntimeProvider'
+import { AgentTextSendContextProvider } from './components/AgentTextSendContext'
 import { AppDialog, type ConfirmDialogOptions, type PromptDialogOptions } from './components/AppDialog'
 import { WorkspaceDialog, type WorkspaceDialogRequest, type WorkspaceDialogValue } from './components/WorkspaceDialog'
 import { WorkspaceManagementDialog } from './components/WorkspaceManagementDialog'
@@ -76,6 +77,7 @@ import { refreshGridTileContent } from './utils/gridTileRefresh'
 import { DEFAULT_SPLIT_ORIENTATION, placeTilesSideBySide, toggleSplitOrientation } from './utils/splitViewState'
 import { getActiveWindowTitle, getVisibleActiveTileId } from './utils/windowTitle'
 import { getAgentSessionTitles } from './utils/terminalDisplayTitle'
+import { buildAgentTextSendTargets, waitForAgentTerminalRuntime } from './utils/agentTextSend'
 import {
   buildAgentAlertNotificationText,
   decideAgentAlertNotification,
@@ -371,6 +373,7 @@ function AppContent(): React.ReactElement {
   const setGridViewState = useCanvasStore((s) => s.setGridViewState)
   const setSplitPanelActiveTile = useCanvasStore((s) => s.setSplitPanelActiveTile)
   const setSplitFocusedPanel = useCanvasStore((s) => s.setSplitFocusedPanel)
+  const bringToFront = useCanvasStore((s) => s.bringToFront)
   const clearTerminalTitle = useCanvasStore((s) => s.clearTerminalTitle)
   const clearAllTerminalAttention = useCanvasStore((s) => s.clearAllTerminalAttention)
   const activeWorkspaceType: WorkspaceType = activeWorkspaceConfig.type
@@ -664,6 +667,13 @@ function AppContent(): React.ReactElement {
     () => getAgentSessionTitles(agentsView.snapshot.sessions, activeWorkspaceId),
     [activeWorkspaceId, agentsView.snapshot.sessions],
   )
+  const agentTextTargets = useMemo(() => buildAgentTextSendTargets({
+    workspaceId: activeWorkspaceId,
+    sessions: agentsView.snapshot.sessions,
+    tiles,
+    terminalTitles,
+    agentTitles,
+  }), [activeWorkspaceId, agentTitles, agentsView.snapshot.sessions, terminalTitles, tiles])
   const agentsViewTitleSession = useMemo(() => {
     if (activityOpen || !agentsView.isOpen) return undefined
     const sessions = agentsView.sessions
@@ -1758,6 +1768,77 @@ function AppContent(): React.ReactElement {
     switchWorkspace(workspace)
   }, [activeWorkspaceId, agentsView.close, agentsView.closeSessionDialog, agentsView.openForSession, sidebarWorkspaces, switchWorkspace])
 
+  const sendTextToAgent = useCallback(async (targetTileId: string, text: string, sourceTileId: string) => {
+    const target = agentTextTargets.find((entry) => entry.id === targetTileId)
+    if (!target) return
+
+    if (target.surface === 'agents-view') {
+      openAgentsViewSession(target.workspaceId, target.id)
+    } else {
+      const state = useCanvasStore.getState()
+      const tile = state.tiles.find((entry) => entry.id === target.id)
+      if (!tile || isTileDetached(tile)) return
+
+      if (state.viewMode === 'splitview') {
+        const panel = state.splitViewState.leftTileIds.includes(tile.id)
+          ? 'left'
+          : state.splitViewState.rightTileIds.includes(tile.id)
+            ? 'right'
+            : null
+
+        if (panel) {
+          setSplitPanelActiveTile(panel, tile.id)
+          focusTile(tile.id)
+          selectTiles([tile.id])
+        } else {
+          focusTileInFullview(tile)
+        }
+      } else if (state.viewMode === 'fullview') {
+        if (sourceTileId === state.fullviewActiveTileId) {
+          setSplitViewState(placeTilesSideBySide(state.splitViewState, sourceTileId, tile.id))
+          setFullviewActiveTileId(tile.id)
+          setViewMode('splitview')
+          focusTile(tile.id)
+          selectTiles([tile.id])
+        } else {
+          focusTileInFullview(tile)
+        }
+      } else {
+        focusTile(tile.id)
+        selectTiles([tile.id])
+        bringToFront(tile.id)
+      }
+    }
+
+    try {
+      const runtime = await waitForAgentTerminalRuntime(registry, {
+        workspaceId: target.workspaceId,
+        tileId: target.id,
+      })
+      if (!runtime) {
+        console.error(`[App] Could not send text to agent ${target.id}: terminal runtime did not appear`)
+        return
+      }
+
+      runtime.paste(text)
+      runtime.focus()
+    } catch (error) {
+      console.error(`[App] Could not send text to agent ${target.id}:`, error)
+    }
+  }, [
+    agentTextTargets,
+    bringToFront,
+    focusTile,
+    focusTileInFullview,
+    openAgentsViewSession,
+    registry,
+    selectTiles,
+    setFullviewActiveTileId,
+    setSplitPanelActiveTile,
+    setSplitViewState,
+    setViewMode,
+  ])
+
   const handleAgentSessionCreated = useCallback((result: AgentSessionCreateResult) => {
     openAgentsViewSession(result.workspaceId, result.tileId)
   }, [openAgentsViewSession])
@@ -2455,6 +2536,10 @@ function AppContent(): React.ReactElement {
       : undefined,
   }
   const workspaceHomeNow = Date.now()
+  const agentTextSendContext = useMemo(() => ({
+    targets: agentTextTargets,
+    sendText: sendTextToAgent,
+  }), [agentTextTargets, sendTextToAgent])
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-bg-primary text-text-primary">
@@ -2709,7 +2794,10 @@ function AppContent(): React.ReactElement {
       </Sidebar>
 
       {/* Right side: content + bars */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <AgentTextSendContextProvider
+        value={agentTextSendContext}
+        className="flex min-w-0 flex-1 flex-col"
+      >
         {showUpdateBanner && (
           <div className="border-b border-border bg-bg-secondary px-6 py-3">
             <div className="flex items-center justify-between gap-4 rounded-[20px] border border-border-visible bg-bg-tertiary px-4 py-3">
@@ -2925,7 +3013,7 @@ function AppContent(): React.ReactElement {
             </div>
           )}
         </div>
-      </div>
+      </AgentTextSendContextProvider>
       </div>
 
       {/* Settings panel */}

@@ -14,6 +14,7 @@ import { buildTerminalContextMenuItems } from '@/utils/terminalContextMenu'
 import { readTerminalPasteData } from '@/utils/terminalClipboard'
 import type { TerminalLinkTarget } from '@/utils/terminalContextMenu'
 import { ContextMenu, type MenuItem } from './ContextMenu'
+import { useAgentTextSendContext } from './AgentTextSendContext'
 import {
   useTerminalRuntimeContext,
   type TerminalRuntimeCreateRequest,
@@ -325,6 +326,7 @@ export function TerminalTileWrapper({
   onOpenFileTile,
 }: Props): React.ReactElement {
   const { t } = useTranslation()
+  const agentTextSend = useAgentTextSendContext()
   const {
     registry,
     createRuntime,
@@ -739,6 +741,12 @@ export function TerminalTileWrapper({
     onToggleNotifications: () => {
       onUpdate({ notificationsMuted: tile.notificationsMuted ? undefined : true })
     },
+    agentTargets: agentTextSend?.targets
+      .filter((target) => target.id !== tile.id)
+      .map(({ id, label }) => ({ id, label })),
+    onSendToAgent: agentTextSend
+      ? (targetTileId) => agentTextSend.sendText(targetTileId, menuPosition?.selectionText ?? '', tile.id)
+      : undefined,
     onOpenBrowserTile: onOpenBrowserTile
       ? (url) => {
           const currentRuntime = activeRuntimeRef.current
