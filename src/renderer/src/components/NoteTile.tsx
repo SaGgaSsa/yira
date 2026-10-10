@@ -13,9 +13,12 @@ import { getMarkdownEditorKey } from '@/utils/markdownEditor'
 import { MARKDOWN_NOTE_SOURCE_PATH } from '@/utils/markdownImage'
 import { safeMarkdownPreviewOptions } from '@/utils/markdownPlugins'
 import { safeMarkdownUrl } from '@/utils/markdownPreview'
+import { buildNoteContextMenuItems } from '@/utils/noteContextMenu'
 import { useNoteDocument, type NoteDocumentData } from '@/hooks/useNoteDocument'
 import { createMarkdownComponents } from './MarkdownImage'
 import { MarkdownPreviewPane } from './MarkdownPreviewPane'
+import { useAgentTextSendContext } from './AgentTextSendContext'
+import { ContextMenu } from './ContextMenu'
 
 interface NoteTileProps {
   tile: TileState
@@ -76,6 +79,79 @@ const MARKDOWN_COMMANDS = [
   commands.orderedListCommand,
 ]
 
+type NoteSelectionSnapshot =
+  | { kind: 'textarea'; element: HTMLTextAreaElement; start: number; end: number }
+  | { kind: 'range'; range: Range }
+  | { kind: 'none' }
+
+interface NoteContextMenuState {
+  x: number
+  y: number
+  selectedText: string
+  editable: boolean
+  selection: NoteSelectionSnapshot
+}
+
+function captureNoteSelection(root: HTMLElement, target: EventTarget | null): {
+  selectedText: string
+  editable: boolean
+  selection: NoteSelectionSnapshot
+} {
+  const targetElement = target instanceof Element ? target : null
+  const textarea = targetElement?.closest('textarea')
+  if (textarea instanceof HTMLTextAreaElement && root.contains(textarea)) {
+    const start = textarea.selectionStart
+    const end = textarea.selectionEnd
+    return {
+      selectedText: textarea.value.slice(start, end),
+      editable: true,
+      selection: { kind: 'textarea', element: textarea, start, end },
+    }
+  }
+
+  const currentSelection = window.getSelection()
+  const range = currentSelection?.rangeCount ? currentSelection.getRangeAt(0) : null
+  const selectionIsInside = Boolean(
+    currentSelection?.anchorNode
+    && currentSelection.focusNode
+    && root.contains(currentSelection.anchorNode)
+    && root.contains(currentSelection.focusNode),
+  )
+  if (!range || !selectionIsInside) {
+    return { selectedText: '', editable: false, selection: { kind: 'none' } }
+  }
+
+  return {
+    selectedText: currentSelection?.toString() ?? '',
+    editable: false,
+    selection: { kind: 'range', range: range.cloneRange() },
+  }
+}
+
+function restoreNoteSelection(selection: NoteSelectionSnapshot): void {
+  if (selection.kind === 'textarea') {
+    selection.element.focus()
+    selection.element.setSelectionRange(selection.start, selection.end)
+    return
+  }
+
+  if (selection.kind === 'range') {
+    const currentSelection = window.getSelection()
+    currentSelection?.removeAllRanges()
+    currentSelection?.addRange(selection.range)
+  }
+}
+
+function selectPreviewContents(root: HTMLElement, preview: HTMLElement | null): void {
+  if (!preview || !root.contains(preview)) return
+
+  const range = document.createRange()
+  range.selectNodeContents(preview)
+  const selection = window.getSelection()
+  selection?.removeAllRanges()
+  selection?.addRange(range)
+}
+
 function isBlockArray(value: unknown): value is NoteBlocks {
   return Array.isArray(value)
 }
@@ -128,10 +204,12 @@ function RichNoteEditor({
   initialBlocks,
   autoFocus = false,
   onChange,
+  onEditorReady,
 }: {
   initialBlocks: PartialBlock[]
   autoFocus?: boolean
   onChange: (blocks: NoteBlocks, summary: string) => void
+  onEditorReady: (editor: ReturnType<typeof useCreateBlockNote> | null) => void
 }): React.ReactElement {
   const editor = useCreateBlockNote({
     schema: noteSchema,
@@ -164,6 +242,11 @@ function RichNoteEditor({
   useEffect(() => {
     if (autoFocus) editor.prosemirrorView.focus()
   }, [autoFocus, editor])
+
+  useEffect(() => {
+    onEditorReady(editor)
+    return () => onEditorReady(null)
+  }, [editor, onEditorReady])
 
   return (
     <BlockNoteView
@@ -239,6 +322,13 @@ function NotePageHeader({
 
 function RichNoteTile({ tile, autoFocus, onUpdate }: NoteTileProps): React.ReactElement {
   const { t } = useTranslation()
+  const agentTextSend = useAgentTextSendContext()
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const editorRef = useRef<ReturnType<typeof useCreateBlockNote> | null>(null)
+  const [menuPosition, setMenuPosition] = useState<NoteContextMenuState | null>(null)
+  const handleEditorReady = useCallback((editor: ReturnType<typeof useCreateBlockNote> | null) => {
+    editorRef.current = editor
+  }, [])
 
   const applyLoaded = useCallback((raw: NoteDocumentData | null, currentTile: TileState) => {
     const data = raw as NoteData | null
@@ -298,6 +388,35 @@ function RichNoteTile({ tile, autoFocus, onUpdate }: NoteTileProps): React.React
     onUpdate({ noteContent: summary })
   }
 
+  const noteMenuItems = buildNoteContextMenuItems({
+    translate: (key) => t(key),
+    selectedText: menuPosition?.selectedText ?? '',
+    editable: menuPosition?.editable ?? false,
+    agentTargets: agentTextSend?.targets.map(({ id, label }) => ({ id, label })),
+    onCopySelection: () => {
+      editorRef.current?.prosemirrorView.focus()
+      document.execCommand('copy')
+    },
+    onCutSelection: () => {
+      editorRef.current?.prosemirrorView.focus()
+      document.execCommand('cut')
+    },
+    onPaste: () => {
+      void window.electron.clipboard.readText().then((text) => {
+        editorRef.current?.pasteText(text)
+      }).catch((error: unknown) => {
+        console.error('[NoteTile] Failed to read clipboard text:', error)
+      })
+    },
+    onSelectAll: () => {
+      editorRef.current?.prosemirrorView.focus()
+      document.execCommand('selectAll')
+    },
+    onSendToAgent: agentTextSend
+      ? (targetTileId) => agentTextSend.sendText(targetTileId, menuPosition?.selectedText ?? '', tile.id)
+      : undefined,
+  })
+
   return (
     <div
       className="h-full w-full overflow-auto bg-bg-elevated"
@@ -313,19 +432,44 @@ function RichNoteTile({ tile, autoFocus, onUpdate }: NoteTileProps): React.React
           onTitleBlur={() => note.saveNow()}
         />
 
-        <div className="min-h-0 flex-1 px-6 py-8 sm:px-10">
+        <div
+          ref={bodyRef}
+          className="min-h-0 flex-1 px-6 py-8 sm:px-10"
+          tabIndex={-1}
+          onContextMenu={(event) => {
+            event.preventDefault()
+            const captured = bodyRef.current
+              ? captureNoteSelection(bodyRef.current, event.target)
+              : { selectedText: '', selection: { kind: 'none' as const }, editable: false }
+            setMenuPosition({
+              x: event.clientX,
+              y: event.clientY,
+              ...captured,
+              editable: Boolean(editorRef.current),
+            })
+          }}
+        >
           {note.fields.blocks ? (
             <RichNoteEditor
               key={tile.id}
               initialBlocks={note.fields.blocks}
               autoFocus={autoFocus}
               onChange={handleBlocksChange}
+              onEditorReady={handleEditorReady}
             />
           ) : (
             <div className="px-4 py-3 text-sm text-text-secondary">{t('ui.loadingNote')}</div>
           )}
         </div>
       </div>
+      {menuPosition && (
+        <ContextMenu
+          x={menuPosition.x}
+          y={menuPosition.y}
+          items={noteMenuItems}
+          onClose={() => setMenuPosition(null)}
+        />
+      )}
     </div>
   )
 }
@@ -337,7 +481,10 @@ function MarkdownNoteTile({
   workspaceRootPath = '',
 }: NoteTileProps): React.ReactElement {
   const { t } = useTranslation()
+  const agentTextSend = useAgentTextSendContext()
   const editorRef = useRef<HTMLDivElement>(null)
+  const previewContentRef = useRef<HTMLDivElement>(null)
+  const [menuPosition, setMenuPosition] = useState<NoteContextMenuState | null>(null)
   const markdownViewOptions: Array<{ mode: MarkdownViewMode; label: string }> = [
     { mode: 'edit', label: t('ui.noteEditMode') },
     { mode: 'preview', label: t('ui.notePreviewMode') },
@@ -415,6 +562,48 @@ function MarkdownNoteTile({
     note.updateField('viewMode', viewMode, { markdownView: viewMode })
   }
 
+  const noteMenuItems = buildNoteContextMenuItems({
+    translate: (key) => t(key),
+    selectedText: menuPosition?.selectedText ?? '',
+    editable: menuPosition?.editable ?? false,
+    agentTargets: agentTextSend?.targets.map(({ id, label }) => ({ id, label })),
+    onCopySelection: () => {
+      editorRef.current?.focus()
+      if (menuPosition) restoreNoteSelection(menuPosition.selection)
+      document.execCommand('copy')
+    },
+    onCutSelection: () => {
+      if (menuPosition) restoreNoteSelection(menuPosition.selection)
+      document.execCommand('cut')
+    },
+    onPaste: () => {
+      if (menuPosition?.selection.kind !== 'textarea') return
+      const selection = menuPosition.selection
+      void window.electron.clipboard.readText().then((text) => {
+        restoreNoteSelection(selection)
+        document.execCommand('insertText', false, text)
+      }).catch((error: unknown) => {
+        console.error('[NoteTile] Failed to read clipboard text:', error)
+      })
+    },
+    onSelectAll: () => {
+      const root = editorRef.current
+      if (!root) return
+      if (menuPosition?.selection.kind === 'textarea') {
+        menuPosition.selection.element.focus()
+        document.execCommand('selectAll')
+        return
+      }
+
+      root.focus()
+      const preview = root.querySelector<HTMLElement>('.w-md-editor-preview') ?? previewContentRef.current
+      selectPreviewContents(root, preview)
+    },
+    onSendToAgent: agentTextSend
+      ? (targetTileId) => agentTextSend.sendText(targetTileId, menuPosition?.selectedText ?? '', tile.id)
+      : undefined,
+  })
+
   const modeButtons = (
     <div className="flex shrink-0 items-center gap-1">
       {markdownViewOptions.map(({ mode, label }) => (
@@ -450,14 +639,31 @@ function MarkdownNoteTile({
           onTitleBlur={() => note.saveNow()}
         />
 
-        <div ref={editorRef} className="yira-markdown-editor min-h-[480px] flex-1 px-6 py-8 sm:px-10">
+        <div
+          ref={editorRef}
+          className="yira-markdown-editor min-h-[480px] flex-1 px-6 py-8 sm:px-10"
+          tabIndex={-1}
+          onContextMenu={(event) => {
+            event.preventDefault()
+            const captured = editorRef.current
+              ? captureNoteSelection(editorRef.current, event.target)
+              : { selectedText: '', selection: { kind: 'none' as const }, editable: false }
+            setMenuPosition({
+              x: event.clientX,
+              y: event.clientY,
+              ...captured,
+            })
+          }}
+        >
           {note.fields.viewMode === 'preview' ? (
-            <MarkdownPreviewPane
-              source={note.fields.markdown}
-              colorMode={document.documentElement.classList.contains('light') ? 'light' : 'dark'}
-              rootPath={workspaceRootPath}
-              imageSourcePath={MARKDOWN_NOTE_SOURCE_PATH}
-            />
+            <div ref={previewContentRef} className="h-full min-h-0">
+              <MarkdownPreviewPane
+                source={note.fields.markdown}
+                colorMode={document.documentElement.classList.contains('light') ? 'light' : 'dark'}
+                rootPath={workspaceRootPath}
+                imageSourcePath={MARKDOWN_NOTE_SOURCE_PATH}
+              />
+            </div>
           ) : (
             <MDEditor
               key={getMarkdownEditorKey(tile.id, note.fields.viewMode)}
@@ -474,6 +680,14 @@ function MarkdownNoteTile({
           )}
         </div>
       </div>
+      {menuPosition && (
+        <ContextMenu
+          x={menuPosition.x}
+          y={menuPosition.y}
+          items={noteMenuItems}
+          onClose={() => setMenuPosition(null)}
+        />
+      )}
     </div>
   )
 }

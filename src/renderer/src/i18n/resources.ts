@@ -803,8 +803,11 @@ type TranslationResources = {
     openBrowserTile: string
     copyUrl: string
     copyText: string
+    cut: string
     paste: string
     selectAll: string
+    sendToAgent: string
+    noAgentsInWorkspace: string
     gridFull: string
     gridFullMessage: string
     refreshTerminal: string
@@ -1682,8 +1685,11 @@ const en: TranslationResources = {
     openBrowserTile: 'Open in Browser tile',
     copyUrl: 'Copy URL',
     copyText: 'Copy',
+    cut: 'Cut',
     paste: 'Paste',
     selectAll: 'Select All',
+    sendToAgent: 'Send to agent',
+    noAgentsInWorkspace: 'No agents in this workspace',
     gridFull: 'Grid is full',
     gridFullMessage: 'Grid workspaces can contain at most {{count}} tiles.',
     refreshTerminal: 'Refresh terminal',
@@ -2561,8 +2567,11 @@ const es: TranslationResources = {
     openBrowserTile: 'Abrir en un panel del navegador',
     copyUrl: 'Copiar URL',
     copyText: 'Copiar',
+    cut: 'Cortar',
     paste: 'Pegar',
     selectAll: 'Seleccionar todo',
+    sendToAgent: 'Enviar a agente',
+    noAgentsInWorkspace: 'No hay agentes en este espacio de trabajo',
     gridFull: 'La cuadrícula está llena',
     gridFullMessage: 'Los espacios de trabajo en cuadrícula admiten hasta {{count}} paneles.',
     refreshTerminal: 'Actualizar terminal',

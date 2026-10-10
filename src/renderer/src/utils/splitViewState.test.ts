@@ -1,4 +1,4 @@
-import { normalizeSplitOrientation, toggleSplitOrientation } from './splitViewState'
+import { normalizeSplitOrientation, placeTilesSideBySide, toggleSplitOrientation } from './splitViewState'
 import type { SplitViewState } from '@shared/types'
 
 const verticalState: SplitViewState = {
@@ -28,4 +28,22 @@ if (toggleSplitOrientation(verticalState.orientation) !== 'horizontal') {
 
 if (toggleSplitOrientation('horizontal') !== 'vertical') {
   throw new Error('horizontal split orientation must toggle to vertical')
+}
+
+const sideBySide = placeTilesSideBySide(
+  { ...verticalState, leftTileIds: ['terminal-2', 'note-1'], rightTileIds: ['terminal-1'], focusedPanel: 'left' },
+  'terminal-1',
+  'agent-1',
+)
+
+if (sideBySide.leftTileIds.join(',') !== 'terminal-1,terminal-2,note-1') {
+  throw new Error('side-by-side placement must put the left tile first and keep other left tabs')
+}
+
+if (sideBySide.rightTileIds.join(',') !== 'agent-1') {
+  throw new Error('side-by-side placement must move the left tile out of the right panel')
+}
+
+if (sideBySide.activeLeftTileId !== 'terminal-1' || sideBySide.activeRightTileId !== 'agent-1' || sideBySide.focusedPanel !== 'right') {
+  throw new Error('side-by-side placement must activate both tiles and focus the right panel')
 }
