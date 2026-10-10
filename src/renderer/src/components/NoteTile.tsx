@@ -288,7 +288,7 @@ function NotePageHeader({
 
   return (
     <header className="mx-auto w-full px-6 pt-10 sm:px-10">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center justify-center gap-3">
         <span
           aria-hidden="true"
           className="h-[10px] w-[10px] shrink-0 rounded-full"
@@ -296,7 +296,7 @@ function NotePageHeader({
         />
         <input
           className={
-            'note-title-text min-w-0 flex-1 bg-transparent font-body font-semibold leading-tight text-text-display outline-none placeholder:text-text-disabled'
+            'note-title-text min-w-[2ch] max-w-full bg-transparent font-body font-semibold leading-tight text-text-display outline-none [field-sizing:content] placeholder:text-text-disabled'
           }
           value={title}
           onChange={onTitleChange}
@@ -307,14 +307,14 @@ function NotePageHeader({
       </div>
 
       <div
-        className="mt-2 flex min-h-6 items-center justify-between gap-3 text-text-secondary"
+        className="mt-2 grid min-h-6 grid-cols-[minmax(0,1fr)_minmax(0,auto)_minmax(0,1fr)] items-center gap-3 text-text-secondary"
         style={{ fontSize: 'var(--font-caption)' }}
       >
-        <span className="truncate">
+        <span className="col-start-2 truncate">
           {time ? <>{t('ui.noteEdited', { time })} · </> : null}
           {t('ui.noteWordCount', { count: wordCount })}
         </span>
-        {rightSlot}
+        {rightSlot && <div className="justify-self-end">{rightSlot}</div>}
       </div>
     </header>
   )
