@@ -4,12 +4,12 @@ export interface NoteContextMenuInput {
   translate?: (key: string) => string
   selectedText: string
   editable: boolean
-  agentTargets?: Array<{ id: string; label: string }>
   onCopySelection: () => void
   onCutSelection: () => void
   onPaste: () => void
   onSelectAll: () => void
-  onSendToAgent?: (id: string) => void
+  /** Opens the new-prompt dialog with the selected text. */
+  onSendToPrompt?: () => void
 }
 
 export function buildNoteContextMenuItems(input: NoteContextMenuInput): MenuItem[] {
@@ -35,21 +35,13 @@ export function buildNoteContextMenuItems(input: NoteContextMenuInput): MenuItem
       label: label('ui.selectAll', 'Select All'),
       action: input.onSelectAll,
     },
-    ...(input.onSendToAgent ? [
+    ...(input.onSendToPrompt ? [
       { label: '', divider: true },
-      input.agentTargets?.length
-        ? {
-            label: label('ui.sendToAgent', 'Send to agent'),
-            disabled: !input.selectedText,
-            submenu: !input.selectedText ? undefined : input.agentTargets.map((target) => ({
-              label: target.label,
-              action: () => input.onSendToAgent?.(target.id),
-            })),
-          }
-        : {
-            label: label('ui.noAgentsInWorkspace', 'No agents in this workspace'),
-            disabled: true,
-          },
+      {
+        label: label('ui.sendToPrompt', 'Send to new prompt'),
+        disabled: !input.selectedText,
+        action: input.onSendToPrompt,
+      },
     ] : []),
   ]
 }

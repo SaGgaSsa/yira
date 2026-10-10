@@ -21,7 +21,7 @@ test('note menu disables copy and cut without a selection and enables paste for 
   assert.equal(items[1].disabled, true)
   assert.equal(items[2].disabled, false)
   assert.equal(items[3].disabled, undefined)
-  assert.equal(items.some((item) => item.label === 'Send to agent'), false)
+  assert.equal(items.some((item) => item.label === 'Send to new prompt'), false)
 })
 
 test('note preview disables cut and paste while allowing copy and select all', () => {
@@ -41,33 +41,20 @@ test('editable note selection enables cut and paste', () => {
   assert.equal(items[2].disabled, false)
 })
 
-test('note menu adds an enabled agent submenu only when selection exists', () => {
-  let sentTo = ''
+test('note menu sends the selection to a new prompt only when text is selected', () => {
+  let sent = false
   const items = buildItems({
     selectedText: 'prompt text',
-    agentTargets: [{ id: 'agent-one', label: 'Claude task' }],
-    onSendToAgent: (id) => { sentTo = id },
+    onSendToPrompt: () => { sent = true },
   })
-  const sendItem = items.find((item) => item.label === 'Send to agent')
+  const sendItem = items.find((item) => item.label === 'Send to new prompt')
 
   assert.ok(sendItem)
   assert.equal(sendItem.disabled, false)
-  assert.equal(sendItem.submenu?.[0].label, 'Claude task')
-  sendItem.submenu?.[0].action?.()
-  assert.equal(sentTo, 'agent-one')
+  assert.equal(sendItem.submenu, undefined)
+  sendItem.action?.()
+  assert.equal(sent, true)
 
-  const noSelection = buildItems({
-    onSendToAgent: () => {},
-    agentTargets: [{ id: 'agent-one', label: 'Claude task' }],
-  })
-  assert.equal(noSelection.find((item) => item.label === 'Send to agent')?.disabled, true)
-})
-
-test('note menu shows a disabled empty-workspace item when no agents are available', () => {
-  const items = buildItems({ onSendToAgent: () => {}, agentTargets: [] })
-  const emptyItem = items.find((item) => item.label === 'No agents in this workspace')
-
-  assert.ok(emptyItem)
-  assert.equal(emptyItem.disabled, true)
-  assert.equal(emptyItem.submenu, undefined)
+  const noSelection = buildItems({ onSendToPrompt: () => {} })
+  assert.equal(noSelection.find((item) => item.label === 'Send to new prompt')?.disabled, true)
 })

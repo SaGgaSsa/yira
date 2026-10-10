@@ -86,44 +86,41 @@ if (!unmuteActivityItems.some((item) => item.label === 'Unmute Activity')) {
   throw new Error('muted terminal context menu must offer unmuting visual activity')
 }
 
-if (activityItems.some((item) => item.label === 'Send to agent')) {
-  throw new Error('terminal context menu must omit agent sending without a callback')
+if (activityItems.some((item) => item.label === 'Send to new prompt')) {
+  throw new Error('terminal context menu must omit prompt sending without a callback')
 }
 
-let sentTo = ''
-const agentItems = buildTerminalContextMenuItems({
+let sent = false
+const promptItems = buildTerminalContextMenuItems({
   selectedText: 'selected command',
   notificationsMuted: false,
-  agentTargets: [{ id: 'agent-one', label: 'Claude task' }],
   onCopySelection: () => {},
   onPaste: () => {},
   onSelectAll: () => {},
   onToggleNotifications: () => {},
-  onSendToAgent: (id) => { sentTo = id },
+  onSendToPrompt: () => { sent = true },
   onOpenExternal: () => {},
   onCopyLink: () => {},
 })
-const sendItem = agentItems.find((item) => item.label === 'Send to agent')
+const sendItem = promptItems.find((item) => item.label === 'Send to new prompt')
 
-if (!sendItem || sendItem.disabled || sendItem.submenu?.[0].label !== 'Claude task') {
-  throw new Error('terminal context menu must add a submenu for available agents')
+if (!sendItem || sendItem.disabled || sendItem.submenu) {
+  throw new Error('terminal context menu must offer sending the selection to a new prompt')
 }
-sendItem.submenu[0].action?.()
-if (sentTo !== 'agent-one') throw new Error(`unexpected agent destination: ${sentTo}`)
+sendItem.action?.()
+if (!sent) throw new Error('terminal context menu must call the new-prompt callback')
 
-const noAgentItems = buildTerminalContextMenuItems({
+const noSelectionItems = buildTerminalContextMenuItems({
   selectedText: '',
   notificationsMuted: false,
-  agentTargets: [],
   onCopySelection: () => {},
   onPaste: () => {},
   onSelectAll: () => {},
   onToggleNotifications: () => {},
-  onSendToAgent: () => {},
+  onSendToPrompt: () => {},
   onOpenExternal: () => {},
   onCopyLink: () => {},
 })
-const noAgentsItem = noAgentItems.find((item) => item.label === 'No agents in this workspace')
-if (!noAgentsItem?.disabled || noAgentsItem.submenu) {
-  throw new Error('terminal menu must show a disabled no-agents item without a submenu')
+if (!noSelectionItems.find((item) => item.label === 'Send to new prompt')?.disabled) {
+  throw new Error('terminal menu must disable sending to a new prompt without a selection')
 }

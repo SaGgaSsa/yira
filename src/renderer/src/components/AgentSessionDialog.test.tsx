@@ -278,6 +278,7 @@ Object.defineProperty(globalThis, 'electron', {
 interface DialogOptions {
   workspaces?: WorkspaceMetadata[]
   initialWorkspaceId?: string | null
+  initialPrompt?: string
   agents?: UserSettings['agents']
   capabilities?: (workspaceId: string) => Promise<AgentSessionCapabilities>
   focusRequestId?: number
@@ -301,6 +302,7 @@ function renderDialog(options: DialogOptions = {}): {
     open: true,
     workspaces: options.workspaces ?? [workspace('workspace-a', { agentProvider: 'claude' })],
     initialWorkspaceId: options.initialWorkspaceId ?? 'workspace-a',
+    initialPrompt: options.initialPrompt,
     agents: options.agents ?? enabledAgents,
     focusRequestId: options.focusRequestId ?? 1,
     onClose: () => { closeCount += 1 },
@@ -455,6 +457,18 @@ test('preselects the initial workspace and its configured usable provider', asyn
     assert.equal(findRadio(container, 'Codex')?.getAttribute('aria-checked'), 'true')
     await waitFor(() => capabilityCalls.length >= 1)
     assert.deepEqual(capabilityCalls, ['workspace-b'])
+  } finally {
+    root.unmount()
+  }
+})
+
+test('opens with the initial prompt text', async () => {
+  const { container, root } = renderDialog({ initialPrompt: 'Text from a note' })
+
+  try {
+    await settle()
+    const prompt = findElement(container, 'textarea')
+    assert.equal(prompt.value, 'Text from a note')
   } finally {
     root.unmount()
   }

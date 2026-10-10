@@ -39,6 +39,7 @@ export interface ActivityPaletteProps {
   sessions: readonly AgentActiveSession[]
   agents: UserSettings['agents']
   initialWorkspaceId: string | null
+  initialPrompt?: string
   focusRequestId: number
   shortcutLabel: string
   onClose: () => void
@@ -390,6 +391,7 @@ export function ActivityPalette({
   sessions,
   agents,
   initialWorkspaceId,
+  initialPrompt,
   focusRequestId,
   shortcutLabel,
   onClose,
@@ -418,6 +420,7 @@ export function ActivityPalette({
         open={step === 'new-session'}
         workspaces={sessionWorkspaces}
         initialWorkspaceId={initialWorkspaceId}
+        initialPrompt={initialPrompt}
         agents={agents}
         focusRequestId={focusRequestId}
         onClose={onClose}

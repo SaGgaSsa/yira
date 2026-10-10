@@ -1,9 +1,8 @@
 import React, { createContext, useContext } from 'react'
-import type { AgentTextSendTarget } from '@/utils/agentTextSend'
 
 export interface AgentTextSendContextValue {
-  targets: AgentTextSendTarget[]
-  sendText: (targetTileId: string, text: string, sourceTileId: string) => void | Promise<void>
+  /** Opens the new-prompt dialog with `text` as the prompt. */
+  sendText: (text: string) => void
 }
 
 interface AgentTextSendContextProviderProps {
