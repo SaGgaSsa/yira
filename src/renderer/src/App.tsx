@@ -73,7 +73,7 @@ import { getAgentSessionSurface } from './utils/activityPalette'
 import { sanitizeAgentCwd } from './utils/agentPanel'
 import { getAttachedTiles, isTileDetached, selectFloatingTileWindowOpenRequests } from '@shared/floatingTiles'
 import { refreshGridTileContent } from './utils/gridTileRefresh'
-import { DEFAULT_SPLIT_ORIENTATION, toggleSplitOrientation } from './utils/splitViewState'
+import { DEFAULT_SPLIT_ORIENTATION, placeTilesSideBySide, toggleSplitOrientation } from './utils/splitViewState'
 import { getActiveWindowTitle, getVisibleActiveTileId } from './utils/windowTitle'
 import { getAgentSessionTitles } from './utils/terminalDisplayTitle'
 import {
@@ -2424,7 +2424,14 @@ function AppContent(): React.ReactElement {
       if (!agentTileProvider || !defaultProfile) return
       // A preset Claude session ID lets the tile resume the conversation after the agent exits.
       const sessionId = agentTileProvider === 'claude' ? crypto.randomUUID() : undefined
-      addTerminal(defaultProfile.id, { provider: agentTileProvider, ...(sessionId ? { sessionId } : {}) })
+      const previousFullviewTileId = viewMode === 'fullview' ? fullviewActiveTileId : null
+      const tileId = addTerminal(defaultProfile.id, { provider: agentTileProvider, ...(sessionId ? { sessionId } : {}) })
+      // Focus view shows one tile only: open a split so the new agent appears next to the current tile.
+      if (tileId && previousFullviewTileId && previousFullviewTileId !== tileId) {
+        setSplitViewState(placeTilesSideBySide(useCanvasStore.getState().splitViewState, previousFullviewTileId, tileId))
+        setFullviewActiveTileId(tileId)
+        setViewMode('splitview')
+      }
     },
     onCreateNote: () => {
       setShowProfilePicker(false)
