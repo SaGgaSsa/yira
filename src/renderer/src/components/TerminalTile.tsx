@@ -741,11 +741,8 @@ export function TerminalTileWrapper({
     onToggleNotifications: () => {
       onUpdate({ notificationsMuted: tile.notificationsMuted ? undefined : true })
     },
-    agentTargets: agentTextSend?.targets
-      .filter((target) => target.id !== tile.id)
-      .map(({ id, label }) => ({ id, label })),
-    onSendToAgent: agentTextSend
-      ? (targetTileId) => agentTextSend.sendText(targetTileId, menuPosition?.selectionText ?? '', tile.id)
+    onSendToPrompt: agentTextSend
+      ? () => agentTextSend.sendText(menuPosition?.selectionText ?? '')
       : undefined,
     onOpenBrowserTile: onOpenBrowserTile
       ? (url) => {

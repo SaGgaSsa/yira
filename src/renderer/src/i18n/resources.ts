@@ -806,8 +806,7 @@ type TranslationResources = {
     cut: string
     paste: string
     selectAll: string
-    sendToAgent: string
-    noAgentsInWorkspace: string
+    sendToPrompt: string
     gridFull: string
     gridFullMessage: string
     refreshTerminal: string
@@ -1688,8 +1687,7 @@ const en: TranslationResources = {
     cut: 'Cut',
     paste: 'Paste',
     selectAll: 'Select All',
-    sendToAgent: 'Send to agent',
-    noAgentsInWorkspace: 'No agents in this workspace',
+    sendToPrompt: 'Send to new prompt',
     gridFull: 'Grid is full',
     gridFullMessage: 'Grid workspaces can contain at most {{count}} tiles.',
     refreshTerminal: 'Refresh terminal',
@@ -2570,8 +2568,7 @@ const es: TranslationResources = {
     cut: 'Cortar',
     paste: 'Pegar',
     selectAll: 'Seleccionar todo',
-    sendToAgent: 'Enviar a agente',
-    noAgentsInWorkspace: 'No hay agentes en este espacio de trabajo',
+    sendToPrompt: 'Enviar a nuevo prompt',
     gridFull: 'La cuadrícula está llena',
     gridFullMessage: 'Los espacios de trabajo en cuadrícula admiten hasta {{count}} paneles.',
     refreshTerminal: 'Actualizar terminal',

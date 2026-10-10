@@ -392,7 +392,6 @@ function RichNoteTile({ tile, autoFocus, onUpdate }: NoteTileProps): React.React
     translate: (key) => t(key),
     selectedText: menuPosition?.selectedText ?? '',
     editable: menuPosition?.editable ?? false,
-    agentTargets: agentTextSend?.targets.map(({ id, label }) => ({ id, label })),
     onCopySelection: () => {
       editorRef.current?.prosemirrorView.focus()
       document.execCommand('copy')
@@ -412,8 +411,8 @@ function RichNoteTile({ tile, autoFocus, onUpdate }: NoteTileProps): React.React
       editorRef.current?.prosemirrorView.focus()
       document.execCommand('selectAll')
     },
-    onSendToAgent: agentTextSend
-      ? (targetTileId) => agentTextSend.sendText(targetTileId, menuPosition?.selectedText ?? '', tile.id)
+    onSendToPrompt: agentTextSend
+      ? () => agentTextSend.sendText(menuPosition?.selectedText ?? '')
       : undefined,
   })
 
@@ -566,7 +565,6 @@ function MarkdownNoteTile({
     translate: (key) => t(key),
     selectedText: menuPosition?.selectedText ?? '',
     editable: menuPosition?.editable ?? false,
-    agentTargets: agentTextSend?.targets.map(({ id, label }) => ({ id, label })),
     onCopySelection: () => {
       editorRef.current?.focus()
       if (menuPosition) restoreNoteSelection(menuPosition.selection)
@@ -599,8 +597,8 @@ function MarkdownNoteTile({
       const preview = root.querySelector<HTMLElement>('.w-md-editor-preview') ?? previewContentRef.current
       selectPreviewContents(root, preview)
     },
-    onSendToAgent: agentTextSend
-      ? (targetTileId) => agentTextSend.sendText(targetTileId, menuPosition?.selectedText ?? '', tile.id)
+    onSendToPrompt: agentTextSend
+      ? () => agentTextSend.sendText(menuPosition?.selectedText ?? '')
       : undefined,
   })
 

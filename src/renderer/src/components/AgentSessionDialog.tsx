@@ -34,6 +34,8 @@ export interface AgentSessionDialogProps {
   open: boolean
   workspaces: WorkspaceMetadata[]
   initialWorkspaceId: string | null
+  /** Prompt text written in the editor when the dialog opens. */
+  initialPrompt?: string
   agents: UserSettings['agents']
   focusRequestId: number
   onClose: () => void
@@ -130,6 +132,7 @@ export function AgentSessionDialog({
   open,
   workspaces,
   initialWorkspaceId,
+  initialPrompt = '',
   agents,
   focusRequestId,
   onClose,
@@ -204,7 +207,8 @@ export function AgentSessionDialog({
     const nextWorkspace = getInitialWorkspace(usableWorkspaces, initialWorkspaceId)
     setSelectedWorkspaceId(nextWorkspace?.workspace.id ?? null)
     setSelectedProvider(getDefaultProvider(nextWorkspace))
-    setPrompt('')
+    setPrompt(initialPrompt)
+    pendingCaretRef.current = initialPrompt ? initialPrompt.length : null
     promptImageGenerationRef.current += 1
     promptImageNumberRef.current = 0
     promptImagesRef.current = []
@@ -215,7 +219,7 @@ export function AgentSessionDialog({
     setIsSubmitting(false)
     requestWorkspaceCapabilities(nextWorkspace?.workspace.id ?? null)
     promptRef.current?.focus()
-  }, [agents, initialWorkspaceId, open, requestWorkspaceCapabilities, usableWorkspaces])
+  }, [agents, initialPrompt, initialWorkspaceId, open, requestWorkspaceCapabilities, usableWorkspaces])
 
   useEffect(() => {
     if (open) promptRef.current?.focus()

@@ -15,8 +15,8 @@ export interface TerminalContextMenuInput {
   onPaste: () => void
   onSelectAll: () => void
   onToggleNotifications: () => void
-  agentTargets?: Array<{ id: string; label: string }>
-  onSendToAgent?: (id: string) => void
+  /** Opens the new-prompt dialog with the selected text. */
+  onSendToPrompt?: () => void
   onOpenBrowserTile?: (url: string) => void
   onOpenFileTile?: (relativePath: string, options?: FileTileOpenOptions) => void | Promise<void>
   onOpenExternal: (url: string) => void
@@ -81,21 +81,13 @@ export function buildTerminalContextMenuItems(input: TerminalContextMenuInput): 
       label: input.notificationsMuted ? label('ui.unmuteActivity', 'Unmute Activity') : label('ui.muteActivity', 'Mute Activity'),
       action: input.onToggleNotifications,
     },
-    ...(input.onSendToAgent ? [
+    ...(input.onSendToPrompt ? [
       { label: '', divider: true },
-      input.agentTargets?.length
-        ? {
-            label: label('ui.sendToAgent', 'Send to agent'),
-            disabled: !input.selectedText,
-            submenu: !input.selectedText ? undefined : input.agentTargets.map((target) => ({
-              label: target.label,
-              action: () => input.onSendToAgent?.(target.id),
-            })),
-          }
-        : {
-            label: label('ui.noAgentsInWorkspace', 'No agents in this workspace'),
-            disabled: true,
-          },
+      {
+        label: label('ui.sendToPrompt', 'Send to new prompt'),
+        disabled: !input.selectedText,
+        action: input.onSendToPrompt,
+      },
     ] : []),
   ]
 }

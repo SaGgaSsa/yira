@@ -25,12 +25,16 @@ export interface AgentsViewState {
   /** True when the new-session step was reached from the Activity step. */
   sessionDialogFromActivity: boolean
   sessionDialogInitialWorkspaceId: string | null
+  /** Prompt text prefilled when the new-session step opens. */
+  sessionDialogInitialPrompt: string
   sessionDialogFocusRequestId: number
   focusedSessionId: string | null
   toggle: () => void
   close: () => void
   openForSession: (tileId: string) => void
   openNewSessionDialog: () => void
+  /** Opens the new-session step directly with `prompt` already written. */
+  openNewSessionDialogWithPrompt: (prompt: string) => void
   /** Opens the new-session step, preselecting `workspaceId` when given. */
   showNewSessionStep: (workspaceId?: string) => void
   backToActivity: () => void
@@ -49,6 +53,7 @@ interface SessionDialogRequest {
   step: ActivityPaletteStep
   fromActivity: boolean
   initialWorkspaceId: string | null
+  initialPrompt?: string
   requestId: number
 }
 
@@ -86,6 +91,16 @@ export function useAgentsView({
       step: 'new-session',
       fromActivity: current?.step === 'new-session' ? current.fromActivity : false,
       initialWorkspaceId: workspaceId || null,
+      requestId: (current?.requestId ?? 0) + 1,
+    }))
+  }, [workspaceId])
+
+  const openNewSessionDialogWithPrompt = useCallback((prompt: string) => {
+    setSessionDialogRequest((current) => ({
+      step: 'new-session',
+      fromActivity: false,
+      initialWorkspaceId: workspaceId || null,
+      initialPrompt: prompt,
       requestId: (current?.requestId ?? 0) + 1,
     }))
   }, [workspaceId])
@@ -160,12 +175,14 @@ export function useAgentsView({
     activityPaletteStep: sessionDialogRequest?.step ?? null,
     sessionDialogFromActivity: sessionDialogRequest?.fromActivity ?? false,
     sessionDialogInitialWorkspaceId: sessionDialogRequest?.initialWorkspaceId ?? null,
+    sessionDialogInitialPrompt: sessionDialogRequest?.initialPrompt ?? '',
     sessionDialogFocusRequestId: sessionDialogRequest?.requestId ?? 0,
     focusedSessionId: focusedSession?.scope === scopeKey ? focusedSession.tileId : null,
     toggle,
     close,
     openForSession,
     openNewSessionDialog,
+    openNewSessionDialogWithPrompt,
     showNewSessionStep,
     backToActivity,
     closeSessionDialog,
