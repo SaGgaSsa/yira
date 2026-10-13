@@ -418,7 +418,7 @@ export function AgentPanel({
                 }}
                 placeholder={copy.searchPlaceholder}
                 aria-label={copy.searchPlaceholder}
-                className="w-full rounded-full border border-border-visible bg-bg-primary py-2 pl-9 pr-3 text-xs text-text-display outline-none placeholder:text-text-disabled focus:border-text-secondary"
+                className="w-full rounded-full border border-border-visible bg-bg-primary py-2 pl-9 pr-3 text-xs text-text-display outline-hidden placeholder:text-text-disabled focus:border-text-secondary"
               />
             </label>
           </div>

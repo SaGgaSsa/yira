@@ -82,7 +82,7 @@ export function ExplorerInlineInput({
           ref={inputRef}
           aria-label={ariaLabel}
           aria-invalid={error ? true : undefined}
-          className={`min-w-0 flex-1 rounded border bg-transparent px-1.5 py-0.5 text-sm text-text-display outline-none ${error ? 'border-danger' : 'border-border-visible focus:border-text-secondary'}`}
+          className={`min-w-0 flex-1 rounded-sm border bg-transparent px-1.5 py-0.5 text-sm text-text-display outline-hidden ${error ? 'border-danger' : 'border-border-visible focus:border-text-secondary'}`}
           disabled={submitting}
           onBlur={handleBlur}
           onChange={(event) => {

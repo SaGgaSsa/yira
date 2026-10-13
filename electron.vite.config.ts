@@ -1,5 +1,6 @@
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 import { resolve } from 'path'
 
 const targets = process.env.EV_BUILD_TARGET
@@ -66,7 +67,7 @@ export default defineConfig({
               '@shared': resolve(__dirname, 'src/shared'),
             },
           },
-          plugins: [react()],
+          plugins: [react(), tailwindcss()],
           build: {
             outDir: 'dist-electron/renderer',
             modulePreload: false,

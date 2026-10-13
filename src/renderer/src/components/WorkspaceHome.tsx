@@ -50,7 +50,7 @@ export function WorkspaceHome({
                 type="button"
                 onClick={() => onSelectWorkspace(workspace)}
                 title={workspace.name}
-                className="flex min-h-28 min-w-0 flex-col gap-3 rounded-2xl border border-border bg-bg-secondary p-4 text-left transition-colors hover:bg-hover-bg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--interactive)]"
+                className="flex min-h-28 min-w-0 flex-col gap-3 rounded-2xl border border-border bg-bg-secondary p-4 text-left transition-colors hover:bg-hover-bg focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--interactive)"
               >
                 <span className="flex min-w-0 items-start justify-between gap-3">
                   <span className="min-w-0 truncate text-base text-text-display">{workspace.name}</span>
@@ -75,7 +75,7 @@ export function WorkspaceHome({
           <button
             type="button"
             onClick={onCreateWorkspace}
-            className="flex min-h-28 min-w-0 flex-col items-start justify-center gap-3 rounded-2xl border border-dashed border-border-visible bg-transparent p-4 text-left transition-colors hover:bg-hover-bg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--interactive)]"
+            className="flex min-h-28 min-w-0 flex-col items-start justify-center gap-3 rounded-2xl border border-dashed border-border-visible bg-transparent p-4 text-left transition-colors hover:bg-hover-bg focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--interactive)"
           >
             <span className="flex items-center gap-2 text-text-display">
               <Plus size={16} aria-hidden="true" />

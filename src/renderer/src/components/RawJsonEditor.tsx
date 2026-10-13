@@ -41,7 +41,7 @@ export function RawJsonEditor({ open, workspaceId, workspaceType, state, onClose
   if (!open) return null
 
   return createPortal(
-    <div className="fixed inset-0 z-[10020] flex items-center justify-center bg-black/80">
+    <div className="fixed inset-0 z-10020 flex items-center justify-center bg-black/80">
       <div className="flex h-[84vh] w-[860px] max-w-[94vw] flex-col overflow-hidden rounded-[24px] border border-border-visible bg-bg-secondary">
         <div className="flex items-center justify-between border-b border-border px-6 py-5">
           <div>
@@ -59,7 +59,7 @@ export function RawJsonEditor({ open, workspaceId, workspaceType, state, onClose
 
         <div className="flex-1 p-5">
           <textarea
-            className="h-full w-full resize-none rounded-[20px] border border-border-visible bg-bg-primary p-4 font-mono text-xs leading-6 text-text-primary outline-none"
+            className="h-full w-full resize-none rounded-[20px] border border-border-visible bg-bg-primary p-4 font-mono text-xs leading-6 text-text-primary outline-hidden"
             value={value}
             onChange={(event) => setValue(event.target.value)}
             spellCheck={false}

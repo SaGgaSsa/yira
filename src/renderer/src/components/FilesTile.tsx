@@ -362,7 +362,7 @@ function TextFileTile({ tile, rootPath, isFocused, isVisible, onUpdate, onOpenFi
               <button
                 key={mode}
                 type="button"
-                className={`inline-flex h-7 w-7 items-center justify-center rounded transition-colors ${markdownView === mode ? 'bg-active-bg text-text-display' : 'text-text-secondary hover:bg-hover-bg hover:text-text-display'}`}
+                className={`inline-flex h-7 w-7 items-center justify-center rounded-sm transition-colors ${markdownView === mode ? 'bg-active-bg text-text-display' : 'text-text-secondary hover:bg-hover-bg hover:text-text-display'}`}
                 title={label}
                 aria-label={label}
                 aria-pressed={markdownView === mode}

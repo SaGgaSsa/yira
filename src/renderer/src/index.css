@@ -1,11 +1,97 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
 
-/* Tailwind 3 lets display utilities such as `flex` override the `hidden` attribute.
-   Make the attribute always hide, as Tailwind 4 does. */
-[hidden]:where(:not([hidden='until-found'])) {
-  display: none !important;
+/* Keep the Tailwind 3 `darkMode: 'class'` selector. */
+@custom-variant dark (&:is(.dark *));
+
+/* Tailwind 4 only applies `hover:` on devices that support hover. Keep the Tailwind 3 behavior. */
+@custom-variant hover (&:hover);
+
+/* `inline` makes utilities read the app variables directly, so theme classes on any element keep
+   following the active palette, as they did with the Tailwind 3 config. */
+@theme inline {
+  --color-bg-primary: var(--bg-primary);
+  --color-bg-secondary: var(--bg-secondary);
+  --color-bg-tertiary: var(--bg-tertiary);
+  --color-bg-elevated: var(--bg-elevated);
+
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-text-disabled: var(--text-disabled);
+  --color-text-display: var(--text-display);
+  --color-text-inverse: var(--text-inverse);
+
+  --color-border: var(--border-color);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-visible: var(--border-visible);
+
+  --color-accent: var(--accent);
+  --color-accent-subtle: var(--accent-subtle);
+
+  --color-activity: var(--activity);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-interactive: var(--interactive);
+
+  --color-statusbar-bg: var(--statusbar-bg);
+  --color-statusbar-text: var(--statusbar-text);
+
+  --color-hover-bg: var(--hover-bg);
+  --color-active-bg: var(--active-bg);
+
+  --color-danger: var(--danger);
+  --color-danger-hover: var(--danger-hover);
+
+  --color-shadow: var(--shadow);
+}
+
+/* `static` always emits these variables, because the app CSS below reads them too. */
+@theme static {
+  --font-display: 'Doto', 'IBM Plex Mono', monospace;
+  --font-body: 'Saira', 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', 'Consolas', monospace;
+}
+
+@theme {
+  /* Tailwind 3 palette values for the default colors the app uses (Tailwind 4 switched to OKLCH). */
+  --color-red-100: #fee2e2;
+  --color-red-200: #fecaca;
+  --color-red-300: #fca5a5;
+  --color-red-400: #f87171;
+  --color-red-500: #ef4444;
+  --color-red-950: #450a0a;
+  --color-amber-300: #fcd34d;
+  --color-cyan-300: #67e8f9;
+  --color-cyan-400: #22d3ee;
+  --color-emerald-300: #6ee7b7;
+
+  /* Fixed Tailwind 3 line heights. The font sizes of these classes scale with the font settings below. */
+  --text-xs--line-height: 1rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg--line-height: 1.75rem;
+  --text-xl--line-height: 1.75rem;
+}
+
+/* Tailwind 3 Preflight defaults that Tailwind 4 changed. */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--border-color, currentcolor);
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: #9ca3af;
+  }
+
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
 }
 
 @font-face {
@@ -108,9 +194,6 @@
   --font-note-title: min(36px, calc(var(--font-base) * 1.75));
   --font-label: max(9px, calc(var(--font-base) * 0.6875));
   --font-caption: max(10px, calc(var(--font-base) * 0.75));
-  --font-display: 'Doto', 'IBM Plex Mono', monospace;
-  --font-body: 'Saira', 'Segoe UI', sans-serif;
-  --font-mono: 'IBM Plex Mono', 'Consolas', monospace;
 }
 
 :root.light {
@@ -153,86 +236,88 @@
   --selection: rgba(0, 0, 0, 0.08);
 }
 
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
 
-html,
-body,
-#root {
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  font-family: var(--font-body);
-  font-size: var(--font-base);
-  color: var(--text-primary);
-  background: var(--bg-primary);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
+  html,
+  body,
+  #root {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    font-family: var(--font-body);
+    font-size: var(--font-base);
+    color: var(--text-primary);
+    background: var(--bg-primary);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 
-body {
-  background-image:
-    radial-gradient(circle at top right, rgba(255, 255, 255, 0.045) 0, transparent 22%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.015), transparent 22%);
-}
+  body {
+    background-image:
+      radial-gradient(circle at top right, rgba(255, 255, 255, 0.045) 0, transparent 22%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.015), transparent 22%);
+  }
 
-:root.light body {
-  background-image:
-    radial-gradient(circle at top right, rgba(0, 0, 0, 0.04) 0, transparent 20%),
-    linear-gradient(180deg, rgba(0, 0, 0, 0.015), transparent 20%);
-}
+  :root.light body {
+    background-image:
+      radial-gradient(circle at top right, rgba(0, 0, 0, 0.04) 0, transparent 20%),
+      linear-gradient(180deg, rgba(0, 0, 0, 0.015), transparent 20%);
+  }
 
-html.window-material,
-html.window-material body,
-html.window-material #root {
-  background: transparent;
-}
+  html.window-material,
+  html.window-material body,
+  html.window-material #root {
+    background: transparent;
+  }
 
-html.window-material body {
-  background-image: none;
-}
+  html.window-material body {
+    background-image: none;
+  }
 
-button,
-input,
-textarea,
-select {
-  font: inherit;
-}
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
 
-button {
-  color: inherit;
-}
+  button {
+    color: inherit;
+  }
 
-input,
-textarea {
-  caret-color: var(--text-display);
-}
+  input,
+  textarea {
+    caret-color: var(--text-display);
+  }
 
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
 
-::-webkit-scrollbar-track {
-  background: transparent;
-}
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
 
-::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb);
-  border-radius: 999px;
-}
+  ::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 999px;
+  }
 
-::-webkit-scrollbar-thumb:hover {
-  background: var(--scrollbar-hover);
-}
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-hover);
+  }
 
-::selection {
-  background: var(--selection);
+  ::selection {
+    background: var(--selection);
+  }
 }
 
 .xterm {
@@ -343,121 +428,124 @@ textarea {
   color: var(--text-display);
 }
 
-.dragging,
-.dragging * {
-  user-select: none !important;
-  -webkit-user-select: none !important;
-}
+/* Inside the utilities layer, after the generated utilities, as in Tailwind 3. */
+@layer utilities {
+  .dragging,
+  .dragging * {
+    user-select: none !important;
+    -webkit-user-select: none !important;
+  }
 
-.no-transition {
-  transition: none !important;
-}
+  .no-transition {
+    transition: none !important;
+  }
 
-.canvas-viewport {
-  transition: transform 0.24s cubic-bezier(0.25, 0.1, 0.25, 1);
-}
+  .canvas-viewport {
+    transition: transform 0.24s cubic-bezier(0.25, 0.1, 0.25, 1);
+  }
 
-.app-chrome-row {
-  box-sizing: content-box;
-  height: var(--app-chrome-control-height);
-  padding-block: var(--app-chrome-row-padding);
-}
+  .app-chrome-row {
+    box-sizing: content-box;
+    height: var(--app-chrome-control-height);
+    padding-block: var(--app-chrome-row-padding);
+  }
 
-.window-titlebar {
-  height: var(--window-titlebar-height);
-  padding-left: calc(var(--window-titlebar-controls-left) + 0.5rem);
-  padding-right: calc(var(--window-titlebar-controls-right) + 0.5rem);
-  -webkit-app-region: drag;
-}
+  .window-titlebar {
+    height: var(--window-titlebar-height);
+    padding-left: calc(var(--window-titlebar-controls-left) + 0.5rem);
+    padding-right: calc(var(--window-titlebar-controls-right) + 0.5rem);
+    -webkit-app-region: drag;
+  }
 
-.window-titlebar button {
-  -webkit-app-region: no-drag;
-}
+  .window-titlebar button {
+    -webkit-app-region: no-drag;
+  }
 
-/* Popups hang below the titlebar but inherit its drag region; keep their content selectable. */
-.window-titlebar-popup {
-  -webkit-app-region: no-drag;
-}
+  /* Popups hang below the titlebar but inherit its drag region; keep their content selectable. */
+  .window-titlebar-popup {
+    -webkit-app-region: no-drag;
+  }
 
-.nd-label {
-  font-family: var(--font-mono);
-  font-size: var(--font-label);
-  letter-spacing: 0;
-  text-transform: uppercase;
-}
+  .nd-label {
+    font-family: var(--font-mono);
+    font-size: var(--font-label);
+    letter-spacing: 0;
+    text-transform: uppercase;
+  }
 
-.nd-caption {
-  font-family: var(--font-mono);
-  font-size: var(--font-caption);
-  letter-spacing: 0;
-}
+  .nd-caption {
+    font-family: var(--font-mono);
+    font-size: var(--font-caption);
+    letter-spacing: 0;
+  }
 
-.nd-display {
-  font-family: var(--font-display);
-  letter-spacing: 0;
-  line-height: 1;
-}
+  .nd-display {
+    font-family: var(--font-display);
+    letter-spacing: 0;
+    line-height: 1;
+  }
 
-.tile-font-scope {
-  --font-base: var(--tile-font-base);
-  --font-xs: max(10px, calc(var(--font-base) * 0.75));
-  --font-sm: max(10px, calc(var(--font-base) * 0.875));
-  --font-lg: min(30px, calc(var(--font-base) * 1.125));
-  --font-xl: min(34px, calc(var(--font-base) * 1.25));
-  --font-5xl: min(64px, calc(var(--font-base) * 3));
-  --font-note-title: min(36px, calc(var(--font-base) * 1.75));
-  --font-label: max(9px, calc(var(--font-base) * 0.6875));
-  --font-caption: max(10px, calc(var(--font-base) * 0.75));
-  font-size: var(--font-base);
-}
+  .tile-font-scope {
+    --font-base: var(--tile-font-base);
+    --font-xs: max(10px, calc(var(--font-base) * 0.75));
+    --font-sm: max(10px, calc(var(--font-base) * 0.875));
+    --font-lg: min(30px, calc(var(--font-base) * 1.125));
+    --font-xl: min(34px, calc(var(--font-base) * 1.25));
+    --font-5xl: min(64px, calc(var(--font-base) * 3));
+    --font-note-title: min(36px, calc(var(--font-base) * 1.75));
+    --font-label: max(9px, calc(var(--font-base) * 0.6875));
+    --font-caption: max(10px, calc(var(--font-base) * 0.75));
+    font-size: var(--font-base);
+  }
 
-.text-xs {
-  font-size: var(--font-xs);
-}
+  .text-xs {
+    font-size: var(--font-xs);
+  }
 
-.text-sm {
-  font-size: var(--font-sm);
-}
+  .text-sm {
+    font-size: var(--font-sm);
+  }
 
-.text-base {
-  font-size: var(--font-base);
-}
+  .text-base {
+    font-size: var(--font-base);
+  }
 
-.text-lg {
-  font-size: var(--font-lg);
-}
+  .text-lg {
+    font-size: var(--font-lg);
+  }
 
-.text-xl {
-  font-size: var(--font-xl);
-}
+  .text-xl {
+    font-size: var(--font-xl);
+  }
 
-.text-5xl {
-  font-size: var(--font-5xl);
-}
+  .text-5xl {
+    font-size: var(--font-5xl);
+  }
 
-.text-\[10px\] {
-  font-size: max(9px, calc(var(--font-base) * 0.625));
-}
+  .text-\[10px\] {
+    font-size: max(9px, calc(var(--font-base) * 0.625));
+  }
 
-.text-\[11px\] {
-  font-size: max(9px, calc(var(--font-base) * 0.6875));
-}
+  .text-\[11px\] {
+    font-size: max(9px, calc(var(--font-base) * 0.6875));
+  }
 
-.note-title-text {
-  font-size: var(--font-note-title);
-}
+  .note-title-text {
+    font-size: var(--font-note-title);
+  }
 
-.nd-dot-grid {
-  background-image: radial-gradient(circle, var(--border-visible) 0.75px, transparent 0.75px);
-  background-size: 14px 14px;
-}
+  .nd-dot-grid {
+    background-image: radial-gradient(circle, var(--border-visible) 0.75px, transparent 0.75px);
+    background-size: 14px 14px;
+  }
 
-.nd-panel {
-  background: var(--surface);
-  border: 1px solid var(--border);
-}
+  .nd-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+  }
 
-.nd-panel-raised {
-  background: var(--surface-raised);
-  border: 1px solid var(--border-visible);
+  .nd-panel-raised {
+    background: var(--surface-raised);
+    border: 1px solid var(--border-visible);
+  }
 }

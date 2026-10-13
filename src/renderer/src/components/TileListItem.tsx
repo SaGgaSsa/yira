@@ -89,9 +89,9 @@ export function ListRow({
   const attentionLabel = formatTerminalAttentionCount(attentionCount)
   const actionCount = [onConfigure, onFocus, onDetach, onClose].filter(Boolean).length
   const actionPaddingClass = actionCount >= 4
-    ? 'pr-[7.75rem]'
+    ? 'pr-31'
     : actionCount > 0
-      ? 'pr-[5.75rem]'
+      ? 'pr-23'
       : ''
 
   return (

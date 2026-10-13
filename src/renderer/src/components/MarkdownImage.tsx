@@ -32,7 +32,7 @@ function imageFallback(
   const message = status === 'loading' ? t('common.loading') : alt || t('files.imageUnavailable')
   return (
     <span
-      className="inline-flex rounded border border-border-visible px-2 py-1 text-xs text-text-secondary"
+      className="inline-flex rounded-sm border border-border-visible px-2 py-1 text-xs text-text-secondary"
       role={status === 'loading' ? 'status' : 'img'}
       aria-label={message}
     >

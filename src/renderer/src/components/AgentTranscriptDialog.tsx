@@ -111,7 +111,7 @@ function TranscriptEntryView({
             <span>{labels.you}</span>
             {timestamp && <time dateTime={entry.timestamp}>{timestamp}</time>}
           </div>
-          <p className="whitespace-pre-wrap break-words text-sm leading-6 text-text-primary">{entry.text}</p>
+          <p className="whitespace-pre-wrap wrap-break-word text-sm leading-6 text-text-primary">{entry.text}</p>
           {entry.truncated && <p className="mt-2 text-[11px] text-text-disabled">{labels.truncatedEntry}</p>}
         </article>
       </div>
@@ -140,7 +140,7 @@ function TranscriptEntryView({
         source={entry.text}
         urlTransform={safeMarkdownUrl}
         components={markdownComponents}
-        className="!bg-transparent !text-text-primary"
+        className="bg-transparent! text-text-primary!"
         wrapperElement={{ 'data-color-mode': currentColorMode() }}
       />
       {entry.truncated && <p className="mt-2 text-[11px] text-text-disabled">{labels.truncatedEntry}</p>}

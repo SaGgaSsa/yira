@@ -80,7 +80,7 @@ export function WorkspaceActivityCard({
         {onGoToTerminal && (
           <button
             type="button"
-            className="rounded p-1 text-text-secondary hover:text-text-primary"
+            className="rounded-sm p-1 text-text-secondary hover:text-text-primary"
             aria-label={t('activity.goToTerminal')}
             title={t('activity.goToTerminal')}
             onClick={onGoToTerminal}
@@ -90,7 +90,7 @@ export function WorkspaceActivityCard({
         )}
         <button
           type="button"
-          className="rounded p-1 text-text-secondary hover:text-text-primary"
+          className="rounded-sm p-1 text-text-secondary hover:text-text-primary"
           aria-label={t('activity.openWorkspace')}
           title={t('activity.openWorkspace')}
           data-open-workspace-icon="arrow-up-right"

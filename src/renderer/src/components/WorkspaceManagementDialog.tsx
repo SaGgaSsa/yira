@@ -150,7 +150,7 @@ export function WorkspaceManagementDialog({
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[10040] flex items-center justify-center bg-black/80">
+    <div className="fixed inset-0 z-10040 flex items-center justify-center bg-black/80">
       <div className="flex max-h-[90vh] w-[920px] max-w-[calc(100vw-32px)] flex-col overflow-hidden rounded-[24px] border border-border-visible bg-bg-secondary shadow-2xl">
         <div className="flex items-center justify-between gap-4 border-b border-border px-6 py-4">
           <div className="min-w-0">
@@ -213,7 +213,7 @@ export function WorkspaceManagementDialog({
                       {!isNewDraft && !draft.markedForRemoval && (
                         <div className="mt-4 flex flex-wrap items-center gap-2">
                           <input
-                            className="min-w-[220px] flex-1 rounded-full border border-border-visible bg-bg-primary px-4 py-2 font-mono text-sm text-text-display outline-none"
+                            className="min-w-[220px] flex-1 rounded-full border border-border-visible bg-bg-primary px-4 py-2 font-mono text-sm text-text-display outline-hidden"
                             value={draft.removalText}
                             onChange={(event) => {
                               const removalText = event.target.value

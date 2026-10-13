@@ -37,7 +37,7 @@ export function ModelBreakdown({ history }: {
                     {Math.round(percent)}% · {formatCompactTokens(row.tokens)}
                   </span>
                 </div>
-                <div className="mt-1 h-1 overflow-hidden rounded bg-bg-secondary">
+                <div className="mt-1 h-1 overflow-hidden rounded-sm bg-bg-secondary">
                   <div
                     className="h-full"
                     style={{ width: `${percent}%`, background: getProviderColor(row.provider) }}

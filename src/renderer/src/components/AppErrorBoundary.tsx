@@ -59,7 +59,7 @@ export function AppErrorFallback({
         </p>
         <details className="text-xs text-text-secondary">
           <summary className="cursor-pointer select-none">{t('app.crashDetails', 'Error details')}</summary>
-          <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-md bg-bg-primary p-3 font-mono text-[11px]">
+          <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap wrap-break-word rounded-md bg-bg-primary p-3 font-mono text-[11px]">
             {detail}
           </pre>
         </details>

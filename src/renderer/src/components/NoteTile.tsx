@@ -296,7 +296,7 @@ function NotePageHeader({
         />
         <input
           className={
-            'note-title-text min-w-[2ch] max-w-full bg-transparent font-body font-semibold leading-tight text-text-display outline-none [field-sizing:content] placeholder:text-text-disabled'
+            'note-title-text min-w-[2ch] max-w-full bg-transparent font-body font-semibold leading-tight text-text-display outline-hidden field-sizing-content placeholder:text-text-disabled'
           }
           value={title}
           onChange={onTitleChange}

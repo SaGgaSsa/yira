@@ -24,7 +24,7 @@ export function WorkspaceSidebarSection({
         type="button"
         aria-expanded={expanded}
         onClick={onToggle}
-        className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left transition-colors hover:bg-hover-bg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--interactive)]"
+        className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left transition-colors hover:bg-hover-bg focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--interactive)"
       >
         <ChevronDown
           size={13}

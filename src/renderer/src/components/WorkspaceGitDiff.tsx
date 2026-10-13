@@ -69,7 +69,7 @@ export function WorkspaceGitDiffIndicator({
 
   return (
     <span
-      className="inline-flex max-w-[6rem] shrink-0 items-center gap-1 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[10px] leading-none text-text-secondary"
+      className="inline-flex max-w-24 shrink-0 items-center gap-1 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[10px] leading-none text-text-secondary"
       title={tooltip}
       aria-label={tooltip}
       data-workspace-git-diff="true"

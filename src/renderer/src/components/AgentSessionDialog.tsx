@@ -438,12 +438,12 @@ export function AgentSessionDialog({
                           }`}
                         />
                       )}
-                      <span className="pointer-events-none absolute bottom-0.5 left-0.5 rounded bg-black/70 px-1 text-[10px] leading-4 text-white">
+                      <span className="pointer-events-none absolute bottom-0.5 left-0.5 rounded-sm bg-black/70 px-1 text-[10px] leading-4 text-white">
                         #{image.number}
                       </span>
                       <button
                         type="button"
-                        className="absolute -right-1 -top-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-border-visible bg-bg-secondary text-text-secondary shadow transition-colors hover:bg-hover-bg hover:text-text-display"
+                        className="absolute -right-1 -top-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-border-visible bg-bg-secondary text-text-secondary shadow-sm transition-colors hover:bg-hover-bg hover:text-text-display"
                         aria-label={`${t('agentsView.removePromptImage')} ${image.number}`}
                         disabled={isSubmitting}
                         onClick={() => {
@@ -459,7 +459,7 @@ export function AgentSessionDialog({
               )}
               <textarea
                 ref={promptRef}
-                className="min-h-36 w-full flex-1 resize-none rounded-xl border border-border-visible bg-bg-primary px-4 py-3 text-sm leading-6 text-text-primary outline-none focus:border-text-secondary"
+                className="min-h-36 w-full flex-1 resize-none rounded-xl border border-border-visible bg-bg-primary px-4 py-3 text-sm leading-6 text-text-primary outline-hidden focus:border-text-secondary"
                 value={prompt}
                 onChange={(event) => setPrompt(event.target.value)}
                 onPaste={handlePromptPaste}
@@ -544,7 +544,7 @@ export function AgentSessionDialog({
                   >
                     <input
                       type="checkbox"
-                      className="h-3.5 w-3.5 accent-[var(--text-primary)]"
+                      className="h-3.5 w-3.5 accent-(--text-primary)"
                       checked={worktree}
                       disabled={isSubmitting}
                       title={t('agentsView.worktreeDescription')}

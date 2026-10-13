@@ -59,9 +59,9 @@ export function UsageKpis({ history, workspaceNames }: {
           <div className="mt-1 truncate text-sm font-semibold text-text-primary">
             {row.label === t('activity.lines') && history?.lines ? (
               <span>
-                <span className="text-[var(--success)]">+{formatCompactTokens(history.lines.added)}</span>
+                <span className="text-(--success)">+{formatCompactTokens(history.lines.added)}</span>
                 {' / '}
-                <span className="text-[var(--danger)]">−{formatCompactTokens(history.lines.removed)}</span>
+                <span className="text-(--danger)">−{formatCompactTokens(history.lines.removed)}</span>
               </span>
             ) : row.value}
           </div>

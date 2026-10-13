@@ -264,7 +264,7 @@ export function TimerTile({ tile, isFocused, onUpdate }: TimerTileProps): React.
 
       <div className="mt-3 grid shrink-0 grid-cols-[1fr_1fr_1fr_auto] gap-2">
         <input
-          className="min-w-0 rounded-full border border-border-visible bg-bg-tertiary px-3 py-2 text-center font-mono text-sm text-text-display outline-none"
+          className="min-w-0 rounded-full border border-border-visible bg-bg-tertiary px-3 py-2 text-center font-mono text-sm text-text-display outline-hidden"
           type="number"
           min={0}
           max={23}
@@ -273,7 +273,7 @@ export function TimerTile({ tile, isFocused, onUpdate }: TimerTileProps): React.
           title={t('ui.hours')}
         />
         <input
-          className="min-w-0 rounded-full border border-border-visible bg-bg-tertiary px-3 py-2 text-center font-mono text-sm text-text-display outline-none"
+          className="min-w-0 rounded-full border border-border-visible bg-bg-tertiary px-3 py-2 text-center font-mono text-sm text-text-display outline-hidden"
           type="number"
           min={0}
           max={59}
@@ -282,7 +282,7 @@ export function TimerTile({ tile, isFocused, onUpdate }: TimerTileProps): React.
           title={t('timer.minutes')}
         />
         <input
-          className="min-w-0 rounded-full border border-border-visible bg-bg-tertiary px-3 py-2 text-center font-mono text-sm text-text-display outline-none"
+          className="min-w-0 rounded-full border border-border-visible bg-bg-tertiary px-3 py-2 text-center font-mono text-sm text-text-display outline-hidden"
           type="number"
           min={0}
           max={59}

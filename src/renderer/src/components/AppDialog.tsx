@@ -102,7 +102,7 @@ export function AppDialog({ request, onCancel, onConfirm }: AppDialogProps): Rea
   if (!request) return null
 
   return createPortal(
-    <div className="fixed inset-0 z-[10030] flex items-center justify-center bg-black/80" onClick={handleBackdropClick}>
+    <div className="fixed inset-0 z-10030 flex items-center justify-center bg-black/80" onClick={handleBackdropClick}>
       <div className="w-[480px] max-w-[calc(100vw-32px)] overflow-hidden rounded-[24px] border border-border-visible bg-bg-secondary shadow-2xl">
         <div className="flex items-start justify-between gap-4 border-b border-border px-6 py-5">
           <div className="min-w-0">
@@ -137,7 +137,7 @@ export function AppDialog({ request, onCancel, onConfirm }: AppDialogProps): Rea
                 <CornerDownLeft size={14} className="shrink-0 text-text-secondary" />
                 <input
                   ref={inputRef}
-                  className="w-full bg-transparent font-mono text-sm text-text-display outline-none"
+                  className="w-full bg-transparent font-mono text-sm text-text-display outline-hidden"
                   value={value}
                   onChange={(event) => setValue(event.target.value)}
                   placeholder={request.placeholder}

@@ -2573,7 +2573,7 @@ function AppContent(): React.ReactElement {
         footer={
           <div ref={footerRef} className="relative border-t border-border bg-bg-secondary px-3 py-3">
             {showProfilePicker && (
-              <div className="absolute bottom-full left-4 z-[9999] mb-3 w-[260px]">
+              <div className="absolute bottom-full left-4 z-9999 mb-3 w-[260px]">
                 <TileCreationMenu
                   title={t('ui.shellProfiles')}
                   items={[
@@ -2614,7 +2614,7 @@ function AppContent(): React.ReactElement {
             )}
 
             {showNotePicker && (
-              <div className="absolute bottom-full left-4 z-[9999] mb-3 w-[260px]">
+              <div className="absolute bottom-full left-4 z-9999 mb-3 w-[260px]">
                 <TileCreationMenu
                   title={t('ui.noteType')}
                   items={[
@@ -2656,7 +2656,7 @@ function AppContent(): React.ReactElement {
               <div className="flex items-center gap-1">
                 <button
                   type="button"
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text-display"
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text-display"
                   onClick={openCreateWorkspaceDialog}
                   title={t('app.newWorkspace')}
                   aria-label={t('app.newWorkspace')}
@@ -2665,7 +2665,7 @@ function AppContent(): React.ReactElement {
                 </button>
                 <button
                   type="button"
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text-display"
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text-display"
                   onClick={openHome}
                   title={t('sidebar.home')}
                   aria-label={t('sidebar.home')}
@@ -2674,7 +2674,7 @@ function AppContent(): React.ReactElement {
                 </button>
                 <button
                   type="button"
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text-display"
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text-display"
                   onClick={() => setShowWorkspaceManager(true)}
                   title={t('app.manageWorkspaces')}
                   aria-label={t('app.manageWorkspaces')}

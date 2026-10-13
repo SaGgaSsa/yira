@@ -68,7 +68,7 @@ export function LegalDocuments({ documentId, onBack }: LegalDocumentsProps): Rea
         <button
           ref={backButtonRef}
           type="button"
-          className="mt-0.5 inline-flex shrink-0 items-center gap-2 rounded-full border border-border-visible px-3 py-2 text-sm text-text-secondary transition-colors hover:border-text-secondary hover:text-text-display focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--interactive)]"
+          className="mt-0.5 inline-flex shrink-0 items-center gap-2 rounded-full border border-border-visible px-3 py-2 text-sm text-text-secondary transition-colors hover:border-text-secondary hover:text-text-display focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--interactive)"
           onClick={onBack}
         >
           <ArrowLeft size={14} aria-hidden="true" />
@@ -89,7 +89,7 @@ export function LegalDocuments({ documentId, onBack }: LegalDocumentsProps): Rea
         <MDEditor.Markdown
           {...safeMarkdownPreviewOptions}
           source={source}
-          className="min-h-full bg-transparent p-6 text-text-primary"
+          className="min-h-full bg-transparent! p-6 text-text-primary!"
           wrapperElement={{ 'data-color-mode': colorMode }}
           urlTransform={safeMarkdownUrl}
           components={components}

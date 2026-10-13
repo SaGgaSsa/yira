@@ -95,7 +95,7 @@ export function TileEditorDialog({ request, onCancel, onConfirm }: TileEditorDia
   const notificationCopy = getTileNotificationCopy(request.tileType, t)
 
   return createPortal(
-    <div className="fixed inset-0 z-[10035] flex items-center justify-center bg-black/80">
+    <div className="fixed inset-0 z-10035 flex items-center justify-center bg-black/80">
       <div
         className="w-[620px] max-h-[86vh] max-w-[calc(100vw-32px)] overflow-hidden rounded-[24px] border border-border-visible bg-bg-secondary shadow-2xl"
         role="dialog"
@@ -124,7 +124,7 @@ export function TileEditorDialog({ request, onCancel, onConfirm }: TileEditorDia
                 <CornerDownLeft size={14} className="shrink-0 text-text-secondary" />
                 <input
                   ref={nameInputRef}
-                  className="w-full bg-transparent font-mono text-sm text-text-display outline-none"
+                  className="w-full bg-transparent font-mono text-sm text-text-display outline-hidden"
                   value={value.label}
                   onChange={(event) => setValue((current) => current ? { ...current, label: event.target.value } : current)}
             placeholder={t('tile.untitled')}
@@ -145,7 +145,7 @@ export function TileEditorDialog({ request, onCancel, onConfirm }: TileEditorDia
               <label className="block">
           <span className="nd-label mb-2 block text-text-secondary">{t('ui.command')}</span>
                 <input
-                  className="w-full rounded-full border border-border-visible bg-bg-primary px-4 py-3 font-mono text-sm text-text-display outline-none"
+                  className="w-full rounded-full border border-border-visible bg-bg-primary px-4 py-3 font-mono text-sm text-text-display outline-hidden"
                   value={value.startupCommand}
                   onChange={(event) => setValue((current) => current ? { ...current, startupCommand: event.target.value } : current)}
             placeholder={t('ui.optionalStartupCommand')}

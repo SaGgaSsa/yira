@@ -54,9 +54,9 @@ export function PlanLimits({ providers, usage }: {
                         </span>
                         <span>{formatUsageResetAt(window.resetsAt, window.kind) ?? '—'}</span>
                       </div>
-                      <div className="relative mt-1 h-1.5 rounded bg-bg-secondary">
+                      <div className="relative mt-1 h-1.5 rounded-sm bg-bg-secondary">
                         <span
-                          className={`block h-full rounded ${getBarColor(window.usedPercent)}`}
+                          className={`block h-full rounded-sm ${getBarColor(window.usedPercent)}`}
                           style={{ width: `${Math.max(0, Math.min(100, window.usedPercent))}%` }}
                         />
                         <span

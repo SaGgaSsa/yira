@@ -370,7 +370,7 @@ export function WorkspaceSourceControl({
         <div className="flex min-w-0 items-center gap-2">
           <button
             type="button"
-            className={`mr-auto inline-flex h-7 items-center gap-1 rounded px-2 text-xs ${onlyChanged ? 'bg-active-bg text-text-display' : 'text-text-secondary hover:bg-hover-bg hover:text-text-display'}`}
+            className={`mr-auto inline-flex h-7 items-center gap-1 rounded-sm px-2 text-xs ${onlyChanged ? 'bg-active-bg text-text-display' : 'text-text-secondary hover:bg-hover-bg hover:text-text-display'}`}
             aria-pressed={onlyChanged}
             onClick={() => setOnlyChanged((current) => !current)}
             title={t('sourceControl.onlyChanged')}
@@ -379,7 +379,7 @@ export function WorkspaceSourceControl({
           </button>
           <button
             type="button"
-            className={`inline-flex h-7 w-7 items-center justify-center rounded ${sourceControlViewMode === 'list' ? 'bg-active-bg text-text-display' : 'text-text-secondary hover:bg-hover-bg'}`}
+            className={`inline-flex h-7 w-7 items-center justify-center rounded-sm ${sourceControlViewMode === 'list' ? 'bg-active-bg text-text-display' : 'text-text-secondary hover:bg-hover-bg'}`}
             onClick={() => handleViewModeChange('list')}
             title={t('sourceControl.listView')}
             aria-label={t('sourceControl.listView')}
@@ -388,7 +388,7 @@ export function WorkspaceSourceControl({
           </button>
           <button
             type="button"
-            className={`inline-flex h-7 w-7 items-center justify-center rounded ${sourceControlViewMode === 'tree' ? 'bg-active-bg text-text-display' : 'text-text-secondary hover:bg-hover-bg'}`}
+            className={`inline-flex h-7 w-7 items-center justify-center rounded-sm ${sourceControlViewMode === 'tree' ? 'bg-active-bg text-text-display' : 'text-text-secondary hover:bg-hover-bg'}`}
             onClick={() => handleViewModeChange('tree')}
             title={t('sourceControl.treeView')}
             aria-label={t('sourceControl.treeView')}
@@ -397,7 +397,7 @@ export function WorkspaceSourceControl({
           </button>
           <button
             type="button"
-            className="inline-flex h-7 w-7 items-center justify-center rounded text-text-secondary hover:bg-hover-bg hover:text-text-display disabled:opacity-50"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-sm text-text-secondary hover:bg-hover-bg hover:text-text-display disabled:opacity-50"
             onClick={() => void refreshAllStatuses(repositories)}
             disabled={statusRefreshing}
             title={t('sourceControl.refreshAll')}

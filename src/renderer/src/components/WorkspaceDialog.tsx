@@ -330,7 +330,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm, allowCustomScrip
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[10050] flex items-center justify-center bg-black/80">
+    <div className="fixed inset-0 z-10050 flex items-center justify-center bg-black/80">
       <div className="flex max-h-[calc(100vh-32px)] w-[640px] max-w-[calc(100vw-32px)] flex-col overflow-hidden rounded-[24px] border border-border-visible bg-bg-secondary shadow-2xl">
         <header className="shrink-0 flex items-center justify-between gap-4 border-b border-border px-6 py-5">
           <div className="min-w-0">
@@ -416,7 +416,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm, allowCustomScrip
                   <span className="nd-label mb-2 block text-text-secondary">{t('workspace.workspaceName')}</span>
                   <input
                     ref={nameInputRef}
-                    className="w-full rounded-full border border-border-visible bg-bg-primary px-4 py-3 font-mono text-sm text-text-display outline-none"
+                    className="w-full rounded-full border border-border-visible bg-bg-primary px-4 py-3 font-mono text-sm text-text-display outline-hidden"
                     value={value.name}
                     onChange={(event) => setValue((current) => current ? { ...current, name: event.target.value } : current)}
                     placeholder={t('workspace.workspaceName')}
@@ -491,7 +491,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm, allowCustomScrip
                   <span className="nd-label text-text-secondary">{t('workspace.initialCommand')}</span>
                 </div>
                 <input
-                  className="w-full rounded-full border border-border-visible bg-bg-primary px-4 py-3 font-mono text-sm text-text-display outline-none"
+                  className="w-full rounded-full border border-border-visible bg-bg-primary px-4 py-3 font-mono text-sm text-text-display outline-hidden"
                   value={value.initialCommand}
                   onChange={(event) => setValue((current) => current ? { ...current, initialCommand: event.target.value } : current)}
                   placeholder={t('workspace.optionalCommand')}
@@ -516,7 +516,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm, allowCustomScrip
                   <label className="block">
                     <span className="nd-label mb-2 block text-text-secondary">{t('workspace.hostTailscaleOrLocal')}</span>
                     <input
-                      className="w-full rounded-full border border-border-visible bg-bg-primary px-4 py-3 font-mono text-sm text-text-display outline-none"
+                      className="w-full rounded-full border border-border-visible bg-bg-primary px-4 py-3 font-mono text-sm text-text-display outline-hidden"
                       value={value.remoteTerminal.host}
                       onChange={(event) => setValue((current) => current ? {
                         ...current,
@@ -529,7 +529,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm, allowCustomScrip
                   <label className="block">
                     <span className="nd-label mb-2 block text-text-secondary">{t('workspace.linuxUser')}</span>
                     <input
-                      className="w-full rounded-full border border-border-visible bg-bg-primary px-4 py-3 font-mono text-sm text-text-display outline-none"
+                      className="w-full rounded-full border border-border-visible bg-bg-primary px-4 py-3 font-mono text-sm text-text-display outline-hidden"
                       value={value.remoteTerminal.user}
                       onChange={(event) => setValue((current) => current ? {
                         ...current,
@@ -542,7 +542,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm, allowCustomScrip
                   <label className="block sm:col-span-2 sm:max-w-[200px]">
                     <span className="nd-label mb-2 block text-text-secondary">{t('workspace.sshPort')}</span>
                     <input
-                      className="w-full rounded-full border border-border-visible bg-bg-primary px-4 py-3 font-mono text-sm text-text-display outline-none"
+                      className="w-full rounded-full border border-border-visible bg-bg-primary px-4 py-3 font-mono text-sm text-text-display outline-hidden"
                       type="number"
                       min="1"
                       max="65535"
@@ -563,7 +563,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm, allowCustomScrip
                     <span className="nd-label text-text-secondary">{t('workspace.wakeOnLan')}</span>
                     <input
                       type="checkbox"
-                      className="h-5 w-5 shrink-0 accent-[var(--text-primary)]"
+                      className="h-5 w-5 shrink-0 accent-(--text-primary)"
                       checked={wakeOnLanEnabled}
                       onChange={(event) => {
                         const enabled = event.target.checked
@@ -590,7 +590,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm, allowCustomScrip
                       <label className="block">
                         <span className="nd-label mb-2 block text-text-secondary">{t('workspace.wakeOnLanMacAddress')}</span>
                         <input
-                          className="w-full rounded-full border border-border-visible bg-bg-primary px-4 py-3 font-mono text-sm text-text-display outline-none"
+                          className="w-full rounded-full border border-border-visible bg-bg-primary px-4 py-3 font-mono text-sm text-text-display outline-hidden"
                           value={wakeOnLan?.macAddress ?? ''}
                           onChange={(event) => updateWakeOnLan({ macAddress: event.target.value })}
                           placeholder="AA:BB:CC:DD:EE:FF"
@@ -607,7 +607,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm, allowCustomScrip
                       <label className="block">
                         <span className="nd-label mb-2 block text-text-secondary">{t('workspace.wakeOnLanBroadcastAddress')}</span>
                         <input
-                          className="w-full rounded-full border border-border-visible bg-bg-primary px-4 py-3 font-mono text-sm text-text-display outline-none"
+                          className="w-full rounded-full border border-border-visible bg-bg-primary px-4 py-3 font-mono text-sm text-text-display outline-hidden"
                           value={wakeOnLan?.broadcastAddress ?? ''}
                           onChange={(event) => updateWakeOnLan({ broadcastAddress: event.target.value })}
                           placeholder="255.255.255.255"
@@ -624,7 +624,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm, allowCustomScrip
                       <label className="block sm:col-span-2 sm:max-w-[200px]">
                         <span className="nd-label mb-2 block text-text-secondary">{t('workspace.wakeOnLanUdpPort')}</span>
                         <input
-                          className="w-full rounded-full border border-border-visible bg-bg-primary px-4 py-3 font-mono text-sm text-text-display outline-none"
+                          className="w-full rounded-full border border-border-visible bg-bg-primary px-4 py-3 font-mono text-sm text-text-display outline-hidden"
                           type="number"
                           min="1"
                           max="65535"
@@ -650,7 +650,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm, allowCustomScrip
                   </span>
                   <input
                     type="checkbox"
-                    className="h-5 w-5 shrink-0 accent-[var(--text-primary)]"
+                    className="h-5 w-5 shrink-0 accent-(--text-primary)"
                     checked={value.terminalHistoryEnabled}
                     onChange={(event) => setValue((current) => current ? { ...current, terminalHistoryEnabled: event.target.checked } : current)}
                   />
@@ -686,7 +686,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm, allowCustomScrip
                       <label className="block min-w-0">
                         <span className="nd-label mb-2 block text-text-secondary">{t('workspace.customScriptName')}</span>
                         <input
-                          className="w-full rounded-md border border-border-visible bg-bg-secondary px-3 py-2 font-mono text-sm text-text-display outline-none"
+                          className="w-full rounded-md border border-border-visible bg-bg-secondary px-3 py-2 font-mono text-sm text-text-display outline-hidden"
                           value={script.name}
                           onChange={(event) => updateCustomScript(script.id, { name: event.target.value })}
                           placeholder={t('workspace.customScriptNamePlaceholder')}
@@ -696,7 +696,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm, allowCustomScrip
                       <label className="block min-w-0">
                         <span className="nd-label mb-2 block text-text-secondary">{t('workspace.customScriptCommand')}</span>
                         <input
-                          className="w-full rounded-md border border-border-visible bg-bg-secondary px-3 py-2 font-mono text-sm text-text-display outline-none"
+                          className="w-full rounded-md border border-border-visible bg-bg-secondary px-3 py-2 font-mono text-sm text-text-display outline-hidden"
                           value={script.command}
                           onChange={(event) => updateCustomScript(script.id, { command: event.target.value })}
                           placeholder={t('workspace.customScriptCommandPlaceholder')}
@@ -739,7 +739,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm, allowCustomScrip
                       <input
                         type="radio"
                         name="workspace-agent-provider"
-                        className="h-4 w-4 shrink-0 accent-[var(--text-primary)]"
+                        className="h-4 w-4 shrink-0 accent-(--text-primary)"
                         checked={active}
                         onChange={() => setValue((current) => current ? { ...current, agentProvider: option.provider } : current)}
                       />
@@ -752,7 +752,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm, allowCustomScrip
                 <label className="mt-4 block">
                   <span className="nd-label mb-2 block text-text-secondary">{t('workspace.agentProviderArgs')}</span>
                   <textarea
-                    className="min-h-[72px] w-full resize-y rounded-[14px] border border-border-visible bg-bg-secondary px-3 py-2 font-mono text-xs text-text-display outline-none"
+                    className="min-h-[72px] w-full resize-y rounded-[14px] border border-border-visible bg-bg-secondary px-3 py-2 font-mono text-xs text-text-display outline-hidden"
                     value={value.agentProviders[selectedProvider].args.join('\n')}
                     onChange={(event) => updateProviderArgs(selectedProvider, event.target.value.split(/\r?\n/))}
                     placeholder={t('workspace.agentProviderArgsPlaceholder')}
@@ -828,7 +828,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm, allowCustomScrip
                       >
                         <input
                           type="checkbox"
-                          className="h-4 w-4 shrink-0 accent-[var(--text-primary)]"
+                          className="h-4 w-4 shrink-0 accent-(--text-primary)"
                           checked={checked}
                           onChange={(event) => toggleRepository(repository.relativePath, event.target.checked)}
                           aria-label={`${t('workspace.repository')}: ${repository.name}`}

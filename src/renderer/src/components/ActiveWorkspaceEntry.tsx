@@ -41,7 +41,7 @@ export function ActiveWorkspaceEntry({
             aria-expanded={expanded}
             title={workspace.name}
             onClick={onToggleExpanded}
-            className="inline-flex h-5 w-5 items-center justify-center rounded text-text-muted transition-colors hover:bg-hover-bg hover:text-text-display focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--interactive)]"
+            className="inline-flex h-5 w-5 items-center justify-center rounded-sm text-text-muted transition-colors hover:bg-hover-bg hover:text-text-display focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--interactive)"
           >
             <ChevronDown
               size={12}

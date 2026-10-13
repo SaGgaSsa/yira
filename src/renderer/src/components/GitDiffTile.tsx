@@ -54,11 +54,11 @@ export function GitDiffTile({ tile, workspaceId, isVisible, onOpenFile }: GitDif
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex shrink-0 items-center gap-1 border-b border-border px-2 py-1.5">
-        <button type="button" className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-text-secondary hover:bg-hover-bg" onClick={() => setInline((value) => !value)} title={inline ? t('files.diffSideBySide') : t('files.diffInline')}>
+        <button type="button" className="inline-flex items-center gap-1 rounded-sm px-2 py-1 text-xs text-text-secondary hover:bg-hover-bg" onClick={() => setInline((value) => !value)} title={inline ? t('files.diffSideBySide') : t('files.diffInline')}>
           {inline ? <Rows2 size={14} /> : <Columns2 size={14} />}{inline ? t('files.diffSideBySide') : t('files.diffInline')}
         </button>
-        <button type="button" className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-text-secondary hover:bg-hover-bg" onClick={refresh} title={t('common.refresh')}><RefreshCw size={14} />{t('common.refresh')}</button>
-        <button type="button" className="ml-auto rounded px-2 py-1 text-xs text-text-secondary hover:bg-hover-bg disabled:opacity-50" onClick={() => { if (filePath) void Promise.resolve(onOpenFile?.(filePath)).catch((error: unknown) => console.error('[GitDiffTile] Failed to open file:', error)) }} disabled={!hasModifiedFile}>{t('files.openDiffFile')}</button>
+        <button type="button" className="inline-flex items-center gap-1 rounded-sm px-2 py-1 text-xs text-text-secondary hover:bg-hover-bg" onClick={refresh} title={t('common.refresh')}><RefreshCw size={14} />{t('common.refresh')}</button>
+        <button type="button" className="ml-auto rounded-sm px-2 py-1 text-xs text-text-secondary hover:bg-hover-bg disabled:opacity-50" onClick={() => { if (filePath) void Promise.resolve(onOpenFile?.(filePath)).catch((error: unknown) => console.error('[GitDiffTile] Failed to open file:', error)) }} disabled={!hasModifiedFile}>{t('files.openDiffFile')}</button>
       </div>
       <div className="relative min-h-0 flex-1">
         {loading && <div className="absolute inset-0 z-10 flex items-center justify-center bg-bg-primary text-sm text-text-secondary">{t('files.diffLoading')}</div>}
