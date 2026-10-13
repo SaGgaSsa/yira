@@ -160,13 +160,13 @@ function ExplorerTreeNode({ node, depth, handlers }: ExplorerTreeNodeProps): Rea
       )}
 
       {isDirectory && node.expanded && (
-        <div>
-          {isCreateTarget && renderDraftInput(depth + 1, null)}
+        <ul>
+          {isCreateTarget && <li>{renderDraftInput(depth + 1, null)}</li>}
           {node.status === 'loading' && (
-            <div className="px-3 py-2 text-xs text-text-disabled" style={{ paddingLeft: `${42 + depth * 16}px` }}>{t('common.loading')}</div>
+            <li className="px-3 py-2 text-xs text-text-disabled" style={{ paddingLeft: `${42 + depth * 16}px` }}>{t('common.loading')}</li>
           )}
           {node.status === 'error' && (
-            <div className="flex items-center gap-2 px-3 py-2 text-xs text-red-300" style={{ paddingLeft: `${28 + depth * 16}px` }}>
+            <li className="flex items-center gap-2 px-3 py-2 text-xs text-red-300" style={{ paddingLeft: `${28 + depth * 16}px` }}>
               <span className="min-w-0 flex-1 truncate" title={node.error}>{node.error ?? t('ui.unableToLoadDirectory')}</span>
               <button
                 className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded hover:bg-hover-bg"
@@ -178,7 +178,7 @@ function ExplorerTreeNode({ node, depth, handlers }: ExplorerTreeNodeProps): Rea
               >
                 <RefreshCw size={13} />
               </button>
-            </div>
+            </li>
           )}
           {node.status === 'ready' && node.children?.map((child) => (
             <ExplorerTreeNode
@@ -188,7 +188,7 @@ function ExplorerTreeNode({ node, depth, handlers }: ExplorerTreeNodeProps): Rea
               handlers={handlers}
             />
           ))}
-        </div>
+        </ul>
       )}
     </li>
   )
