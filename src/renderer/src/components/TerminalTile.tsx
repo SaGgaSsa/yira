@@ -31,6 +31,8 @@ interface Props {
   edgeToEdge?: boolean
   /** Connect an existing daemon-backed script session without creating a shell. */
   connectOnly?: boolean
+  /** Copy the selection to the clipboard as soon as a mouse selection ends. */
+  copyOnSelect?: boolean
   isVisible?: boolean
   autoFocus?: boolean
   onFocus: () => void
@@ -317,6 +319,7 @@ export function TerminalTileWrapper({
   isFocused,
   edgeToEdge = false,
   connectOnly = false,
+  copyOnSelect = false,
   isVisible = true,
   autoFocus = false,
   onFocus,
@@ -539,6 +542,17 @@ export function TerminalTileWrapper({
     } catch (error) {
       console.error('[TerminalTile] Failed to copy terminal selection:', error)
     }
+  }, [])
+
+  // The drag can end outside the terminal, so listen for that mouseup on the window.
+  const copySelectionOnMouseUp = useCallback(() => {
+    window.addEventListener('mouseup', () => {
+      const currentRuntime = activeRuntimeRef.current
+      if (!currentRuntime?.hasSelection()) return
+      void window.electron.clipboard.writeText(currentRuntime.getSelection()).catch((error: unknown) => {
+        console.error('[TerminalTile] Failed to copy terminal selection:', error)
+      })
+    }, { once: true })
   }, [])
 
   const pasteClipboard = useCallback(async () => {
@@ -771,7 +785,10 @@ export function TerminalTileWrapper({
         className="h-full w-full"
         data-terminal-title={snapshot.title ?? undefined}
         style={{ background: getTerminalContainerBackground(terminalThemeId, activeWindowBackgroundMaterial !== 'none'), overflow: 'hidden' }}
-        onMouseDown={focusTerminal}
+        onMouseDown={(event) => {
+          focusTerminal()
+          if (copyOnSelect && event.button === 0) copySelectionOnMouseUp()
+        }}
         onContextMenu={(event) => {
           event.preventDefault()
           focusTerminal()

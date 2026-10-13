@@ -374,6 +374,11 @@ textarea {
   -webkit-app-region: no-drag;
 }
 
+/* Popups hang below the titlebar but inherit its drag region; keep their content selectable. */
+.window-titlebar-popup {
+  -webkit-app-region: no-drag;
+}
+
 .nd-label {
   font-family: var(--font-mono);
   font-size: var(--font-label);
