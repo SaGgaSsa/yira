@@ -117,7 +117,7 @@ export function WorkspacePanel({
         ))}
       </div>
       <div className="min-h-0 flex-1">
-        {tab === 'explorer' && <WorkspaceExplorer rootPath={rootPath} activeFilePath={activeFilePath} onOpenFile={onOpenFile} />}
+        {tab === 'explorer' && <WorkspaceExplorer rootPath={rootPath} activeFilePath={activeFilePath} onOpenFile={onOpenFile} requestConfirm={requestConfirm} />}
         {tab === 'agents' && (
           <AgentPanel
             key={`${workspaceId}:${effectiveAgentProvider ?? 'none'}`}

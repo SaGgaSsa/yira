@@ -1,6 +1,11 @@
 import {
   createExplorerNode,
+  expandExplorerDirectory,
+  findExplorerNode,
+  getCreateParentPath,
   getLoadedExpandedDirectories,
+  hasExplorerSiblingNamed,
+  joinRootPath,
   mergeExplorerDirectoryChildren,
   toggleExplorerDirectory,
   updateExplorerDirectory,
@@ -63,4 +68,41 @@ if (cachedTree.children?.some((child) => child.relativePath === 'old.txt') || !c
 }
 if (getLoadedExpandedDirectories(cachedTree).join(',') !== ',src') {
   throw new Error('loaded expanded directories must be listed parents first')
+}
+
+const dirTarget = { relativePath: 'src/utils', kind: 'directory' as const }
+const fileTarget = { relativePath: 'src/utils/a.ts', kind: 'file' as const }
+if (getCreateParentPath(null) !== '' || getCreateParentPath(dirTarget) !== 'src/utils' || getCreateParentPath(fileTarget) !== 'src/utils') {
+  throw new Error('create target must be the selected folder, the parent of a selected file, or the root')
+}
+if (getCreateParentPath({ relativePath: 'README.md', kind: 'file' }) !== '') {
+  throw new Error('a root-level file must create entries in the root')
+}
+
+const siblingTree = updateExplorerDirectory(root, '', {
+  status: 'ready',
+  children: [createExplorerNode('Src', 'Src', 'directory'), createExplorerNode('a.ts', 'a.ts', 'file')],
+})
+if (!hasExplorerSiblingNamed(siblingTree, '', 'src') || !hasExplorerSiblingNamed(siblingTree, '', 'SRC/x.ts')) {
+  throw new Error('sibling names must collide case-insensitively on the first segment')
+}
+if (hasExplorerSiblingNamed(siblingTree, '', 'a.ts', 'a.ts') || hasExplorerSiblingNamed(siblingTree, '', 'b.ts')) {
+  throw new Error('the renamed entry itself and unknown names must not collide')
+}
+if (findExplorerNode(siblingTree, 'a.ts')?.name !== 'a.ts' || findExplorerNode(siblingTree, 'zzz') !== null) {
+  throw new Error('findExplorerNode must locate loaded nodes only')
+}
+
+const collapsedSrc = updateExplorerDirectory(siblingTree, '', {
+  status: 'ready',
+  children: [createExplorerNode('src', 'src', 'directory')],
+})
+const expandedSrc = expandExplorerDirectory(collapsedSrc, 'src')
+const srcNode = findExplorerNode(expandedSrc, 'src')
+if (!srcNode?.expanded || srcNode.status !== 'loading') {
+  throw new Error('expanding an unloaded directory must flag it as loading')
+}
+
+if (joinRootPath('C:\\repo\\', 'src/a.ts') !== 'C:\\repo\\src\\a.ts' || joinRootPath('/repo', 'src/a.ts') !== '/repo/src/a.ts' || joinRootPath('/repo', '') !== '/repo') {
+  throw new Error('absolute paths must use the root path separator')
 }

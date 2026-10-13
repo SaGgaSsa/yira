@@ -650,6 +650,26 @@ type TranslationResources = {
     openFolder: string
     path: string
     revealInExplorer: string
+    newFile: string
+    newFolder: string
+    showHidden: string
+    hideHidden: string
+    rename: string
+    copyPath: string
+    moveToTrash: string
+    trashTitle: string
+    trashMessage: string
+    trashConfirm: string
+    entryName: string
+    nameExists: string
+    nameMissing: string
+    errorEmpty: string
+    errorInvalidSegment: string
+    errorInvalidCharacter: string
+    errorReservedName: string
+    errorTrailingDotOrSpace: string
+    errorTooLong: string
+    errorAbsolutePath: string
     retry: string
     size: string
     type: string
@@ -1533,6 +1553,26 @@ const en: TranslationResources = {
     openFolder: 'Open folder',
     path: 'PATH',
     revealInExplorer: 'Reveal in Explorer',
+    newFile: 'New file',
+    newFolder: 'New folder',
+    showHidden: 'Show hidden files',
+    hideHidden: 'Hide hidden files',
+    rename: 'Rename',
+    copyPath: 'Copy path',
+    moveToTrash: 'Move to trash',
+    trashTitle: 'Move to trash',
+    trashMessage: 'Move "{{name}}" to the trash?',
+    trashConfirm: 'Move to trash',
+    entryName: 'File or folder name',
+    nameExists: 'A file or folder with that name already exists',
+    nameMissing: 'The file or folder no longer exists',
+    errorEmpty: 'Enter a name',
+    errorInvalidSegment: 'The name contains an empty or invalid segment',
+    errorInvalidCharacter: 'The name contains invalid characters',
+    errorReservedName: 'That name is reserved by the system',
+    errorTrailingDotOrSpace: 'The name cannot end with a dot or a space',
+    errorTooLong: 'The name is too long',
+    errorAbsolutePath: 'The name cannot be an absolute path',
     retry: 'Retry',
     size: 'Size',
     type: 'Type',
@@ -2416,6 +2456,26 @@ const es: TranslationResources = {
     openFolder: 'Abrir carpeta',
     path: 'RUTA',
     revealInExplorer: 'Mostrar en el explorador',
+    newFile: 'Nuevo archivo',
+    newFolder: 'Nueva carpeta',
+    showHidden: 'Mostrar archivos ocultos',
+    hideHidden: 'Ocultar archivos ocultos',
+    rename: 'Renombrar',
+    copyPath: 'Copiar ruta',
+    moveToTrash: 'Mover a la papelera',
+    trashTitle: 'Mover a la papelera',
+    trashMessage: '¿Mover "{{name}}" a la papelera?',
+    trashConfirm: 'Mover a la papelera',
+    entryName: 'Nombre del archivo o carpeta',
+    nameExists: 'Ya existe un archivo o carpeta con ese nombre',
+    nameMissing: 'El archivo o carpeta ya no existe',
+    errorEmpty: 'Escribe un nombre',
+    errorInvalidSegment: 'El nombre tiene un segmento vacío o inválido',
+    errorInvalidCharacter: 'El nombre contiene caracteres no permitidos',
+    errorReservedName: 'Ese nombre está reservado por el sistema',
+    errorTrailingDotOrSpace: 'El nombre no puede terminar en punto ni en espacio',
+    errorTooLong: 'El nombre es demasiado largo',
+    errorAbsolutePath: 'El nombre no puede ser una ruta absoluta',
     retry: 'Reintentar',
     size: 'Tamaño',
     type: 'Tipo',

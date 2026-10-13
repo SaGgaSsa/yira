@@ -831,6 +831,40 @@ export interface FileWriteInput {
   force?: boolean
 }
 
+export type FileNameError =
+  | 'empty'
+  | 'invalid-segment'
+  | 'invalid-character'
+  | 'reserved-name'
+  | 'trailing-dot-or-space'
+  | 'too-long'
+  | 'absolute-path'
+
+export interface FileCreateInput {
+  parentRelativePath: string
+  name: string
+  kind: 'file' | 'directory'
+}
+
+export type FileCreateResult =
+  | { status: 'created'; relativePath: string; kind: 'file' | 'directory' }
+  | { status: 'exists'; relativePath: string }
+  | { status: 'invalid'; reason: FileNameError }
+  | { status: 'missing' }
+
+export interface FileRenameInput {
+  relativePath: string
+  newName: string
+}
+
+export type FileRenameResult =
+  | { status: 'renamed'; relativePath: string }
+  | { status: 'exists'; relativePath: string }
+  | { status: 'invalid'; reason: FileNameError }
+  | { status: 'missing' }
+
+export type FileTrashResult = { status: 'trashed' } | { status: 'missing' }
+
 export type FilePreviewAssetResult =
   | { status: 'ready'; mimeType: string; dataBase64: string }
   | { status: 'unsupported'; reason: string }
