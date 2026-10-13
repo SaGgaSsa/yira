@@ -4,11 +4,11 @@ import { constants as fsConstants, promises as fs } from 'fs'
 import type { Stats } from 'fs'
 import type { FileHandle } from 'fs/promises'
 import { basename, isAbsolute, relative, resolve, sep } from 'path'
-import type { FileEntry, FileListOptions, FileListResult, FileSearchEntry, FileSearchResult, FileSelectFolderResult, FileWriteInput } from '@shared/types'
+import type { FileEntry, FileListOptions, FileListResult, FileSearchEntry, FileSearchResult, FileSelectFolderResult, FileWriteInput, FileCreateInput, FileRenameInput } from '@shared/types'
 import { compileFileSearchQuery } from '@shared/fileSearch'
 import { canonicalizeRootFolderPath } from '../workspace-root'
 import { mainText } from '../i18n'
-import { readFile, readPreviewAsset, resolveRootTarget, statFile, writeFile } from './file-access'
+import { createEntry, readFile, readPreviewAsset, renameEntry, resolveRootTarget, statFile, trashEntry, writeFile } from './file-access'
 
 const electronApi = createRequire(import.meta.url)('electron') as typeof import('electron')
 const { BrowserWindow, dialog, ipcMain } = electronApi
@@ -388,5 +388,22 @@ export function registerFilesIPC(): void {
   ipcMain.handle('files:readPreviewAsset', async (_event, rootPath: string, relativePath: string) =>
     readPreviewAsset(rootPath, relativePath),
   )
+
+  ipcMain.handle('files:createEntry', async (_event, rootPath: string, input: FileCreateInput) =>
+    createEntry(rootPath, input),
+  )
+
+  ipcMain.handle('files:renameEntry', async (_event, rootPath: string, input: FileRenameInput) =>
+    renameEntry(rootPath, input),
+  )
+
+  ipcMain.handle('files:trashEntry', async (_event, rootPath: string, relativePath: string) =>
+    trashEntry(rootPath, relativePath, (absolutePath) => electronApi.shell.trashItem(absolutePath)),
+  )
+
+  ipcMain.handle('files:revealEntry', async (_event, rootPath: string, relativePath: string): Promise<void> => {
+    const resolved = await resolveRootTarget(rootPath, relativePath)
+    electronApi.shell.showItemInFolder(resolved.targetPath)
+  })
 
 }

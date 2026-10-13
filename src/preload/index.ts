@@ -25,7 +25,9 @@ import type {
   AgentUsageHistorySnapshot,
   AgentUsageSnapshot,
   BoardTask,
+  FileCreateInput,
   FileListOptions,
+  FileRenameInput,
   FileSearchResult,
   FileWriteInput,
   FloatingNavigationEvent,
@@ -207,6 +209,14 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.invoke('files:write', rootPath, relativePath, input),
     readPreviewAsset: (rootPath: string, relativePath: string) =>
       ipcRenderer.invoke('files:readPreviewAsset', rootPath, relativePath),
+    createEntry: (rootPath: string, input: FileCreateInput) =>
+      ipcRenderer.invoke('files:createEntry', rootPath, input),
+    renameEntry: (rootPath: string, input: FileRenameInput) =>
+      ipcRenderer.invoke('files:renameEntry', rootPath, input),
+    trashEntry: (rootPath: string, relativePath: string) =>
+      ipcRenderer.invoke('files:trashEntry', rootPath, relativePath),
+    revealEntry: (rootPath: string, relativePath: string) =>
+      ipcRenderer.invoke('files:revealEntry', rootPath, relativePath),
   },
 
   git: {

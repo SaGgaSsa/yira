@@ -6,7 +6,8 @@ import type { FileHandle } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import test from 'node:test'
-import { readFile, readPreviewAsset, statFile, writeFile } from './file-access'
+import { validateEntryName } from '@shared/fileName'
+import { createEntry, readFile, readPreviewAsset, renameEntry, statFile, trashEntry, writeFile } from './file-access'
 import { searchFiles } from './files'
 import * as fileAccess from './file-access'
 
@@ -674,4 +675,236 @@ test('hashes a descriptor incrementally without buffering the full file', async 
   assert.equal(revision.size, content.byteLength)
   assert.equal(revision.sha256, createHash('sha256').update(content).digest('hex'))
   assert.deepEqual(readPositions, [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50])
+})
+
+test('validates entry names', () => {
+  const nested = { allowNested: true }
+  const single = { allowNested: false }
+  assert.equal(validateEntryName('a/b/c.ts', nested), null)
+  assert.equal(validateEntryName('folder/', nested), null)
+  assert.equal(validateEntryName('.gitignore', single), null)
+  assert.equal(validateEntryName('', nested), 'empty')
+  assert.equal(validateEntryName('/abs', nested), 'absolute-path')
+  assert.equal(validateEntryName('..', nested), 'invalid-segment')
+  assert.equal(validateEntryName('a/../b', nested), 'invalid-segment')
+  assert.equal(validateEntryName('a//b', nested), 'invalid-segment')
+  assert.equal(validateEntryName('a/b', single), 'invalid-character')
+  for (const name of ['x?', 'a<b', 'a:b', 'a"b', 'a|b', 'a*b', 'a\\b', `a${String.fromCharCode(0)}b`, 'a\u0001b']) {
+    assert.equal(validateEntryName(name, nested), 'invalid-character', name)
+  }
+  for (const name of ['CON', 'nul.txt', 'Com1', 'lpt9.log', 'dir/AUX']) {
+    assert.equal(validateEntryName(name, nested), 'reserved-name', name)
+  }
+  assert.equal(validateEntryName('console', nested), null)
+  assert.equal(validateEntryName('name.', nested), 'trailing-dot-or-space')
+  assert.equal(validateEntryName('name ', nested), 'trailing-dot-or-space')
+  assert.equal(validateEntryName('a'.repeat(256), nested), 'too-long')
+  assert.equal(validateEntryName('a'.repeat(255), nested), null)
+})
+
+test('creates files at the root and in nested folders', async () => {
+  const rootPath = await createWorkspace()
+  try {
+    assert.deepEqual(
+      await createEntry(rootPath, { parentRelativePath: '', name: 'a.txt', kind: 'file' }),
+      { status: 'created', relativePath: 'a.txt', kind: 'file' },
+    )
+    assert.deepEqual(
+      await createEntry(rootPath, { parentRelativePath: '', name: 'a/b/c.ts', kind: 'file' }),
+      { status: 'created', relativePath: 'a/b/c.ts', kind: 'file' },
+    )
+    assert.equal(await fs.readFile(join(rootPath, 'a', 'b', 'c.ts'), 'utf8'), '')
+    assert.deepEqual(
+      await createEntry(rootPath, { parentRelativePath: 'a', name: 'd.ts', kind: 'file' }),
+      { status: 'created', relativePath: 'a/d.ts', kind: 'file' },
+    )
+  } finally {
+    await removeWorkspace(rootPath)
+  }
+})
+
+test('creates folders, and a trailing slash forces a folder', async () => {
+  const rootPath = await createWorkspace()
+  try {
+    assert.deepEqual(
+      await createEntry(rootPath, { parentRelativePath: '', name: 'dir', kind: 'directory' }),
+      { status: 'created', relativePath: 'dir', kind: 'directory' },
+    )
+    assert.deepEqual(
+      await createEntry(rootPath, { parentRelativePath: '', name: 'x/y/', kind: 'file' }),
+      { status: 'created', relativePath: 'x/y', kind: 'directory' },
+    )
+    assert.ok((await fs.stat(join(rootPath, 'x', 'y'))).isDirectory())
+  } finally {
+    await removeWorkspace(rootPath)
+  }
+})
+
+test('reports existing files and folders without overwriting them', async () => {
+  const rootPath = await createWorkspace()
+  try {
+    await fs.writeFile(join(rootPath, 'keep.txt'), 'content', 'utf8')
+    await fs.mkdir(join(rootPath, 'dir'))
+    assert.deepEqual(
+      await createEntry(rootPath, { parentRelativePath: '', name: 'keep.txt', kind: 'file' }),
+      { status: 'exists', relativePath: 'keep.txt' },
+    )
+    assert.deepEqual(
+      await createEntry(rootPath, { parentRelativePath: '', name: 'dir', kind: 'directory' }),
+      { status: 'exists', relativePath: 'dir' },
+    )
+    assert.deepEqual(
+      await createEntry(rootPath, { parentRelativePath: '', name: 'keep.txt/inner.txt', kind: 'file' }),
+      { status: 'exists', relativePath: 'keep.txt/inner.txt' },
+    )
+    assert.equal(await fs.readFile(join(rootPath, 'keep.txt'), 'utf8'), 'content')
+  } finally {
+    await removeWorkspace(rootPath)
+  }
+})
+
+test('rejects invalid names and missing parents when creating', async () => {
+  const rootPath = await createWorkspace()
+  try {
+    const invalid: Array<[string, string]> = [
+      ['', 'empty'],
+      ['..', 'invalid-segment'],
+      ['a/../b', 'invalid-segment'],
+      ['CON', 'reserved-name'],
+      ['nul.txt', 'reserved-name'],
+      ['x?', 'invalid-character'],
+      ['name.', 'trailing-dot-or-space'],
+      ['/abs', 'absolute-path'],
+    ]
+    for (const [name, reason] of invalid) {
+      assert.deepEqual(
+        await createEntry(rootPath, { parentRelativePath: '', name, kind: 'file' }),
+        { status: 'invalid', reason },
+        name,
+      )
+    }
+    assert.deepEqual(
+      await createEntry(rootPath, { parentRelativePath: 'nope', name: 'a.txt', kind: 'file' }),
+      { status: 'missing' },
+    )
+    await fs.writeFile(join(rootPath, 'file.txt'), '', 'utf8')
+    assert.deepEqual(
+      await createEntry(rootPath, { parentRelativePath: 'file.txt', name: 'a.txt', kind: 'file' }),
+      { status: 'missing' },
+    )
+    await assert.rejects(createEntry(rootPath, { parentRelativePath: '../x', name: 'a.txt', kind: 'file' }), /traversal/i)
+  } finally {
+    await removeWorkspace(rootPath)
+  }
+})
+
+test('does not create entries through a link that leaves the root', async () => {
+  const rootPath = await createWorkspace()
+  const outsidePath = await createWorkspace()
+  try {
+    try {
+      await fs.symlink(outsidePath, join(rootPath, 'link'), DIRECTORY_SYMLINK_TYPE)
+    } catch (error) {
+      if (!isWindowsPrivilegeError(error)) throw error
+      return
+    }
+    await assert.rejects(createEntry(rootPath, { parentRelativePath: 'link', name: 'a.txt', kind: 'file' }), /escapes/i)
+    await assert.rejects(createEntry(rootPath, { parentRelativePath: '', name: 'link/sub/a.txt', kind: 'file' }), /escapes/i)
+    await assert.rejects(createEntry(rootPath, { parentRelativePath: '', name: 'link/sub/', kind: 'file' }), /escapes/i)
+    assert.deepEqual(await fs.readdir(outsidePath), [])
+  } finally {
+    await removeWorkspace(rootPath)
+    await removeWorkspace(outsidePath)
+  }
+})
+
+test('renames entries without overwriting existing ones', async () => {
+  const rootPath = await createWorkspace()
+  try {
+    await fs.mkdir(join(rootPath, 'dir'))
+    await fs.writeFile(join(rootPath, 'dir', 'old.txt'), 'old', 'utf8')
+    await fs.writeFile(join(rootPath, 'dir', 'other.txt'), 'other', 'utf8')
+
+    assert.deepEqual(
+      await renameEntry(rootPath, { relativePath: 'dir/old.txt', newName: 'new.txt' }),
+      { status: 'renamed', relativePath: 'dir/new.txt' },
+    )
+    assert.equal(await fs.readFile(join(rootPath, 'dir', 'new.txt'), 'utf8'), 'old')
+    assert.deepEqual(
+      await renameEntry(rootPath, { relativePath: 'dir/new.txt', newName: 'other.txt' }),
+      { status: 'exists', relativePath: 'dir/other.txt' },
+    )
+    assert.equal(await fs.readFile(join(rootPath, 'dir', 'other.txt'), 'utf8'), 'other')
+    assert.deepEqual(
+      await renameEntry(rootPath, { relativePath: 'dir/gone.txt', newName: 'x.txt' }),
+      { status: 'missing' },
+    )
+    assert.deepEqual(
+      await renameEntry(rootPath, { relativePath: 'dir/new.txt', newName: 'a/b' }),
+      { status: 'invalid', reason: 'invalid-character' },
+    )
+    await assert.rejects(renameEntry(rootPath, { relativePath: '', newName: 'x' }), /itself/i)
+  } finally {
+    await removeWorkspace(rootPath)
+  }
+})
+
+test('renames an entry when only the letter case changes', async () => {
+  const rootPath = await createWorkspace()
+  try {
+    await fs.writeFile(join(rootPath, 'readme.md'), 'text', 'utf8')
+
+    assert.deepEqual(
+      await renameEntry(rootPath, { relativePath: 'readme.md', newName: 'README.md' }),
+      { status: 'renamed', relativePath: 'README.md' },
+    )
+    assert.deepEqual(await fs.readdir(rootPath), ['README.md'])
+  } finally {
+    await removeWorkspace(rootPath)
+  }
+})
+
+test('sends entries to the trash through the injected mover', async () => {
+  const rootPath = await createWorkspace()
+  try {
+    await fs.mkdir(join(rootPath, 'dir'))
+    await fs.writeFile(join(rootPath, 'dir', 'a.txt'), '', 'utf8')
+    const trashed: string[] = []
+    const moveToTrash = async (absolutePath: string): Promise<void> => {
+      trashed.push(absolutePath)
+    }
+
+    assert.deepEqual(await trashEntry(rootPath, 'dir/a.txt', moveToTrash), { status: 'trashed' })
+    assert.equal(trashed.length, 1)
+    assert.equal(trashed[0], join(await fs.realpath(rootPath), 'dir', 'a.txt'))
+    assert.deepEqual(await trashEntry(rootPath, 'dir/missing.txt', moveToTrash), { status: 'missing' })
+    assert.equal(trashed.length, 1)
+    await assert.rejects(trashEntry(rootPath, '', moveToTrash), /itself/i)
+    await assert.rejects(trashEntry(rootPath, '../x', moveToTrash), /traversal/i)
+    assert.equal(trashed.length, 1)
+  } finally {
+    await removeWorkspace(rootPath)
+  }
+})
+
+test('trashes a symlink itself rather than its target', async (t) => {
+  const rootPath = await createWorkspace()
+  const outsidePath = await createWorkspace()
+  try {
+    try {
+      await fs.symlink(outsidePath, join(rootPath, 'link'), DIRECTORY_SYMLINK_TYPE)
+    } catch (error) {
+      if (!isWindowsPrivilegeError(error)) throw error
+      t.skip('symlinks need privilege')
+      return
+    }
+    const trashed: string[] = []
+    await trashEntry(rootPath, 'link', async (absolutePath) => {
+      trashed.push(absolutePath)
+    })
+    assert.deepEqual(trashed, [join(await fs.realpath(rootPath), 'link')])
+  } finally {
+    await removeWorkspace(rootPath)
+    await removeWorkspace(outsidePath)
+  }
 })

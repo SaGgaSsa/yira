@@ -1,9 +1,22 @@
-import { createHash } from 'crypto'
+import { createHash, randomUUID } from 'crypto'
 import { constants as fsConstants, promises as fs } from 'fs'
 import type { Stats } from 'fs'
 import type { FileHandle } from 'fs/promises'
-import { extname, isAbsolute, relative, resolve } from 'path'
-import type { FilePreviewAssetResult, FileReadResult, FileRevision, FileStatResult, FileWriteInput, FileWriteResult } from '@shared/types'
+import { dirname, extname, isAbsolute, join, relative, resolve } from 'path'
+import type {
+  FileCreateInput,
+  FileCreateResult,
+  FilePreviewAssetResult,
+  FileReadResult,
+  FileRenameInput,
+  FileRenameResult,
+  FileRevision,
+  FileStatResult,
+  FileTrashResult,
+  FileWriteInput,
+  FileWriteResult,
+} from '@shared/types'
+import { validateEntryName } from '@shared/fileName'
 
 export const MAX_TEXT_FILE_BYTES = 10 * 1024 * 1024
 export const MAX_PREVIEW_ASSET_BYTES = 10 * 1024 * 1024
@@ -97,6 +110,162 @@ export async function resolveRootTarget(
     targetPath: targetRealPath,
     relativePath: relative(rootResolved, targetRealPath).split(/[/\\]+/).join('/'),
   }
+}
+
+function toRelativeSlashPath(rootPath: string, targetPath: string): string {
+  return relative(rootPath, targetPath).split(/[/\\]+/).join('/')
+}
+
+function assertInsideRoot(rootPath: string, targetPath: string): void {
+  if (!isInsidePath(normalizeForCompare(rootPath), normalizeForCompare(targetPath))) {
+    throw new Error('Path escapes the files folder')
+  }
+}
+
+// Verifies the deepest existing ancestor of a path still resolves inside the root,
+// so folders are never created through a symlink or junction that leads outside.
+async function assertExistingAncestorInsideRoot(rootPath: string, directoryPath: string): Promise<void> {
+  let current = directoryPath
+  for (;;) {
+    try {
+      assertInsideRoot(rootPath, await fs.realpath(current))
+      return
+    } catch (error) {
+      if (!isMissingError(error)) throw error
+      const parent = dirname(current)
+      if (parent === current) throw error
+      current = parent
+    }
+  }
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await fs.lstat(path)
+    return true
+  } catch (error) {
+    if (isMissingError(error)) return false
+    throw error
+  }
+}
+
+export async function createEntry(rootPathInput: string, input: FileCreateInput): Promise<FileCreateResult> {
+  if (!input || typeof input.name !== 'string' || typeof input.parentRelativePath !== 'string') {
+    throw new Error('Parent folder and name are required')
+  }
+  if (input.kind !== 'file' && input.kind !== 'directory') throw new Error('Invalid entry kind')
+
+  const reason = validateEntryName(input.name, { allowNested: true })
+  if (reason) return { status: 'invalid', reason }
+
+  let parent: ResolvedRootTarget
+  try {
+    parent = await resolveRootTarget(rootPathInput, input.parentRelativePath)
+    if (!(await fs.stat(parent.targetPath)).isDirectory()) return { status: 'missing' }
+  } catch (error) {
+    if (error instanceof MissingFileError) return { status: 'missing' }
+    throw error
+  }
+
+  const kind = input.name.endsWith('/') ? 'directory' : input.kind
+  const segments = (input.name.endsWith('/') ? input.name.slice(0, -1) : input.name).split('/')
+  const targetPath = join(parent.targetPath, ...segments)
+  const containingDirectory = dirname(targetPath)
+  const relativePath = toRelativeSlashPath(parent.rootPath, targetPath)
+  assertInsideRoot(parent.rootPath, targetPath)
+
+  if (await pathExists(targetPath)) return { status: 'exists', relativePath }
+  await assertExistingAncestorInsideRoot(parent.rootPath, containingDirectory)
+
+  try {
+    if (kind === 'directory') {
+      await fs.mkdir(targetPath, { recursive: true })
+    } else {
+      await fs.mkdir(containingDirectory, { recursive: true })
+      assertInsideRoot(parent.rootPath, await fs.realpath(containingDirectory))
+      await fs.writeFile(targetPath, '', { flag: 'wx' })
+    }
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    // EEXIST: lost a race. ENOTDIR: an intermediate segment is an existing file.
+    if (code === 'EEXIST' || code === 'ENOTDIR') return { status: 'exists', relativePath }
+    throw error
+  }
+  return { status: 'created', relativePath, kind }
+}
+
+interface ResolvedEntry {
+  rootPath: string
+  parentPath: string
+  entryPath: string
+  name: string
+}
+
+// Resolves an entry without following it when it is a symlink: only its parent is
+// canonicalized, so rename and trash act on the link itself.
+async function resolveEntry(rootPathInput: string, relativePath: string): Promise<ResolvedEntry | null> {
+  if (typeof relativePath !== 'string') throw new Error('Relative path must be a string')
+  const segments = relativePath.split(/[\\/]+/).filter(Boolean)
+  const name = segments.pop()
+  if (name === undefined) throw new Error('The files folder itself cannot be modified')
+  if (name === '.' || name === '..') throw new Error('Path traversal is not allowed')
+
+  let parent: ResolvedRootTarget
+  try {
+    parent = await resolveRootTarget(rootPathInput, segments.join('/'))
+  } catch (error) {
+    if (error instanceof MissingFileError) return null
+    throw error
+  }
+  const entryPath = join(parent.targetPath, name)
+  if (!(await pathExists(entryPath))) return null
+  return { rootPath: parent.rootPath, parentPath: parent.targetPath, entryPath, name }
+}
+
+export async function renameEntry(rootPathInput: string, input: FileRenameInput): Promise<FileRenameResult> {
+  if (!input || typeof input.newName !== 'string' || typeof input.relativePath !== 'string') {
+    throw new Error('Path and new name are required')
+  }
+  const reason = validateEntryName(input.newName, { allowNested: false })
+  if (reason) return { status: 'invalid', reason }
+
+  const source = await resolveEntry(rootPathInput, input.relativePath)
+  if (!source) return { status: 'missing' }
+
+  const destinationPath = join(source.parentPath, input.newName)
+  const destinationRelativePath = toRelativeSlashPath(source.rootPath, destinationPath)
+  if (input.newName === source.name) return { status: 'renamed', relativePath: destinationRelativePath }
+
+  if (await pathExists(destinationPath)) {
+    if (!(await isCaseOnlyRename(source, destinationPath, input.newName))) {
+      return { status: 'exists', relativePath: destinationRelativePath }
+    }
+    // Case-insensitive filesystems report the destination as existing, so go through a temporary name.
+    const temporaryPath = join(source.parentPath, `${source.name}.${randomUUID()}.tmp`)
+    await fs.rename(source.entryPath, temporaryPath)
+    await fs.rename(temporaryPath, destinationPath)
+    return { status: 'renamed', relativePath: destinationRelativePath }
+  }
+
+  await fs.rename(source.entryPath, destinationPath)
+  return { status: 'renamed', relativePath: destinationRelativePath }
+}
+
+async function isCaseOnlyRename(source: ResolvedEntry, destinationPath: string, newName: string): Promise<boolean> {
+  if (source.name.toLowerCase() !== newName.toLowerCase()) return false
+  const [sourceStat, destinationStat] = await Promise.all([fs.lstat(source.entryPath), fs.lstat(destinationPath)])
+  return sourceStat.dev === destinationStat.dev && sourceStat.ino === destinationStat.ino
+}
+
+export async function trashEntry(
+  rootPathInput: string,
+  relativePath: string,
+  moveToTrash: (absolutePath: string) => Promise<void>,
+): Promise<FileTrashResult> {
+  const entry = await resolveEntry(rootPathInput, relativePath)
+  if (!entry) return { status: 'missing' }
+  await moveToTrash(entry.entryPath)
+  return { status: 'trashed' }
 }
 
 function textFromBuffer(buffer: Buffer): string {

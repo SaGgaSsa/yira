@@ -30,11 +30,16 @@ import type {
   AgentAlertNotificationTarget,
   NotificationAttentionOptions,
   NotificationAttentionResult,
+  FileCreateInput,
+  FileCreateResult,
   FileListOptions,
   FileListResult,
   FileSearchResult,
   FilePreviewAssetResult,
   FileReadResult,
+  FileRenameInput,
+  FileRenameResult,
+  FileTrashResult,
   FileSelectFolderResult,
   FileStatResult,
   FileWriteInput,
@@ -164,6 +169,10 @@ interface ElectronWorld {
     stat: (rootPath: string, relativePath: string) => Promise<FileStatResult>
     write: (rootPath: string, relativePath: string, input: FileWriteInput) => Promise<FileWriteResult>
     readPreviewAsset: (rootPath: string, relativePath: string) => Promise<FilePreviewAssetResult>
+    createEntry: (rootPath: string, input: FileCreateInput) => Promise<FileCreateResult>
+    renameEntry: (rootPath: string, input: FileRenameInput) => Promise<FileRenameResult>
+    trashEntry: (rootPath: string, relativePath: string) => Promise<FileTrashResult>
+    revealEntry: (rootPath: string, relativePath: string) => Promise<void>
   }
   git: {
     discoverRepositories: (workspaceId: string) => Promise<GitRepository[]>
