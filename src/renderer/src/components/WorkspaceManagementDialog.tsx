@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Grid3X3, LayoutGrid, Pencil, RotateCcw, Save, Trash2, X } from 'lucide-react'
+import { Grid3x3, LayoutGrid, Pencil, RotateCcw, Save, Trash, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { WorkspaceManagementEntry, WorkspaceMetadata } from '@shared/types'
 import { createDefaultAgentProvidersConfig, normalizeAgentProvidersConfig, normalizeWorkspaceAgentProvider } from '@shared/workspaceConfig'
@@ -192,7 +192,7 @@ export function WorkspaceManagementDialog({
                           </span>
                         )}
                         <span className="inline-flex items-center gap-1 rounded-full border border-border-visible px-2 py-1 text-xs uppercase tracking-[0.08em] text-text-secondary">
-                          {draft.type === 'grid' ? <Grid3X3 size={12} /> : <LayoutGrid size={12} />}
+                          {draft.type === 'grid' ? <Grid3x3 size={12} /> : <LayoutGrid size={12} />}
                           {draft.type === 'grid' ? t('workspace.grid') : t('workspace.canvas')}
                         </span>
                         {isNewDraft && !draft.markedForRemoval && (
@@ -233,7 +233,7 @@ export function WorkspaceManagementDialog({
                             }}
                             disabled={!canMarkRemoval}
                           >
-                            <Trash2 size={14} />
+                            <Trash size={14} />
                             <span>{t('workspace.removeFromYira')}</span>
                           </button>
                         </div>

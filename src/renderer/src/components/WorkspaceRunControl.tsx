@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { BookmarkPlus, ChevronDown, Play, Square, TerminalSquare, X } from 'lucide-react'
+import { BookmarkPlus, ChevronDown, Play, Square, SquareTerminal, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { WorkspaceConfig, WorkspaceScript, WorkspaceScriptRun, WorkspaceScriptsSnapshot } from '@shared/types'
 
@@ -235,7 +235,7 @@ export function WorkspaceScriptsMenu({
   return (
     <div role="menu" aria-label={t('scripts.title')} className="w-[min(360px,calc(100vw-24px))] overflow-hidden rounded-lg border border-border-visible bg-bg-secondary p-1.5 shadow-xl">
       <div className="flex items-center gap-2 rounded-md border border-border bg-bg-primary px-2.5 py-2">
-        <TerminalSquare size={13} className="shrink-0 text-text-secondary" />
+        <SquareTerminal size={13} className="shrink-0 text-text-secondary" />
         <input
           type="text"
           autoFocus
@@ -737,7 +737,7 @@ export function WorkspaceRunControl({
           aria-label={t(outputRunTileId === selectedRun.tileId ? 'scripts.hideOutput' : 'scripts.showOutput')}
           aria-pressed={outputRunTileId === selectedRun.tileId}
         >
-          <TerminalSquare size={14} />
+          <SquareTerminal size={14} />
         </button>
       )}
 
@@ -777,7 +777,7 @@ export function WorkspaceRunControl({
           aria-label={t('scripts.output')}
         >
           <header className="flex h-9 shrink-0 items-center gap-2 border-b border-border px-2.5">
-            <TerminalSquare size={13} className="shrink-0 text-text-secondary" />
+            <SquareTerminal size={13} className="shrink-0 text-text-secondary" />
             <span className="min-w-0 flex-1 truncate text-xs text-text-display">
               {outputRun.command ?? outputScript?.name ?? outputRun.scriptId}
             </span>

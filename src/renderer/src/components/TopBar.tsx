@@ -1,5 +1,5 @@
 import React from 'react'
-import { Settings, Grid3X3, LayoutGrid, Columns, PanelLeft, PanelRight, SplitSquareHorizontal, SplitSquareVertical, ClipboardList, Activity, Bot } from 'lucide-react'
+import { Settings, Grid3x3, LayoutGrid, Columns2, PanelLeft, PanelRight, SquareSplitHorizontal, SquareSplitVertical, ClipboardList, Activity, Bot } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { AgentProvider, AgentUsageSnapshot, SplitOrientation, ViewMode, WorkspaceConfig, WorkspaceType } from '@shared/types'
 import type { MainView } from '../utils/layoutState'
@@ -121,7 +121,7 @@ export function TopBar({
   const { t } = useTranslation()
   const agents = useSettingsStore((state) => state.agents)
   const zoomPercent = Math.round(zoom * 100)
-  const SplitIcon = splitOrientation === 'horizontal' ? SplitSquareVertical : SplitSquareHorizontal
+  const SplitIcon = splitOrientation === 'horizontal' ? SquareSplitVertical : SquareSplitHorizontal
   const isGridWorkspace = workspaceType === 'grid'
   const activityOpen = mainView === 'activity'
   const agentsViewOpen = mainView === 'agents'
@@ -162,7 +162,7 @@ export function TopBar({
             <SegmentedButton
               active={!overlayOpen && viewMode === 'fullview'}
               label={t('shortcuts.focus')}
-              icon={Columns}
+              icon={Columns2}
               onClick={() => onSetViewMode('fullview')}
             />
             <SegmentedButton
@@ -178,7 +178,7 @@ export function TopBar({
                 active={!overlayOpen && viewMode === 'gridview'}
                 label={t('shortcuts.grid')}
                 title={viewMode === 'gridview' ? t('workspace.canvas') : t('shortcuts.grid')}
-                icon={Grid3X3}
+                icon={Grid3x3}
                 onClick={() => onSetViewMode(viewMode === 'gridview' && !overlayOpen ? 'canvas' : 'gridview')}
               />
             ) : (
@@ -236,7 +236,7 @@ export function TopBar({
                   title={t('canvas.showAll')}
                   aria-label={t('canvas.showAll')}
                 >
-                  <Columns size={14} />
+                  <Columns2 size={14} />
                 </button>
                 <button
                   className="inline-flex h-7 items-center rounded-md px-1.5 font-mono text-xs text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"

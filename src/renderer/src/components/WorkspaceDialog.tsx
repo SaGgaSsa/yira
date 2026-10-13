@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ExternalLink, FolderOpen, GitBranch, Grid3X3, History, Info, LayoutGrid, Plus, TerminalSquare, Trash2, X } from 'lucide-react'
+import { ExternalLink, FolderOpen, GitBranch, Grid3x3, RotateCcwClock, Info, LayoutGrid, Plus, SquareTerminal, Trash, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { AgentProvider, AgentProvidersConfig, ClaudeStatusLineState, GitRepository, RemoteTerminalConfig, WakeOnLanConfig, WorkspaceCustomScript, WorkspaceType } from '@shared/types'
 import { normalizeAgentProvidersConfig, normalizeWorkspaceAgentProvider } from '@shared/workspaceConfig'
@@ -378,14 +378,14 @@ export function WorkspaceDialog({ request, onCancel, onConfirm, allowCustomScrip
             <div className="space-y-6">
               <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
                 <div className="mb-4 flex items-center gap-2">
-                  {value.type === 'grid' ? <Grid3X3 size={14} className="text-text-secondary" /> : <LayoutGrid size={14} className="text-text-secondary" />}
+                  {value.type === 'grid' ? <Grid3x3 size={14} className="text-text-secondary" /> : <LayoutGrid size={14} className="text-text-secondary" />}
                   <span className="nd-label text-text-secondary">{t('workspace.workspaceType')}</span>
                 </div>
                 {typeEditable ? (
                   <div className="grid grid-cols-2 gap-3">
                     {([
                       { type: 'canvas' as const, label: t('workspace.canvas'), icon: LayoutGrid },
-                      { type: 'grid' as const, label: t('workspace.grid'), icon: Grid3X3 },
+                      { type: 'grid' as const, label: t('workspace.grid'), icon: Grid3x3 },
                     ]).map((option) => {
                       const Icon = option.icon
                       const active = value.type === option.type
@@ -487,7 +487,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm, allowCustomScrip
             <div className="space-y-6">
               <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
                 <div className="mb-4 flex items-center gap-2">
-                  <TerminalSquare size={14} className="text-text-secondary" />
+                  <SquareTerminal size={14} className="text-text-secondary" />
                   <span className="nd-label text-text-secondary">{t('workspace.initialCommand')}</span>
                 </div>
                 <input
@@ -501,7 +501,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm, allowCustomScrip
 
               <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
                 <div className="mb-4 flex items-center gap-2">
-                  <TerminalSquare size={14} className="text-text-secondary" />
+                  <SquareTerminal size={14} className="text-text-secondary" />
                   <span className="nd-label text-text-secondary">{t('workspace.remoteTerminal')}</span>
                   <button
                     className="ml-auto flex h-7 w-7 items-center justify-center rounded-full border border-border-visible text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
@@ -645,7 +645,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm, allowCustomScrip
               <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
                 <label className="flex items-center justify-between gap-4">
                   <span className="flex min-w-0 items-center gap-2">
-                    <History size={14} className="shrink-0 text-text-secondary" />
+                    <RotateCcwClock size={14} className="shrink-0 text-text-secondary" />
                     <span className="nd-label truncate text-text-secondary">{t('workspace.terminalHistory')}</span>
                   </span>
                   <input
@@ -710,7 +710,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm, allowCustomScrip
                         title={t('workspace.removeCustomScript')}
                         aria-label={t('workspace.removeCustomScript')}
                       >
-                        <Trash2 size={14} />
+                        <Trash size={14} />
                       </button>
                     </div>
                   ))}
@@ -722,7 +722,7 @@ export function WorkspaceDialog({ request, onCancel, onConfirm, allowCustomScrip
           {activeTab === 'agents' && (
             <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
               <div className="mb-4 flex items-center gap-2">
-                <TerminalSquare size={14} className="text-text-secondary" />
+                <SquareTerminal size={14} className="text-text-secondary" />
                 <span className="nd-label text-text-secondary">{t('workspace.agentProvider')}</span>
               </div>
               <p className="mb-4 text-sm leading-6 text-text-secondary">{t('workspace.agentProviderHelp')}</p>

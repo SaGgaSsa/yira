@@ -13,24 +13,14 @@ const require = createRequire(import.meta.url)
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..')
 const cssExtensions = require.extensions as Record<string, (module: NodeModule, filename: string) => void>
 cssExtensions['.css'] = () => {}
-const { transformSync } = require('esbuild') as typeof import('esbuild')
 
-const loadWithJiti = require('jiti')(fileURLToPath(import.meta.url), {
-  extensions: ['.js', '.mjs', '.cjs', '.ts', '.tsx', '.mts', '.cts', '.json'],
-  transform: ({ source, filename }: { source: string; filename: string }) => ({
-    code: transformSync(source, {
-      loader: filename.endsWith('.tsx') ? 'tsx' : filename.endsWith('.ts') ? 'ts' : 'js',
-      format: 'cjs',
-      platform: 'node',
-      target: 'node22',
-    }).code,
-  }),
-}) as <T>(id: string) => T
-const { getTileNotificationCopy } = loadWithJiti<typeof import('./TileEditorDialog')>('./TileEditorDialog.tsx')
+// tsx compiles required TypeScript files to CommonJS, so mocks placed in require.cache apply.
+const loadModule = require as <T>(id: string) => T
+const { getTileNotificationCopy } = loadModule<typeof import('./TileEditorDialog')>('./TileEditorDialog.tsx')
 const {
   isWakeOnLanConfigValid,
   normalizeValue,
-} = loadWithJiti<typeof import('./WorkspaceDialog')>('./WorkspaceDialog.tsx')
+} = loadModule<typeof import('./WorkspaceDialog')>('./WorkspaceDialog.tsx')
 const {
   handleTerminalAgentAlert,
   handleTerminalOutput,
@@ -45,7 +35,7 @@ const {
   subscribeToRemotePreparationProgress,
   attachTerminalRuntimeHost,
   shouldCloseExitedAgentTile,
-} = loadWithJiti<typeof import('./TerminalTile')>('./TerminalTile.tsx')
+} = loadModule<typeof import('./TerminalTile')>('./TerminalTile.tsx')
 
 const preparationMessageCases = [
   ['checking', 'terminal.wakeOnLanPreparing'],

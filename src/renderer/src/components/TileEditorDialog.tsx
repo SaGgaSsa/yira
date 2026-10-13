@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Bell, CornerDownLeft, TerminalSquare, X } from 'lucide-react'
+import { Bell, CornerDownLeft, SquareTerminal, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { TileState } from '@shared/types'
 
@@ -137,7 +137,7 @@ export function TileEditorDialog({ request, onCancel, onConfirm }: TileEditorDia
           {showCommandField && (
             <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
               <div className="mb-4 flex items-center gap-2">
-                <TerminalSquare size={14} className="text-text-secondary" />
+                <SquareTerminal size={14} className="text-text-secondary" />
                 <span className="nd-label text-text-secondary">
                   Startup command{request.shellProfileId ? ` · ${request.shellProfileId}` : ''}
                 </span>

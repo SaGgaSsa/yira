@@ -14,7 +14,7 @@ import {
   Pencil,
   RefreshCw,
   Search,
-  Trash2,
+  Trash,
   X,
 } from 'lucide-react'
 import type { FileEntry, FileEntryKind, FileNameError } from '@shared/types'
@@ -530,7 +530,7 @@ export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile, onEntr
         action: () => { void window.electron.files.revealEntry(rootPath, node.relativePath).catch(() => {}) },
       },
       { label: '', divider: true },
-      { label: t('files.moveToTrash'), icon: Trash2, danger: true, action: () => { void requestTrash(node) } },
+      { label: t('files.moveToTrash'), icon: Trash, danger: true, action: () => { void requestTrash(node) } },
     ]
   }, [contextMenu, requestTrash, rootPath, startCreate, startRename, t])
 

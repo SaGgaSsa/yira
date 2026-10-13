@@ -1,5 +1,5 @@
 import React from 'react'
-import { AlertTriangle, Copy, RotateCcw } from 'lucide-react'
+import { TriangleAlert, Copy, RotateCcw } from 'lucide-react'
 import { i18n } from '../i18n'
 
 interface AppErrorBoundaryProps {
@@ -51,7 +51,7 @@ export function AppErrorFallback({
     >
       <div className="flex w-full max-w-xl flex-col gap-4 rounded-lg border border-border-visible bg-bg-secondary p-6">
         <div className="flex items-center gap-2 text-text-display">
-          <AlertTriangle size={18} className="text-warning" aria-hidden="true" />
+          <TriangleAlert size={18} className="text-warning" aria-hidden="true" />
           <h1 className="text-base font-medium">{t('app.crashTitle', 'Something went wrong')}</h1>
         </div>
         <p className="text-sm text-text-secondary">

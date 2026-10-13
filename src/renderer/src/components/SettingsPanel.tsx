@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import {
-  X, Monitor, Moon, Sun, Type, Grid3X3, Globe, Code2, Info, RefreshCw, Download,
+  X, Monitor, Moon, Sun, Type, Grid3x3, Globe, CodeXml, Info, RefreshCw, Download,
   LayoutGrid, Keyboard, Terminal, ExternalLink, FileText, Bot,
 } from 'lucide-react'
 import { createUserSettingsDraft, useSettingsStore } from '@/store/settingsStore'
@@ -47,13 +47,13 @@ const SETTINGS_SECTIONS: Array<{
 }> = [
   { id: 'appearance', icon: Monitor },
   { id: 'density', icon: Type },
-  { id: 'canvas', icon: Grid3X3 },
+  { id: 'canvas', icon: Grid3x3 },
   { id: 'tiles', icon: LayoutGrid },
   { id: 'terminal', icon: Terminal },
   { id: 'agents', icon: Bot },
   { id: 'shortcuts', icon: Keyboard },
   { id: 'browser', icon: Globe },
-  { id: 'advanced', icon: Code2 },
+  { id: 'advanced', icon: CodeXml },
   { id: 'about', icon: Info },
 ]
 

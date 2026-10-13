@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { AlertTriangle, CornerDownLeft, X } from 'lucide-react'
+import { TriangleAlert, CornerDownLeft, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 export interface PromptDialogOptions {
@@ -123,7 +123,7 @@ export function AppDialog({ request, onCancel, onConfirm }: AppDialogProps): Rea
         <div className="space-y-5 px-6 py-6">
           {request.mode === 'confirm' && request.danger && (
             <div className="flex items-center gap-3 rounded-[20px] border border-danger/40 bg-danger/10 px-4 py-3 text-danger">
-              <AlertTriangle size={16} className="shrink-0" />
+              <TriangleAlert size={16} className="shrink-0" />
               <span className="text-sm">{request.warning ?? t('dialogs.persistedStateWarning')}</span>
             </div>
           )}

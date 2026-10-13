@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { createPortal } from 'react-dom'
-import { AlertCircle, Save, X } from 'lucide-react'
+import { CircleAlert, Save, X } from 'lucide-react'
 import type { CanvasState, GridWorkspaceState, WorkspaceType } from '@shared/types'
 import { createEmptyCanvasState, normalizeCanvasStateForJson } from '@/utils/canvasStateNormalization'
 import { createEmptyGridWorkspaceState, normalizeGridWorkspaceState } from '@shared/gridWorkspaceState'
@@ -70,7 +70,7 @@ export function RawJsonEditor({ open, workspaceId, workspaceType, state, onClose
           <div className="flex items-center gap-2 text-xs text-danger">
             {error && (
               <>
-                <AlertCircle size={14} />
+                <CircleAlert size={14} />
                 <span className="nd-caption">{t('ui.errorStatus')} {error}</span>
               </>
             )}

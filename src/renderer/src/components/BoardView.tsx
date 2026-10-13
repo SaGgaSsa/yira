@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Check, ClipboardList, Copy, MessageSquarePlus, Search, Trash2, Undo2, X } from 'lucide-react'
+import { Check, ClipboardList, Copy, MessageSquarePlus, Search, Trash, Undo2, X } from 'lucide-react'
 import { BOARD_COLUMNS, type BoardState, type BoardTask } from '@shared/types'
 import { getBoardHistory, getVisibleBoardColumns } from '@shared/board'
 
@@ -112,7 +112,7 @@ function TaskCard({
               onClick={() => onDeleteBacklogTask(task)}
               title={t('ui.deleteBacklogTask')}
             >
-              <Trash2 size={14} />
+              <Trash size={14} />
             </button>
           )}
           {task.status === 'review' && (
