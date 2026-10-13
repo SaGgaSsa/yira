@@ -48,8 +48,10 @@ function isInsidePath(rootPath: string, targetPath: string): boolean {
   )
 }
 
+// POSIX reports ENOTDIR when an intermediate segment is a file; Windows reports ENOENT.
 function isMissingError(error: unknown): boolean {
-  return (error as NodeJS.ErrnoException | undefined)?.code === 'ENOENT'
+  const code = (error as NodeJS.ErrnoException | undefined)?.code
+  return code === 'ENOENT' || code === 'ENOTDIR'
 }
 
 function hasTraversalSegment(relativePath: string): boolean {
