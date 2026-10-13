@@ -93,6 +93,16 @@ export function getDefaultWorkspaceScriptId(
   return runningScript?.scriptId ?? scripts[0]?.id ?? null
 }
 
+export function isSelectableWorkspaceScriptId(
+  scripts: WorkspaceScript[],
+  runs: WorkspaceScriptRun[],
+  scriptId: string | null,
+): boolean {
+  if (!scriptId) return false
+  return scripts.some((script) => script.id === scriptId)
+    || runs.some((run) => run.command !== undefined && run.scriptId === scriptId)
+}
+
 export function getWorkspaceScriptRunStatus(run: WorkspaceScriptRun | null | undefined): WorkspaceScriptRunStatus {
   if (!run) return 'idle'
   if (run.state === 'running') return 'running'
@@ -254,7 +264,7 @@ export function WorkspaceScriptsMenu({
             return (
               <div
                 key={run.scriptId}
-                className="flex items-center gap-1 rounded-md"
+                className={`flex items-center gap-1 rounded-md ${selectedScriptId === run.scriptId ? 'bg-hover-bg' : ''}`}
                 data-adhoc-script-id={run.scriptId}
               >
                 <button
@@ -497,7 +507,7 @@ export function WorkspaceRunControl({
   const scripts = currentSnapshot?.scripts ?? []
   const runs = currentSnapshot?.runs ?? []
   const selectedScriptId = selection.workspaceId === workspaceId
-    && scripts.some((script) => script.id === selection.scriptId)
+    && isSelectableWorkspaceScriptId(scripts, runs, selection.scriptId)
     ? selection.scriptId
     : getDefaultWorkspaceScriptId(scripts, runs)
   const selectedScript = scripts.find((script) => script.id === selectedScriptId) ?? null
@@ -505,7 +515,7 @@ export function WorkspaceRunControl({
   useEffect(() => {
     if (!currentSnapshot) return
     const selectedId = selection.workspaceId === workspaceId
-      && scripts.some((script) => script.id === selection.scriptId)
+      && isSelectableWorkspaceScriptId(scripts, runs, selection.scriptId)
       ? selection.scriptId
       : getDefaultWorkspaceScriptId(scripts, runs)
     if (selection.workspaceId === workspaceId && selection.scriptId === selectedId) return
@@ -523,7 +533,9 @@ export function WorkspaceRunControl({
     }
     return indexed
   }, [runs])
-  const selectedRun = selectedScript ? runsByScriptId.get(selectedScript.id) ?? null : null
+  const selectedRun = selectedScriptId ? runsByScriptId.get(selectedScriptId) ?? null : null
+  const selectedAdhocRun = selectedRun?.command !== undefined ? selectedRun : null
+  const selectedLabel = selectedScript?.name ?? selectedAdhocRun?.command
   const orphanRuns = useMemo(() => getOrphanWorkspaceScriptRuns(scripts, runs), [runs, scripts])
   const adhocRuns = useMemo(() => (
     runs
@@ -570,10 +582,15 @@ export function WorkspaceRunControl({
     setOutputRunTileId(null)
   }, [outputRunTileId, runs])
 
-  const selectScript = (scriptId: string) => {
+  const rememberSelection = (scriptId: string) => {
     setSelection({ workspaceId, scriptId })
     writeWorkspaceScriptSelection(workspaceId, scriptId)
+  }
+
+  const selectScript = (scriptId: string) => {
+    rememberSelection(scriptId)
     setMenuOpen(false)
+    setOutputRunTileId(runsByScriptId.get(scriptId)?.tileId ?? null)
   }
 
   const runScript = async (scriptId: string, showOutput = false) => {
@@ -612,6 +629,7 @@ export function WorkspaceRunControl({
           runs: [...base.runs.filter((run) => run.scriptId !== nextRun.scriptId), nextRun],
         }
       })
+      rememberSelection(nextRun.scriptId)
       setMenuOpen(false)
       setOutputRunTileId(nextRun.tileId)
     } catch (error) {
@@ -636,13 +654,21 @@ export function WorkspaceRunControl({
   }
 
   const runOrStopScript = (script: WorkspaceScript, run: WorkspaceScriptRun | null) => {
-    if (run?.state === 'running') void stopScript(script.id, run)
-    else void runScript(script.id)
+    if (run?.state === 'running') {
+      void stopScript(script.id, run)
+      return
+    }
+    rememberSelection(script.id)
+    void runScript(script.id)
   }
 
   const runOrStopAdhoc = (run: WorkspaceScriptRun) => {
-    if (run.state === 'running') void stopScript(run.scriptId, run)
-    else void runScript(run.scriptId)
+    if (run.state === 'running') {
+      void stopScript(run.scriptId, run)
+      return
+    }
+    rememberSelection(run.scriptId)
+    void runScript(run.scriptId)
   }
 
   const savedCommands = useMemo(
@@ -680,23 +706,23 @@ export function WorkspaceRunControl({
         type="button"
         className="inline-flex h-7 max-w-[180px] items-center gap-1.5 rounded-md px-2 text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
         onClick={() => setMenuOpen((open) => !open)}
-        title={errorTitle ?? selectedScript?.command ?? t('scripts.title')}
+        title={errorTitle ?? selectedScript?.command ?? selectedAdhocRun?.command ?? t('scripts.title')}
         aria-label={`${t('scripts.title')}: ${workspaceName}`}
         aria-haspopup="menu"
         aria-expanded={menuOpen}
       >
         {selectedRun && <span className={`size-1.5 shrink-0 rounded-full ${statusDotClass(getWorkspaceScriptRunStatus(selectedRun))}`} />}
-        <span className="truncate text-xs">{selectedScript?.name ?? t('scripts.title')}</span>
+        <span className={`truncate text-xs ${!selectedScript && selectedAdhocRun ? 'font-mono' : ''}`}>{selectedLabel ?? t('scripts.title')}</span>
         <ChevronDown size={12} className="shrink-0" />
       </button>
       <button
         type="button"
         className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
         onClick={() => {
-          if (!selectedScript) return
-          runOrStopScript(selectedScript, selectedRun)
+          if (selectedScript) runOrStopScript(selectedScript, selectedRun)
+          else if (selectedAdhocRun) runOrStopAdhoc(selectedAdhocRun)
         }}
-        disabled={!selectedScript || pendingScriptId === selectedScript.id}
+        disabled={!selectedLabel || pendingScriptId === selectedScriptId}
         title={errorTitle ?? t(selectedRun?.state === 'running' ? 'scripts.stopScript' : 'scripts.runScript')}
         aria-label={t(selectedRun?.state === 'running' ? 'scripts.stopScript' : 'scripts.runScript')}
       >
@@ -731,6 +757,7 @@ export function WorkspaceRunControl({
             onStopOrphan={(run) => void stopScript(run.scriptId, run)}
             onRunCommand={(command) => void runCommand(command)}
             onShowOutput={(run) => {
+              rememberSelection(run.scriptId)
               setOutputRunTileId(run.tileId)
               setMenuOpen(false)
             }}
