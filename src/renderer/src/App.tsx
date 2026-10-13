@@ -1485,7 +1485,7 @@ function AppContent(): React.ReactElement {
     setFullviewActiveTileId(tileId)
   }, [focusTile, selectTiles, setFullviewActiveTileId, setSplitPanelActiveTile])
 
-  const makeOpenedFileVisible = useCallback((tileId: string) => {
+  const revealTile = useCallback((tileId: string) => {
     const state = useCanvasStore.getState()
     const tile = state.tiles.find((entry) => entry.id === tileId)
     if (!tile) return
@@ -1532,6 +1532,11 @@ function AppContent(): React.ReactElement {
     })
   }, [])
 
+  // Manual creation and duplication show the new tile in the current view.
+  const revealCreatedTile = useCallback((tileId: string | null) => {
+    if (tileId) revealTile(tileId)
+  }, [revealTile])
+
   const openFileTile = useCallback(async (relativePath: string, options: FileTileOpenOptions = {}) => {
     const path = relativePath.trim()
     if (!workspaceRootPath || !path) throw new Error('A workspace file path is required')
@@ -1570,7 +1575,7 @@ function AppContent(): React.ReactElement {
     const initialPlan = planFileTileOpen(initialState.tiles, proposed)
     if (initialPlan.kind === 'focus-existing') {
       if (options.reveal) initialState.updateTile(initialPlan.tileId, { fileRevealRequest: { ...options.reveal, id: `${Date.now()}-${Math.random()}` } })
-      makeOpenedFileVisible(initialPlan.tileId)
+      revealTile(initialPlan.tileId)
       return
     }
 
@@ -1606,13 +1611,13 @@ function AppContent(): React.ReactElement {
 
     if (plan.kind === 'focus-existing') {
       if (options.reveal) state.updateTile(plan.tileId, { fileRevealRequest: { ...options.reveal, id: `${Date.now()}-${Math.random()}` } })
-      makeOpenedFileVisible(plan.tileId)
+      revealTile(plan.tileId)
       return
     }
 
     if (plan.kind === 'reuse-preview') {
       state.setTiles(state.tiles.map((tile) => tile.id === plan.tile.id ? { ...plan.tile, ...(options.reveal ? { fileRevealRequest: { ...options.reveal, id: `${Date.now()}-${Math.random()}` } } : {}) } : tile))
-      makeOpenedFileVisible(plan.tile.id)
+      revealTile(plan.tile.id)
       return
     }
 
@@ -1620,8 +1625,8 @@ function AppContent(): React.ReactElement {
       throw new Error(`Grid workspaces can contain at most ${GRID_MAX_TILES} tiles.`)
     }
     state.addTile(plan.tile)
-    makeOpenedFileVisible(plan.tile.id)
-  }, [makeOpenedFileVisible, t, workspaceRootPath])
+    revealTile(plan.tile.id)
+  }, [revealTile, t, workspaceRootPath])
 
   // The store only holds the active workspace's tiles, which are the ones the explorer shows.
   const handleExplorerEntryRenamed = useCallback((oldPath: string, newPath: string) => {
@@ -1921,13 +1926,8 @@ function AppContent(): React.ReactElement {
   }, [attachFloatingTile])
 
   const duplicateTileFromMenu = useCallback((tile: TileState) => {
-    const duplicateId = duplicateTerminalTile(tile.id)
-    if (!duplicateId) return
-
-    if (viewMode === 'fullview') {
-      setFullviewActiveTileId(duplicateId)
-    }
-  }, [duplicateTerminalTile, setFullviewActiveTileId, viewMode])
+    revealCreatedTile(duplicateTerminalTile(tile.id))
+  }, [duplicateTerminalTile, revealCreatedTile])
 
   const bumpTileRefreshKey = useCallback((tileId: string) => {
     setTileRefreshKeys((current) => ({
@@ -2157,14 +2157,14 @@ function AppContent(): React.ReactElement {
 
   const createTerminalFromSidebar = useCallback(() => {
     if (availableProfiles.length <= 1 && defaultProfile && !remoteTerminalConfigured) {
-      addTerminal(defaultProfile.id)
+      revealCreatedTile(addTerminal(defaultProfile.id))
       setShowProfilePicker(false)
       setShowNotePicker(false)
       return
     }
     setShowNotePicker(false)
     setShowProfilePicker((v) => !v)
-  }, [availableProfiles.length, defaultProfile, addTerminal, remoteTerminalConfigured])
+  }, [availableProfiles.length, defaultProfile, addTerminal, remoteTerminalConfigured, revealCreatedTile])
 
   const handleCreateBoardTask = useCallback(async () => {
     if (!activeWorkspaceId) return
@@ -2479,7 +2479,9 @@ function AppContent(): React.ReactElement {
         setSplitViewState(placeTilesSideBySide(useCanvasStore.getState().splitViewState, previousFullviewTileId, tileId))
         setFullviewActiveTileId(tileId)
         setViewMode('splitview')
+        return
       }
+      revealCreatedTile(tileId)
     },
     onCreateNote: () => {
       setShowProfilePicker(false)
@@ -2487,11 +2489,11 @@ function AppContent(): React.ReactElement {
     },
     onCreateBrowser: () => {
       setShowProfilePicker(false)
-      addBrowser()
+      revealCreatedTile(addBrowser())
     },
     onCreateTimer: () => {
       setShowProfilePicker(false)
-      addTimer()
+      revealCreatedTile(addTimer())
     },
     onCreateBoard: () => {
       void handleBoardButton()
@@ -2582,7 +2584,7 @@ function AppContent(): React.ReactElement {
                       detail: profile.available ? `[ ${t('ui.ready').toUpperCase()} ]` : `[ ${t('ui.missing').toUpperCase()} ]`,
                       disabled: !profile.available,
                       onClick: () => {
-                        addTerminal(profile.id)
+                        revealCreatedTile(addTerminal(profile.id))
                         setShowProfilePicker(false)
                       },
                     })),
@@ -2602,7 +2604,7 @@ function AppContent(): React.ReactElement {
                           ? t('ui.opensshMissing')
                           : t('ui.createSshTerminal'),
                       onClick: () => {
-                        addRemoteTerminal()
+                        revealCreatedTile(addRemoteTerminal())
                         setShowProfilePicker(false)
                       },
                     },
@@ -2622,7 +2624,7 @@ function AppContent(): React.ReactElement {
                       label: t('ui.richNote'),
                       detail: t('ui.richStatus'),
                       onClick: () => {
-                        addNote('rich')
+                        revealCreatedTile(addNote('rich'))
                         setShowNotePicker(false)
                       },
                     },
@@ -2632,7 +2634,7 @@ function AppContent(): React.ReactElement {
                       label: t('ui.markdownNote'),
                       detail: t('ui.markdownStatus'),
                       onClick: () => {
-                        addNote('markdown')
+                        revealCreatedTile(addNote('markdown'))
                         setShowNotePicker(false)
                       },
                     },
@@ -2880,11 +2882,11 @@ function AppContent(): React.ReactElement {
                     workspaceConfig={activeWorkspaceConfig}
                     tileCreationSelectorProps={tileCreationSelectorProps}
                     profiles={availableProfiles}
-                    onCreateTerminal={(profileId) => addTerminal(profileId)}
-                    onCreateRichNote={() => addNote('rich')}
-                    onCreateMarkdownNote={() => addNote('markdown')}
-                    onCreateBrowser={() => addBrowser()}
-                    onCreateTimer={() => addTimer()}
+                    onCreateTerminal={(profileId) => revealCreatedTile(addTerminal(profileId))}
+                    onCreateRichNote={() => revealCreatedTile(addNote('rich'))}
+                    onCreateMarkdownNote={() => revealCreatedTile(addNote('markdown'))}
+                    onCreateBrowser={() => revealCreatedTile(addBrowser())}
+                    onCreateTimer={() => revealCreatedTile(addTimer())}
                     onOpenBrowserTile={(url) => addBrowser(url)}
                     onOpenFileTile={openFileTile}
                     canCreateNote={canCreateNote}

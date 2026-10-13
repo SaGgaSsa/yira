@@ -155,7 +155,7 @@ export function useCanvasActions({ requestConfirm, destroyTerminalRuntime }: Use
     const size = getDefaultTileSize('terminal')
     const pos = getSpawnPos(size.width, size.height, 40)
 
-    finalizeAddedTile({
+    const tile: TileState = {
       id: generateId(),
       type: 'terminal',
       x: pos.x,
@@ -165,7 +165,8 @@ export function useCanvasActions({ requestConfirm, destroyTerminalRuntime }: Use
       zIndex: state.nextZIndex,
       shellProfileId: 'bash',
       terminalConnection: 'remote-ssh',
-    })
+    }
+    return finalizeAddedTile(tile) ? tile.id : null
   }, [finalizeAddedTile, getSpawnPos])
 
   const duplicateTerminalTile = useCallback(
@@ -208,7 +209,7 @@ export function useCanvasActions({ requestConfirm, destroyTerminalRuntime }: Use
   )
 
   const addBrowser = useCallback((url?: string) => {
-    if (!tileCreationAvailability.browser) return
+    if (!tileCreationAvailability.browser) return null
 
     const state = useCanvasStore.getState()
     const size = getDefaultTileSize('browser')
@@ -224,12 +225,12 @@ export function useCanvasActions({ requestConfirm, destroyTerminalRuntime }: Use
       zIndex: state.nextZIndex,
       browserUrl: getBrowserTileUrl(url, browserHomeUrl),
     }
-    finalizeAddedTile(tile)
+    return finalizeAddedTile(tile) ? tile.id : null
   }, [browserHomeUrl, finalizeAddedTile, getSpawnPos, tileCreationAvailability.browser])
 
   const addNote = useCallback(
     (kind: NoteKind, color?: NoteColor) => {
-      if (!tileCreationAvailability.note) return
+      if (!tileCreationAvailability.note) return null
 
       const state = useCanvasStore.getState()
       const size = getDefaultTileSize('note')
@@ -249,13 +250,13 @@ export function useCanvasActions({ requestConfirm, destroyTerminalRuntime }: Use
         noteKind: kind,
         ...(kind === 'markdown' ? { markdown: '', markdownView: 'live' as const } : {}),
       }
-      finalizeAddedTile(tile)
+      return finalizeAddedTile(tile) ? tile.id : null
     },
     [finalizeAddedTile, getSpawnPos, tileCreationAvailability.note],
   )
 
   const addTimer = useCallback(() => {
-    if (!tileCreationAvailability.timer) return
+    if (!tileCreationAvailability.timer) return null
 
     const state = useCanvasStore.getState()
     const size = getDefaultTileSize('timer')
@@ -274,7 +275,7 @@ export function useCanvasActions({ requestConfirm, destroyTerminalRuntime }: Use
       timerRemainingMs: defaultDurationMs,
       timerStatus: 'idle',
     }
-    finalizeAddedTile(tile)
+    return finalizeAddedTile(tile) ? tile.id : null
   }, [finalizeAddedTile, getSpawnPos, tileCreationAvailability.timer])
 
   const deleteTile = useCallback(
