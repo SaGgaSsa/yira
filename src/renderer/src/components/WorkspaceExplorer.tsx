@@ -1,10 +1,34 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ChevronDown, ChevronRight, ExternalLink, File, Folder, RefreshCw, Search, X } from 'lucide-react'
-import type { FileEntry } from '@shared/types'
+import {
+  ChevronDown,
+  ChevronRight,
+  Copy,
+  ExternalLink,
+  Eye,
+  EyeOff,
+  File,
+  FilePlus,
+  Folder,
+  FolderPlus,
+  Pencil,
+  RefreshCw,
+  Search,
+  Trash2,
+  X,
+} from 'lucide-react'
+import type { FileEntry, FileEntryKind, FileNameError } from '@shared/types'
+import { validateEntryName } from '@shared/fileName'
+import { isHiddenRelativePath } from '@shared/hiddenEntries'
 import {
   createExplorerNode,
+  expandExplorerDirectory,
+  findExplorerNode,
+  getCreateParentPath,
   getLoadedExpandedDirectories,
+  getParentRelativePath,
+  hasExplorerSiblingNamed,
+  joinRootPath,
   mergeExplorerDirectoryChildren,
   toggleExplorerDirectory,
   updateExplorerDirectory,
@@ -21,6 +45,48 @@ import {
   type WorkspaceSearchRequest,
   type WorkspaceSearchState,
 } from '@/utils/workspaceExplorerSearch'
+import { ContextMenu, type MenuItem } from './ContextMenu'
+import type { ConfirmDialogOptions } from './AppDialog'
+import { ExplorerInlineInput } from './ExplorerInlineInput'
+
+const SHOW_HIDDEN_STORAGE_KEY = 'yira.explorer.showHidden'
+
+const FILE_NAME_ERROR_KEYS: Record<FileNameError, string> = {
+  empty: 'files.errorEmpty',
+  'invalid-segment': 'files.errorInvalidSegment',
+  'invalid-character': 'files.errorInvalidCharacter',
+  'reserved-name': 'files.errorReservedName',
+  'trailing-dot-or-space': 'files.errorTrailingDotOrSpace',
+  'too-long': 'files.errorTooLong',
+  'absolute-path': 'files.errorAbsolutePath',
+}
+
+type ExplorerDraft =
+  | { mode: 'create'; parentPath: string; kind: FileEntryKind }
+  | { mode: 'rename'; relativePath: string }
+
+interface ExplorerContextMenuState {
+  x: number
+  y: number
+  /** Right-clicked row, or null for the empty area of the tree. */
+  node: ExplorerNode | null
+}
+
+function readShowHidden(): boolean {
+  try {
+    return window.localStorage.getItem(SHOW_HIDDEN_STORAGE_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
+
+function writeShowHidden(value: boolean): void {
+  try {
+    window.localStorage.setItem(SHOW_HIDDEN_STORAGE_KEY, String(value))
+  } catch {
+    // The preference only lasts for this session when storage is unavailable.
+  }
+}
 
 // Explorer trees by root path, kept for the app session so switching panel tabs
 // or workspaces does not collapse the folders the user had open.
@@ -39,38 +105,63 @@ function toExplorerNode(entry: FileEntry): ExplorerNode {
   return createExplorerNode(entry.relativePath, entry.name, entry.kind)
 }
 
-interface ExplorerTreeNodeProps {
-  node: ExplorerNode
-  depth: number
+interface ExplorerTreeHandlers {
+  activeFilePath: string | null
+  selectedPath: string | null
+  draft: ExplorerDraft | null
+  onSelect: (node: ExplorerNode) => void
   onToggleDirectory: (node: ExplorerNode) => void
   onOpenFile: (node: ExplorerNode) => void
   onRetry: (node: ExplorerNode) => void
-  activeFilePath: string | null
+  onContextMenu: (event: React.MouseEvent, node: ExplorerNode) => void
+  /** Inline input for a new entry (node null) or for renaming the given node. */
+  renderDraftInput: (depth: number, node: ExplorerNode | null) => React.ReactNode
 }
 
-function ExplorerTreeNode({ node, depth, onToggleDirectory, onOpenFile, onRetry, activeFilePath }: ExplorerTreeNodeProps): React.ReactElement {
+interface ExplorerTreeNodeProps {
+  node: ExplorerNode
+  depth: number
+  handlers: ExplorerTreeHandlers
+}
+
+function ExplorerTreeNode({ node, depth, handlers }: ExplorerTreeNodeProps): React.ReactElement {
   const { t } = useTranslation()
+  const { activeFilePath, selectedPath, draft, onSelect, onToggleDirectory, onOpenFile, onRetry, onContextMenu, renderDraftInput } = handlers
   const isDirectory = node.kind === 'directory'
   const isActiveFile = !isDirectory && node.relativePath === activeFilePath
+  const isSelected = node.relativePath === selectedPath
+  const isRenaming = draft?.mode === 'rename' && draft.relativePath === node.relativePath
+  const isCreateTarget = draft?.mode === 'create' && draft.parentPath === node.relativePath
   const Icon = isDirectory ? Folder : File
+  const stateClass = isActiveFile
+    ? 'bg-active-bg text-text-display'
+    : isSelected ? 'bg-hover-bg text-text-display' : 'text-text-secondary'
 
   return (
     <li>
-      <button
-        className={`flex w-full items-center gap-1.5 py-1.5 pr-3 text-left text-sm transition-colors hover:bg-hover-bg hover:text-text-display ${isActiveFile ? 'bg-active-bg text-text-display' : 'text-text-secondary'}`}
-        style={{ paddingLeft: `${12 + depth * 16}px` }}
-        onClick={() => isDirectory ? onToggleDirectory(node) : onOpenFile(node)}
-        title={node.name}
-      >
-        {isDirectory ? (
-          node.expanded ? <ChevronDown size={14} className="shrink-0" /> : <ChevronRight size={14} className="shrink-0" />
-        ) : <span className="w-[14px] shrink-0" />}
-        <Icon size={14} className="shrink-0" />
-        <span className="min-w-0 truncate">{node.name}</span>
-      </button>
+      {isRenaming ? renderDraftInput(depth, node) : (
+        <button
+          className={`flex w-full items-center gap-1.5 py-1.5 pr-3 text-left text-sm transition-colors hover:bg-hover-bg hover:text-text-display ${stateClass} ${isSelected ? 'shadow-[inset_2px_0_0_var(--text-secondary)]' : ''}`}
+          style={{ paddingLeft: `${12 + depth * 16}px` }}
+          onClick={() => {
+            onSelect(node)
+            if (isDirectory) onToggleDirectory(node)
+            else onOpenFile(node)
+          }}
+          onContextMenu={(event) => onContextMenu(event, node)}
+          title={node.name}
+        >
+          {isDirectory ? (
+            node.expanded ? <ChevronDown size={14} className="shrink-0" /> : <ChevronRight size={14} className="shrink-0" />
+          ) : <span className="w-[14px] shrink-0" />}
+          <Icon size={14} className="shrink-0" />
+          <span className="min-w-0 truncate">{node.name}</span>
+        </button>
+      )}
 
       {isDirectory && node.expanded && (
         <div>
+          {isCreateTarget && renderDraftInput(depth + 1, null)}
           {node.status === 'loading' && (
             <div className="px-3 py-2 text-xs text-text-disabled" style={{ paddingLeft: `${42 + depth * 16}px` }}>{t('common.loading')}</div>
           )}
@@ -94,10 +185,7 @@ function ExplorerTreeNode({ node, depth, onToggleDirectory, onOpenFile, onRetry,
               key={child.relativePath}
               node={child}
               depth={depth + 1}
-              onToggleDirectory={onToggleDirectory}
-              onOpenFile={onOpenFile}
-              onRetry={onRetry}
-              activeFilePath={activeFilePath}
+              handlers={handlers}
             />
           ))}
         </div>
@@ -110,9 +198,10 @@ interface WorkspaceExplorerProps {
   rootPath: string
   activeFilePath: string | null
   onOpenFile: (relativePath: string) => Promise<void>
+  requestConfirm: (options: ConfirmDialogOptions) => Promise<boolean>
 }
 
-export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile }: WorkspaceExplorerProps): React.ReactElement {
+export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile, requestConfirm }: WorkspaceExplorerProps): React.ReactElement {
   const { t } = useTranslation()
   const [root, setRoot] = useState<ExplorerNode>(() => (
     explorerTreeCache.get(rootPath) ?? createExplorerNode('', rootLabel(rootPath), 'directory')
@@ -125,12 +214,19 @@ export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile }: Work
   const searchRootPathRef = useRef(rootPath)
   searchRootPathRef.current = rootPath
   const rootName = useMemo(() => rootLabel(rootPath), [rootPath])
+  const [selectedPath, setSelectedPath] = useState<string | null>(null)
+  const [draft, setDraft] = useState<ExplorerDraft | null>(null)
+  const [contextMenu, setContextMenu] = useState<ExplorerContextMenuState | null>(null)
+  const [showHidden, setShowHidden] = useState(readShowHidden)
+  const showHiddenRef = useRef(showHidden)
+  const rootRef = useRef(root)
+  rootRef.current = root
 
   const loadDirectory = useCallback(async (relativePath: string) => {
     setRoot((current) => updateExplorerDirectory(current, relativePath, { status: 'loading', error: undefined }))
 
     try {
-      const result = await window.electron.files.list(rootPath, relativePath)
+      const result = await window.electron.files.list(rootPath, relativePath, { showIgnored: showHiddenRef.current })
       setRoot((current) => updateExplorerDirectory(current, relativePath, {
         status: 'ready',
         children: result.entries.map(toExplorerNode),
@@ -146,7 +242,7 @@ export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile }: Work
 
   const refreshDirectory = useCallback(async (relativePath: string) => {
     try {
-      const result = await window.electron.files.list(rootPath, relativePath)
+      const result = await window.electron.files.list(rootPath, relativePath, { showIgnored: showHiddenRef.current })
       if (treeRootPathRef.current !== rootPath) return
       setRoot((current) => mergeExplorerDirectoryChildren(current, relativePath, result.entries.map(toExplorerNode)))
     } catch {
@@ -177,6 +273,9 @@ export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile }: Work
     searchRequestIdRef.current += 1
     setSearchOpen(false)
     setSearchState(resetWorkspaceSearchState())
+    setSelectedPath(null)
+    setDraft(null)
+    setContextMenu(null)
   }, [rootPath])
 
   useEffect(() => {
@@ -223,6 +322,226 @@ export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile }: Work
   const handleOpenFile = useCallback((node: ExplorerNode) => {
     handleOpenRelativePath(node.relativePath)
   }, [handleOpenRelativePath])
+
+  const refreshLoadedDirectories = useCallback(() => {
+    for (const relativePath of getLoadedExpandedDirectories(rootRef.current)) void refreshDirectory(relativePath)
+  }, [refreshDirectory])
+
+  const applyShowHidden = useCallback((next: boolean) => {
+    showHiddenRef.current = next
+    setShowHidden(next)
+    writeShowHidden(next)
+    refreshLoadedDirectories()
+  }, [refreshLoadedDirectories])
+
+  const handleSelect = useCallback((node: ExplorerNode) => {
+    setSelectedPath(node.relativePath)
+  }, [])
+
+  const selectedNode = selectedPath === null ? null : findExplorerNode(root, selectedPath)
+
+  const startCreate = useCallback((kind: FileEntryKind, parentPath: string) => {
+    setContextMenu(null)
+    setOpenError(null)
+    const parent = findExplorerNode(rootRef.current, parentPath)
+    if (parent && !(parent.expanded && parent.status === 'loading') && parent.status !== 'ready') {
+      void loadDirectory(parentPath)
+    }
+    setRoot((current) => expandExplorerDirectory(current, parentPath))
+    setDraft({ mode: 'create', parentPath, kind })
+  }, [loadDirectory])
+
+  const startRename = useCallback((node: ExplorerNode) => {
+    setContextMenu(null)
+    setOpenError(null)
+    setSelectedPath(node.relativePath)
+    setDraft({ mode: 'rename', relativePath: node.relativePath })
+  }, [])
+
+  const requestTrash = useCallback(async (node: ExplorerNode) => {
+    setContextMenu(null)
+    const confirmed = await requestConfirm({
+      title: t('files.trashTitle'),
+      message: t('files.trashMessage', { name: node.name }),
+      confirmLabel: t('files.trashConfirm'),
+      danger: true,
+    })
+    if (!confirmed) return
+
+    try {
+      await window.electron.files.trashEntry(rootPath, node.relativePath)
+      await refreshDirectory(getParentRelativePath(node.relativePath))
+      setSelectedPath((current) => (
+        current !== null && (current === node.relativePath || current.startsWith(`${node.relativePath}/`)) ? null : current
+      ))
+    } catch (error) {
+      setOpenError(errorMessage(error, t('files.nameMissing')))
+    }
+  }, [refreshDirectory, requestConfirm, rootPath, t])
+
+  const getNameError = useCallback((value: string, parentPath: string, allowNested: boolean, ignorePath?: string): string | null => {
+    const nameError = validateEntryName(value, { allowNested })
+    if (nameError) return t(FILE_NAME_ERROR_KEYS[nameError])
+    return hasExplorerSiblingNamed(rootRef.current, parentPath, value, ignorePath) ? t('files.nameExists') : null
+  }, [t])
+
+  // Reveals the changed path in the listing, turning on "show hidden" when the filter would hide it.
+  const refreshAfterChange = useCallback(async (parentPath: string, changedPath: string) => {
+    if (isHiddenRelativePath(changedPath) && !showHiddenRef.current) {
+      applyShowHidden(true)
+      return
+    }
+    await refreshDirectory(parentPath)
+  }, [applyShowHidden, refreshDirectory])
+
+  const submitCreate = useCallback(async (draftState: Extract<ExplorerDraft, { mode: 'create' }>, name: string): Promise<string | null> => {
+    try {
+      const result = await window.electron.files.createEntry(rootPath, {
+        parentRelativePath: draftState.parentPath,
+        name,
+        kind: draftState.kind,
+      })
+      if (result.status === 'exists') return t('files.nameExists')
+      if (result.status === 'missing') return t('files.nameMissing')
+      if (result.status === 'invalid') return t(FILE_NAME_ERROR_KEYS[result.reason])
+
+      setDraft(null)
+      await refreshAfterChange(draftState.parentPath, result.relativePath)
+      setSelectedPath(result.relativePath)
+      if (result.kind === 'file') handleOpenRelativePath(result.relativePath)
+      return null
+    } catch (error) {
+      return errorMessage(error, t('files.nameMissing'))
+    }
+  }, [handleOpenRelativePath, refreshAfterChange, rootPath, t])
+
+  const submitRename = useCallback(async (node: ExplorerNode, newName: string): Promise<string | null> => {
+    if (newName === node.name) {
+      setDraft(null)
+      return null
+    }
+
+    try {
+      const result = await window.electron.files.renameEntry(rootPath, { relativePath: node.relativePath, newName })
+      if (result.status === 'exists') return t('files.nameExists')
+      if (result.status === 'missing') return t('files.nameMissing')
+      if (result.status === 'invalid') return t(FILE_NAME_ERROR_KEYS[result.reason])
+
+      setDraft(null)
+      await refreshAfterChange(getParentRelativePath(node.relativePath), result.relativePath)
+      setSelectedPath(result.relativePath)
+      return null
+    } catch (error) {
+      return errorMessage(error, t('files.nameMissing'))
+    }
+  }, [refreshAfterChange, rootPath, t])
+
+  const renderDraftInput = useCallback((depth: number, node: ExplorerNode | null): React.ReactNode => {
+    if (!draft) return null
+    const cancel = () => setDraft(null)
+
+    if (draft.mode === 'create') {
+      return (
+        <ExplorerInlineInput
+          key={`create:${draft.parentPath}:${draft.kind}`}
+          kind={draft.kind}
+          depth={depth}
+          ariaLabel={t('files.entryName')}
+          validate={(value) => getNameError(value, draft.parentPath, true)}
+          onSubmit={(value) => submitCreate(draft, value)}
+          onCancel={cancel}
+        />
+      )
+    }
+
+    if (!node) return null
+    return (
+      <ExplorerInlineInput
+        key={`rename:${node.relativePath}`}
+        kind={node.kind}
+        depth={depth}
+        initialValue={node.name}
+        selectBaseName={node.kind === 'file'}
+        ariaLabel={t('files.entryName')}
+        validate={(value) => getNameError(value, getParentRelativePath(node.relativePath), false, node.relativePath)}
+        onSubmit={(value) => submitRename(node, value)}
+        onCancel={cancel}
+      />
+    )
+  }, [draft, getNameError, submitCreate, submitRename, t])
+
+  const handleNodeContextMenu = useCallback((event: React.MouseEvent, node: ExplorerNode) => {
+    event.preventDefault()
+    event.stopPropagation()
+    setSelectedPath(node.relativePath)
+    setContextMenu({ x: event.clientX, y: event.clientY, node })
+  }, [])
+
+  const handleTreeContextMenu = useCallback((event: React.MouseEvent) => {
+    if (searchOpen) return
+    event.preventDefault()
+    setContextMenu({ x: event.clientX, y: event.clientY, node: null })
+  }, [searchOpen])
+
+  const handleTreeKeyDown = useCallback((event: React.KeyboardEvent) => {
+    if (searchOpen || !selectedNode) return
+    const target = event.target as HTMLElement
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return
+    if (event.key === 'F2') {
+      event.preventDefault()
+      startRename(selectedNode)
+    } else if (event.key === 'Delete') {
+      event.preventDefault()
+      void requestTrash(selectedNode)
+    }
+  }, [requestTrash, searchOpen, selectedNode, startRename])
+
+  const contextMenuItems = useMemo((): MenuItem[] => {
+    if (!contextMenu) return []
+    const { node } = contextMenu
+    const parentPath = getCreateParentPath(node)
+    const createItems: MenuItem[] = [
+      { label: t('files.newFile'), icon: FilePlus, action: () => startCreate('file', parentPath) },
+      { label: t('files.newFolder'), icon: FolderPlus, action: () => startCreate('directory', parentPath) },
+    ]
+    if (!node) return createItems
+
+    return [
+      ...createItems,
+      { label: '', divider: true },
+      { label: t('files.rename'), icon: Pencil, action: () => startRename(node) },
+      {
+        label: t('files.copyPath'),
+        icon: Copy,
+        action: () => { void window.electron.clipboard.writeText(joinRootPath(rootPath, node.relativePath)).catch(() => {}) },
+      },
+      {
+        label: t('files.copyRelativePath'),
+        icon: Copy,
+        action: () => { void window.electron.clipboard.writeText(node.relativePath).catch(() => {}) },
+      },
+      {
+        label: t('files.revealInExplorer'),
+        icon: ExternalLink,
+        action: () => { void window.electron.files.revealEntry(rootPath, node.relativePath).catch(() => {}) },
+      },
+      { label: '', divider: true },
+      { label: t('files.moveToTrash'), icon: Trash2, danger: true, action: () => { void requestTrash(node) } },
+    ]
+  }, [contextMenu, requestTrash, rootPath, startCreate, startRename, t])
+
+  const treeHandlers: ExplorerTreeHandlers = {
+    activeFilePath,
+    selectedPath,
+    draft,
+    onSelect: handleSelect,
+    onToggleDirectory: handleToggleDirectory,
+    onOpenFile: handleOpenFile,
+    onRetry: handleRetry,
+    onContextMenu: handleNodeContextMenu,
+    renderDraftInput,
+  }
+  const rootCreateDraft = draft?.mode === 'create' && draft.parentPath === ''
 
   const handleOpenSearch = useCallback(() => {
     searchRequestIdRef.current += 1
@@ -289,6 +608,34 @@ export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile }: Work
             <button
               type="button"
               className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-text-secondary hover:bg-hover-bg hover:text-text-display"
+              onClick={() => startCreate('file', getCreateParentPath(selectedNode))}
+              title={t('files.newFile')}
+              aria-label={t('files.newFile')}
+            >
+              <FilePlus size={15} />
+            </button>
+            <button
+              type="button"
+              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-text-secondary hover:bg-hover-bg hover:text-text-display"
+              onClick={() => startCreate('directory', getCreateParentPath(selectedNode))}
+              title={t('files.newFolder')}
+              aria-label={t('files.newFolder')}
+            >
+              <FolderPlus size={15} />
+            </button>
+            <button
+              type="button"
+              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-text-secondary hover:bg-hover-bg hover:text-text-display"
+              onClick={() => applyShowHidden(!showHidden)}
+              title={showHidden ? t('files.hideHidden') : t('files.showHidden')}
+              aria-label={showHidden ? t('files.hideHidden') : t('files.showHidden')}
+              aria-pressed={showHidden}
+            >
+              {showHidden ? <EyeOff size={15} /> : <Eye size={15} />}
+            </button>
+            <button
+              type="button"
+              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-text-secondary hover:bg-hover-bg hover:text-text-display"
               onClick={handleOpenSearch}
               title={t('ui.searchWorkspaceFiles')}
               aria-label={t('ui.searchWorkspaceFiles')}
@@ -298,7 +645,14 @@ export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile }: Work
           </>
         )}
       </div>
-      <div className="min-h-0 flex-1 overflow-auto py-1">
+      <div
+        className="min-h-0 flex-1 overflow-auto py-1"
+        onClick={(event) => {
+          if (event.target === event.currentTarget) setSelectedPath(null)
+        }}
+        onContextMenu={handleTreeContextMenu}
+        onKeyDown={handleTreeKeyDown}
+      >
         {searchOpen ? (
           <>
             {searchView === 'prompt' && <div className="px-4 py-3 text-sm text-text-disabled">{t('ui.typeToSearchFiles')}</div>}
@@ -336,23 +690,24 @@ export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile }: Work
               <RefreshCw size={13} /> {t('files.retry')}
             </button>
           </div>
-        ) : root.children?.length ? (
+        ) : root.children?.length || rootCreateDraft ? (
           <ul>
-            {root.children.map((child) => (
+            {rootCreateDraft && <li>{renderDraftInput(0, null)}</li>}
+            {root.children?.map((child) => (
               <ExplorerTreeNode
                 key={child.relativePath}
                 node={child}
                 depth={0}
-                onToggleDirectory={handleToggleDirectory}
-                onOpenFile={handleOpenFile}
-                onRetry={handleRetry}
-                activeFilePath={activeFilePath}
+                handlers={treeHandlers}
               />
             ))}
           </ul>
         ) : <div className="px-4 py-3 text-sm text-text-disabled">{t('ui.emptyFolder')}</div>}
       </div>
       {openError && <div className="shrink-0 border-t border-border px-3 py-2 text-xs text-red-300">{openError}</div>}
+      {contextMenu && (
+        <ContextMenu x={contextMenu.x} y={contextMenu.y} items={contextMenuItems} onClose={() => setContextMenu(null)} />
+      )}
     </div>
   )
 }

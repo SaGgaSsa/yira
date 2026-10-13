@@ -88,3 +88,57 @@ export function getLoadedExpandedDirectories(root: ExplorerNode): string[] {
   visit(root)
   return paths
 }
+
+export function findExplorerNode(root: ExplorerNode, relativePath: string): ExplorerNode | null {
+  if (root.relativePath === relativePath) return root
+  for (const child of root.children ?? []) {
+    const found = findExplorerNode(child, relativePath)
+    if (found) return found
+  }
+  return null
+}
+
+/** Parent directory of a '/'-separated relative path; '' is the workspace root. */
+export function getParentRelativePath(relativePath: string): string {
+  const index = relativePath.lastIndexOf('/')
+  return index === -1 ? '' : relativePath.slice(0, index)
+}
+
+/** Directory where "new file/folder" creates its entry for the given target. */
+export function getCreateParentPath(target: Pick<ExplorerNode, 'relativePath' | 'kind'> | null): string {
+  if (!target) return ''
+  return target.kind === 'directory' ? target.relativePath : getParentRelativePath(target.relativePath)
+}
+
+/** Mark a directory as expanded, flagging it as loading when its children are not loaded yet. */
+export function expandExplorerDirectory(root: ExplorerNode, relativePath: string): ExplorerNode {
+  return updateNode(root, relativePath, (node) => {
+    if (node.kind !== 'directory' || node.expanded) return node
+    return { ...node, expanded: true, status: node.status === 'ready' ? 'ready' : 'loading', error: undefined }
+  })
+}
+
+/**
+ * Whether a typed name collides (case-insensitively) with a loaded sibling.
+ * Nested names such as 'a/b.ts' only collide on their first segment.
+ */
+export function hasExplorerSiblingNamed(
+  root: ExplorerNode,
+  parentRelativePath: string,
+  name: string,
+  ignoreRelativePath?: string,
+): boolean {
+  const firstSegment = name.split('/')[0].toLowerCase()
+  if (!firstSegment) return false
+  const parent = findExplorerNode(root, parentRelativePath)
+  return (parent?.children ?? []).some((child) => (
+    child.relativePath !== ignoreRelativePath && child.name.toLowerCase() === firstSegment
+  ))
+}
+
+/** Absolute path of a workspace entry, using the separator style of the root path. */
+export function joinRootPath(rootPath: string, relativePath: string): string {
+  const separator = rootPath.includes('\\') ? '\\' : '/'
+  const base = rootPath.replace(/[\\/]+$/, '')
+  return relativePath ? `${base}${separator}${relativePath.split('/').join(separator)}` : base
+}

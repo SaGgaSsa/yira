@@ -6,24 +6,13 @@ import type { FileHandle } from 'fs/promises'
 import { basename, isAbsolute, relative, resolve, sep } from 'path'
 import type { FileEntry, FileListOptions, FileListResult, FileSearchEntry, FileSearchResult, FileSelectFolderResult, FileWriteInput, FileCreateInput, FileRenameInput } from '@shared/types'
 import { compileFileSearchQuery } from '@shared/fileSearch'
+import { shouldHideEntry } from '@shared/hiddenEntries'
 import { canonicalizeRootFolderPath } from '../workspace-root'
 import { mainText } from '../i18n'
 import { createEntry, readFile, readPreviewAsset, renameEntry, resolveRootTarget, statFile, trashEntry, writeFile } from './file-access'
 
 const electronApi = createRequire(import.meta.url)('electron') as typeof import('electron')
 const { BrowserWindow, dialog, ipcMain } = electronApi
-
-const IGNORED_NAMES = new Set([
-  '.git',
-  'node_modules',
-  'dist',
-  'dist-electron',
-  'build',
-  'release',
-  'coverage',
-  '.next',
-  '.vite',
-])
 
 function isInsidePath(rootPath: string, targetPath: string): boolean {
   const relativePath = relative(rootPath, targetPath)
@@ -44,11 +33,6 @@ function toRendererRelativePath(rootPath: string, targetPath: string): string {
 
 function joinRendererPath(dir: string, name: string): string {
   return dir ? `${dir}/${name}` : name
-}
-
-function shouldHideEntry(name: string): boolean {
-  const key = name.toLowerCase()
-  return name.startsWith('.') || IGNORED_NAMES.has(key)
 }
 
 function getParentPath(relativeDir: string): string | null {
