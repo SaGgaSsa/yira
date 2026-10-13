@@ -8,6 +8,7 @@ import {
   getOrphanWorkspaceScriptRuns,
   getWorkspaceScriptRunStatus,
   groupWorkspaceScripts,
+  isSelectableWorkspaceScriptId,
   readWorkspaceScriptSelection,
   WorkspaceScriptsMenu,
   writeWorkspaceScriptSelection,
@@ -73,6 +74,19 @@ test('chooses the first running script by default, then falls back to the first 
   assert.equal(getDefaultWorkspaceScriptId(scripts, runs), 'package:.:test')
   assert.equal(getDefaultWorkspaceScriptId(scripts, []), 'package:.:dev')
   assert.equal(getDefaultWorkspaceScriptId([], runs), null)
+})
+
+test('treats saved scripts and one-off command runs as selectable', () => {
+  const scripts = [packageScript('package:.:dev', 'dev')]
+  const runs = [
+    { ...scriptRun('adhoc:one-off', 'script-adhoc', 'running'), command: 'git pull' },
+    scriptRun('custom:removed', 'script-orphan', 'running'),
+  ]
+
+  assert.equal(isSelectableWorkspaceScriptId(scripts, runs, 'package:.:dev'), true)
+  assert.equal(isSelectableWorkspaceScriptId(scripts, runs, 'adhoc:one-off'), true)
+  assert.equal(isSelectableWorkspaceScriptId(scripts, runs, 'custom:removed'), false)
+  assert.equal(isSelectableWorkspaceScriptId(scripts, runs, null), false)
 })
 
 test('maps run state and exit codes to compact statuses', () => {
