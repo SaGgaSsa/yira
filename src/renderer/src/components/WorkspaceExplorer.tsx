@@ -198,10 +198,12 @@ interface WorkspaceExplorerProps {
   rootPath: string
   activeFilePath: string | null
   onOpenFile: (relativePath: string) => Promise<void>
+  onEntryRenamed?: (oldPath: string, newPath: string) => void
+  onEntryTrashed?: (path: string) => void
   requestConfirm: (options: ConfirmDialogOptions) => Promise<boolean>
 }
 
-export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile, requestConfirm }: WorkspaceExplorerProps): React.ReactElement {
+export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile, onEntryRenamed, onEntryTrashed, requestConfirm }: WorkspaceExplorerProps): React.ReactElement {
   const { t } = useTranslation()
   const [root, setRoot] = useState<ExplorerNode>(() => (
     explorerTreeCache.get(rootPath) ?? createExplorerNode('', rootLabel(rootPath), 'directory')
@@ -370,6 +372,7 @@ export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile, reques
 
     try {
       await window.electron.files.trashEntry(rootPath, node.relativePath)
+      onEntryTrashed?.(node.relativePath)
       await refreshDirectory(getParentRelativePath(node.relativePath))
       setSelectedPath((current) => (
         current !== null && (current === node.relativePath || current.startsWith(`${node.relativePath}/`)) ? null : current
@@ -377,7 +380,7 @@ export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile, reques
     } catch (error) {
       setOpenError(errorMessage(error, t('files.nameMissing')))
     }
-  }, [refreshDirectory, requestConfirm, rootPath, t])
+  }, [onEntryTrashed, refreshDirectory, requestConfirm, rootPath, t])
 
   const getNameError = useCallback((value: string, parentPath: string, allowNested: boolean, ignorePath?: string): string | null => {
     const nameError = validateEntryName(value, { allowNested })
@@ -428,13 +431,14 @@ export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile, reques
       if (result.status === 'invalid') return t(FILE_NAME_ERROR_KEYS[result.reason])
 
       setDraft(null)
+      onEntryRenamed?.(node.relativePath, result.relativePath)
       await refreshAfterChange(getParentRelativePath(node.relativePath), result.relativePath)
       setSelectedPath(result.relativePath)
       return null
     } catch (error) {
       return errorMessage(error, t('files.nameMissing'))
     }
-  }, [refreshAfterChange, rootPath, t])
+  }, [onEntryRenamed, refreshAfterChange, rootPath, t])
 
   const renderDraftInput = useCallback((depth: number, node: ExplorerNode | null): React.ReactNode => {
     if (!draft) return null
