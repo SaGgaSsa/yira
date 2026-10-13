@@ -103,6 +103,7 @@ import {
 import { getInitialWorkspaceDialogCopy, getWorkspaceDialogCopy } from './utils/workspaceDialogCopy'
 import { buildTileConfigurationMenuItems } from './components/tileConfigurationMenu'
 import { createFileTileOpenRequestTracker, deriveFileTileTitle, planFileTileOpen } from './utils/fileTileLifecycle'
+import { planFileTileClosures, planFileTileRenames } from './utils/fileTileRename'
 import { isImageFilePath } from './utils/fileImage'
 import { windowBufferRegistry } from './utils/windowBufferRegistry'
 import {
@@ -1622,6 +1623,25 @@ function AppContent(): React.ReactElement {
     makeOpenedFileVisible(plan.tile.id)
   }, [makeOpenedFileVisible, t, workspaceRootPath])
 
+  // The store only holds the active workspace's tiles, which are the ones the explorer shows.
+  const handleExplorerEntryRenamed = useCallback((oldPath: string, newPath: string) => {
+    const state = useCanvasStore.getState()
+    const updates = planFileTileRenames(state.tiles, oldPath, newPath, (tile) => (
+      ` (${t(tile.fileDiff?.staged ? 'files.diffStaged' : 'files.diffWorkingTree')})`
+    ))
+    for (const update of updates) {
+      const wasPreview = state.tiles.find((tile) => tile.id === update.tileId)?.filePreview === true
+      state.updateTile(update.tileId, update.patch)
+      // A label patch pins preview tiles as if the user renamed the tile; a file rename should not.
+      if (wasPreview) state.updateTile(update.tileId, { filePreview: true })
+    }
+  }, [t])
+
+  const handleExplorerEntryTrashed = useCallback((path: string) => {
+    const state = useCanvasStore.getState()
+    for (const tileId of planFileTileClosures(state.tiles, path)) state.removeTile(tileId)
+  }, [])
+
   useEffect(() => window.electron.floating.onNavigationRequested(({ workspaceId, kind, target, fileMarkdownView, fileReveal }) => {
     if (workspaceId !== useCanvasStore.getState().activeWorkspaceId) return
     if (kind === 'file') {
@@ -2941,6 +2961,8 @@ function AppContent(): React.ReactElement {
                 onWorkspaceUpdated={handleWorkspaceConfigUpdated}
                 activeFilePath={activeFilePath}
                 onOpenFile={openFileTile}
+                onEntryRenamed={handleExplorerEntryRenamed}
+                onEntryTrashed={handleExplorerEntryTrashed}
                 onOpenDiff={(repositoryPath, change, staged) => {
                   const path = repositoryPath === '.' ? change.path : `${repositoryPath}/${change.path}`
                   void openFileTile(path, { diff: { repositoryPath, path: change.path, originalPath: change.originalPath, staged } }).catch((error: unknown) => {

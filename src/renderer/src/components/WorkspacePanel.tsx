@@ -27,6 +27,8 @@ interface WorkspacePanelProps {
   onWorkspaceUpdated: (workspace: Workspace) => void
   activeFilePath: string | null
   onOpenFile: (relativePath: string, options?: FileTileOpenOptions) => Promise<void>
+  onEntryRenamed?: (oldPath: string, newPath: string) => void
+  onEntryTrashed?: (path: string) => void
   onOpenDiff: (repositoryPath: string, change: GitFileChange, staged: boolean) => void
   agentProvider?: AgentProvider
   agentProviders: AgentProvidersConfig
@@ -47,6 +49,8 @@ export function WorkspacePanel({
   onWorkspaceUpdated,
   activeFilePath,
   onOpenFile,
+  onEntryRenamed,
+  onEntryTrashed,
   onOpenDiff,
   agentProvider,
   agentProviders,
@@ -117,7 +121,7 @@ export function WorkspacePanel({
         ))}
       </div>
       <div className="min-h-0 flex-1">
-        {tab === 'explorer' && <WorkspaceExplorer rootPath={rootPath} activeFilePath={activeFilePath} onOpenFile={onOpenFile} requestConfirm={requestConfirm} />}
+        {tab === 'explorer' && <WorkspaceExplorer rootPath={rootPath} activeFilePath={activeFilePath} onOpenFile={onOpenFile} onEntryRenamed={onEntryRenamed} onEntryTrashed={onEntryTrashed} requestConfirm={requestConfirm} />}
         {tab === 'agents' && (
           <AgentPanel
             key={`${workspaceId}:${effectiveAgentProvider ?? 'none'}`}
