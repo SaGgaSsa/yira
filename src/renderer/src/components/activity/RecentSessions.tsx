@@ -47,7 +47,7 @@ export function RecentSessions({ history, workspaceNames }: {
                 {contextPercent !== null && (
                   <div className="mt-1 ml-5 flex items-center gap-2 text-[10px] text-text-muted">
                     <span>{t('activity.context')}</span>
-                    <span className="h-1 flex-1 overflow-hidden rounded bg-bg-secondary">
+                    <span className="h-1 flex-1 overflow-hidden rounded-sm bg-bg-secondary">
                       <span
                         className={`block h-full ${contextPercent >= 85 ? 'bg-amber-300' : 'bg-activity'}`}
                         style={{ width: `${contextPercent}%` }}

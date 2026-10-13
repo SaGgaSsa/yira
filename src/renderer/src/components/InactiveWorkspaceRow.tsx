@@ -29,7 +29,7 @@ export function InactiveWorkspaceRow({
       type="button"
       title={workspace.name}
       onClick={() => onSelect(workspace)}
-      className="flex w-full min-w-0 items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-hover-bg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--interactive)]"
+      className="flex w-full min-w-0 items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-hover-bg focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--interactive)"
     >
       <span className="min-w-0 flex-1 truncate text-sm text-text-primary">{workspace.name}</span>
       {lastUsed && (

@@ -1,5 +1,5 @@
 import React from 'react'
-import { CircleCheck, CircleDot, CircleHelp, Hourglass, LoaderCircle, Terminal } from 'lucide-react'
+import { CircleCheck, CircleDot, CircleQuestionMark, Hourglass, LoaderCircle, Terminal } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { TerminalActivitySummary } from '@/utils/terminalActivity'
 import { summarizeTerminalActivity } from '@/utils/terminalActivity'
@@ -8,7 +8,7 @@ import { useTerminalProcessActivity } from '@/hooks/useTerminalProcessActivity'
 import { useCanvasStore } from '@/store/canvasStore'
 
 const ACTIVITY_STYLES = {
-  'needs-input': { Icon: CircleHelp, className: 'text-warning' },
+  'needs-input': { Icon: CircleQuestionMark, className: 'text-warning' },
   working: { Icon: LoaderCircle, className: 'text-activity motion-safe:animate-spin' },
   unread: { Icon: CircleDot, className: 'text-text-display' },
   output: { Icon: LoaderCircle, className: 'text-activity motion-safe:animate-spin' },

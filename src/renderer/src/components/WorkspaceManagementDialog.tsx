@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Grid3X3, LayoutGrid, Pencil, RotateCcw, Save, Trash2, X } from 'lucide-react'
+import { Grid3x3, LayoutGrid, Pencil, RotateCcw, Save, Trash, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { WorkspaceManagementEntry, WorkspaceMetadata } from '@shared/types'
 import { createDefaultAgentProvidersConfig, normalizeAgentProvidersConfig, normalizeWorkspaceAgentProvider } from '@shared/workspaceConfig'
@@ -150,7 +150,7 @@ export function WorkspaceManagementDialog({
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[10040] flex items-center justify-center bg-black/80">
+    <div className="fixed inset-0 z-10040 flex items-center justify-center bg-black/80">
       <div className="flex max-h-[90vh] w-[920px] max-w-[calc(100vw-32px)] flex-col overflow-hidden rounded-[24px] border border-border-visible bg-bg-secondary shadow-2xl">
         <div className="flex items-center justify-between gap-4 border-b border-border px-6 py-4">
           <div className="min-w-0">
@@ -192,7 +192,7 @@ export function WorkspaceManagementDialog({
                           </span>
                         )}
                         <span className="inline-flex items-center gap-1 rounded-full border border-border-visible px-2 py-1 text-xs uppercase tracking-[0.08em] text-text-secondary">
-                          {draft.type === 'grid' ? <Grid3X3 size={12} /> : <LayoutGrid size={12} />}
+                          {draft.type === 'grid' ? <Grid3x3 size={12} /> : <LayoutGrid size={12} />}
                           {draft.type === 'grid' ? t('workspace.grid') : t('workspace.canvas')}
                         </span>
                         {isNewDraft && !draft.markedForRemoval && (
@@ -213,7 +213,7 @@ export function WorkspaceManagementDialog({
                       {!isNewDraft && !draft.markedForRemoval && (
                         <div className="mt-4 flex flex-wrap items-center gap-2">
                           <input
-                            className="min-w-[220px] flex-1 rounded-full border border-border-visible bg-bg-primary px-4 py-2 font-mono text-sm text-text-display outline-none"
+                            className="min-w-[220px] flex-1 rounded-full border border-border-visible bg-bg-primary px-4 py-2 font-mono text-sm text-text-display outline-hidden"
                             value={draft.removalText}
                             onChange={(event) => {
                               const removalText = event.target.value
@@ -233,7 +233,7 @@ export function WorkspaceManagementDialog({
                             }}
                             disabled={!canMarkRemoval}
                           >
-                            <Trash2 size={14} />
+                            <Trash size={14} />
                             <span>{t('workspace.removeFromYira')}</span>
                           </button>
                         </div>

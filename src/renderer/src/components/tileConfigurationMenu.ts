@@ -1,4 +1,4 @@
-import { Bell, BellOff, CopyPlus, Lock, Pencil, RefreshCw, Unlock } from 'lucide-react'
+import { Bell, BellOff, CopyPlus, Lock, Pencil, RefreshCw, LockOpen } from 'lucide-react'
 import type { TileState } from '@shared/types'
 import type { MenuItem } from './ContextMenu'
 
@@ -64,7 +64,7 @@ export function buildTileConfigurationMenuItems({
       : []),
     {
       label: tile.locked ? label('ui.unlock', 'Unlock') : label('ui.lock', 'Lock'),
-      icon: tile.locked ? Unlock : Lock,
+      icon: tile.locked ? LockOpen : Lock,
       action: runTileAction(tile, onToggleLock, onBeforeAction),
     },
   ]

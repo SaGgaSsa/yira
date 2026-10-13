@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import {
-  X, Monitor, Moon, Sun, Type, Grid3X3, Globe, Code2, Info, RefreshCw, Download,
+  X, Monitor, Moon, Sun, Type, Grid3x3, Globe, CodeXml, Info, RefreshCw, Download,
   LayoutGrid, Keyboard, Terminal, ExternalLink, FileText, Bot,
 } from 'lucide-react'
 import { createUserSettingsDraft, useSettingsStore } from '@/store/settingsStore'
@@ -47,13 +47,13 @@ const SETTINGS_SECTIONS: Array<{
 }> = [
   { id: 'appearance', icon: Monitor },
   { id: 'density', icon: Type },
-  { id: 'canvas', icon: Grid3X3 },
+  { id: 'canvas', icon: Grid3x3 },
   { id: 'tiles', icon: LayoutGrid },
   { id: 'terminal', icon: Terminal },
   { id: 'agents', icon: Bot },
   { id: 'shortcuts', icon: Keyboard },
   { id: 'browser', icon: Globe },
-  { id: 'advanced', icon: Code2 },
+  { id: 'advanced', icon: CodeXml },
   { id: 'about', icon: Info },
 ]
 
@@ -349,7 +349,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
                 type="button"
                 aria-pressed={draft.themeId === theme.id}
                 onClick={() => setDraft((current) => ({ ...current, themeId: theme.id }))}
-                className={`rounded-[20px] border p-4 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--interactive)] ${draft.themeId === theme.id ? 'border-text-primary' : 'border-border-visible'}`}
+                className={`rounded-[20px] border p-4 text-left focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--interactive) ${draft.themeId === theme.id ? 'border-text-primary' : 'border-border-visible'}`}
                 style={{ background: theme.tokens['--surface'], color: theme.tokens['--text-primary'] }}
               >
                 <span className="flex items-center justify-between gap-2">
@@ -454,7 +454,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
             <span className="font-mono text-sm text-text-secondary">{value}px</span>
           </span>
           <input
-            className="mt-5 w-full accent-[var(--text-display)]"
+            className="mt-5 w-full accent-(--text-display)"
             type="range"
             min={MIN_FONT_SIZE_PX}
             max={MAX_FONT_SIZE_PX}
@@ -506,7 +506,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
             <label className="block">
               <span className="nd-label mb-2 block text-text-secondary">{t('settings.gridSize')}</span>
               <input
-                className="w-full rounded-full border border-border-visible bg-bg-primary px-4 py-3 font-mono text-sm text-text-display outline-none"
+                className="w-full rounded-full border border-border-visible bg-bg-primary px-4 py-3 font-mono text-sm text-text-display outline-hidden"
                 type="number"
                 min={8}
                 max={80}
@@ -662,7 +662,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
             <input
               id="new-agent-session-shortcut"
               data-agent-shortcut-capture="new-agent-session"
-              className="w-40 rounded-full border border-border-visible bg-bg-secondary px-4 py-2 text-center font-mono text-sm text-text-display outline-none focus:border-text-secondary"
+              className="w-40 rounded-full border border-border-visible bg-bg-secondary px-4 py-2 text-center font-mono text-sm text-text-display outline-hidden focus:border-text-secondary"
               aria-label={t('settings.newAgentSessionShortcut')}
               aria-live="polite"
               readOnly
@@ -786,7 +786,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
           <label className="block">
             <span className="nd-label mb-2 block text-text-secondary">{t('settings.homeUrl')}</span>
             <input
-              className="w-full rounded-full border border-border-visible bg-bg-primary px-4 py-3 font-mono text-sm text-text-display outline-none"
+              className="w-full rounded-full border border-border-visible bg-bg-primary px-4 py-3 font-mono text-sm text-text-display outline-hidden"
               value={browserHomeUrl}
               onChange={(event) => setBrowserHomeUrl(event.target.value)}
               spellCheck={false}
@@ -984,7 +984,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
             <button
               ref={privacyDocumentButtonRef}
               type="button"
-              className="flex items-center gap-3 rounded-[16px] border border-border-visible px-4 py-3 text-left text-sm text-text-display transition-colors hover:border-text-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--interactive)]"
+              className="flex items-center gap-3 rounded-[16px] border border-border-visible px-4 py-3 text-left text-sm text-text-display transition-colors hover:border-text-secondary focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--interactive)"
               onClick={() => {
                 setLegalDocument('privacy')
               }}
@@ -995,7 +995,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
             <button
               ref={termsDocumentButtonRef}
               type="button"
-              className="flex items-center gap-3 rounded-[16px] border border-border-visible px-4 py-3 text-left text-sm text-text-display transition-colors hover:border-text-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--interactive)]"
+              className="flex items-center gap-3 rounded-[16px] border border-border-visible px-4 py-3 text-left text-sm text-text-display transition-colors hover:border-text-secondary focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--interactive)"
               onClick={() => {
                 setLegalDocument('terms')
               }}
@@ -1010,7 +1010,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80" onClick={handleBackdropClick}>
+    <div className="fixed inset-0 z-10000 flex items-center justify-center bg-black/80" onClick={handleBackdropClick}>
       <div
         className="flex h-[86vh] w-[1040px] max-w-[calc(100vw-32px)] flex-col overflow-hidden rounded-[24px] border border-border-visible bg-bg-secondary"
         role="dialog"

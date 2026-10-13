@@ -105,7 +105,7 @@ function MenuItems({ items, onClose }: { items: MenuItem[]; onClose: () => void 
       {/* Submenu portal — rendered outside the backdrop to avoid click-through */}
       {activeSubmenu !== null && submenuPos && createPortal(
         <div
-          className="fixed overflow-hidden rounded-2xl py-1 z-[10002]"
+          className="fixed overflow-hidden rounded-2xl py-1 z-10002"
           style={{
             left: submenuPos.x,
             top: submenuPos.y,
@@ -180,7 +180,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps): React.R
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[10000]"
+      className="fixed inset-0 z-10000"
       onClick={handleBackdrop}
     >
       <div

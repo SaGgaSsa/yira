@@ -328,7 +328,7 @@ export function GridView({
           <div className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-bg-tertiary px-3">
             <button
               type="button"
-              className="flex h-8 w-8 shrink-0 cursor-grab items-center justify-center rounded border border-border-visible text-text-secondary active:cursor-grabbing"
+              className="flex h-8 w-8 shrink-0 cursor-grab items-center justify-center rounded-sm border border-border-visible text-text-secondary active:cursor-grabbing"
               title={t('ui.moveTile')}
               onPointerDown={(event) => startMove(event, tile.id)}
             >

@@ -66,7 +66,7 @@ export function WorkspaceAgentTree({
             aria-current={focused ? 'true' : undefined}
             title={`${sessionName} · ${statusLabel}`}
             onClick={() => onOpenAgent(workspace, session)}
-            className={`relative flex h-[26px] min-w-0 items-center gap-2 rounded-md pl-6 pr-1.5 text-left transition-colors ${focused ? 'bg-active-bg before:absolute before:inset-y-[5px] before:left-0 before:w-0.5 before:rounded-full before:bg-text-display' : 'hover:bg-hover-bg'} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--interactive)]`}
+            className={`relative flex h-[26px] min-w-0 items-center gap-2 rounded-md pl-6 pr-1.5 text-left transition-colors ${focused ? 'bg-active-bg before:absolute before:inset-y-[5px] before:left-0 before:w-0.5 before:rounded-full before:bg-text-display' : 'hover:bg-hover-bg'} focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--interactive)`}
           >
             <StatusDot status={session.status} />
             <span className={`min-w-0 flex-1 truncate text-sm ${nameClass}`}>{sessionName}</span>

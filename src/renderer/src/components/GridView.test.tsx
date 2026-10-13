@@ -164,18 +164,8 @@ document.addEventListener('selectionchange', () => {})
 const require = createRequire(import.meta.url)
 const cssExtensions = require.extensions as Record<string, (module: NodeModule, filename: string) => void>
 cssExtensions['.css'] = () => {}
-const { transformSync } = require('esbuild') as typeof import('esbuild')
-const loadWithJiti = require('jiti')(fileURLToPath(import.meta.url), {
-  extensions: ['.js', '.mjs', '.cjs', '.ts', '.tsx', '.mts', '.cts', '.json'],
-  transform: ({ source, filename }: { source: string; filename: string }) => ({
-    code: transformSync(source, {
-      loader: filename.endsWith('.tsx') ? 'tsx' : filename.endsWith('.ts') ? 'ts' : 'js',
-      format: 'cjs',
-      platform: 'node',
-      target: 'node22',
-    }).code,
-  }),
-}) as <T>(id: string) => T
+// tsx compiles required TypeScript files to CommonJS, so mocks placed in require.cache apply.
+const loadModule = require as <T>(id: string) => T
 const ReactDOM = await import('react-dom/client')
 const testIcon = () => React.createElement('span')
 type TileContentLifecycle = { mountCount: number; cleanupCount: number }
@@ -219,8 +209,8 @@ const mockedModules: Record<string, Record<string, unknown>> = {
 for (const [filename, exports] of Object.entries(mockedModules)) {
   require.cache[filename] = { exports, filename, id: filename, loaded: true } as NodeModule
 }
-await loadWithJiti<typeof import('../i18n')>('../i18n/index.ts').initializeI18n()
-const { GridView } = loadWithJiti<typeof import('./GridView')>('./GridView.tsx')
+await loadModule<typeof import('../i18n')>('../i18n/index.ts').initializeI18n()
+const { GridView } = loadModule<typeof import('./GridView')>('./GridView.tsx')
 
 const tile = {
   id: 'tile-a',

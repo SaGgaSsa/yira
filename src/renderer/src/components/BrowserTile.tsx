@@ -116,7 +116,7 @@ export function BrowserTile({ tile, autoFocus = false, onUpdate }: BrowserTilePr
         >
           <Globe size={14} className="shrink-0 text-text-secondary" />
           <input
-            className="min-w-0 flex-1 bg-transparent py-3 font-mono text-sm text-text-primary outline-none"
+            className="min-w-0 flex-1 bg-transparent py-3 font-mono text-sm text-text-primary outline-hidden"
             value={inputUrl}
             onChange={(event) => setInputUrl(event.target.value)}
             spellCheck={false}

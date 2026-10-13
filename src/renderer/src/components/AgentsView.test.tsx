@@ -107,18 +107,8 @@ Object.assign(globalThis, {
 const require = createRequire(import.meta.url)
 const cssExtensions = require.extensions as Record<string, (module: NodeModule, filename: string) => void>
 cssExtensions['.css'] = () => {}
-const { transformSync } = require('esbuild') as typeof import('esbuild')
-const loadWithJiti = require('jiti')(fileURLToPath(import.meta.url), {
-  extensions: ['.js', '.mjs', '.cjs', '.ts', '.tsx', '.mts', '.cts', '.json'],
-  transform: ({ source, filename }: { source: string; filename: string }) => ({
-    code: transformSync(source, {
-      loader: filename.endsWith('.tsx') ? 'tsx' : filename.endsWith('.ts') ? 'ts' : 'js',
-      format: 'cjs',
-      platform: 'node',
-      target: 'node22',
-    }).code,
-  }),
-}) as <T>(id: string) => T
+// tsx compiles required TypeScript files to CommonJS, so mocks placed in require.cache apply.
+const loadModule = require as <T>(id: string) => T
 const ReactDOM = await import('react-dom/client')
 const terminalMock = ({ session }: { session: AgentActiveSession }) => React.createElement('div', {
   'data-terminal-session': session.tileId,
@@ -157,7 +147,7 @@ require.cache[require.resolve('./AgentSessionTerminal.tsx')] = {
   id: require.resolve('./AgentSessionTerminal.tsx'),
   loaded: true,
 } as NodeModule
-const { AgentsView } = loadWithJiti<typeof import('./AgentsView')>('./AgentsView.tsx')
+const { AgentsView } = loadModule<typeof import('./AgentsView')>('./AgentsView.tsx')
 
 const workspaceConfig: WorkspaceConfig = {
   type: 'canvas',

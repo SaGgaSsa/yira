@@ -1,5 +1,6 @@
-import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
+import { defineConfig } from 'electron-vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 import { resolve } from 'path'
 
 const targets = process.env.EV_BUILD_TARGET
@@ -15,7 +16,6 @@ export default defineConfig({
   ...(shouldBuildMain
     ? {
         main: {
-          plugins: [externalizeDepsPlugin()],
           resolve: {
             alias: {
               '@shared': resolve(__dirname, 'src/shared'),
@@ -39,7 +39,6 @@ export default defineConfig({
   ...(shouldBuildPreload
     ? {
         preload: {
-          plugins: [externalizeDepsPlugin()],
           resolve: {
             alias: {
               '@shared': resolve(__dirname, 'src/shared'),
@@ -66,7 +65,7 @@ export default defineConfig({
               '@shared': resolve(__dirname, 'src/shared'),
             },
           },
-          plugins: [react()],
+          plugins: [react(), tailwindcss()],
           build: {
             outDir: 'dist-electron/renderer',
             modulePreload: false,
@@ -94,7 +93,6 @@ export default defineConfig({
               'i18next',
               'react-i18next',
               'html-parse-stringify',
-              'void-elements',
             ],
             exclude: ['@xterm/xterm', '@xterm/addon-fit'],
           },

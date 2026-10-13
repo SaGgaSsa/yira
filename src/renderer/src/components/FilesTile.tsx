@@ -2,7 +2,7 @@ import { COLOR_PRESETS } from '@shared/appThemes'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import Editor, { type Monaco } from '@monaco-editor/react'
 import type { editor as MonacoEditor } from 'monaco-editor'
-import { AlertTriangle, Check, Code2, Columns2, Eye, RefreshCw, Save } from 'lucide-react'
+import { TriangleAlert, Check, CodeXml, Columns2, Eye, RefreshCw, Save } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { TileState } from '@shared/types'
 import { useSettingsStore } from '@/store/settingsStore'
@@ -355,14 +355,14 @@ function TextFileTile({ tile, rootPath, isFocused, isVisible, onUpdate, onOpenFi
         {isMarkdown && (
           <div className="flex items-center gap-0.5 rounded-md border border-border-visible bg-bg-tertiary p-0.5">
             {([
-              { mode: 'edit' as const, label: t('files.markdownEdit'), Icon: Code2 },
+              { mode: 'edit' as const, label: t('files.markdownEdit'), Icon: CodeXml },
               { mode: 'live' as const, label: t('files.markdownSplit'), Icon: Columns2 },
               { mode: 'preview' as const, label: t('files.markdownPreview'), Icon: Eye },
             ]).map(({ mode, label, Icon }) => (
               <button
                 key={mode}
                 type="button"
-                className={`inline-flex h-7 w-7 items-center justify-center rounded transition-colors ${markdownView === mode ? 'bg-active-bg text-text-display' : 'text-text-secondary hover:bg-hover-bg hover:text-text-display'}`}
+                className={`inline-flex h-7 w-7 items-center justify-center rounded-sm transition-colors ${markdownView === mode ? 'bg-active-bg text-text-display' : 'text-text-secondary hover:bg-hover-bg hover:text-text-display'}`}
                 title={label}
                 aria-label={label}
                 aria-pressed={markdownView === mode}
@@ -374,7 +374,7 @@ function TextFileTile({ tile, rootPath, isFocused, isVisible, onUpdate, onOpenFi
           </div>
         )}
         {state.conflict ? (
-          <span className="inline-flex items-center gap-1 text-xs text-warning"><AlertTriangle size={13} />{t('files.conflict')}</span>
+          <span className="inline-flex items-center gap-1 text-xs text-warning"><TriangleAlert size={13} />{t('files.conflict')}</span>
         ) : state.dirty ? (
           <span className="text-xs text-warning">{t('files.dirty')}</span>
         ) : saveConfirmed ? (

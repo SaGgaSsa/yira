@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { AlertTriangle, CornerDownLeft, X } from 'lucide-react'
+import { TriangleAlert, CornerDownLeft, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 export interface PromptDialogOptions {
@@ -102,7 +102,7 @@ export function AppDialog({ request, onCancel, onConfirm }: AppDialogProps): Rea
   if (!request) return null
 
   return createPortal(
-    <div className="fixed inset-0 z-[10030] flex items-center justify-center bg-black/80" onClick={handleBackdropClick}>
+    <div className="fixed inset-0 z-10030 flex items-center justify-center bg-black/80" onClick={handleBackdropClick}>
       <div className="w-[480px] max-w-[calc(100vw-32px)] overflow-hidden rounded-[24px] border border-border-visible bg-bg-secondary shadow-2xl">
         <div className="flex items-start justify-between gap-4 border-b border-border px-6 py-5">
           <div className="min-w-0">
@@ -123,7 +123,7 @@ export function AppDialog({ request, onCancel, onConfirm }: AppDialogProps): Rea
         <div className="space-y-5 px-6 py-6">
           {request.mode === 'confirm' && request.danger && (
             <div className="flex items-center gap-3 rounded-[20px] border border-danger/40 bg-danger/10 px-4 py-3 text-danger">
-              <AlertTriangle size={16} className="shrink-0" />
+              <TriangleAlert size={16} className="shrink-0" />
               <span className="text-sm">{request.warning ?? t('dialogs.persistedStateWarning')}</span>
             </div>
           )}
@@ -137,7 +137,7 @@ export function AppDialog({ request, onCancel, onConfirm }: AppDialogProps): Rea
                 <CornerDownLeft size={14} className="shrink-0 text-text-secondary" />
                 <input
                   ref={inputRef}
-                  className="w-full bg-transparent font-mono text-sm text-text-display outline-none"
+                  className="w-full bg-transparent font-mono text-sm text-text-display outline-hidden"
                   value={value}
                   onChange={(event) => setValue(event.target.value)}
                   placeholder={request.placeholder}

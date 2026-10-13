@@ -56,7 +56,7 @@ export function WorkspaceListItem({
     >
       {leading && <div className="flex shrink-0 items-center pl-0.5">{leading}</div>}
       <button
-        className={`flex h-full min-w-0 flex-1 items-center pr-2 text-left ${leading ? 'pl-0.5' : 'pl-2'} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--interactive)]`}
+        className={`flex h-full min-w-0 flex-1 items-center pr-2 text-left ${leading ? 'pl-0.5' : 'pl-2'} focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--interactive)`}
         onClick={onClick}
         title={workspace.name}
         type="button"
@@ -77,7 +77,7 @@ export function WorkspaceListItem({
           />
         )}
         <button
-          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded text-text-secondary transition-[opacity,color,background-color] hover:bg-hover-bg ${menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'} hover:text-text-display focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--interactive)]`}
+          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-text-secondary transition-[opacity,color,background-color] hover:bg-hover-bg ${menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'} hover:text-text-display focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--interactive)`}
           onMouseDown={(event) => event.stopPropagation()}
           onClick={(event) => {
             event.stopPropagation()

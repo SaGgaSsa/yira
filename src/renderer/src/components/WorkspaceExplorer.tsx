@@ -14,7 +14,7 @@ import {
   Pencil,
   RefreshCw,
   Search,
-  Trash2,
+  Trash,
   X,
 } from 'lucide-react'
 import type { FileEntry, FileEntryKind, FileNameError } from '@shared/types'
@@ -169,7 +169,7 @@ function ExplorerTreeNode({ node, depth, handlers }: ExplorerTreeNodeProps): Rea
             <li className="flex items-center gap-2 px-3 py-2 text-xs text-red-300" style={{ paddingLeft: `${28 + depth * 16}px` }}>
               <span className="min-w-0 flex-1 truncate" title={node.error}>{node.error ?? t('ui.unableToLoadDirectory')}</span>
               <button
-                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded hover:bg-hover-bg"
+                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-sm hover:bg-hover-bg"
                 onClick={(event) => {
                   event.stopPropagation()
                   onRetry(node)
@@ -530,7 +530,7 @@ export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile, onEntr
         action: () => { void window.electron.files.revealEntry(rootPath, node.relativePath).catch(() => {}) },
       },
       { label: '', divider: true },
-      { label: t('files.moveToTrash'), icon: Trash2, danger: true, action: () => { void requestTrash(node) } },
+      { label: t('files.moveToTrash'), icon: Trash, danger: true, action: () => { void requestTrash(node) } },
     ]
   }, [contextMenu, requestTrash, rootPath, startCreate, startRename, t])
 
@@ -574,7 +574,7 @@ export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile, onEntr
             <input
               autoFocus
               aria-label={t('ui.searchWorkspaceFiles')}
-              className="min-w-0 flex-1 bg-transparent text-sm text-text-display outline-none placeholder:text-text-disabled"
+              className="min-w-0 flex-1 bg-transparent text-sm text-text-display outline-hidden placeholder:text-text-disabled"
               onChange={(event) => handleSearchQueryChange(event.target.value)}
               onKeyDown={(event) => {
                 if (getWorkspaceSearchKeyAction(event.key) !== 'close') return
@@ -587,7 +587,7 @@ export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile, onEntr
             />
             <button
               type="button"
-              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-text-secondary hover:bg-hover-bg hover:text-text-display"
+              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-text-secondary hover:bg-hover-bg hover:text-text-display"
               onClick={handleCloseSearch}
               title={t('ui.closeSearch')}
               aria-label={t('ui.closeSearch')}
@@ -600,7 +600,7 @@ export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile, onEntr
             <span className="nd-label min-w-0 flex-1 truncate">{rootName}</span>
             <button
               type="button"
-              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-text-secondary hover:bg-hover-bg hover:text-text-display"
+              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-text-secondary hover:bg-hover-bg hover:text-text-display"
               onClick={() => {
                 void window.electron.files.openFolder(rootPath).catch(() => {})
               }}
@@ -611,7 +611,7 @@ export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile, onEntr
             </button>
             <button
               type="button"
-              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-text-secondary hover:bg-hover-bg hover:text-text-display"
+              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-text-secondary hover:bg-hover-bg hover:text-text-display"
               onClick={() => startCreate('file', getCreateParentPath(selectedNode))}
               title={t('files.newFile')}
               aria-label={t('files.newFile')}
@@ -620,7 +620,7 @@ export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile, onEntr
             </button>
             <button
               type="button"
-              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-text-secondary hover:bg-hover-bg hover:text-text-display"
+              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-text-secondary hover:bg-hover-bg hover:text-text-display"
               onClick={() => startCreate('directory', getCreateParentPath(selectedNode))}
               title={t('files.newFolder')}
               aria-label={t('files.newFolder')}
@@ -629,7 +629,7 @@ export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile, onEntr
             </button>
             <button
               type="button"
-              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-text-secondary hover:bg-hover-bg hover:text-text-display"
+              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-text-secondary hover:bg-hover-bg hover:text-text-display"
               onClick={() => applyShowHidden(!showHidden)}
               title={showHidden ? t('files.hideHidden') : t('files.showHidden')}
               aria-label={showHidden ? t('files.hideHidden') : t('files.showHidden')}
@@ -639,7 +639,7 @@ export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile, onEntr
             </button>
             <button
               type="button"
-              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-text-secondary hover:bg-hover-bg hover:text-text-display"
+              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-text-secondary hover:bg-hover-bg hover:text-text-display"
               onClick={handleOpenSearch}
               title={t('ui.searchWorkspaceFiles')}
               aria-label={t('ui.searchWorkspaceFiles')}
@@ -690,7 +690,7 @@ export function WorkspaceExplorer({ rootPath, activeFilePath, onOpenFile, onEntr
         ) : root.status === 'error' ? (
           <div className="flex items-center gap-2 px-4 py-3 text-sm text-red-300">
             <span className="min-w-0 flex-1">{root.error ?? t('ui.unableToLoadDirectory')}</span>
-            <button className="inline-flex h-7 items-center gap-1 rounded px-2 hover:bg-hover-bg" onClick={() => handleRetry(root)} title={t('files.retry')}>
+            <button className="inline-flex h-7 items-center gap-1 rounded-sm px-2 hover:bg-hover-bg" onClick={() => handleRetry(root)} title={t('files.retry')}>
               <RefreshCw size={13} /> {t('files.retry')}
             </button>
           </div>

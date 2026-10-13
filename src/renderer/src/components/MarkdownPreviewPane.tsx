@@ -67,7 +67,7 @@ export function MarkdownPreviewPane({ source, colorMode, rootPath, filePath, ima
       <MDEditor.Markdown
         {...safeMarkdownPreviewOptions}
         source={source}
-        className="min-h-full bg-transparent p-6 text-text-primary"
+        className="min-h-full bg-transparent! p-6 text-text-primary!"
         wrapperElement={{ 'data-color-mode': colorMode }}
         urlTransform={safeMarkdownUrl}
         components={components}

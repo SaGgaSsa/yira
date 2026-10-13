@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { BookmarkPlus, ChevronDown, Play, Square, TerminalSquare, X } from 'lucide-react'
+import { BookmarkPlus, ChevronDown, Play, Square, SquareTerminal, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { WorkspaceConfig, WorkspaceScript, WorkspaceScriptRun, WorkspaceScriptsSnapshot } from '@shared/types'
 
@@ -235,13 +235,13 @@ export function WorkspaceScriptsMenu({
   return (
     <div role="menu" aria-label={t('scripts.title')} className="w-[min(360px,calc(100vw-24px))] overflow-hidden rounded-lg border border-border-visible bg-bg-secondary p-1.5 shadow-xl">
       <div className="flex items-center gap-2 rounded-md border border-border bg-bg-primary px-2.5 py-2">
-        <TerminalSquare size={13} className="shrink-0 text-text-secondary" />
+        <SquareTerminal size={13} className="shrink-0 text-text-secondary" />
         <input
           type="text"
           autoFocus
           aria-label={t('scripts.commandInputLabel')}
           placeholder={t('scripts.commandPlaceholder')}
-          className="min-w-0 flex-1 bg-transparent font-mono text-xs text-text-display outline-none placeholder:text-text-disabled disabled:opacity-50"
+          className="min-w-0 flex-1 bg-transparent font-mono text-xs text-text-display outline-hidden placeholder:text-text-disabled disabled:opacity-50"
           value={commandInput}
           onChange={(event) => {
             setCommandInput(event.target.value)
@@ -284,7 +284,7 @@ export function WorkspaceScriptsMenu({
                 </button>
                 <button
                   type="button"
-                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-text-secondary transition-colors hover:bg-bg-primary hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
+                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-text-secondary transition-colors hover:bg-bg-primary hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
                   onClick={() => onRunOrStopAdhoc(run)}
                   disabled={pending}
                   title={t(running ? 'scripts.stopScript' : 'scripts.runScript')}
@@ -295,7 +295,7 @@ export function WorkspaceScriptsMenu({
                 {onSaveAdhoc && !isAdhocSaved?.(run) && (
                   <button
                     type="button"
-                    className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-text-secondary transition-colors hover:bg-bg-primary hover:text-text-display"
+                    className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-text-secondary transition-colors hover:bg-bg-primary hover:text-text-display"
                     onClick={() => onSaveAdhoc(run)}
                     title={t('scripts.saveCommand')}
                     aria-label={`${t('scripts.saveCommand')} ${run.command}`}
@@ -306,7 +306,7 @@ export function WorkspaceScriptsMenu({
                 {!running && (
                   <button
                     type="button"
-                    className="mr-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-text-secondary transition-colors hover:bg-bg-primary hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
+                    className="mr-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-text-secondary transition-colors hover:bg-bg-primary hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
                     onClick={() => onDismissAdhoc(run)}
                     disabled={pending}
                     title={t('scripts.dismissCommand')}
@@ -363,7 +363,7 @@ export function WorkspaceScriptsMenu({
                 </button>
                 <button
                   type="button"
-                  className="mr-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-text-secondary transition-colors hover:bg-bg-primary hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
+                  className="mr-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-text-secondary transition-colors hover:bg-bg-primary hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
                   onClick={() => onRunOrStop(script, run)}
                   disabled={pending}
                   title={running ? t('scripts.stopScript') : t('scripts.runScript')}
@@ -394,7 +394,7 @@ export function WorkspaceScriptsMenu({
                 </span>
                 <button
                   type="button"
-                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-text-secondary transition-colors hover:bg-bg-primary hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
+                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-text-secondary transition-colors hover:bg-bg-primary hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
                   onClick={() => onStopOrphan(run)}
                   disabled={!running || pendingScriptId === run.scriptId}
                   title={t('scripts.stopScript')}
@@ -408,7 +408,7 @@ export function WorkspaceScriptsMenu({
         </div>
       )}
 
-      {error && <p className="mx-2.5 my-1 rounded border border-red-400/30 bg-red-950/30 px-2 py-1.5 text-[11px] text-red-200" role="alert">{error}</p>}
+      {error && <p className="mx-2.5 my-1 rounded-sm border border-red-400/30 bg-red-950/30 px-2 py-1.5 text-[11px] text-red-200" role="alert">{error}</p>}
       <div className="mt-1 border-t border-border pt-1">
         <button
           type="button"
@@ -737,12 +737,12 @@ export function WorkspaceRunControl({
           aria-label={t(outputRunTileId === selectedRun.tileId ? 'scripts.hideOutput' : 'scripts.showOutput')}
           aria-pressed={outputRunTileId === selectedRun.tileId}
         >
-          <TerminalSquare size={14} />
+          <SquareTerminal size={14} />
         </button>
       )}
 
       {menuOpen && (
-        <div className="window-titlebar-popup absolute right-0 top-full z-[70] mt-1">
+        <div className="window-titlebar-popup absolute right-0 top-full z-70 mt-1">
           <WorkspaceScriptsMenu
             groups={groups}
             runsByScriptId={runsByScriptId}
@@ -773,11 +773,11 @@ export function WorkspaceRunControl({
       {outputRun && (
         <section
           data-testid="workspace-script-output"
-          className="window-titlebar-popup absolute right-0 top-full z-[60] mt-1 flex h-[40vh] w-[min(900px,70vw)] max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-lg border border-border-visible bg-bg-secondary shadow-2xl"
+          className="window-titlebar-popup absolute right-0 top-full z-60 mt-1 flex h-[40vh] w-[min(900px,70vw)] max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-lg border border-border-visible bg-bg-secondary shadow-2xl"
           aria-label={t('scripts.output')}
         >
           <header className="flex h-9 shrink-0 items-center gap-2 border-b border-border px-2.5">
-            <TerminalSquare size={13} className="shrink-0 text-text-secondary" />
+            <SquareTerminal size={13} className="shrink-0 text-text-secondary" />
             <span className="min-w-0 flex-1 truncate text-xs text-text-display">
               {outputRun.command ?? outputScript?.name ?? outputRun.scriptId}
             </span>
@@ -787,7 +787,7 @@ export function WorkspaceRunControl({
             </span>
             <button
               type="button"
-              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-sm text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
               onClick={() => {
                 if (outputRun.state === 'running') void stopScript(outputRun.scriptId, outputRun)
                 else if (outputScript || outputIsAdhoc) void runScript(outputRun.scriptId, true)
@@ -802,7 +802,7 @@ export function WorkspaceRunControl({
             {outputIsAdhoc && !isAdhocSaved(outputRun) && (
               <button
                 type="button"
-                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
+                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-sm text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
                 onClick={() => void saveAdhoc(outputRun)}
                 title={t('scripts.saveCommand')}
                 aria-label={t('scripts.saveCommand')}
@@ -812,7 +812,7 @@ export function WorkspaceRunControl({
             )}
             <button
               type="button"
-              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
+              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-sm text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
               onClick={() => setOutputRunTileId(null)}
               title={t('scripts.closeOutput')}
               aria-label={t('scripts.closeOutput')}

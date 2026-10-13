@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAgentSessionSnapshot } from '@/hooks/useAgentSessionSnapshot'
-import { Bot, Clock3, History, MessageSquareText, Pin, RefreshCw, Search, Settings, Zap } from 'lucide-react'
+import { Bot, Clock3, RotateCcwClock, MessageSquareText, Pin, RefreshCw, Search, Settings, Zap } from 'lucide-react'
 import type {
   AgentActiveSession,
   AgentProvider,
@@ -169,7 +169,7 @@ function HistoryCard({
   return (
     <article className="rounded-[18px] border border-border-visible bg-bg-primary px-3 py-3">
       <div className="flex min-w-0 items-start gap-2">
-        <History size={15} className="mt-0.5 shrink-0 text-text-secondary" />
+        <RotateCcwClock size={15} className="mt-0.5 shrink-0 text-text-secondary" />
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-start justify-between gap-2">
             <h4 className="min-w-0 truncate text-sm text-text-display" title={getHistoryTitle(item, unknownTitle)}>
@@ -389,7 +389,7 @@ export function AgentPanel({
         <section className="px-4 py-3">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <History size={14} className="text-text-secondary" />
+              <RotateCcwClock size={14} className="text-text-secondary" />
               <h3 className="nd-label text-text-display">{copy.history}</h3>
             </div>
             <button
@@ -418,7 +418,7 @@ export function AgentPanel({
                 }}
                 placeholder={copy.searchPlaceholder}
                 aria-label={copy.searchPlaceholder}
-                className="w-full rounded-full border border-border-visible bg-bg-primary py-2 pl-9 pr-3 text-xs text-text-display outline-none placeholder:text-text-disabled focus:border-text-secondary"
+                className="w-full rounded-full border border-border-visible bg-bg-primary py-2 pl-9 pr-3 text-xs text-text-display outline-hidden placeholder:text-text-disabled focus:border-text-secondary"
               />
             </label>
           </div>

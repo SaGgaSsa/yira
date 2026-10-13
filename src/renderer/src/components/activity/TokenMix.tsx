@@ -26,7 +26,7 @@ export function TokenMix({ history }: {
       <h2 className="mb-3 text-sm font-semibold text-text-primary">{t('activity.tokenMix')}</h2>
       {values.length === 0 ? <ActivityEmptyState /> : (
         <>
-          <div className="flex h-1.5 overflow-hidden rounded bg-bg-secondary" aria-hidden="true">
+          <div className="flex h-1.5 overflow-hidden rounded-sm bg-bg-secondary" aria-hidden="true">
             {values.map((item) => (
               <span
                 key={item.key}

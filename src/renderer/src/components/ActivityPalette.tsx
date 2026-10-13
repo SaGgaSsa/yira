@@ -78,7 +78,7 @@ function isButtonTarget(target: EventTarget | null): boolean {
 
 function Keycap({ children }: { children: React.ReactNode }): React.ReactElement {
   return (
-    <kbd className="rounded border border-border-visible px-1.5 py-0.5 font-mono text-[10px] text-text-secondary">
+    <kbd className="rounded-sm border border-border-visible px-1.5 py-0.5 font-mono text-[10px] text-text-secondary">
       {children}
     </kbd>
   )
@@ -162,7 +162,7 @@ function ActivityStep({
         aria-labelledby="activity-palette-title"
         tabIndex={-1}
         data-activity-palette="activity"
-        className="flex max-h-[calc(100vh-2rem)] w-[min(1240px,calc(100vw-2rem))] flex-col overflow-hidden rounded-[20px] border border-border-visible bg-bg-secondary shadow-2xl outline-none"
+        className="flex max-h-[calc(100vh-2rem)] w-[min(1240px,calc(100vw-2rem))] flex-col overflow-hidden rounded-[20px] border border-border-visible bg-bg-secondary shadow-2xl outline-hidden"
       >
         <div className="flex shrink-0 items-center gap-4 border-b border-border px-6 py-5">
           <div className="min-w-0 flex-1">
@@ -291,7 +291,7 @@ function WorkspaceCard({
           <button
             type="button"
             data-activity-palette-new-session={group.workspace.id}
-            className="group inline-flex min-w-0 max-w-full items-center gap-1.5 rounded text-left text-sm text-text-display hover:underline"
+            className="group inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-sm text-left text-sm text-text-display hover:underline"
             title={t('activityPalette.newSessionInWorkspace', { workspace: workspaceName })}
             onClick={() => onNewSession(group.workspace.id)}
           >

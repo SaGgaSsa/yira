@@ -70,7 +70,7 @@ function statusLabel(status: GitFileChange['status']): string {
   }[status]
 }
 
-const rowActionClassName = 'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-text-secondary hover:bg-hover-bg hover:text-text-display disabled:opacity-50'
+const rowActionClassName = 'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-sm text-text-secondary hover:bg-hover-bg hover:text-text-display disabled:opacity-50'
 
 function FileChangeRow({ change, staged, depth, displayPath, disabled, onToggle, onDiscard, onOpenDiff }: {
   change: GitFileChange
@@ -356,7 +356,7 @@ function RepositoryActions({
           <button
             key={type}
             type="button"
-            className="flex min-w-0 items-center gap-2 rounded border border-border px-2 py-1.5 text-left text-text-secondary hover:bg-hover-bg hover:text-text-display disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex min-w-0 items-center gap-2 rounded-sm border border-border px-2 py-1.5 text-left text-text-secondary hover:bg-hover-bg hover:text-text-display disabled:cursor-not-allowed disabled:opacity-50"
             disabled={Boolean(pendingAction) || disabledForUpstream}
             title={disabledForUpstream ? t('sourceControl.requiresUpstream', { action: label }) : label}
             onClick={() => onAction(type === 'sync' ? { type: 'sync' } : { type })}
@@ -503,7 +503,7 @@ export function SourceControlRepositorySection({
                 <label htmlFor={commitMessageId} className="sr-only">{t('sourceControl.commitMessage')}</label>
                 <textarea
                   id={commitMessageId}
-                  className="h-16 w-full resize-none rounded border border-border-visible bg-bg-primary px-2 py-1.5 text-sm text-text-display outline-none placeholder:text-text-disabled disabled:opacity-50"
+                  className="h-16 w-full resize-none rounded-sm border border-border-visible bg-bg-primary px-2 py-1.5 text-sm text-text-display outline-hidden placeholder:text-text-disabled disabled:opacity-50"
                   value={commitMessage}
                   onChange={(event) => onCommitMessageChange(event.target.value)}
                   placeholder={t('sourceControl.commitMessage')}
@@ -512,7 +512,7 @@ export function SourceControlRepositorySection({
                 <div className="mt-2 flex justify-end">
                   <button
                     type="button"
-                    className="inline-flex h-8 items-center rounded bg-active-bg px-3 text-sm text-text-display hover:bg-hover-bg disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex h-8 items-center rounded-sm bg-active-bg px-3 text-sm text-text-display hover:bg-hover-bg disabled:cursor-not-allowed disabled:opacity-50"
                     onClick={() => onAction({ type: 'commit', message: commitMessage.trim() })}
                     disabled={!canCommit || Boolean(pendingAction)}
                   >

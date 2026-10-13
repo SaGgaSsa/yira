@@ -150,7 +150,7 @@ export function WorkspacePickerMenu({
       <button
         ref={triggerRef}
         type="button"
-        className="inline-flex h-9 w-fit max-w-full min-w-0 shrink-0 items-center gap-2 rounded-full border border-border-visible bg-bg-primary px-3 text-sm leading-5 text-text-primary outline-none transition-colors hover:bg-hover-bg focus:border-text-secondary disabled:opacity-50"
+        className="inline-flex h-9 w-fit max-w-full min-w-0 shrink-0 items-center gap-2 rounded-full border border-border-visible bg-bg-primary px-3 text-sm leading-5 text-text-primary outline-hidden transition-colors hover:bg-hover-bg focus:border-text-secondary disabled:opacity-50"
         aria-label={`${label}: ${selectedOption?.label ?? ''}`}
         title={selectedOption?.label}
         aria-haspopup="listbox"
@@ -165,7 +165,7 @@ export function WorkspacePickerMenu({
         }}
       >
         <FolderOpen size={13} className="shrink-0 text-text-secondary" aria-hidden="true" />
-        <span className="max-w-[13.5rem] truncate text-left">{selectedOption?.label ?? label}</span>
+        <span className="max-w-54 truncate text-left">{selectedOption?.label ?? label}</span>
         <ChevronDown size={13} className="shrink-0 text-text-secondary" aria-hidden="true" />
       </button>
 
@@ -177,7 +177,7 @@ export function WorkspacePickerMenu({
           aria-label={label}
           aria-activedescendant={options[activeIndex] ? `${listboxId}-option-${activeIndex}` : undefined}
           tabIndex={-1}
-          className="fixed z-[60] overflow-y-auto rounded-xl py-1 shadow-xl outline-none"
+          className="fixed z-60 overflow-y-auto rounded-xl py-1 shadow-xl outline-hidden"
           style={{
             top: position.top,
             left: position.left,

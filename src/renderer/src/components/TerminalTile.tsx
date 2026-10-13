@@ -71,7 +71,7 @@ export function RemoteTerminalReconnectNotice({
       <span>{message}</span>
       <button
         type="button"
-        className="inline-flex items-center gap-1.5 rounded border border-border-visible px-2 py-1 text-text-display transition-colors hover:bg-hover-bg disabled:cursor-wait disabled:opacity-60"
+        className="inline-flex items-center gap-1.5 rounded-sm border border-border-visible px-2 py-1 text-text-display transition-colors hover:bg-hover-bg disabled:cursor-wait disabled:opacity-60"
         disabled={reconnecting}
         onClick={onReconnect}
       >
@@ -829,12 +829,12 @@ export function TerminalTileWrapper({
           role="alert"
           className="absolute inset-x-3 bottom-3 z-20 flex items-start gap-2 rounded-md border border-red-400/50 bg-red-950/80 py-2 pl-3 pr-2 text-xs text-red-200"
         >
-          <span className="min-w-0 flex-1 break-words">{snapshot.error}</span>
+          <span className="min-w-0 flex-1 wrap-break-word">{snapshot.error}</span>
           <button
             type="button"
             aria-label={t('common.close')}
             title={t('common.close')}
-            className="shrink-0 rounded p-0.5 text-red-200/80 hover:bg-red-400/20 hover:text-red-100"
+            className="shrink-0 rounded-sm p-0.5 text-red-200/80 hover:bg-red-400/20 hover:text-red-100"
             onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => {
               event.stopPropagation()

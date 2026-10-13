@@ -25,7 +25,7 @@ export function UsageBreakdown({ history, workspaceNames }: {
                   <span className="truncate">{workspaceNames[row.workspaceId] ?? row.workspaceId}</span>
                   <span className="shrink-0">{Math.round(percent)}% · {formatCompactTokens(row.tokens)}</span>
                 </div>
-                <div className="mt-1 h-1 overflow-hidden rounded bg-bg-secondary">
+                <div className="mt-1 h-1 overflow-hidden rounded-sm bg-bg-secondary">
                   <div className="h-full bg-activity" style={{ width: `${percent}%` }} />
                 </div>
               </div>

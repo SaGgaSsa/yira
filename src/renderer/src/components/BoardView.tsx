@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Check, ClipboardList, Copy, MessageSquarePlus, Search, Trash2, Undo2, X } from 'lucide-react'
+import { Check, ClipboardList, Copy, MessageSquarePlus, Search, Trash, Undo2, X } from 'lucide-react'
 import { BOARD_COLUMNS, type BoardState, type BoardTask } from '@shared/types'
 import { getBoardHistory, getVisibleBoardColumns } from '@shared/board'
 
@@ -47,7 +47,7 @@ function TaskCard({
     <article className="rounded-lg border border-border-visible bg-bg-secondary p-3">
       <div className="nd-caption mb-2 text-text-secondary">{task.id}</div>
       <input
-        className="w-full bg-transparent text-sm text-text-display outline-none"
+        className="w-full bg-transparent text-sm text-text-display outline-hidden"
         value={title}
         onChange={(event) => setTitle(event.target.value)}
         onBlur={() => {
@@ -55,7 +55,7 @@ function TaskCard({
         }}
       />
       <textarea
-        className="mt-3 min-h-[88px] w-full resize-none rounded-lg border border-border bg-bg-tertiary px-3 py-2 text-sm leading-5 text-text-primary outline-none"
+        className="mt-3 min-h-[88px] w-full resize-none rounded-lg border border-border bg-bg-tertiary px-3 py-2 text-sm leading-5 text-text-primary outline-hidden"
         value={body}
         onChange={(event) => setBody(event.target.value)}
         onBlur={() => {
@@ -84,7 +84,7 @@ function TaskCard({
 
       <div className="mt-3 flex gap-2">
         <input
-          className="min-w-0 flex-1 rounded-full border border-border bg-bg-tertiary px-3 py-2 text-xs text-text-primary outline-none"
+          className="min-w-0 flex-1 rounded-full border border-border bg-bg-tertiary px-3 py-2 text-xs text-text-primary outline-hidden"
           value={note}
           onChange={(event) => setNote(event.target.value)}
           placeholder={t('ui.addNote')}
@@ -112,7 +112,7 @@ function TaskCard({
               onClick={() => onDeleteBacklogTask(task)}
               title={t('ui.deleteBacklogTask')}
             >
-              <Trash2 size={14} />
+              <Trash size={14} />
             </button>
           )}
           {task.status === 'review' && (
@@ -237,7 +237,7 @@ export function BoardView({
             <label className="flex h-10 w-[320px] items-center gap-2 rounded-full border border-border-visible bg-bg-primary px-3">
               <Search size={14} className="text-text-secondary" />
               <input
-                className="min-w-0 flex-1 bg-transparent text-sm text-text-primary outline-none"
+                className="min-w-0 flex-1 bg-transparent text-sm text-text-primary outline-hidden"
                 value={historySearch}
                 onChange={(event) => setHistorySearch(event.target.value)}
                 placeholder={t('ui.searchHistory')}
