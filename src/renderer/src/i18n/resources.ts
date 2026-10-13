@@ -160,6 +160,7 @@ type TranslationResources = {
     commandInputLabel: string
     recentCommands: string
     dismissCommand: string
+    saveCommand: string
     runScript: string
     stopScript: string
     showOutput: string
@@ -170,6 +171,7 @@ type TranslationResources = {
     outputUnavailable: string
     runFailed: string
     stopFailed: string
+    saveFailed: string
   }
   terminalActivity: {
     'needs-input': string
@@ -1041,6 +1043,7 @@ const en: TranslationResources = {
     commandInputLabel: 'Run a one-off command in this workspace',
     recentCommands: 'Recent commands',
     dismissCommand: 'Dismiss',
+    saveCommand: 'Save command',
     runScript: 'Run script',
     stopScript: 'Stop script',
     showOutput: 'Show output',
@@ -1051,6 +1054,7 @@ const en: TranslationResources = {
     outputUnavailable: 'Output is unavailable.',
     runFailed: 'Unable to run this script.',
     stopFailed: 'Unable to stop this script.',
+    saveFailed: 'Unable to save this command.',
   },
   terminalActivity: {
     'needs-input': 'Needs input',
@@ -1922,6 +1926,7 @@ const es: TranslationResources = {
     commandInputLabel: 'Ejecutar un comando puntual en este espacio de trabajo',
     recentCommands: 'Comandos recientes',
     dismissCommand: 'Descartar',
+    saveCommand: 'Guardar comando',
     runScript: 'Ejecutar script',
     stopScript: 'Detener script',
     showOutput: 'Mostrar salida',
@@ -1932,6 +1937,7 @@ const es: TranslationResources = {
     outputUnavailable: 'La salida no está disponible.',
     runFailed: 'No se pudo ejecutar este script.',
     stopFailed: 'No se pudo detener este script.',
+    saveFailed: 'No se pudo guardar este comando.',
   },
   terminalActivity: {
     'needs-input': 'Requiere intervención',

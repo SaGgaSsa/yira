@@ -13,6 +13,7 @@ interface TopBarProps {
   workspaceName: string
   workspaceConfig: WorkspaceConfig
   onEditWorkspaceScripts: () => void
+  onSaveWorkspaceCommand: (command: string) => Promise<void>
   zoom: number
   viewMode: ViewMode
   splitOrientation: SplitOrientation
@@ -90,6 +91,7 @@ export function TopBar({
   workspaceName,
   workspaceConfig,
   onEditWorkspaceScripts,
+  onSaveWorkspaceCommand,
   zoom,
   viewMode,
   splitOrientation,
@@ -253,6 +255,7 @@ export function TopBar({
                 workspaceName={workspaceName}
                 workspaceConfig={workspaceConfig}
                 onEditCommands={() => onEditWorkspaceScripts()}
+                onSaveCommand={onSaveWorkspaceCommand}
               />
             )}
 

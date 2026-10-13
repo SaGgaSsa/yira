@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronDown, Play, Square, TerminalSquare, X } from 'lucide-react'
+import { BookmarkPlus, ChevronDown, Play, Square, TerminalSquare, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { WorkspaceConfig, WorkspaceScript, WorkspaceScriptRun, WorkspaceScriptsSnapshot } from '@shared/types'
 
@@ -12,6 +12,7 @@ interface WorkspaceRunControlProps {
   workspaceName: string
   workspaceConfig: WorkspaceConfig
   onEditCommands: () => void
+  onSaveCommand: (command: string) => Promise<void>
 }
 
 export interface WorkspaceScriptGroup {
@@ -150,6 +151,8 @@ interface WorkspaceScriptsMenuProps {
   onShowOutput: (run: WorkspaceScriptRun) => void
   onRunOrStopAdhoc: (run: WorkspaceScriptRun) => void
   onDismissAdhoc: (run: WorkspaceScriptRun) => void
+  onSaveAdhoc?: (run: WorkspaceScriptRun) => void
+  isAdhocSaved?: (run: WorkspaceScriptRun) => boolean
   onEditCommands: () => void
 }
 
@@ -169,6 +172,8 @@ export function WorkspaceScriptsMenu({
   onShowOutput,
   onRunOrStopAdhoc,
   onDismissAdhoc,
+  onSaveAdhoc,
+  isAdhocSaved,
   onEditCommands,
 }: WorkspaceScriptsMenuProps): React.ReactElement {
   const { t } = useTranslation()
@@ -277,6 +282,17 @@ export function WorkspaceScriptsMenu({
                 >
                   {running ? <Square size={12} /> : <Play size={12} />}
                 </button>
+                {onSaveAdhoc && !isAdhocSaved?.(run) && (
+                  <button
+                    type="button"
+                    className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-text-secondary transition-colors hover:bg-bg-primary hover:text-text-display"
+                    onClick={() => onSaveAdhoc(run)}
+                    title={t('scripts.saveCommand')}
+                    aria-label={`${t('scripts.saveCommand')} ${run.command}`}
+                  >
+                    <BookmarkPlus size={12} />
+                  </button>
+                )}
                 {!running && (
                   <button
                     type="button"
@@ -419,6 +435,7 @@ export function WorkspaceRunControl({
   workspaceName,
   workspaceConfig,
   onEditCommands,
+  onSaveCommand,
 }: WorkspaceRunControlProps): React.ReactElement {
   const { t } = useTranslation()
   const [scriptSnapshot, setScriptSnapshot] = useState<WorkspaceScriptsSnapshot | null>(null)
@@ -628,6 +645,26 @@ export function WorkspaceRunControl({
     else void runScript(run.scriptId)
   }
 
+  const savedCommands = useMemo(
+    () => new Set((workspaceConfig.customScripts ?? []).map((script) => script.command)),
+    [workspaceConfig.customScripts],
+  )
+  const isAdhocSaved = (run: WorkspaceScriptRun) => run.command !== undefined && savedCommands.has(run.command)
+
+  const saveAdhoc = async (run: WorkspaceScriptRun) => {
+    if (!run.command) return
+    setActionError(null)
+    try {
+      await onSaveCommand(run.command)
+      const nextSnapshot = await window.electron.scripts.snapshot(workspaceId)
+      setScriptSnapshot((current) => (
+        current?.workspaceId === workspaceId ? { ...current, scripts: nextSnapshot.scripts } : nextSnapshot
+      ))
+    } catch (error) {
+      setActionError(getErrorMessage(error) || t('scripts.saveFailed'))
+    }
+  }
+
   const handleEditCommands = () => {
     setMenuOpen(false)
     onEditCommands()
@@ -679,7 +716,7 @@ export function WorkspaceRunControl({
       )}
 
       {menuOpen && (
-        <div className="absolute right-0 top-full z-[70] mt-1">
+        <div className="window-titlebar-popup absolute right-0 top-full z-[70] mt-1">
           <WorkspaceScriptsMenu
             groups={groups}
             runsByScriptId={runsByScriptId}
@@ -699,6 +736,8 @@ export function WorkspaceRunControl({
             }}
             onRunOrStopAdhoc={runOrStopAdhoc}
             onDismissAdhoc={(run) => void stopScript(run.scriptId, run)}
+            onSaveAdhoc={(run) => void saveAdhoc(run)}
+            isAdhocSaved={isAdhocSaved}
             onEditCommands={handleEditCommands}
           />
         </div>
@@ -707,7 +746,7 @@ export function WorkspaceRunControl({
       {outputRun && (
         <section
           data-testid="workspace-script-output"
-          className="absolute right-0 top-full z-[60] mt-1 flex h-[40vh] w-[min(900px,70vw)] max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-lg border border-border-visible bg-bg-secondary shadow-2xl"
+          className="window-titlebar-popup absolute right-0 top-full z-[60] mt-1 flex h-[40vh] w-[min(900px,70vw)] max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-lg border border-border-visible bg-bg-secondary shadow-2xl"
           aria-label={t('scripts.output')}
         >
           <header className="flex h-9 shrink-0 items-center gap-2 border-b border-border px-2.5">
@@ -733,6 +772,17 @@ export function WorkspaceRunControl({
             >
               {outputRun.state === 'running' ? <Square size={12} /> : <Play size={12} />}
             </button>
+            {outputIsAdhoc && !isAdhocSaved(outputRun) && (
+              <button
+                type="button"
+                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
+                onClick={() => void saveAdhoc(outputRun)}
+                title={t('scripts.saveCommand')}
+                aria-label={t('scripts.saveCommand')}
+              >
+                <BookmarkPlus size={12} />
+              </button>
+            )}
             <button
               type="button"
               className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
@@ -753,6 +803,7 @@ export function WorkspaceRunControl({
                 isVisible
                 edgeToEdge
                 connectOnly
+                copyOnSelect
                 onFocus={() => undefined}
                 onUpdate={() => undefined}
                 onDelete={() => undefined}

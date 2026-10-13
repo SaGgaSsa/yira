@@ -1399,6 +1399,33 @@ function AppContent(): React.ReactElement {
     if (workspace) openWorkspaceEditor(workspace, initialTab)
   }, [activeWorkspaceId, openWorkspaceEditor, workspaceMetadata])
 
+  // Saves an ad-hoc command from the run control as a custom workspace command.
+  const saveActiveWorkspaceCommand = useCallback(async (command: string) => {
+    if (!activeWorkspaceId) return
+    const workspace = workspaceMetadata.find((entry) => entry.id === activeWorkspaceId)
+    const customScripts = workspace?.config.customScripts ?? activeWorkspaceConfig.customScripts ?? []
+    if (customScripts.some((script) => script.command === command)) return
+
+    const updated = await window.electron.workspace.update(activeWorkspaceId, {
+      config: {
+        customScripts: [
+          ...customScripts,
+          {
+            id: crypto.randomUUID().replace(/-/g, ''),
+            name: command.length > 80 ? `${command.slice(0, 79)}…` : command,
+            command,
+          },
+        ],
+      },
+    })
+    if (!updated) return
+
+    await refreshWorkspaceMetadata()
+    if (useCanvasStore.getState().activeWorkspaceId === updated.id) {
+      setWorkspace(updated.id, updated.name, updated.config)
+    }
+  }, [activeWorkspaceConfig.customScripts, activeWorkspaceId, refreshWorkspaceMetadata, setWorkspace, workspaceMetadata])
+
   const toggleWorkspacePanel = useCallback(() => {
     if (!activeWorkspaceId || !hasWorkspacePanel) return
     // Hiding a temporarily revealed panel undoes the reveal and keeps the saved preference.
@@ -2468,6 +2495,7 @@ function AppContent(): React.ReactElement {
         workspaceName={activeWorkspaceName}
         workspaceConfig={activeWorkspaceConfig}
         onEditWorkspaceScripts={() => openActiveWorkspaceEditor('scripts')}
+        onSaveWorkspaceCommand={saveActiveWorkspaceCommand}
         zoom={viewport.zoom}
         viewMode={viewMode}
         splitOrientation={splitViewState.orientation}
