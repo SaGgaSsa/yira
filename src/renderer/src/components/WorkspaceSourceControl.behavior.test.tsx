@@ -219,6 +219,7 @@ test('keeps healthy Git status visible when history loading fails', async () => 
     { i18n },
     React.createElement(WorkspaceSourceControl, {
       workspaceId,
+      tiles: [],
       sourceControlRepositoryPaths: [repositoryPath],
       sourceControlViewMode: 'list',
       onWorkspaceUpdated: () => undefined,
@@ -254,3 +255,136 @@ test('keeps healthy Git status visible when history loading fails', async () => 
     ;(globalThis as AnyRecord).window.electron = previousElectron
   }
 })
+
+test('open file button calls onOpenFile and does not open the diff', async () => {
+  const openedFiles: unknown[] = []
+  const openedDiffs: unknown[] = []
+  const bridge = {
+    git: {
+      discoverRepositories: async () => [{ relativePath: repositoryPath, name: 'workspace' }],
+      status: async () => status,
+      history: async () => ({ outgoing: [], upstream: [], local: [] }),
+      stage: async () => undefined,
+      unstage: async () => undefined,
+      commit: async () => undefined,
+      sync: async () => undefined,
+    },
+    workspace: {
+      update: async () => null,
+    },
+    shell: {
+      openExternal: async () => undefined,
+    },
+  }
+  const previousElectron = (globalThis as AnyRecord).window.electron
+  ;(globalThis as AnyRecord).window.electron = bridge
+  const container = document.createElement('div') as any
+  currentContainer = container
+  const ReactDOM = await import('react-dom/client')
+  const root = ReactDOM.createRoot(container)
+  root.render(React.createElement(
+    I18nextProvider,
+    { i18n },
+    React.createElement(WorkspaceSourceControl, {
+      workspaceId,
+      tiles: [],
+      sourceControlRepositoryPaths: [repositoryPath],
+      sourceControlViewMode: 'list',
+      onWorkspaceUpdated: () => undefined,
+      onOpenWorkspaceSettings: () => undefined,
+      onOpenDiff: (...args: unknown[]) => { openedDiffs.push(args) },
+      onOpenFile: (...args: unknown[]) => { openedFiles.push(args) },
+      requestConfirm: async () => false,
+    }),
+  ))
+
+  try {
+    await waitFor(() => serializedMarkup(container).includes('Changes (1)'))
+    const openFileButton = Array.from(container.getElementsByTagName('button')).find((button: any) =>
+      button.getAttribute('title') === 'Open file' || button.getAttribute('aria-label') === 'Open README.md',
+    ) as any
+    assert.ok(openFileButton, 'expected an open file button')
+    openFileButton.dispatchEvent(new TestEvent('click', { bubbles: true }))
+    assert.deepEqual(openedFiles, [['README.md']])
+    assert.equal(openedDiffs.length, 0)
+  } finally {
+    root.unmount()
+    currentContainer = null
+    ;(globalThis as AnyRecord).window.electron = previousElectron
+  }
+})
+
+test('expanding a commit loads files and opens commit diff on file click', async () => {
+  const commitFilesCalls: unknown[] = []
+  const openedCommitDiffs: unknown[] = []
+  const commit = { shortHash: 'abc123', subject: 'Commit subject', commitDate: new Date().toISOString() }
+  const bridge = {
+    git: {
+      discoverRepositories: async () => [{ relativePath: repositoryPath, name: 'workspace' }],
+      status: async () => status,
+      history: async () => ({ outgoing: [commit], upstream: [], local: [] }),
+      commitFiles: async (workspace: string, repository: string, hash: string) => {
+        commitFilesCalls.push([workspace, repository, hash])
+        return { files: [{ path: 'src/file.ts', status: 'modified' }] }
+      },
+      stage: async () => undefined,
+      unstage: async () => undefined,
+      commit: async () => undefined,
+      sync: async () => undefined,
+    },
+    workspace: {
+      update: async () => null,
+    },
+    shell: {
+      openExternal: async () => undefined,
+    },
+  }
+  const previousElectron = (globalThis as AnyRecord).window.electron
+  ;(globalThis as AnyRecord).window.electron = bridge
+  const container = document.createElement('div') as any
+  currentContainer = container
+  const ReactDOM = await import('react-dom/client')
+  const root = ReactDOM.createRoot(container)
+  root.render(React.createElement(
+    I18nextProvider,
+    { i18n },
+    React.createElement(WorkspaceSourceControl, {
+      workspaceId,
+      tiles: [],
+      sourceControlRepositoryPaths: [repositoryPath],
+      sourceControlViewMode: 'list',
+      onWorkspaceUpdated: () => undefined,
+      onOpenWorkspaceSettings: () => undefined,
+      onOpenDiff: () => undefined,
+      onOpenCommitDiff: (...args: unknown[]) => { openedCommitDiffs.push(args) },
+      requestConfirm: async () => false,
+    }),
+  ))
+
+  try {
+    await waitFor(() => serializedMarkup(container).includes('Changes (1)'))
+    const commitsButton = findCommitsButton(container)
+    commitsButton.dispatchEvent(new TestEvent('click', { bubbles: true }))
+    await waitFor(() => serializedMarkup(container).includes('Commit subject'))
+    const commitButton = Array.from(container.getElementsByTagName('button')).find((button: any) =>
+      (button.textContent ?? '').includes('abc123'),
+    ) as any
+    assert.ok(commitButton, 'expected a commit row button')
+    commitButton.dispatchEvent(new TestEvent('click', { bubbles: true }))
+    await waitFor(() => serializedMarkup(container).includes('src/file.ts'))
+    assert.deepEqual(commitFilesCalls, [[workspaceId, repositoryPath, 'abc123']])
+    const fileButton = Array.from(container.getElementsByTagName('button')).find((button: any) =>
+      (button.getAttribute('title') ?? '') === 'src/file.ts',
+    ) as any
+    assert.ok(fileButton, 'expected a commit file button')
+    fileButton.dispatchEvent(new TestEvent('click', { bubbles: true }))
+    assert.equal(openedCommitDiffs.length, 1)
+    assert.equal((openedCommitDiffs[0] as any[])[1].shortHash, 'abc123')
+    assert.equal((openedCommitDiffs[0] as any[])[2].path, 'src/file.ts')
+  } finally {
+    root.unmount()
+    currentContainer = null
+    ;(globalThis as AnyRecord).window.electron = previousElectron
+  }
+})
+

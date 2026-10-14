@@ -1,17 +1,22 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { GitBranch, List, ListFilter, RefreshCw, TreePine } from 'lucide-react'
-import type { GitCommitHistoryResult, GitFileChange, GitRepository, GitStatusResult, SourceControlViewMode, Workspace } from '@shared/types'
+import type { GitCommitHistoryResult, GitCommitSummary, GitFileChange, GitRepository, GitStatusResult, SourceControlViewMode, TileState, Workspace } from '@shared/types'
 import { useTranslation } from 'react-i18next'
 import { SourceControlRepositorySection, type RepositoryAction } from './SourceControlRepositorySection'
+import { agentsInRepository } from '@/utils/sourceControlBranches'
+import { BranchSwitchChangesDialog } from './SourceControlBranchPicker'
 import type { ConfirmDialogOptions } from './AppDialog'
 
 interface WorkspaceSourceControlProps {
   workspaceId: string
+  tiles: TileState[]
   sourceControlRepositoryPaths: string[]
   sourceControlViewMode: SourceControlViewMode
   onWorkspaceUpdated: (workspace: Workspace) => void
   onOpenWorkspaceSettings: (initialTab?: 'sourceControl') => void
   onOpenDiff: (repositoryPath: string, change: GitFileChange, staged: boolean) => void
+  onOpenFile?: (relativePath: string) => void
+  onOpenCommitDiff?: (repositoryPath: string, commit: GitCommitSummary, change: GitFileChange) => void
   requestConfirm: (options: ConfirmDialogOptions) => Promise<boolean>
 }
 
@@ -46,11 +51,14 @@ function emptyStatus(error: unknown, fallback: string): GitStatusResult {
 
 export function WorkspaceSourceControl({
   workspaceId,
+  tiles,
   sourceControlRepositoryPaths,
   sourceControlViewMode,
   onWorkspaceUpdated,
   onOpenWorkspaceSettings,
   onOpenDiff,
+  onOpenFile,
+  onOpenCommitDiff,
   requestConfirm,
 }: WorkspaceSourceControlProps): React.ReactElement {
   const { t } = useTranslation()
@@ -68,6 +76,7 @@ export function WorkspaceSourceControl({
   const [commitMessages, setCommitMessages] = useState<Record<string, string | undefined>>({})
   const [expandedCommitAccordions, setExpandedCommitAccordions] = useState<Record<string, boolean>>({})
   const [globalError, setGlobalError] = useState<string | null>(null)
+  const [switchPrompt, setSwitchPrompt] = useState<{ from: string; to: string; resolve: (choice: 'carry' | 'stash' | 'cancel') => void } | null>(null)
 
   const workspaceRef = useRef(workspaceId)
   const repositoryLoadVersionRef = useRef(0)
@@ -206,6 +215,12 @@ export function WorkspaceSourceControl({
     })
   }, [expandedRepositories, histories, loadRepositoryHistory, repositories, statuses])
 
+  const requestBranchSwitchChoice = useCallback((from: string, to: string): Promise<'carry' | 'stash' | 'cancel'> => {
+    return new Promise((resolve) => {
+      setSwitchPrompt({ from, to, resolve })
+    })
+  }, [])
+
   const handleRepositoryAction = useCallback(async (
     repositoryPath: string,
     repositoryAction: RepositoryAction,
@@ -236,6 +251,30 @@ export function WorkspaceSourceControl({
       if (!confirmed || workspaceRef.current !== requestWorkspaceId || pendingActionsRef.current.has(actionKey)) return
     }
 
+    let stashBeforeCheckout = false
+    let pushFailed = false
+    const currentBranchName = statuses[repositoryPath]?.branch ?? null
+    if (repositoryAction.type === 'checkout' || repositoryAction.type === 'createBranch') {
+      const agentCount = agentsInRepository(tiles, repositoryPath)
+      if (agentCount > 0) {
+        const confirmed = await requestConfirm({
+          title: t('sourceControl.agentsWorkingInRepository'),
+          message: t('sourceControl.agentsInRepositoryMessage', { count: agentCount }),
+          confirmLabel: t('sourceControl.changeAnyway'),
+        })
+        if (!confirmed || workspaceRef.current !== requestWorkspaceId || pendingActionsRef.current.has(actionKey)) return
+      }
+      if (repositoryAction.type === 'checkout') {
+        const repositoryStatus = statuses[repositoryPath]
+        const hasChanges = Boolean(repositoryStatus?.staged.length || repositoryStatus?.unstaged.length)
+        if (hasChanges) {
+          const choice = await requestBranchSwitchChoice(currentBranchName ?? '', repositoryAction.branch.name)
+          if (choice === 'cancel' || workspaceRef.current !== requestWorkspaceId || pendingActionsRef.current.has(actionKey)) return
+          stashBeforeCheckout = choice === 'stash'
+        }
+      }
+    }
+
     pendingActionsRef.current.add(actionKey)
     // Actions run from an open section. Pin it open so it does not collapse
     // when the repository runs out of changes (for example after a commit).
@@ -262,6 +301,42 @@ export function WorkspaceSourceControl({
         await window.electron.git.discard(requestWorkspaceId, repositoryPath, repositoryAction.changes)
       } else if (repositoryAction.type === 'commit') {
         await window.electron.git.commit(requestWorkspaceId, repositoryPath, repositoryAction.message)
+        if (repositoryAction.push) {
+          const hasUpstream = Boolean(statuses[repositoryPath]?.upstream)
+          try {
+            if (hasUpstream) {
+              await window.electron.git.push(requestWorkspaceId, repositoryPath)
+            } else {
+              await window.electron.git.publish(requestWorkspaceId, repositoryPath)
+            }
+          } catch (pushError) {
+            pushFailed = true
+            if (workspaceRef.current === requestWorkspaceId) {
+              setActionErrors((current) => ({ ...current, [repositoryPath]: errorMessage(pushError, t('sourceControl.loadStatusError')) }))
+              setRetryActions((current) => ({ ...current, [repositoryPath]: { type: hasUpstream ? 'push' : 'publish' } }))
+            }
+          }
+        }
+      } else if (repositoryAction.type === 'checkout') {
+        if (stashBeforeCheckout && currentBranchName) {
+          await window.electron.git.stashForBranch(requestWorkspaceId, repositoryPath, currentBranchName)
+        }
+        await window.electron.git.checkout(requestWorkspaceId, repositoryPath, repositoryAction.branch.name, repositoryAction.branch.remote)
+        const stashEntry = await window.electron.git.branchStash(requestWorkspaceId, repositoryPath, repositoryAction.branch.name)
+        if (stashEntry) {
+          const apply = await requestConfirm({
+            title: t('sourceControl.savedChangesInBranch'),
+            message: t('sourceControl.savedChangesMessage', { branch: repositoryAction.branch.name }),
+            confirmLabel: t('sourceControl.applyChanges'),
+          })
+          if (apply && workspaceRef.current === requestWorkspaceId) {
+            await window.electron.git.popStash(requestWorkspaceId, repositoryPath, stashEntry.ref)
+          }
+        }
+      } else if (repositoryAction.type === 'createBranch') {
+        await window.electron.git.createBranch(requestWorkspaceId, repositoryPath, repositoryAction.name, repositoryAction.startPoint)
+      } else if (repositoryAction.type === 'publish') {
+        await window.electron.git.publish(requestWorkspaceId, repositoryPath)
       } else {
         await window.electron.git[repositoryAction.type](requestWorkspaceId, repositoryPath)
       }
@@ -270,7 +345,7 @@ export function WorkspaceSourceControl({
       const repository = repositories.find((candidate) => candidate.relativePath === repositoryPath)
       if (repository) await refreshRepositoryStatus(repository)
 
-      if ((repositoryAction.type === 'commit' || repositoryAction.type === 'sync')
+      if ((repositoryAction.type === 'commit' || repositoryAction.type === 'sync' || repositoryAction.type === 'checkout' || repositoryAction.type === 'createBranch' || repositoryAction.type === 'publish')
         && historyLoadedPathsRef.current.has(repositoryPath)) {
         historyLoadedPathsRef.current.delete(repositoryPath)
         setHistories((current) => ({ ...current, [repositoryPath]: undefined }))
@@ -279,12 +354,14 @@ export function WorkspaceSourceControl({
       if (repositoryAction.type === 'commit') {
         setCommitMessages((current) => ({ ...current, [repositoryPath]: '' }))
       }
-      setRetryActions((current) => ({ ...current, [repositoryPath]: undefined }))
+      if (!pushFailed) {
+        setRetryActions((current) => ({ ...current, [repositoryPath]: undefined }))
+      }
     } catch (error) {
       if (workspaceRef.current === requestWorkspaceId) {
         setActionErrors((current) => ({ ...current, [repositoryPath]: errorMessage(error, t('sourceControl.loadStatusError')) }))
-        // A retry would skip the confirmation, so a failed discard is not retryable.
-        setRetryActions((current) => ({ ...current, [repositoryPath]: repositoryAction.type === 'discard' ? undefined : repositoryAction }))
+        // A retry would skip the confirmation dialog, so confirmed actions are not retryable.
+        setRetryActions((current) => ({ ...current, [repositoryPath]: (repositoryAction.type === 'discard' || repositoryAction.type === 'checkout') ? undefined : repositoryAction }))
       }
     } finally {
       pendingActionsRef.current.delete(actionKey)
@@ -292,7 +369,7 @@ export function WorkspaceSourceControl({
         setPendingActions((current) => ({ ...current, [repositoryPath]: undefined }))
       }
     }
-  }, [loadRepositoryHistory, refreshRepositoryStatus, repositories, requestConfirm, t, workspaceId])
+  }, [loadRepositoryHistory, refreshRepositoryStatus, repositories, requestConfirm, statuses, tiles, requestBranchSwitchChoice, t, workspaceId])
 
   const handleViewModeChange = useCallback((viewMode: SourceControlViewMode) => {
     if (viewMode === sourceControlViewMode) return
@@ -423,6 +500,7 @@ export function WorkspaceSourceControl({
           return (
             <SourceControlRepositorySection
               key={`${workspaceId}:${repositoryPath}`}
+              workspaceId={workspaceId}
               repository={repository}
               duplicateName={duplicateName}
               repositoryStatus={repositoryStatus}
@@ -447,6 +525,8 @@ export function WorkspaceSourceControl({
                 if (retryAction) void handleRepositoryAction(repositoryPath, retryAction)
               }}
               onOpenDiff={(change, staged) => onOpenDiff(repositoryPath, change, staged)}
+              onOpenFile={(change) => onOpenFile?.(repositoryPath === '.' ? change.path : `${repositoryPath}/${change.path}`)}
+              onOpenCommitDiff={(commit, change) => onOpenCommitDiff?.(repositoryPath, commit, change)}
             />
           )
         })}
@@ -457,6 +537,23 @@ export function WorkspaceSourceControl({
       {globalError && (
         <div className="border-t border-border px-3 py-2 text-xs text-red-300">{globalError}</div>
       )}
+      <BranchSwitchChangesDialog
+        open={switchPrompt !== null}
+        from={switchPrompt?.from ?? ''}
+        to={switchPrompt?.to ?? ''}
+        onCarry={() => {
+          switchPrompt?.resolve('carry')
+          setSwitchPrompt(null)
+        }}
+        onStash={() => {
+          switchPrompt?.resolve('stash')
+          setSwitchPrompt(null)
+        }}
+        onCancel={() => {
+          switchPrompt?.resolve('cancel')
+          setSwitchPrompt(null)
+        }}
+      />
     </div>
   )
 }

@@ -52,7 +52,7 @@ export function isCleanReusableFilePreview(tile: TileState): boolean {
 
 function sameFileTileKind(left: TileState, right: TileState): boolean {
   if (Boolean(left.fileDiff) !== Boolean(right.fileDiff)) return false
-  return !left.fileDiff || !right.fileDiff || left.fileDiff.staged === right.fileDiff.staged
+  return !left.fileDiff || !right.fileDiff || (left.fileDiff.staged === right.fileDiff.staged && left.fileDiff.commit === right.fileDiff.commit)
 }
 
 export function pinFileTile(tile: TileState): TileState {

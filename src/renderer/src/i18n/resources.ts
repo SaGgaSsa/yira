@@ -566,7 +566,11 @@ type TranslationResources = {
     changes: string
     commitMessage: string
     commit: string
+    commitAndPush: string
     retryOperation: string
+    openFile: string
+    openPath: string
+    noFiles: string
     stageFile: string
     unstageFile: string
     stagePath: string
@@ -597,6 +601,28 @@ type TranslationResources = {
     actionFetch: string
     actionSync: string
     repositoriesSummary: string
+    recentBranches: string
+    localBranches: string
+    remoteBranches: string
+    createBranch: string
+    createBranchFrom: string
+    newBranchName: string
+    newBranchNameFrom: string
+    branchSearchPlaceholder: string
+    worktreeInUse: string
+    openInBrowser: string
+    publishBranch: string
+    publishSetUpstream: string
+    agentsWorkingInRepository: string
+    agentsInRepositoryMessage: string
+    changeAnyway: string
+    uncommittedChangesIn: string
+    changesSwitchQuestion: string
+    carryChanges: string
+    stashAndSwitch: string
+    savedChangesInBranch: string
+    savedChangesMessage: string
+    applyChanges: string
   }
   tile: {
     terminal: string
@@ -1470,7 +1496,11 @@ const en: TranslationResources = {
     changes: 'Changes',
     commitMessage: 'Commit message',
     commit: 'Commit',
+    commitAndPush: 'Commit and push',
     retryOperation: 'Retry operation',
+    openFile: 'Open file',
+    openPath: 'Open {{path}}',
+    noFiles: 'No files',
     stageFile: 'Stage file',
     unstageFile: 'Unstage file',
     stagePath: 'Stage {{path}}',
@@ -1501,6 +1531,28 @@ const en: TranslationResources = {
     actionFetch: 'Fetch',
     actionSync: 'Sync',
     repositoriesSummary: 'Repositories ({{count}}) · {{changed}} changed',
+    recentBranches: 'Recent',
+    localBranches: 'Local',
+    remoteBranches: 'Remote',
+    createBranch: "Create branch '{{name}}'",
+    createBranchFrom: 'Create branch from…',
+    newBranchName: 'New branch name',
+    newBranchNameFrom: 'New branch name from {{branch}}',
+    branchSearchPlaceholder: 'Search branches…',
+    worktreeInUse: 'in use in another worktree',
+    openInBrowser: 'Open in browser',
+    publishBranch: 'Publish branch',
+    publishSetUpstream: 'push -u origin',
+    agentsWorkingInRepository: 'Agents working in this repository',
+    agentsInRepositoryMessage: 'There are {{count}} agent(s) with a terminal in this repository. Switching branches changes their files.',
+    changeAnyway: 'Switch anyway',
+    uncommittedChangesIn: 'Uncommitted changes in {{branch}}',
+    changesSwitchQuestion: 'What should I do with the changes when switching to {{branch}}?',
+    carryChanges: 'Carry changes',
+    stashAndSwitch: 'Stash and switch',
+    savedChangesInBranch: 'Changes saved in this branch',
+    savedChangesMessage: 'There are changes (stash) saved when leaving {{branch}}. Apply them now?',
+    applyChanges: 'Apply',
   },
   tile: {
     terminal: 'Terminal',
@@ -2374,7 +2426,11 @@ const es: TranslationResources = {
     changes: 'Cambios',
     commitMessage: 'Mensaje del commit',
     commit: 'Crear commit',
+    commitAndPush: 'Commit y push',
     retryOperation: 'Reintentar operación',
+    openFile: 'Abrir archivo',
+    openPath: 'Abrir {{path}}',
+    noFiles: 'Sin archivos',
     stageFile: 'Preparar archivo',
     unstageFile: 'Quitar archivo de los preparados',
     stagePath: 'Preparar {{path}}',
@@ -2405,6 +2461,28 @@ const es: TranslationResources = {
     actionFetch: 'Obtener',
     actionSync: 'Sincronizar',
     repositoriesSummary: 'Repositorios ({{count}}) · {{changed}} con cambios',
+    recentBranches: 'Recientes',
+    localBranches: 'Locales',
+    remoteBranches: 'Remotos',
+    createBranch: "Crear branch '{{name}}'",
+    createBranchFrom: 'Crear branch desde…',
+    newBranchName: 'Nombre del nuevo branch',
+    newBranchNameFrom: 'Nombre del nuevo branch desde {{branch}}',
+    branchSearchPlaceholder: 'Buscar branches…',
+    worktreeInUse: 'en uso en otro worktree',
+    openInBrowser: 'Abrir en el navegador',
+    publishBranch: 'Publicar branch',
+    publishSetUpstream: 'push -u origin',
+    agentsWorkingInRepository: 'Agentes trabajando en este repositorio',
+    agentsInRepositoryMessage: 'Hay {{count}} agente(s) con terminal en este repositorio. Cambiar de branch cambia sus archivos.',
+    changeAnyway: 'Cambiar igual',
+    uncommittedChangesIn: 'Cambios sin commit en {{branch}}',
+    changesSwitchQuestion: '¿Qué hago con los cambios al cambiar a {{branch}}?',
+    carryChanges: 'Llevar cambios',
+    stashAndSwitch: 'Stash y cambiar',
+    savedChangesInBranch: 'Cambios guardados en este branch',
+    savedChangesMessage: 'Hay cambios guardados (stash) al salir de {{branch}}. ¿Aplicarlos ahora?',
+    applyChanges: 'Aplicar',
   },
   tile: {
     terminal: 'Terminal',

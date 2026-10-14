@@ -7,6 +7,7 @@ import type {
   TileState,
   Workspace,
   FileTileOpenOptions,
+  GitCommitSummary,
   GitFileChange,
 } from '@shared/types'
 import { AgentPanel } from './AgentPanel'
@@ -30,6 +31,7 @@ interface WorkspacePanelProps {
   onEntryRenamed?: (oldPath: string, newPath: string) => void
   onEntryTrashed?: (path: string) => void
   onOpenDiff: (repositoryPath: string, change: GitFileChange, staged: boolean) => void
+  onOpenCommitDiff?: (repositoryPath: string, commit: GitCommitSummary, change: GitFileChange) => void
   agentProvider?: AgentProvider
   agentProviders: AgentProvidersConfig
   tiles: TileState[]
@@ -52,6 +54,7 @@ export function WorkspacePanel({
   onEntryRenamed,
   onEntryTrashed,
   onOpenDiff,
+  onOpenCommitDiff,
   agentProvider,
   agentProviders,
   tiles,
@@ -140,11 +143,14 @@ export function WorkspacePanel({
           <WorkspaceSourceControl
             key={workspaceId}
             workspaceId={workspaceId}
+            tiles={tiles}
             sourceControlRepositoryPaths={sourceControlRepositoryPaths}
             sourceControlViewMode={sourceControlViewMode}
             onWorkspaceUpdated={onWorkspaceUpdated}
             onOpenWorkspaceSettings={onOpenWorkspaceSettings}
+            onOpenFile={onOpenFile}
             onOpenDiff={onOpenDiff}
+            onOpenCommitDiff={onOpenCommitDiff}
             requestConfirm={requestConfirm}
           />
         )}
