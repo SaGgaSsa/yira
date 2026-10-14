@@ -534,3 +534,106 @@ test('stages and unstages every listed change, including rename sources, in one 
   assert.deepEqual(unstaged, [{ root: '/workspace', paths: expectedPaths }])
   await assert.rejects(ipcMain.invoke('git:stageChanges', 'workspace-a', '.', []), /change/)
 })
+
+test('registers and invokes the new branch Git IPC channels through the configured repository boundary', async () => {
+  const ipcMain = new FakeIpcMain()
+  const { createGitIPCHandlers } = loadGitIPC(ipcMain)
+  const resolveCalls: Array<{ rootPath: unknown; configuredPaths: unknown; requestedPath: unknown }> = []
+  const runnerCalls: string[] = []
+  const handlers = createGitIPCHandlers({
+    getWorkspaceGitConfigById: async (workspaceId) => {
+      assert.equal(workspaceId, 'workspace-a')
+      return { rootFolderPath: '/workspace', sourceControlRepositoryPaths: ['packages/web'] }
+    },
+    discoverGitRepositories: async () => [],
+    resolveConfiguredGitRepository: async (rootPath, configuredPaths, requestedPath) => {
+      resolveCalls.push({ rootPath, configuredPaths, requestedPath })
+      return { absolutePath: '/workspace/packages/web', relativePath: 'packages/web', repository: { relativePath: 'packages/web', name: 'web' } }
+    },
+    getGitStatus: async () => statusResult(),
+    getGitCommitHistory: async () => historyResult(),
+    getGitDiffSummary: async () => ({ additions: 0, deletions: 0, available: true }),
+    stageGitFiles: async () => undefined,
+    unstageGitFiles: async () => undefined,
+    commitGitChanges: async () => undefined,
+    fetchGitRepository: async () => undefined,
+    pullGitRepository: async () => undefined,
+    pushGitRepository: async () => undefined,
+    syncGitRepository: async () => undefined,
+    listGitBranches: async (rootPath) => {
+      runnerCalls.push(`branches:${rootPath}`)
+      return { branches: [{ name: 'main', remote: false, current: true }] }
+    },
+    checkoutGitBranch: async (rootPath, name, remote) => {
+      runnerCalls.push(`checkout:${rootPath}:${name}:${remote}`)
+    },
+    createGitBranch: async (rootPath, name, startPoint) => {
+      runnerCalls.push(`createBranch:${rootPath}:${name}:${startPoint}`)
+    },
+    stashGitChangesForBranch: async (rootPath, branch) => {
+      runnerCalls.push(`stashForBranch:${rootPath}:${branch}`)
+    },
+    findGitBranchStash: async (rootPath, branch) => {
+      runnerCalls.push(`branchStash:${rootPath}:${branch}`)
+      return { ref: 'stash@{0}', message: `On main: yira: ${branch}` }
+    },
+    popGitStash: async (rootPath, ref) => {
+      runnerCalls.push(`popStash:${rootPath}:${ref}`)
+    },
+    publishGitBranch: async (rootPath) => {
+      runnerCalls.push(`publish:${rootPath}`)
+    },
+  })
+  for (const [channel, handler] of Object.entries(handlers)) ipcMain.handle(channel, handler)
+
+  assert.deepEqual(await ipcMain.invoke('git:branches', 'workspace-a', 'packages/web'), {
+    branches: [{ name: 'main', remote: false, current: true }],
+  })
+  await ipcMain.invoke('git:checkout', 'workspace-a', 'packages/web', 'main', false)
+  await ipcMain.invoke('git:createBranch', 'workspace-a', 'packages/web', 'feature', 'main')
+  await ipcMain.invoke('git:stashForBranch', 'workspace-a', 'packages/web', 'feature')
+  assert.deepEqual(await ipcMain.invoke('git:branchStash', 'workspace-a', 'packages/web', 'feature'), {
+    ref: 'stash@{0}',
+    message: 'On main: yira: feature',
+  })
+  await ipcMain.invoke('git:popStash', 'workspace-a', 'packages/web', 'stash@{0}')
+  await ipcMain.invoke('git:publish', 'workspace-a', 'packages/web')
+
+  assert.equal(resolveCalls.length, 7)
+  assert.deepEqual(runnerCalls, [
+    'branches:/workspace/packages/web',
+    'checkout:/workspace/packages/web:main:false',
+    'createBranch:/workspace/packages/web:feature:main',
+    'stashForBranch:/workspace/packages/web:feature',
+    'branchStash:/workspace/packages/web:feature',
+    'popStash:/workspace/packages/web:stash@{0}',
+    'publish:/workspace/packages/web',
+  ])
+})
+
+test('returns a sanitized error from git:branches when listing fails', async () => {
+  const ipcMain = new FakeIpcMain()
+  const { createGitIPCHandlers } = loadGitIPC(ipcMain)
+  const handlers = createGitIPCHandlers({
+    getWorkspaceGitConfigById: async () => ({ rootFolderPath: '/workspace', sourceControlRepositoryPaths: ['packages/web'] }),
+    discoverGitRepositories: async () => [],
+    resolveConfiguredGitRepository: async () => ({ absolutePath: '/workspace/packages/web', relativePath: 'packages/web', repository: { relativePath: 'packages/web', name: 'web' } }),
+    getGitStatus: async () => statusResult(),
+    getGitCommitHistory: async () => historyResult(),
+    getGitDiffSummary: async () => ({ additions: 0, deletions: 0, available: true }),
+    stageGitFiles: async () => undefined,
+    unstageGitFiles: async () => undefined,
+    commitGitChanges: async () => undefined,
+    fetchGitRepository: async () => undefined,
+    pullGitRepository: async () => undefined,
+    pushGitRepository: async () => undefined,
+    syncGitRepository: async () => undefined,
+    listGitBranches: async () => ({ branches: [], error: 'fatal: /secret/path' }),
+  })
+  for (const [channel, handler] of Object.entries(handlers)) ipcMain.handle(channel, handler)
+
+  assert.deepEqual(await ipcMain.invoke('git:branches', 'workspace-a', 'packages/web'), {
+    branches: [],
+    error: 'Workspace root folder is unavailable',
+  })
+})

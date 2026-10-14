@@ -20,6 +20,16 @@ import {
   discardGitChanges,
   unstageGitFile,
   getGitCommitHistory,
+  parseGitBranchRefs,
+  parseGitWorktreeBranches,
+  listGitBranches,
+  validateGitBranchName,
+  checkoutGitBranch,
+  createGitBranch,
+  stashGitChangesForBranch,
+  findGitBranchStash,
+  popGitStash,
+  publishGitBranch,
   parseGitCommitLog,
   type GitCommandExecutor,
 } from './runner'
@@ -534,3 +544,158 @@ test('discards tracked edits and deletes untracked files without touching staged
     await rm(rootPath, { recursive: true, force: true })
   }
 })
+
+test('parses Git branch refs including current local and remote branches while ignoring origin/HEAD', async () => {
+  const output = [
+    'refs/heads/main\u0000origin/main\u00002026-01-01T00:00:00.000Z\u0000*',
+    'refs/heads/feature\u0000\u00002026-01-02T00:00:00.000Z\u0000',
+    'refs/remotes/origin/HEAD\u0000\u00002026-01-03T00:00:00.000Z\u0000',
+    'refs/remotes/origin/main\u0000\u00002026-01-03T00:00:00.000Z\u0000',
+    'refs/remotes/origin/feature\u0000\u00002026-01-04T00:00:00.000Z\u0000',
+  ].join('\n')
+  const branches = parseGitBranchRefs(output)
+  assert.equal(branches.length, 4)
+  assert.deepEqual(branches.map((branch) => branch.name), ['main', 'feature', 'origin/main', 'origin/feature'])
+  assert.equal(branches[0].current, true)
+  assert.equal(branches[0].upstream, 'origin/main')
+  assert.equal(branches[1].remote, false)
+  assert.equal(branches[2].remote, true)
+})
+
+test('parses Git worktree porcelain blocks including detached and branch checkouts', async () => {
+  const output = [
+    'worktree /repo',
+    'HEAD 1111111',
+    'branch refs/heads/main',
+    '',
+    'worktree /repo/.wt/feature',
+    'HEAD 2222222',
+    'branch refs/heads/feature',
+    '',
+    'worktree /repo/.wt/detached',
+    'HEAD 3333333',
+    'detached',
+  ].join('\n')
+  const worktrees = parseGitWorktreeBranches(output)
+  assert.equal(worktrees.size, 2)
+  assert.equal(worktrees.get('main'), '/repo')
+  assert.equal(worktrees.get('feature'), '/repo/.wt/feature')
+})
+
+test('lists branches, hides remote upstreams, and marks an alternate worktree', async () => {
+  const rootPath = await mkdtemp(join(tmpdir(), 'yira-git-list-branches-'))
+  const bareOriginPath = await mkdtemp(join(tmpdir(), 'yira-git-list-origin-'))
+  const git = (...args: string[]) => execFileAsync('git', ['-C', rootPath, ...args])
+  try {
+    await initGitRepository(rootPath)
+    await git('config', 'user.email', 'test@example.com')
+    await git('config', 'user.name', 'Test')
+    await git('config', 'core.autocrlf', 'false')
+    await writeFile(join(rootPath, 'file.txt'), 'base\n')
+    await git('add', 'file.txt')
+    await git('commit', '--quiet', '-m', 'base')
+    await git('branch', '-M', 'main')
+
+    await execFileAsync('git', ['init', '--bare', '--quiet', bareOriginPath])
+    await git('remote', 'add', 'origin', bareOriginPath)
+    await git('push', '-u', 'origin', 'main')
+    await git('branch', 'feature', 'main')
+    await mkdir(join(rootPath, '.wt'))
+    await git('worktree', 'add', join(rootPath, '.wt', 'feature'), 'feature')
+
+    const result = await listGitBranches(rootPath)
+    assert.ok(!result.error)
+    assert.ok(result.branches.some((branch) => branch.name === 'main' && branch.current && branch.upstream === 'origin/main'))
+    assert.ok(!result.branches.some((branch) => branch.name === 'origin/main'))
+    const feature = result.branches.find((branch) => branch.name === 'feature' && branch.remote === false)
+    assert.ok(feature?.worktreePath)
+  } finally {
+    await rm(rootPath, { recursive: true, force: true })
+    await rm(bareOriginPath, { recursive: true, force: true })
+  }
+})
+
+test('creates and checks out branches while rejecting invalid names', async () => {
+  const rootPath = await mkdtemp(join(tmpdir(), 'yira-git-checkout-branch-'))
+  const git = (...args: string[]) => execFileAsync('git', ['-C', rootPath, ...args])
+  try {
+    await initGitRepository(rootPath)
+    await git('config', 'user.email', 'test@example.com')
+    await git('config', 'user.name', 'Test')
+    await git('config', 'core.autocrlf', 'false')
+    await writeFile(join(rootPath, 'file.txt'), 'base\n')
+    await git('add', 'file.txt')
+    await git('commit', '--quiet', '-m', 'base')
+    await git('branch', '-M', 'main')
+
+    await createGitBranch(rootPath, 'feature', 'main')
+    assert.equal((await execFileAsync('git', ['-C', rootPath, 'rev-parse', '--abbrev-ref', 'HEAD'])).stdout.trim(), 'feature')
+
+    await checkoutGitBranch(rootPath, 'main', false)
+    assert.equal((await execFileAsync('git', ['-C', rootPath, 'rev-parse', '--abbrev-ref', 'HEAD'])).stdout.trim(), 'main')
+
+    for (const invalidName of ['-x', 'a..b']) {
+      await assert.rejects(createGitBranch(rootPath, invalidName, undefined), /Invalid branch name/)
+    }
+  } finally {
+    await rm(rootPath, { recursive: true, force: true })
+  }
+})
+
+test('stashes, finds, and pops branch changes including untracked files', async () => {
+  const rootPath = await mkdtemp(join(tmpdir(), 'yira-git-stash-branch-'))
+  const git = (...args: string[]) => execFileAsync('git', ['-C', rootPath, ...args])
+  try {
+    await initGitRepository(rootPath)
+    await git('config', 'user.email', 'test@example.com')
+    await git('config', 'user.name', 'Test')
+    await git('config', 'core.autocrlf', 'false')
+    await writeFile(join(rootPath, 'tracked.txt'), 'original\n')
+    await git('add', 'tracked.txt')
+    await git('commit', '--quiet', '-m', 'base')
+    await git('branch', '-M', 'main')
+
+    await writeFile(join(rootPath, 'tracked.txt'), 'edited\n')
+    await writeFile(join(rootPath, 'new.txt'), 'untracked\n')
+    await stashGitChangesForBranch(rootPath, 'feature')
+
+    const stash = await findGitBranchStash(rootPath, 'feature')
+    assert.ok(stash && /^stash@\{\d+\}$/.test(stash.ref))
+    assert.equal(await readFile(join(rootPath, 'tracked.txt'), 'utf8'), 'original\n')
+    await assert.rejects(readFile(join(rootPath, 'new.txt'), 'utf8'))
+
+    await popGitStash(rootPath, stash!.ref)
+    assert.equal(await readFile(join(rootPath, 'tracked.txt'), 'utf8'), 'edited\n')
+    assert.equal(await readFile(join(rootPath, 'new.txt'), 'utf8'), 'untracked\n')
+  } finally {
+    await rm(rootPath, { recursive: true, force: true })
+  }
+})
+
+test('publishes a branch to a configured bare origin and rejects missing origin', async () => {
+  const rootPath = await mkdtemp(join(tmpdir(), 'yira-git-publish-'))
+  const bareOriginPath = await mkdtemp(join(tmpdir(), 'yira-git-publish-origin-'))
+  const git = (...args: string[]) => execFileAsync('git', ['-C', rootPath, ...args])
+  try {
+    await initGitRepository(rootPath)
+    await git('config', 'user.email', 'test@example.com')
+    await git('config', 'user.name', 'Test')
+    await git('config', 'core.autocrlf', 'false')
+    await writeFile(join(rootPath, 'file.txt'), 'base\n')
+    await git('add', 'file.txt')
+    await git('commit', '--quiet', '-m', 'base')
+    await git('branch', '-M', 'main')
+
+    await assert.rejects(publishGitBranch(rootPath), /No origin remote configured/)
+
+    await execFileAsync('git', ['init', '--bare', '--quiet', bareOriginPath])
+    await git('remote', 'add', 'origin', bareOriginPath)
+    await publishGitBranch(rootPath)
+
+    assert.equal((await execFileAsync('git', ['-C', rootPath, 'rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'])).stdout.trim(), 'origin/main')
+  } finally {
+    await rm(rootPath, { recursive: true, force: true })
+    await rm(bareOriginPath, { recursive: true, force: true })
+  }
+})
+

@@ -532,6 +532,30 @@ export interface GitCommitHistoryResult {
   error?: string
 }
 
+export interface GitBranch {
+  /** Short name: `main` for local branches, `origin/feature` for remote ones. */
+  name: string
+  remote: boolean
+  current: boolean
+  /** Upstream short name of a local branch, such as `origin/main`. */
+  upstream?: string
+  /** ISO committer date of the branch tip. */
+  committerDate?: string
+  /** Absolute path of another worktree where this local branch is checked out. */
+  worktreePath?: string
+}
+
+export interface GitBranchListResult {
+  branches: GitBranch[]
+  error?: string
+}
+
+export interface GitStashEntry {
+  /** Stash reference such as `stash@{0}`. */
+  ref: string
+  message: string
+}
+
 export interface WorkspaceGitDiffResult {
   additions: number
   deletions: number
