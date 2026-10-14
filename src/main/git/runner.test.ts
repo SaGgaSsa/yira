@@ -20,7 +20,24 @@ import {
   discardGitChanges,
   unstageGitFile,
   getGitCommitHistory,
+  parseGitBranchRefs,
+  parseGitWorktreeBranches,
+  listGitBranches,
+  validateGitBranchName,
+  checkoutGitBranch,
+  createGitBranch,
+  stashGitChangesForBranch,
+  findGitBranchStash,
+  popGitStash,
+  publishGitBranch,
   parseGitCommitLog,
+  parseGitNameStatus,
+  getGitCommitFiles,
+  getGitOperationState,
+  mergeGitBranch,
+  rebaseGitBranch,
+  abortGitOperation,
+  continueGitOperation,
   type GitCommandExecutor,
 } from './runner'
 import { discoverGitRepositories, resolveConfiguredGitRepository } from './repositories'
@@ -530,6 +547,307 @@ test('discards tracked edits and deletes untracked files without touching staged
 
     await assert.rejects(discardGitChanges(rootPath, { trackedPaths: [], untrackedPaths: [] }), /path/)
     await assert.rejects(discardGitChanges(rootPath, { trackedPaths: ['../outside.txt'], untrackedPaths: [] }), /traversal/)
+  } finally {
+    await rm(rootPath, { recursive: true, force: true })
+  }
+})
+
+test('parses Git branch refs including current local and remote branches while ignoring origin/HEAD', async () => {
+  const output = [
+    'refs/heads/main\u0000origin/main\u00002026-01-01T00:00:00.000Z\u0000*',
+    'refs/heads/feature\u0000\u00002026-01-02T00:00:00.000Z\u0000',
+    'refs/remotes/origin/HEAD\u0000\u00002026-01-03T00:00:00.000Z\u0000',
+    'refs/remotes/origin/main\u0000\u00002026-01-03T00:00:00.000Z\u0000',
+    'refs/remotes/origin/feature\u0000\u00002026-01-04T00:00:00.000Z\u0000',
+  ].join('\n')
+  const branches = parseGitBranchRefs(output)
+  assert.equal(branches.length, 4)
+  assert.deepEqual(branches.map((branch) => branch.name), ['main', 'feature', 'origin/main', 'origin/feature'])
+  assert.equal(branches[0].current, true)
+  assert.equal(branches[0].upstream, 'origin/main')
+  assert.equal(branches[1].remote, false)
+  assert.equal(branches[2].remote, true)
+})
+
+test('parses Git worktree porcelain blocks including detached and branch checkouts', async () => {
+  const output = [
+    'worktree /repo',
+    'HEAD 1111111',
+    'branch refs/heads/main',
+    '',
+    'worktree /repo/.wt/feature',
+    'HEAD 2222222',
+    'branch refs/heads/feature',
+    '',
+    'worktree /repo/.wt/detached',
+    'HEAD 3333333',
+    'detached',
+  ].join('\n')
+  const worktrees = parseGitWorktreeBranches(output)
+  assert.equal(worktrees.size, 2)
+  assert.equal(worktrees.get('main'), '/repo')
+  assert.equal(worktrees.get('feature'), '/repo/.wt/feature')
+})
+
+test('lists branches, hides remote upstreams, and marks an alternate worktree', async () => {
+  const rootPath = await mkdtemp(join(tmpdir(), 'yira-git-list-branches-'))
+  const bareOriginPath = await mkdtemp(join(tmpdir(), 'yira-git-list-origin-'))
+  const git = (...args: string[]) => execFileAsync('git', ['-C', rootPath, ...args])
+  try {
+    await initGitRepository(rootPath)
+    await git('config', 'user.email', 'test@example.com')
+    await git('config', 'user.name', 'Test')
+    await git('config', 'core.autocrlf', 'false')
+    await writeFile(join(rootPath, 'file.txt'), 'base\n')
+    await git('add', 'file.txt')
+    await git('commit', '--quiet', '-m', 'base')
+    await git('branch', '-M', 'main')
+
+    await execFileAsync('git', ['init', '--bare', '--quiet', bareOriginPath])
+    await git('remote', 'add', 'origin', bareOriginPath)
+    await git('push', '-u', 'origin', 'main')
+    await git('branch', 'feature', 'main')
+    await mkdir(join(rootPath, '.wt'))
+    await git('worktree', 'add', join(rootPath, '.wt', 'feature'), 'feature')
+
+    const result = await listGitBranches(rootPath)
+    assert.ok(!result.error)
+    assert.ok(result.branches.some((branch) => branch.name === 'main' && branch.current && branch.upstream === 'origin/main'))
+    assert.ok(!result.branches.some((branch) => branch.name === 'origin/main'))
+    const feature = result.branches.find((branch) => branch.name === 'feature' && branch.remote === false)
+    assert.ok(feature?.worktreePath)
+  } finally {
+    await rm(rootPath, { recursive: true, force: true })
+    await rm(bareOriginPath, { recursive: true, force: true })
+  }
+})
+
+test('creates and checks out branches while rejecting invalid names', async () => {
+  const rootPath = await mkdtemp(join(tmpdir(), 'yira-git-checkout-branch-'))
+  const git = (...args: string[]) => execFileAsync('git', ['-C', rootPath, ...args])
+  try {
+    await initGitRepository(rootPath)
+    await git('config', 'user.email', 'test@example.com')
+    await git('config', 'user.name', 'Test')
+    await git('config', 'core.autocrlf', 'false')
+    await writeFile(join(rootPath, 'file.txt'), 'base\n')
+    await git('add', 'file.txt')
+    await git('commit', '--quiet', '-m', 'base')
+    await git('branch', '-M', 'main')
+
+    await createGitBranch(rootPath, 'feature', 'main')
+    assert.equal((await execFileAsync('git', ['-C', rootPath, 'rev-parse', '--abbrev-ref', 'HEAD'])).stdout.trim(), 'feature')
+
+    await checkoutGitBranch(rootPath, 'main', false)
+    assert.equal((await execFileAsync('git', ['-C', rootPath, 'rev-parse', '--abbrev-ref', 'HEAD'])).stdout.trim(), 'main')
+
+    for (const invalidName of ['-x', 'a..b']) {
+      await assert.rejects(createGitBranch(rootPath, invalidName, undefined), /Invalid branch name/)
+    }
+  } finally {
+    await rm(rootPath, { recursive: true, force: true })
+  }
+})
+
+test('stashes, finds, and pops branch changes including untracked files', async () => {
+  const rootPath = await mkdtemp(join(tmpdir(), 'yira-git-stash-branch-'))
+  const git = (...args: string[]) => execFileAsync('git', ['-C', rootPath, ...args])
+  try {
+    await initGitRepository(rootPath)
+    await git('config', 'user.email', 'test@example.com')
+    await git('config', 'user.name', 'Test')
+    await git('config', 'core.autocrlf', 'false')
+    await writeFile(join(rootPath, 'tracked.txt'), 'original\n')
+    await git('add', 'tracked.txt')
+    await git('commit', '--quiet', '-m', 'base')
+    await git('branch', '-M', 'main')
+
+    await writeFile(join(rootPath, 'tracked.txt'), 'edited\n')
+    await writeFile(join(rootPath, 'new.txt'), 'untracked\n')
+    await stashGitChangesForBranch(rootPath, 'feature')
+
+    const stash = await findGitBranchStash(rootPath, 'feature')
+    assert.ok(stash && /^stash@\{\d+\}$/.test(stash.ref))
+    assert.equal(await readFile(join(rootPath, 'tracked.txt'), 'utf8'), 'original\n')
+    await assert.rejects(readFile(join(rootPath, 'new.txt'), 'utf8'))
+
+    await popGitStash(rootPath, stash!.ref)
+    assert.equal(await readFile(join(rootPath, 'tracked.txt'), 'utf8'), 'edited\n')
+    assert.equal(await readFile(join(rootPath, 'new.txt'), 'utf8'), 'untracked\n')
+  } finally {
+    await rm(rootPath, { recursive: true, force: true })
+  }
+})
+
+test('publishes a branch to a configured bare origin and rejects missing origin', async () => {
+  const rootPath = await mkdtemp(join(tmpdir(), 'yira-git-publish-'))
+  const bareOriginPath = await mkdtemp(join(tmpdir(), 'yira-git-publish-origin-'))
+  const git = (...args: string[]) => execFileAsync('git', ['-C', rootPath, ...args])
+  try {
+    await initGitRepository(rootPath)
+    await git('config', 'user.email', 'test@example.com')
+    await git('config', 'user.name', 'Test')
+    await git('config', 'core.autocrlf', 'false')
+    await writeFile(join(rootPath, 'file.txt'), 'base\n')
+    await git('add', 'file.txt')
+    await git('commit', '--quiet', '-m', 'base')
+    await git('branch', '-M', 'main')
+
+    await assert.rejects(publishGitBranch(rootPath), /No origin remote configured/)
+
+    await execFileAsync('git', ['init', '--bare', '--quiet', bareOriginPath])
+    await git('remote', 'add', 'origin', bareOriginPath)
+    await publishGitBranch(rootPath)
+
+    assert.equal((await execFileAsync('git', ['-C', rootPath, 'rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'])).stdout.trim(), 'origin/main')
+  } finally {
+    await rm(rootPath, { recursive: true, force: true })
+    await rm(bareOriginPath, { recursive: true, force: true })
+  }
+})
+
+
+test('parses Git name-status entries including renamed files', () => {
+  const output = ['M', 'modified.ts', 'A', 'added.ts', 'D', 'deleted.ts', 'R100', 'old.ts', 'new.ts'].join('\0')
+  const changes = parseGitNameStatus(output)
+  assert.deepEqual(changes.map((change) => change.status), ['modified', 'added', 'deleted', 'renamed'])
+  assert.equal(changes[3].path, 'new.ts')
+  assert.equal(changes[3].originalPath, 'old.ts')
+})
+
+test('reads commit files including a rename', async () => {
+  const rootPath = await mkdtemp(join(tmpdir(), 'yira-git-commit-files-'))
+  const git = (...args: string[]) => execFileAsync('git', ['-C', rootPath, ...args])
+  try {
+    await git('init', '--quiet', '--initial-branch=main')
+    await git('config', 'user.email', 'test@example.com')
+    await git('config', 'user.name', 'Test')
+    await git('config', 'core.autocrlf', 'false')
+    await writeFile(join(rootPath, 'old.ts'), 'before\n')
+    await git('add', 'old.ts')
+    await git('commit', '--quiet', '-m', 'base')
+    await git('mv', 'old.ts', 'new.ts')
+    await git('commit', '--quiet', '-m', 'rename')
+    const commit = (await git('rev-parse', 'HEAD')).stdout.trim()
+    const result = await getGitCommitFiles(rootPath, commit)
+    assert.equal(result.files.length, 1)
+    assert.equal(result.files[0].status, 'renamed')
+    assert.equal(result.files[0].path, 'new.ts')
+    assert.equal(result.files[0].originalPath, 'old.ts')
+  } finally {
+    await rm(rootPath, { recursive: true, force: true })
+  }
+})
+
+test('merge conflict exposes operation state and can be aborted', async () => {
+  const rootPath = await mkdtemp(join(tmpdir(), 'yira-git-merge-conflict-'))
+  const git = (...args: string[]) => execFileAsync('git', ['-C', rootPath, ...args])
+  try {
+    await git('init', '--quiet', '--initial-branch=main')
+    await git('config', 'user.email', 'test@example.com')
+    await git('config', 'user.name', 'Test')
+    await git('config', 'core.autocrlf', 'false')
+    await writeFile(join(rootPath, 'f.txt'), 'base\n')
+    await git('add', 'f.txt')
+    await git('commit', '--quiet', '-m', 'base')
+    await git('branch', 'feature')
+    await writeFile(join(rootPath, 'f.txt'), 'main\n')
+    await git('add', 'f.txt')
+    await git('commit', '--quiet', '-m', 'main')
+    await git('checkout', 'feature')
+    await writeFile(join(rootPath, 'f.txt'), 'feature\n')
+    await git('add', 'f.txt')
+    await git('commit', '--quiet', '-m', 'feature')
+    await git('checkout', 'main')
+
+    await assert.rejects(mergeGitBranch(rootPath, 'feature'), /./)
+    const conflictedStatus = await getGitStatus(rootPath)
+    assert.deepEqual(conflictedStatus.operation, { kind: 'merge', conflicted: ['f.txt'] })
+    await assert.rejects(continueGitOperation(rootPath), /Resolve conflicts before continuing/)
+    await abortGitOperation(rootPath)
+    const abortedStatus = await getGitStatus(rootPath)
+    assert.equal(abortedStatus.operation, undefined)
+  } finally {
+    await rm(rootPath, { recursive: true, force: true })
+  }
+})
+
+test('merge conflict can be resolved and continued into a commit', async () => {
+  const rootPath = await mkdtemp(join(tmpdir(), 'yira-git-merge-continue-'))
+  const git = (...args: string[]) => execFileAsync('git', ['-C', rootPath, ...args])
+  try {
+    await git('init', '--quiet', '--initial-branch=main')
+    await git('config', 'user.email', 'test@example.com')
+    await git('config', 'user.name', 'Test')
+    await git('config', 'core.autocrlf', 'false')
+    await writeFile(join(rootPath, 'f.txt'), 'base\n')
+    await git('add', 'f.txt')
+    await git('commit', '--quiet', '-m', 'base')
+    await git('branch', 'feature')
+    await writeFile(join(rootPath, 'f.txt'), 'main\n')
+    await git('add', 'f.txt')
+    await git('commit', '--quiet', '-m', 'main')
+    await git('checkout', 'feature')
+    await writeFile(join(rootPath, 'f.txt'), 'feature\n')
+    await git('add', 'f.txt')
+    await git('commit', '--quiet', '-m', 'feature')
+    await git('checkout', 'main')
+
+    await assert.rejects(mergeGitBranch(rootPath, 'feature'), /./)
+    await writeFile(join(rootPath, 'f.txt'), 'resolved\n')
+    await git('add', 'f.txt')
+    await continueGitOperation(rootPath)
+    const status = await getGitStatus(rootPath)
+    assert.equal(status.operation, undefined)
+  } finally {
+    await rm(rootPath, { recursive: true, force: true })
+  }
+})
+
+test('rebase conflict exposes operation state and can be aborted', async () => {
+  const rootPath = await mkdtemp(join(tmpdir(), 'yira-git-rebase-conflict-'))
+  const git = (...args: string[]) => execFileAsync('git', ['-C', rootPath, ...args])
+  try {
+    await git('init', '--quiet', '--initial-branch=main')
+    await git('config', 'user.email', 'test@example.com')
+    await git('config', 'user.name', 'Test')
+    await git('config', 'core.autocrlf', 'false')
+    await writeFile(join(rootPath, 'f.txt'), 'base\n')
+    await git('add', 'f.txt')
+    await git('commit', '--quiet', '-m', 'base')
+    await git('branch', 'feature')
+    await writeFile(join(rootPath, 'f.txt'), 'main\n')
+    await git('add', 'f.txt')
+    await git('commit', '--quiet', '-m', 'main')
+    await git('checkout', 'feature')
+    await writeFile(join(rootPath, 'f.txt'), 'feature\n')
+    await git('add', 'f.txt')
+    await git('commit', '--quiet', '-m', 'feature')
+
+    await assert.rejects(rebaseGitBranch(rootPath, 'main'), /./)
+    const status = await getGitStatus(rootPath)
+    assert.equal(status.operation?.kind, 'rebase')
+    assert.deepEqual(status.operation?.conflicted, ['f.txt'])
+    await abortGitOperation(rootPath)
+    const abortedStatus = await getGitStatus(rootPath)
+    assert.equal(abortedStatus.operation, undefined)
+  } finally {
+    await rm(rootPath, { recursive: true, force: true })
+  }
+})
+
+test('merge rejects a branch that does not exist', async () => {
+  const rootPath = await mkdtemp(join(tmpdir(), 'yira-git-merge-missing-'))
+  const git = (...args: string[]) => execFileAsync('git', ['-C', rootPath, ...args])
+  try {
+    await git('init', '--quiet', '--initial-branch=main')
+    await git('config', 'user.email', 'test@example.com')
+    await git('config', 'user.name', 'Test')
+    await git('config', 'core.autocrlf', 'false')
+    await writeFile(join(rootPath, 'f.txt'), 'base\n')
+    await git('add', 'f.txt')
+    await git('commit', '--quiet', '-m', 'base')
+    await assert.rejects(mergeGitBranch(rootPath, 'does-not-exist'), /Branch does not exist/)
   } finally {
     await rm(rootPath, { recursive: true, force: true })
   }

@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import type { GitFileDiffContent, WorkspaceGitDiffResult } from '@shared/types'
-import { execGitCommand, resolveGitRootPath, type GitCommandExecutor } from './runner'
+import { execGitCommand, resolveGitRootPath, validateCommitRef, type GitCommandExecutor } from './runner'
 
 interface GitDiffRecord {
   additions: number
@@ -105,6 +105,40 @@ export async function getGitFileDiffContent(
       ])
   if (original.length > MAX_FILE_DIFF_BYTES || modified.length > MAX_FILE_DIFF_BYTES) return { original: '', modified: '', modifiedExists, tooLarge: true }
   if (original.includes(0) || modified.includes(0)) return { original: '', modified: '', modifiedExists, binary: true }
+  return { original: original.toString('utf8'), modified: modified.toString('utf8'), modifiedExists }
+}
+
+export async function getGitCommitFileDiffContent(
+  repositoryPath: string,
+  input: { commit: string; path: string; originalPath?: string },
+  executor: GitCommandExecutor = execGitCommand,
+): Promise<GitFileDiffContent> {
+  const commit = validateCommitRef(input.commit)
+  validateDiffPath(input.path)
+  const basePath = input.originalPath ?? input.path
+  validateDiffPath(basePath)
+
+  const rootPath = await resolveGitRootPath(repositoryPath)
+
+  let hasParent = true
+  try {
+    await runGitAtRoot(rootPath, ['rev-parse', '--verify', '--quiet', `${commit}^`], executor)
+  } catch {
+    hasParent = false
+  }
+
+  const [original, modified, modifiedExists] = await Promise.all([
+    hasParent ? showGitFile(rootPath, `${commit}^`, basePath, executor) : Promise.resolve(Buffer.alloc(0)),
+    showGitFile(rootPath, commit, input.path, executor),
+    gitFileExists(rootPath, commit, input.path, executor),
+  ])
+
+  if (original.length > MAX_FILE_DIFF_BYTES || modified.length > MAX_FILE_DIFF_BYTES) {
+    return { original: '', modified: '', modifiedExists, tooLarge: true }
+  }
+  if (original.includes(0) || modified.includes(0)) {
+    return { original: '', modified: '', modifiedExists, binary: true }
+  }
   return { original: original.toString('utf8'), modified: modified.toString('utf8'), modifiedExists }
 }
 

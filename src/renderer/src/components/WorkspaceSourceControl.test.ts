@@ -47,7 +47,7 @@ for (const requiredSectionText of [
   'disabled={!canCommit || Boolean(pendingAction)}',
   '.slice(0, 5)',
   "t('sourceControl.loadHistoryError'",
-  'Date.parse',
+  'formatRelativeDate(',
   "t('sourceControl.noUpstream')",
 ]) {
   if (!sectionSource.includes(requiredSectionText)) throw new Error(`repository section must preserve ${requiredSectionText}`)

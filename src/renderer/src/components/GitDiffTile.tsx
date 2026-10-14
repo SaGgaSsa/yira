@@ -40,12 +40,15 @@ export function GitDiffTile({ tile, workspaceId, isVisible, onOpenFile }: GitDif
     let current = true
     setLoading(true)
     setContent(null)
-    void window.electron.git.fileDiff(workspaceId, diff.repositoryPath, diff.path, diff.staged, diff.originalPath)
+    const diffPromise = diff.commit
+      ? window.electron.git.commitFileDiff(workspaceId, diff.repositoryPath, diff.commit, diff.path, diff.originalPath)
+      : window.electron.git.fileDiff(workspaceId, diff.repositoryPath, diff.path, diff.staged, diff.originalPath)
+    void diffPromise
       .then((result) => { if (current) setContent(result) })
       .catch((error: unknown) => { if (current) setContent({ original: '', modified: '', error: error instanceof Error ? error.message : String(error) }) })
       .finally(() => { if (current) setLoading(false) })
     return () => { current = false }
-  }, [diff?.repositoryPath, diff?.path, diff?.originalPath, diff?.staged, isVisible, request, workspaceId])
+  }, [diff?.repositoryPath, diff?.path, diff?.originalPath, diff?.staged, diff?.commit, isVisible, request, workspaceId])
 
   const filePath = tile.filePath ?? ''
   const editorTheme = `${themeId === 'default' ? (lightTheme ? 'yira-light' : 'yira-dark') : `yira-${themeId}`}${material === 'none' ? '' : '-material'}`

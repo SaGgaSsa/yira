@@ -1,7 +1,7 @@
 import { execFile } from 'child_process'
 import { promises as fs } from 'fs'
 import { dirname, isAbsolute, relative, resolve, sep } from 'path'
-import type { GitChangeStatus, GitCommitHistoryResult, GitCommitSummary, GitFileChange, GitStatusResult } from '@shared/types'
+import type { GitBranch, GitBranchListResult, GitChangeStatus, GitCommitFilesResult, GitCommitHistoryResult, GitCommitSummary, GitFileChange, GitOperationKind, GitOperationState, GitStashEntry, GitStatusResult } from '@shared/types'
 
 export interface GitCommandResult {
   stdout: string
@@ -297,7 +297,14 @@ export async function getGitStatus(rootPathInput: string, executor: GitCommandEx
     // Origin is optional; source control remains useful without an external link.
   }
 
-  return { isRepository: true, ...parsed, ...(originUrl ? { originUrl } : {}) }
+  let operation: GitOperationState | undefined
+  try {
+    operation = await getGitOperationState(rootPath, executor)
+  } catch {
+    // Operation state is optional and must not break status.
+  }
+
+  return { isRepository: true, ...parsed, ...(originUrl ? { originUrl } : {}), ...(operation ? { operation } : {}) }
 }
 
 export async function getGitCommitHistory(
@@ -494,4 +501,385 @@ export async function syncGitRepository(
   await requireGitUpstream(rootPath, executor)
   await runGitAtRoot(rootPath, ['pull', '--ff-only'], executor)
   await runGitAtRoot(rootPath, ['push'], executor)
+}
+
+export function parseGitBranchRefs(output: string): GitBranch[] {
+  const branches: GitBranch[] = []
+  for (const line of output.split(/\r?\n/)) {
+    if (!line.trim()) continue
+    const [refname, upstreamShort, committerDate, head] = line.split('\0')
+    if (!refname) continue
+    if (refname.startsWith('refs/heads/')) {
+      const name = refname.slice('refs/heads/'.length)
+      if (!name) continue
+      branches.push({
+        name,
+        remote: false,
+        current: head === '*',
+        ...(upstreamShort?.trim() ? { upstream: upstreamShort.trim() } : {}),
+        ...(committerDate?.trim() ? { committerDate: committerDate.trim() } : {}),
+      })
+    } else if (refname.startsWith('refs/remotes/')) {
+      const rest = refname.slice('refs/remotes/'.length)
+      if (!rest || /^([^/]+)\/HEAD$/.test(rest)) continue
+      branches.push({
+        name: rest,
+        remote: true,
+        current: false,
+        ...(upstreamShort?.trim() ? { upstream: upstreamShort.trim() } : {}),
+        ...(committerDate?.trim() ? { committerDate: committerDate.trim() } : {}),
+      })
+    }
+  }
+  return branches
+}
+
+export function parseGitWorktreeBranches(output: string): Map<string, string> {
+  const map = new Map<string, string>()
+  const blocks = output.split(/\n\s*\n/)
+  for (const block of blocks) {
+    let worktreePath: string | undefined
+    let branch: string | undefined
+    for (const rawLine of block.split(/\r?\n/)) {
+      const line = rawLine.trim()
+      if (line.startsWith('worktree ')) worktreePath = line.slice('worktree '.length).trim()
+      else if (line.startsWith('branch ')) {
+        const ref = line.slice('branch '.length).trim()
+        const match = /^refs\/heads\/(.+)$/.exec(ref)
+        if (match) branch = match[1]
+      }
+    }
+    if (worktreePath && branch) map.set(branch, worktreePath)
+  }
+  return map
+}
+
+export async function validateGitBranchName(
+  rootPath: string,
+  name: unknown,
+  executor: GitCommandExecutor,
+): Promise<void> {
+  if (typeof name !== 'string' || !name || name.includes('\0') || name.startsWith('-')) {
+    throw new Error('Invalid branch name')
+  }
+  try {
+    await runGitAtRoot(rootPath, ['check-ref-format', '--branch', name], executor)
+  } catch {
+    throw new Error('Invalid branch name')
+  }
+}
+
+export async function listGitBranches(
+  rootPathInput: string,
+  executor: GitCommandExecutor = execGitCommand,
+): Promise<GitBranchListResult> {
+  let rootPath: string
+  try {
+    rootPath = await resolveGitRootPath(rootPathInput)
+  } catch (error) {
+    return { branches: [], error: toErrorMessage(error) }
+  }
+
+  try {
+    const result = await runGitAtRoot(rootPath, [
+      'for-each-ref',
+      '--sort=-committerdate',
+      '--format=%(refname)%00%(upstream:short)%00%(committerdate:iso-strict)%00%(HEAD)',
+      'refs/heads',
+      'refs/remotes',
+    ], executor)
+    const parsed = parseGitBranchRefs(result.stdout)
+    const localUpstreams = new Set(parsed.filter((branch) => !branch.remote && branch.upstream).map((branch) => branch.upstream as string))
+    const branches = parsed.filter((branch) => !(branch.remote && localUpstreams.has(branch.name)))
+
+    try {
+      const worktreeResult = await runGitAtRoot(rootPath, ['worktree', 'list', '--porcelain'], executor)
+      const worktreeMap = parseGitWorktreeBranches(worktreeResult.stdout)
+      for (const branch of branches) {
+        if (branch.remote) continue
+        const worktreePath = worktreeMap.get(branch.name)
+        if (!worktreePath) continue
+        if (normalizeForCompare(resolve(worktreePath)) === normalizeForCompare(resolve(rootPath))) continue
+        branch.worktreePath = worktreePath
+      }
+    } catch {
+      // Ignore worktree discovery failures; branches still list.
+    }
+
+    return { branches }
+  } catch (error) {
+    return { branches: [], error: toErrorMessage(error) }
+  }
+}
+
+async function gitRefExists(rootPath: string, ref: string, executor: GitCommandExecutor): Promise<boolean> {
+  try {
+    await runGitAtRoot(rootPath, ['show-ref', '--verify', '--quiet', ref], executor)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Validates a local or remote branch name and confirms it exists. */
+async function requireBranchRef(rootPath: string, name: unknown, executor: GitCommandExecutor): Promise<string> {
+  await validateGitBranchName(rootPath, name, executor)
+  const branch = name as string
+  if (await gitRefExists(rootPath, `refs/heads/${branch}`, executor)) return branch
+  if (await gitRefExists(rootPath, `refs/remotes/${branch}`, executor)) return branch
+  throw new Error('Branch does not exist')
+}
+
+export async function checkoutGitBranch(
+  rootPathInput: string,
+  name: string,
+  remote: boolean,
+  executor: GitCommandExecutor = execGitCommand,
+): Promise<void> {
+  const rootPath = await resolveGitRootPath(rootPathInput)
+  await validateGitBranchName(rootPath, name, executor)
+
+  if (!remote) {
+    if (!await gitRefExists(rootPath, `refs/heads/${name}`, executor)) throw new Error('Branch does not exist')
+    await runGitAtRoot(rootPath, ['switch', name], executor)
+    return
+  }
+
+  if (!await gitRefExists(rootPath, `refs/remotes/${name}`, executor)) throw new Error('Branch does not exist')
+  // `origin/feature` becomes `feature`; reuse that local branch when it already exists.
+  const localName = name.slice(name.indexOf('/') + 1)
+  if (await gitRefExists(rootPath, `refs/heads/${localName}`, executor)) {
+    await runGitAtRoot(rootPath, ['switch', localName], executor)
+  } else {
+    await runGitAtRoot(rootPath, ['switch', '--track', name], executor)
+  }
+}
+
+export async function createGitBranch(
+  rootPathInput: string,
+  name: string,
+  startPoint: string | undefined,
+  executor: GitCommandExecutor = execGitCommand,
+): Promise<void> {
+  const rootPath = await resolveGitRootPath(rootPathInput)
+  await validateGitBranchName(rootPath, name, executor)
+
+  if (startPoint !== undefined) {
+    if (typeof startPoint !== 'string' || !startPoint || startPoint.includes('\0') || startPoint.startsWith('-')) {
+      throw new Error('Start point does not exist')
+    }
+    try {
+      await runGitAtRoot(rootPath, ['rev-parse', '--verify', '--quiet', `${startPoint}^{commit}`], executor)
+    } catch {
+      throw new Error('Start point does not exist')
+    }
+  }
+
+  const args = ['switch', '-c', name]
+  if (startPoint) args.push(startPoint)
+  await runGitAtRoot(rootPath, args, executor)
+}
+
+export async function stashGitChangesForBranch(
+  rootPathInput: string,
+  branch: string,
+  executor: GitCommandExecutor = execGitCommand,
+): Promise<void> {
+  const rootPath = await resolveGitRootPath(rootPathInput)
+  await validateGitBranchName(rootPath, branch, executor)
+  await runGitAtRoot(rootPath, ['stash', 'push', '--include-untracked', '-m', `yira: ${branch}`], executor)
+}
+
+export async function findGitBranchStash(
+  rootPathInput: string,
+  branch: string,
+  executor: GitCommandExecutor = execGitCommand,
+): Promise<GitStashEntry | null> {
+  const rootPath = await resolveGitRootPath(rootPathInput)
+  const result = await runGitAtRoot(rootPath, ['stash', 'list', '--format=%gd%x00%s'], executor)
+  const suffix = `yira: ${branch}`
+  for (const line of result.stdout.split(/\r?\n/)) {
+    if (!line.trim()) continue
+    const separator = line.indexOf('\0')
+    if (separator < 0) continue
+    const ref = line.slice(0, separator).trim()
+    const subject = line.slice(separator + 1)
+    if (!ref) continue
+    if (subject.trimEnd().endsWith(suffix)) {
+      return { ref, message: subject }
+    }
+  }
+  return null
+}
+
+export async function popGitStash(
+  rootPathInput: string,
+  ref: string,
+  executor: GitCommandExecutor = execGitCommand,
+): Promise<void> {
+  if (typeof ref !== 'string' || !/^stash@\{\d+\}$/.test(ref)) {
+    throw new Error('Invalid stash reference')
+  }
+  const rootPath = await resolveGitRootPath(rootPathInput)
+  await runGitAtRoot(rootPath, ['stash', 'pop', ref], executor)
+}
+
+export async function publishGitBranch(
+  rootPathInput: string,
+  executor: GitCommandExecutor = execGitCommand,
+): Promise<void> {
+  const rootPath = await resolveGitRootPath(rootPathInput)
+  const branchResult = await runGitAtRoot(rootPath, ['rev-parse', '--abbrev-ref', 'HEAD'], executor)
+  const branch = branchResult.stdout.trim()
+  if (!branch || branch === 'HEAD') throw new Error('Cannot publish a detached HEAD')
+
+  const remoteResult = await runGitAtRoot(rootPath, ['remote'], executor)
+  const remotes = remoteResult.stdout.split(/\r?\n/).map((value) => value.trim()).filter(Boolean)
+  if (!remotes.includes('origin')) throw new Error('No origin remote configured')
+
+  await runGitAtRoot(rootPath, ['push', '-u', 'origin', branch], executor)
+}
+
+export function validateCommitRef(ref: unknown): string {
+  if (typeof ref !== 'string' || !/^[0-9a-fA-F]{4,40}$/.test(ref)) {
+    throw new Error('Invalid commit reference')
+  }
+  return ref
+}
+
+export function parseGitNameStatus(output: string): GitFileChange[] {
+  const records = output.split('\0')
+  const files: GitFileChange[] = []
+  let index = 0
+  while (index < records.length) {
+    const code = records[index]
+    if (code === undefined) break
+    if (code === '') {
+      index += 1
+      continue
+    }
+    const letter = code[0]
+    const isRenameOrCopy = letter === 'R' || letter === 'C'
+    if (isRenameOrCopy) {
+      const originalPath = records[index + 1]
+      const newPath = records[index + 2]
+      if (newPath) files.push({ path: newPath, status: statusFromCode(letter), ...(originalPath ? { originalPath } : {}) })
+      index += 3
+    } else {
+      const path = records[index + 1]
+      if (path) files.push({ path, status: statusFromCode(letter) })
+      index += 2
+    }
+  }
+  return files
+}
+
+export async function getGitCommitFiles(
+  rootPathInput: string,
+  commit: unknown,
+  executor: GitCommandExecutor = execGitCommand,
+): Promise<GitCommitFilesResult> {
+  try {
+    const rootPath = await resolveGitRootPath(rootPathInput)
+    const validatedCommit = validateCommitRef(commit)
+    const result = await runGitAtRoot(rootPath, ['show', '--name-status', '-z', '-M', '--format=', validatedCommit], executor)
+    return { files: parseGitNameStatus(result.stdout) }
+  } catch (error) {
+    return { files: [], error: toErrorMessage(error) }
+  }
+}
+
+async function pathExists(targetPath: string): Promise<boolean> {
+  try {
+    await fs.stat(targetPath)
+    return true
+  } catch {
+    return false
+  }
+}
+
+export async function getGitOperationState(
+  rootPathInput: string,
+  executor: GitCommandExecutor = execGitCommand,
+): Promise<GitOperationState | undefined> {
+  const rootPath = await resolveGitRootPath(rootPathInput)
+  let paths: string[]
+  try {
+    const result = await runGitAtRoot(rootPath, ['rev-parse', '--git-path', 'MERGE_HEAD', '--git-path', 'rebase-merge', '--git-path', 'rebase-apply'], executor)
+    const lines = result.stdout.split(/\r?\n/)
+    paths = [lines[0] ?? '', lines[1] ?? '', lines[2] ?? '']
+  } catch {
+    return undefined
+  }
+
+  // An empty line would resolve to the repository root, which always exists.
+  const gitPathExists = async (gitPath: string): Promise<boolean> => (
+    Boolean(gitPath.trim()) && pathExists(resolve(rootPath, gitPath.trim()))
+  )
+  const [mergeHeadPath, rebaseMergePath, rebaseApplyPath] = paths
+
+  let kind: GitOperationKind | undefined
+  if (await gitPathExists(rebaseMergePath) || await gitPathExists(rebaseApplyPath)) kind = 'rebase'
+  else if (await gitPathExists(mergeHeadPath)) kind = 'merge'
+  if (!kind) return undefined
+
+  let conflicted: string[] = []
+  try {
+    const diff = await runGitAtRoot(rootPath, ['diff', '--name-only', '--diff-filter=U', '-z'], executor)
+    conflicted = diff.stdout.split('\0').filter(Boolean)
+  } catch {
+    conflicted = []
+  }
+  return { kind, conflicted }
+}
+
+export async function mergeGitBranch(
+  rootPathInput: string,
+  name: unknown,
+  executor: GitCommandExecutor = execGitCommand,
+): Promise<void> {
+  const rootPath = await resolveGitRootPath(rootPathInput)
+  const branch = await requireBranchRef(rootPath, name, executor)
+
+  await runGitAtRoot(rootPath, ['merge', '--no-edit', branch], executor)
+}
+
+export async function rebaseGitBranch(
+  rootPathInput: string,
+  name: unknown,
+  executor: GitCommandExecutor = execGitCommand,
+): Promise<void> {
+  const rootPath = await resolveGitRootPath(rootPathInput)
+  const branch = await requireBranchRef(rootPath, name, executor)
+
+  await runGitAtRoot(rootPath, ['rebase', branch], executor)
+}
+
+export async function abortGitOperation(
+  rootPathInput: string,
+  executor: GitCommandExecutor = execGitCommand,
+): Promise<void> {
+  const rootPath = await resolveGitRootPath(rootPathInput)
+  const state = await getGitOperationState(rootPath, executor)
+  if (!state) throw new Error('No merge or rebase in progress')
+  if (state.kind === 'merge') {
+    await runGitAtRoot(rootPath, ['merge', '--abort'], executor)
+  } else {
+    await runGitAtRoot(rootPath, ['rebase', '--abort'], executor)
+  }
+}
+
+export async function continueGitOperation(
+  rootPathInput: string,
+  executor: GitCommandExecutor = execGitCommand,
+): Promise<void> {
+  const rootPath = await resolveGitRootPath(rootPathInput)
+  const state = await getGitOperationState(rootPath, executor)
+  if (!state) throw new Error('No merge or rebase in progress')
+  if (state.conflicted.length > 0) throw new Error('Resolve conflicts before continuing')
+  if (state.kind === 'merge') {
+    await runGitAtRoot(rootPath, ['commit', '--no-edit'], executor)
+  } else {
+    await runGitAtRoot(rootPath, ['-c', 'core.editor=true', 'rebase', '--continue'], executor)
+  }
 }

@@ -507,6 +507,19 @@ export interface GitFileDiffContent {
   error?: string
 }
 
+export type GitOperationKind = 'merge' | 'rebase'
+
+export interface GitOperationState {
+  kind: GitOperationKind
+  /** Repository-relative paths with unresolved conflicts. */
+  conflicted: string[]
+}
+
+export interface GitCommitFilesResult {
+  files: GitFileChange[]
+  error?: string
+}
+
 export interface GitStatusResult {
   isRepository: boolean
   branch: string | null
@@ -516,6 +529,7 @@ export interface GitStatusResult {
   originUrl?: string
   staged: GitFileChange[]
   unstaged: GitFileChange[]
+  operation?: GitOperationState
   error?: string
 }
 
@@ -530,6 +544,30 @@ export interface GitCommitHistoryResult {
   upstream: GitCommitSummary[]
   local: GitCommitSummary[]
   error?: string
+}
+
+export interface GitBranch {
+  /** Short name: `main` for local branches, `origin/feature` for remote ones. */
+  name: string
+  remote: boolean
+  current: boolean
+  /** Upstream short name of a local branch, such as `origin/main`. */
+  upstream?: string
+  /** ISO committer date of the branch tip. */
+  committerDate?: string
+  /** Absolute path of another worktree where this local branch is checked out. */
+  worktreePath?: string
+}
+
+export interface GitBranchListResult {
+  branches: GitBranch[]
+  error?: string
+}
+
+export interface GitStashEntry {
+  /** Stash reference such as `stash@{0}`. */
+  ref: string
+  message: string
 }
 
 export interface WorkspaceGitDiffResult {
@@ -949,7 +987,7 @@ export function normalizeFileMarkdownViewMode(value: unknown): MarkdownViewMode 
 export interface FileTileOpenOptions {
   markdownView?: MarkdownViewMode
   reveal?: { line: number; column?: number; endLine?: number }
-  diff?: { repositoryPath: string; path: string; originalPath?: string; staged: boolean }
+  diff?: { repositoryPath: string; path: string; originalPath?: string; staged: boolean; commit?: string }
 }
 
 export const NOTE_COLORS: Record<NoteColor, { bg: string; text: string; accent: string }> = {
@@ -1078,7 +1116,7 @@ export interface TileState {
 
   // Files-specific
   filePath?: string
-  fileDiff?: { repositoryPath: string; path: string; originalPath?: string; staged: boolean }
+  fileDiff?: { repositoryPath: string; path: string; originalPath?: string; staged: boolean; commit?: string }
   filePreview?: boolean
   fileDraft?: string
   /** SHA-256 revision expected by a subsequent write. */

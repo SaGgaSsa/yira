@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import test from 'node:test'
-import { getGitDiffSummary, getGitFileDiffContent, parseGitDiffNumstat } from './diff'
+import { getGitCommitFileDiffContent, getGitDiffSummary, getGitFileDiffContent, parseGitDiffNumstat } from './diff'
 
 const execFileAsync = promisify(execFile)
 
@@ -353,6 +353,62 @@ test('reads file diff sides from a real repository, including unborn HEAD and un
       modified: '',
       modifiedExists: false,
     })
+  } finally {
+    await rm(rootPath, { recursive: true, force: true })
+  }
+})
+
+test('reads commit file diff compared with its parent', async () => {
+  const rootPath = await mkdtemp(join(tmpdir(), 'git-commit-file-diff-'))
+  const git = async (args: string[]) => execFileAsync('git', ['-C', rootPath, ...args], { encoding: 'utf8' })
+  try {
+    await git(['init', '--quiet'])
+    await git(['config', 'user.email', 'yira-tests@example.com'])
+    await git(['config', 'user.name', 'Yira Tests'])
+    await git(['branch', '-M', 'main'])
+    await writeFile(join(rootPath, 'file.txt'), 'first\n')
+    await git(['add', '--', 'file.txt'])
+    await git(['commit', '--quiet', '-m', 'base'])
+    await writeFile(join(rootPath, 'file.txt'), 'first\nsecond\n')
+    await git(['add', '--', 'file.txt'])
+    await git(['commit', '--quiet', '-m', 'second'])
+    const commit = (await git(['rev-parse', 'HEAD'])).stdout.trim()
+    assert.deepEqual(await getGitCommitFileDiffContent(rootPath, { commit, path: 'file.txt' }), {
+      original: 'first\n',
+      modified: 'first\nsecond\n',
+      modifiedExists: true,
+    })
+  } finally {
+    await rm(rootPath, { recursive: true, force: true })
+  }
+})
+
+test('reads an initial commit with an empty original side', async () => {
+  const rootPath = await mkdtemp(join(tmpdir(), 'git-commit-file-diff-root-'))
+  const git = async (args: string[]) => execFileAsync('git', ['-C', rootPath, ...args], { encoding: 'utf8' })
+  try {
+    await git(['init', '--quiet'])
+    await git(['config', 'user.email', 'yira-tests@example.com'])
+    await git(['config', 'user.name', 'Yira Tests'])
+    await git(['branch', '-M', 'main'])
+    await writeFile(join(rootPath, 'file.txt'), 'first\n')
+    await git(['add', '--', 'file.txt'])
+    await git(['commit', '--quiet', '-m', 'base'])
+    const commit = (await git(['rev-parse', 'HEAD'])).stdout.trim()
+    assert.deepEqual(await getGitCommitFileDiffContent(rootPath, { commit, path: 'file.txt' }), {
+      original: '',
+      modified: 'first\n',
+      modifiedExists: true,
+    })
+  } finally {
+    await rm(rootPath, { recursive: true, force: true })
+  }
+})
+
+test('rejects an invalid commit reference', async () => {
+  const rootPath = await mkdtemp(join(tmpdir(), 'git-commit-file-diff-invalid-'))
+  try {
+    await assert.rejects(getGitCommitFileDiffContent(rootPath, { commit: 'zz', path: 'file.txt' }), /Invalid commit reference/)
   } finally {
     await rm(rootPath, { recursive: true, force: true })
   }

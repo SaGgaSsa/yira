@@ -1543,7 +1543,7 @@ function AppContent(): React.ReactElement {
       height: size.height,
       zIndex: initialState.nextZIndex,
       label: options.diff
-        ? `${deriveFileTileTitle(path)} (${t(options.diff.staged ? 'files.diffStaged' : 'files.diffWorkingTree')})`
+        ? `${deriveFileTileTitle(path)} (${options.diff.commit ?? t(options.diff.staged ? 'files.diffStaged' : 'files.diffWorkingTree')})`
         : deriveFileTileTitle(path),
       filePath: path,
       filePreview: true,
@@ -1612,7 +1612,7 @@ function AppContent(): React.ReactElement {
   const handleExplorerEntryRenamed = useCallback((oldPath: string, newPath: string) => {
     const state = useCanvasStore.getState()
     const updates = planFileTileRenames(state.tiles, oldPath, newPath, (tile) => (
-      ` (${t(tile.fileDiff?.staged ? 'files.diffStaged' : 'files.diffWorkingTree')})`
+      ` (${tile.fileDiff?.commit ?? t(tile.fileDiff?.staged ? 'files.diffStaged' : 'files.diffWorkingTree')})`
     ))
     for (const update of updates) {
       const wasPreview = state.tiles.find((tile) => tile.id === update.tileId)?.filePreview === true
@@ -2915,6 +2915,12 @@ function AppContent(): React.ReactElement {
                   const path = repositoryPath === '.' ? change.path : `${repositoryPath}/${change.path}`
                   void openFileTile(path, { diff: { repositoryPath, path: change.path, originalPath: change.originalPath, staged } }).catch((error: unknown) => {
                     console.error('[App] Failed to open Git diff tile:', error)
+                  })
+                }}
+                onOpenCommitDiff={(repositoryPath, commit, change) => {
+                  const path = repositoryPath === '.' ? change.path : `${repositoryPath}/${change.path}`
+                  void openFileTile(path, { diff: { repositoryPath, path: change.path, originalPath: change.originalPath, staged: false, commit: commit.shortHash } }).catch((error: unknown) => {
+                    console.error('[App] Failed to open Git commit diff tile:', error)
                   })
                 }}
                 agentProvider={agentsView.effectiveProvider}
