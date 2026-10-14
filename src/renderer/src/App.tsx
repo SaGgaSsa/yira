@@ -2663,13 +2663,13 @@ function AppContent(): React.ReactElement {
                 <div className="mt-3 text-sm text-text-disabled">{t('sidebar.emptyWorkspaces')}</div>
               </div>
             ) : (
-              <div className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
+              <div className="-mx-3 flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
                 {activeSidebarWorkspaces.length === 0 ? (
-                  <div className="px-2 py-2 text-sm text-text-disabled">
+                  <div className="px-5 py-2 text-sm text-text-disabled">
                     {t('sidebar.noActiveWorkspaces')}
                   </div>
                 ) : (
-                  <div className="min-h-0 flex-1 space-y-1 pr-1">
+                  <div className="min-h-0 flex-1">
                     {activeSidebarWorkspaces.map((workspace) => (
                       <ActiveWorkspaceEntry
                         key={workspace.id}
