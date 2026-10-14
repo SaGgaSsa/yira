@@ -19,7 +19,6 @@ import { AppDialog, type ConfirmDialogOptions, type PromptDialogOptions } from '
 import { WorkspaceDialog, type WorkspaceDialogRequest, type WorkspaceDialogValue } from './components/WorkspaceDialog'
 import { WorkspaceManagementDialog } from './components/WorkspaceManagementDialog'
 import { ActiveWorkspaceEntry } from './components/ActiveWorkspaceEntry'
-import { WorkspaceSidebarSection } from './components/WorkspaceSidebarSection'
 import { WorkspaceHome } from './components/WorkspaceHome'
 import { WorkspaceActivityView } from './components/WorkspaceActivityView'
 import { AgentsView } from './components/AgentsView'
@@ -2625,7 +2624,7 @@ function AppContent(): React.ReactElement {
       >
         <div className="flex h-full flex-col bg-bg-secondary">
           <div className="flex min-h-0 flex-1 flex-col px-3 py-4">
-            <div className="mb-3 flex items-center justify-between px-2">
+            <div className="-mx-3 mb-3 flex items-center justify-between border-b border-border px-5 pb-3">
               <span className="nd-label text-text-secondary">{t('sidebar.workspaces')}</span>
               <div className="flex items-center gap-1">
                 <button
@@ -2664,50 +2663,44 @@ function AppContent(): React.ReactElement {
                 <div className="mt-3 text-sm text-text-disabled">{t('sidebar.emptyWorkspaces')}</div>
               </div>
             ) : (
-              <div className="flex min-h-0 flex-1 flex-col">
-                <WorkspaceSidebarSection
-                  title={t('sidebar.activeSection')}
-                  count={activeSidebarWorkspaces.length}
-                  className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto"
-                >
-                  {activeSidebarWorkspaces.length === 0 ? (
-                    <div className="px-2 py-2 text-sm text-text-disabled">
-                      {t('sidebar.noActiveWorkspaces')}
-                    </div>
-                  ) : (
-                    <div className="min-h-0 flex-1 space-y-1 pr-1">
-                      {activeSidebarWorkspaces.map((workspace) => (
-                        <ActiveWorkspaceEntry
-                          key={workspace.id}
-                          workspace={workspace}
-                          sessions={agentsView.snapshot.sessions}
-                          expanded={expandedActiveWorkspaceIds.has(workspace.id)}
-                          onToggleExpanded={() => toggleActiveWorkspaceExpanded(workspace.id)}
-                          onOpenAgent={openActivityPaletteAgent}
-                          focusedAgentTileId={workspace.id === activeWorkspaceId ? focusedAgentTileId : null}
-                          active={workspace.id === activeWorkspaceId}
-                          sessionActive={sessionActiveWorkspaceIds.has(workspace.id)}
-                          onClick={() => {
-                            agentsView.close()
-                            agentsView.closeSessionDialog()
-                            setActivityOpen(false)
-                            switchWorkspace(workspace)
-                          }}
-                          onConfigure={() => openWorkspaceEditor(workspace)}
-                          onFocus={() => {
-                            agentsView.close()
-                            agentsView.closeSessionDialog()
-                            setActivityOpen(false)
-                            recordWorkspaceSelection(workspace.id)
-                            void activateWorkspace(workspace, { activationMode: 'focus-last' })
-                          }}
-                          onDeactivate={() => void deactivateWorkspace(workspace)}
-                          deactivatePending={pendingWorkspaceDeactivationIds.has(workspace.id)}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </WorkspaceSidebarSection>
+              <div className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
+                {activeSidebarWorkspaces.length === 0 ? (
+                  <div className="px-2 py-2 text-sm text-text-disabled">
+                    {t('sidebar.noActiveWorkspaces')}
+                  </div>
+                ) : (
+                  <div className="min-h-0 flex-1 space-y-1 pr-1">
+                    {activeSidebarWorkspaces.map((workspace) => (
+                      <ActiveWorkspaceEntry
+                        key={workspace.id}
+                        workspace={workspace}
+                        sessions={agentsView.snapshot.sessions}
+                        expanded={expandedActiveWorkspaceIds.has(workspace.id)}
+                        onToggleExpanded={() => toggleActiveWorkspaceExpanded(workspace.id)}
+                        onOpenAgent={openActivityPaletteAgent}
+                        focusedAgentTileId={workspace.id === activeWorkspaceId ? focusedAgentTileId : null}
+                        active={workspace.id === activeWorkspaceId}
+                        sessionActive={sessionActiveWorkspaceIds.has(workspace.id)}
+                        onClick={() => {
+                          agentsView.close()
+                          agentsView.closeSessionDialog()
+                          setActivityOpen(false)
+                          switchWorkspace(workspace)
+                        }}
+                        onConfigure={() => openWorkspaceEditor(workspace)}
+                        onFocus={() => {
+                          agentsView.close()
+                          agentsView.closeSessionDialog()
+                          setActivityOpen(false)
+                          recordWorkspaceSelection(workspace.id)
+                          void activateWorkspace(workspace, { activationMode: 'focus-last' })
+                        }}
+                        onDeactivate={() => void deactivateWorkspace(workspace)}
+                        deactivatePending={pendingWorkspaceDeactivationIds.has(workspace.id)}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
