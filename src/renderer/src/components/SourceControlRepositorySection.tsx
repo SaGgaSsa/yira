@@ -11,7 +11,9 @@ import {
   FileText,
   Folder,
   GitBranch,
+  GitMerge,
   LoaderCircle,
+  TriangleAlert,
   RefreshCw,
   SquareMinus,
   SquarePlus,
@@ -22,6 +24,7 @@ import type {
   GitCommitHistoryResult,
   GitCommitSummary,
   GitFileChange,
+  GitOperationState,
   GitRepository,
   GitStatusResult,
   SourceControlViewMode,
@@ -30,6 +33,7 @@ import { buildSourceControlTree, type SourceControlTreeNode } from '@/utils/sour
 import { useTranslation } from 'react-i18next'
 import { i18n } from '@/i18n'
 import { SourceControlBranchPicker } from './SourceControlBranchPicker'
+import { formatRelativeDate } from '@/utils/relativeDate'
 
 export type SourceControlAction =
   | { type: 'toggle'; change: GitFileChange; staged: boolean }
@@ -38,7 +42,7 @@ export type SourceControlAction =
   | { type: 'commit'; message: string; push?: boolean }
   | { type: 'sync' }
 
-export type RepositoryAction = SourceControlAction | { type: 'fetch' | 'pull' | 'push' | 'publish' } | { type: 'checkout'; branch: GitBranchType } | { type: 'createBranch'; name: string; startPoint?: string }
+export type RepositoryAction = SourceControlAction | { type: 'fetch' | 'pull' | 'push' | 'publish' } | { type: 'checkout'; branch: GitBranchType } | { type: 'createBranch'; name: string; startPoint?: string } | { type: 'merge'; branch: string } | { type: 'rebase'; branch: string } | { type: 'abortOperation' } | { type: 'continueOperation' }
 
 export interface SourceControlRepositorySectionProps {
   workspaceId: string
@@ -243,28 +247,6 @@ function ChangeSection({ title, changes, staged, viewMode, disabled, onToggle, o
   )
 }
 
-function relativeCommitDate(commitDate: string | null | undefined, language: string): string {
-  const timestamp = typeof commitDate === 'string' ? Date.parse(commitDate) : Number.NaN
-  if (!Number.isFinite(timestamp)) return i18n.t('sourceControl.unknownDate')
-
-  const elapsedSeconds = (timestamp - Date.now()) / 1000
-  const elapsed = Math.abs(elapsedSeconds)
-  const units = [
-    { seconds: 31_536_000, unit: 'year' as const },
-    { seconds: 2_592_000, unit: 'month' as const },
-    { seconds: 604_800, unit: 'week' as const },
-    { seconds: 86_400, unit: 'day' as const },
-    { seconds: 3_600, unit: 'hour' as const },
-    { seconds: 60, unit: 'minute' as const },
-  ]
-  const unit = units.find(({ seconds }) => elapsed >= seconds) ?? { seconds: 1, unit: 'second' as const }
-  const value = Math.max(1, Math.floor(elapsed / unit.seconds))
-  return new Intl.RelativeTimeFormat(language, { numeric: 'auto' }).format(
-    Math.sign(elapsedSeconds) * value,
-    unit.unit,
-  )
-}
-
 function CommitRow({ commit, workspaceId, repositoryPath, onOpenCommitDiff }: {
   commit: GitCommitSummary
   workspaceId: string
@@ -320,7 +302,7 @@ function CommitRow({ commit, workspaceId, repositoryPath, onOpenCommitDiff }: {
         <span className="shrink-0 font-mono text-[11px] text-text-disabled">{shortHash}</span>
         <span className="min-w-0 flex-1 truncate">{subject}</span>
         <time className="shrink-0 text-[11px] text-text-disabled" dateTime={commitDate} title={commitDate ?? t('sourceControl.unknownDate')}>
-          {relativeCommitDate(commit.commitDate, i18n.language)}
+          {formatRelativeDate(typeof commit.commitDate === 'string' ? commit.commitDate : undefined, i18n.language)}
         </time>
       </button>
       {expanded && (
@@ -587,6 +569,64 @@ function CommitButton({ commitMessage, canCommit, pendingAction, onAction }: {
   )
 }
 
+function OperationBanner({ operation, disabled, onOpenConflict, onAction }: {
+  operation: GitOperationState
+  disabled: boolean
+  onOpenConflict: (path: string) => void
+  onAction: (action: RepositoryAction) => void
+}): React.ReactElement {
+  const { t } = useTranslation()
+  const hasConflicts = operation.conflicted.length > 0
+  return (
+    <div className="border-b border-border bg-active-bg px-4 py-3">
+      <div className="flex items-center gap-2 text-sm text-text-display">
+        {operation.kind === 'merge' ? <GitMerge size={15} className="shrink-0" /> : <TriangleAlert size={15} className="shrink-0" />}
+        <span className="font-medium">{operation.kind === 'merge' ? t('sourceControl.mergeInProgress') : t('sourceControl.rebaseInProgress')}</span>
+      </div>
+      {hasConflicts ? (
+        <>
+          <div className="mt-1 text-xs text-text-secondary">
+            {t('sourceControl.filesWithConflicts', { count: operation.conflicted.length })}
+          </div>
+          <div className="mt-2 flex flex-col gap-1">
+            {operation.conflicted.map((path) => (
+              <button
+                key={path}
+                type="button"
+                className="truncate text-left font-mono text-xs text-text-display hover:underline"
+                onClick={() => onOpenConflict(path)}
+              >
+                {path}
+              </button>
+            ))}
+          </div>
+        </>
+      ) : (
+        <div className="mt-1 text-xs text-text-secondary">{t('sourceControl.noConflictsContinue')}</div>
+      )}
+      <div className="mt-3 flex items-center gap-2">
+        <button
+          type="button"
+          className="text-xs text-red-300 hover:underline disabled:opacity-50"
+          disabled={disabled}
+          onClick={() => onAction({ type: 'abortOperation' })}
+        >
+          {t('sourceControl.abortOperation')}
+        </button>
+        <button
+          type="button"
+          className="rounded-sm bg-active-bg px-2 py-1 text-xs text-text-display hover:bg-hover-bg disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={disabled || hasConflicts}
+          title={hasConflicts ? t('sourceControl.continueDisabledReason') : undefined}
+          onClick={() => onAction({ type: 'continueOperation' })}
+        >
+          {t('sourceControl.continueOperation')}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export function SourceControlRepositorySection({
   workspaceId,
   repository,
@@ -641,7 +681,14 @@ export function SourceControlRepositorySection({
             disabled={Boolean(pendingAction)}
             onSelect={(branch) => onAction({ type: 'checkout', branch })}
             onCreate={(name, startPoint) => onAction({ type: 'createBranch', name, startPoint })}
+            onMerge={(branch) => onAction({ type: 'merge', branch: branch.name })}
+            onRebase={(branch) => onAction({ type: 'rebase', branch: branch.name })}
           />
+          {repositoryStatus?.operation && !expanded && (
+            <span className="rounded bg-active-bg px-1.5 py-0.5 text-[10px] uppercase text-text-display">
+              {repositoryStatus.operation.kind === 'merge' ? t('sourceControl.mergeBadge') : t('sourceControl.rebaseBadge')}
+            </span>
+          )}
           {statusLoading && !repositoryStatus ? <LoaderCircle size={14} className="animate-spin" /> : null}
           {repositoryStatus?.error ? <span className="text-xs text-red-300" title={repositoryStatus.error}>!</span> : null}
           {!repositoryStatus?.error && changeCount > 0 ? (
@@ -670,16 +717,27 @@ export function SourceControlRepositorySection({
           )}
           {isRepository && repositoryStatus && (
             <>
+              {repositoryStatus.operation && (
+                <OperationBanner
+                  operation={repositoryStatus.operation}
+                  disabled={Boolean(pendingAction)}
+                  onOpenConflict={(path) => onOpenDiff({ path, status: 'unmerged' }, false)}
+                  onAction={onAction}
+                />
+              )}
               <div className="border-t border-border px-4 py-3">
                 <div className="flex min-w-0 items-center gap-2">
                   <GitBranch size={15} className="shrink-0 text-text-secondary" />
                   <SourceControlBranchPicker
+                    variant="prominent"
                     workspaceId={workspaceId}
                     repositoryPath={repository.relativePath}
                     currentBranch={repositoryStatus.branch ?? null}
                     disabled={Boolean(pendingAction)}
                     onSelect={(branch) => onAction({ type: 'checkout', branch })}
                     onCreate={(name, startPoint) => onAction({ type: 'createBranch', name, startPoint })}
+                    onMerge={(branch) => onAction({ type: 'merge', branch: branch.name })}
+                    onRebase={(branch) => onAction({ type: 'rebase', branch: branch.name })}
                   />
                   {repositoryStatus.originUrl && (
                     <button

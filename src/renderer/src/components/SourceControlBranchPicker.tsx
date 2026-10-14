@@ -1,10 +1,13 @@
-import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   Check,
   ChevronDown,
   Cloud,
+  Ellipsis,
   GitBranch as GitBranchIcon,
+  GitMerge,
+  GitPullRequestArrow,
   LoaderCircle,
   Plus,
 } from 'lucide-react'
@@ -12,6 +15,7 @@ import type { GitBranch } from '@shared/types'
 import { useTranslation } from 'react-i18next'
 import { i18n } from '@/i18n'
 import { groupBranches, canCreateBranch } from '@/utils/sourceControlBranches'
+import { formatRelativeDate } from '@/utils/relativeDate'
 
 interface BranchPickerPosition {
   top: number
@@ -29,35 +33,16 @@ function isWithin(target: Node | null, ancestor: Node | null): boolean {
   return false
 }
 
-function relativeBranchDate(date: string | undefined, language: string): string {
-  const timestamp = typeof date === 'string' ? Date.parse(date) : Number.NaN
-  if (!Number.isFinite(timestamp)) return i18n.t('sourceControl.unknownDate')
-
-  const elapsedSeconds = (timestamp - Date.now()) / 1000
-  const elapsed = Math.abs(elapsedSeconds)
-  const units = [
-    { seconds: 31_536_000, unit: 'year' as const },
-    { seconds: 2_592_000, unit: 'month' as const },
-    { seconds: 604_800, unit: 'week' as const },
-    { seconds: 86_400, unit: 'day' as const },
-    { seconds: 3_600, unit: 'hour' as const },
-    { seconds: 60, unit: 'minute' as const },
-  ]
-  const unit = units.find(({ seconds }) => elapsed >= seconds) ?? { seconds: 1, unit: 'second' as const }
-  const value = Math.max(1, Math.floor(elapsed / unit.seconds))
-  return new Intl.RelativeTimeFormat(language, { numeric: 'auto' }).format(
-    Math.sign(elapsedSeconds) * value,
-    unit.unit,
-  )
-}
-
 export interface SourceControlBranchPickerProps {
   workspaceId: string
   repositoryPath: string
   currentBranch: string | null
   disabled?: boolean
+  variant?: 'compact' | 'prominent'
   onSelect: (branch: GitBranch) => void
   onCreate: (name: string, startPoint?: string) => void
+  onMerge?: (branch: GitBranch) => void
+  onRebase?: (branch: GitBranch) => void
   label?: React.ReactNode
   children?: React.ReactNode
 }
@@ -67,13 +52,118 @@ type PickerItem =
   | { kind: 'createFrom' }
   | { kind: 'branch'; branch: GitBranch }
 
+interface BranchRowProps {
+  branch: GitBranch
+  currentBranch: string | null
+  highlighted: boolean
+  onHover: () => void
+  onSelect: () => void
+  onMerge?: (branch: GitBranch) => void
+  onRebase?: (branch: GitBranch) => void
+}
+
+function BranchRow({
+  branch,
+  currentBranch,
+  highlighted,
+  onHover,
+  onSelect,
+  onMerge,
+  onRebase,
+}: BranchRowProps): React.ReactElement {
+  const { t } = useTranslation()
+  const [actionMenuOpen, setActionMenuOpen] = useState(false)
+  const isCurrent = branch.current
+  const disabledRow = Boolean(branch.worktreePath)
+  const canRunActions = !isCurrent
+
+  return (
+    <div
+      role="option"
+      aria-selected={branch.current}
+      aria-disabled={disabledRow}
+      className={`group flex items-center gap-2 px-3 py-2 text-xs ${disabledRow ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-hover-bg'} ${highlighted ? 'bg-hover-bg' : ''}`}
+      title={branch.worktreePath ?? undefined}
+      onMouseEnter={() => { if (!disabledRow) onHover() }}
+      onClick={() => { if (!disabledRow) onSelect() }}
+    >
+      {branch.remote ? <Cloud size={13} className="shrink-0 text-text-secondary" /> : <GitBranchIcon size={13} className="shrink-0 text-text-secondary" />}
+      <span className="min-w-0 flex-1 truncate text-text-display">{branch.name}</span>
+      <span className="shrink-0 text-[10px] text-text-disabled">
+        {branch.worktreePath ? t('sourceControl.worktreeInUse') : (branch.upstream ? branch.upstream : formatRelativeDate(branch.committerDate, i18n.language))}
+      </span>
+      {branch.current && <Check size={13} className="shrink-0 text-text-display" />}
+      {canRunActions && (
+        <div className="relative shrink-0" onClick={(event) => event.stopPropagation()}>
+          <button
+            type="button"
+            className="inline-flex h-5 w-5 items-center justify-center rounded-sm text-text-secondary opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100 hover:bg-hover-bg hover:text-text-display"
+            aria-label={t('sourceControl.branchActions')}
+            onClick={() => setActionMenuOpen((current) => !current)}
+          >
+            <Ellipsis size={13} />
+          </button>
+          {actionMenuOpen && (
+            <div
+              role="menu"
+              className="absolute right-0 top-full z-70 mt-1 min-w-[180px] rounded-sm border border-border bg-bg-primary shadow-xl"
+            >
+              {onMerge && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-text-display hover:bg-hover-bg"
+                  onClick={() => { onMerge(branch); setActionMenuOpen(false) }}
+                >
+                  <GitMerge size={13} className="shrink-0" />
+                  <span className="truncate">{t('sourceControl.mergeBranchInto', { branch: branch.name, current: currentBranch ?? t('sourceControl.noBranch') })}</span>
+                </button>
+              )}
+              {onRebase && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-text-display hover:bg-hover-bg"
+                  onClick={() => { onRebase(branch); setActionMenuOpen(false) }}
+                >
+                  <GitPullRequestArrow size={13} className="shrink-0" />
+                  <span className="truncate">{t('sourceControl.rebaseCurrentOnto', { current: currentBranch ?? t('sourceControl.noBranch'), branch: branch.name })}</span>
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+interface BranchGroupProps {
+  title: string
+  branches: GitBranch[]
+  renderItem: (branch: GitBranch) => React.ReactNode
+}
+
+function BranchGroup({ title, branches, renderItem }: BranchGroupProps): React.ReactElement | null {
+  if (branches.length === 0) return null
+  return (
+    <>
+      <div className="px-3 py-1 text-[10px] uppercase tracking-wide text-text-disabled">{title}</div>
+      {branches.map((branch) => renderItem(branch))}
+    </>
+  )
+}
+
 export function SourceControlBranchPicker({
   workspaceId,
   repositoryPath,
   currentBranch,
   disabled = false,
+  variant = 'compact',
   onSelect,
   onCreate,
+  onMerge,
+  onRebase,
   label,
   children,
 }: SourceControlBranchPickerProps): React.ReactElement {
@@ -107,23 +197,26 @@ export function SourceControlBranchPicker({
     }
   }, [repositoryPath, workspaceId])
 
+  const getPickerPosition = useCallback((): BranchPickerPosition | null => {
+    const trigger = triggerRef.current
+    if (!trigger) return null
+    const rect = trigger.getBoundingClientRect()
+    const viewportWidth = window.innerWidth || rect.right
+    const viewportHeight = window.innerHeight || rect.bottom + 320
+    const width = Math.min(320, Math.max(rect.width, 220))
+    const left = Math.max(8, Math.min(rect.left, viewportWidth - width - 8))
+    const maxHeight = Math.min(360, Math.max(120, viewportHeight - rect.bottom - 12))
+    return { top: rect.bottom + 4, left, width, maxHeight }
+  }, [])
+
   const openMenu = useCallback(() => {
     setQuery('')
     setCreateMode(null)
     setHighlightIndex(0)
     loadBranches().catch(() => undefined)
-    const trigger = triggerRef.current
-    if (trigger) {
-      const rect = trigger.getBoundingClientRect()
-      const viewportWidth = window.innerWidth || rect.right
-      const viewportHeight = window.innerHeight || rect.bottom + 320
-      const width = Math.min(320, Math.max(rect.width, 220))
-      const left = Math.max(8, Math.min(rect.left, viewportWidth - width - 8))
-      const maxHeight = Math.min(360, Math.max(120, viewportHeight - rect.bottom - 12))
-      setPosition({ top: rect.bottom + 4, left, width, maxHeight })
-    }
+    setPosition(getPickerPosition())
     setIsOpen(true)
-  }, [loadBranches])
+  }, [getPickerPosition, loadBranches])
 
   const closeMenu = useCallback(() => {
     setIsOpen(false)
@@ -131,11 +224,6 @@ export function SourceControlBranchPicker({
     setQuery('')
     triggerRef.current?.focus()
   }, [])
-
-  const handleCreateQuick = useCallback((name: string) => {
-    onCreate(name.trim())
-    closeMenu()
-  }, [closeMenu, onCreate])
 
   const handleSelect = useCallback((branch: GitBranch) => {
     if (branch.current) {
@@ -147,19 +235,27 @@ export function SourceControlBranchPicker({
     closeMenu()
   }, [closeMenu, onSelect])
 
+  const handleCreateQuick = useCallback((name: string) => {
+    onCreate(name.trim())
+    closeMenu()
+  }, [closeMenu, onCreate])
+
+  const handleMerge = useCallback((branch: GitBranch) => {
+    onMerge?.(branch)
+    closeMenu()
+  }, [closeMenu, onMerge])
+
+  const handleRebase = useCallback((branch: GitBranch) => {
+    onRebase?.(branch)
+    closeMenu()
+  }, [closeMenu, onRebase])
+
   useLayoutEffect(() => {
     if (!isOpen) return
     inputRef.current?.focus()
     const updatePosition = (): void => {
-      const trigger = triggerRef.current
-      if (!trigger) return
-      const rect = trigger.getBoundingClientRect()
-      const viewportWidth = window.innerWidth || rect.right
-      const viewportHeight = window.innerHeight || rect.bottom + 320
-      const width = Math.min(320, Math.max(rect.width, 220))
-      const left = Math.max(8, Math.min(rect.left, viewportWidth - width - 8))
-      const maxHeight = Math.min(360, Math.max(120, viewportHeight - rect.bottom - 12))
-      setPosition({ top: rect.bottom + 4, left, width, maxHeight })
+      const next = getPickerPosition()
+      if (next) setPosition(next)
     }
     updatePosition()
     window.addEventListener('resize', updatePosition)
@@ -168,7 +264,7 @@ export function SourceControlBranchPicker({
       window.removeEventListener('resize', updatePosition)
       window.removeEventListener('scroll', updatePosition, true)
     }
-  }, [isOpen])
+  }, [getPickerPosition, isOpen])
 
   useEffect(() => {
     if (!isOpen) return
@@ -181,27 +277,31 @@ export function SourceControlBranchPicker({
     return () => document.removeEventListener('pointerdown', handleOutsidePointerDown)
   }, [closeMenu, isOpen])
 
-  const groups = groupBranches(branches, query)
+  const groups = useMemo(() => groupBranches(branches, query), [branches, query])
   const showCreateQuick = canCreateBranch(branches, query) && !createMode
 
-  const items: PickerItem[] = []
-  if (showCreateQuick) items.push({ kind: 'createQuick' })
-  items.push({ kind: 'createFrom' })
-  for (const branch of groups.recent) items.push({ kind: 'branch', branch })
-  for (const branch of groups.local) items.push({ kind: 'branch', branch })
-  for (const branch of groups.remote) items.push({ kind: 'branch', branch })
+  const items = useMemo((): PickerItem[] => {
+    const next: PickerItem[] = []
+    if (showCreateQuick) next.push({ kind: 'createQuick' })
+    next.push({ kind: 'createFrom' })
+    for (const branch of groups.recent) next.push({ kind: 'branch', branch })
+    for (const branch of groups.local) next.push({ kind: 'branch', branch })
+    for (const branch of groups.remote) next.push({ kind: 'branch', branch })
+    return next
+  }, [groups, showCreateQuick])
 
-  const enabledItems = items.filter((item) => !(item.kind === 'branch' && item.branch.worktreePath))
   // Clamp highlight
   useEffect(() => {
-    if (!enabledItems.length) return
+    if (!items.length) return
     setHighlightIndex((current) => {
       const highlighted = items[current]
-      if (highlighted && !(highlighted.kind === 'branch' && highlighted.branch.worktreePath)) return current
+      if (highlighted && !(highlighted.kind === 'branch' && highlighted.branch.worktreePath)) {
+        return Math.min(current, items.length - 1)
+      }
       const firstEnabled = items.findIndex((item) => !(item.kind === 'branch' && item.branch.worktreePath))
       return firstEnabled >= 0 ? firstEnabled : 0
     })
-  }, [items, enabledItems.length])
+  }, [items])
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement | HTMLInputElement>): void => {
     if (event.key === 'Escape') {
@@ -257,14 +357,35 @@ export function SourceControlBranchPicker({
 
   const placeholder = createMode
     ? t('sourceControl.newBranchNameFrom', { branch: createMode.startPoint })
-    : (branches.length === 0 && !loading ? t('sourceControl.branchSearchPlaceholder') : t('sourceControl.branchSearchPlaceholder'))
+    : t('sourceControl.branchSearchPlaceholder')
+
+  const renderBranchRow = (branch: GitBranch): React.ReactNode => {
+    const itemIndex = items.findIndex((item) => item.kind === 'branch' && item.branch === branch)
+    return (
+      <BranchRow
+        key={`${branch.remote ? 'remote' : 'local'}-${branch.name}`}
+        branch={branch}
+        currentBranch={currentBranch}
+        highlighted={itemIndex === highlightIndex}
+        onHover={() => { setHighlightIndex(itemIndex); setHighlightedBranchName(branch.name) }}
+        onSelect={() => handleSelect(branch)}
+        onMerge={onMerge ? handleMerge : undefined}
+        onRebase={onRebase ? handleRebase : undefined}
+      />
+    )
+  }
+
+  const createQuickIndex = items.findIndex((item) => item.kind === 'createQuick')
+  const createFromIndex = items.findIndex((item) => item.kind === 'createFrom')
 
   return (
     <>
       <button
         ref={triggerRef}
         type="button"
-        className="inline-flex max-w-32 items-center gap-1 truncate text-xs text-text-secondary hover:text-text-display disabled:opacity-50"
+        className={variant === 'prominent'
+          ? 'inline-flex min-w-0 items-center gap-1 truncate text-sm text-text-display hover:text-text-display disabled:opacity-50'
+          : 'inline-flex max-w-32 items-center gap-1 truncate text-xs text-text-secondary hover:text-text-display disabled:opacity-50'}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         aria-controls={isOpen ? listboxId : undefined}
@@ -311,9 +432,9 @@ export function SourceControlBranchPicker({
                 {showCreateQuick && (
                   <div
                     role="option"
-                    aria-selected={highlightIndex === items.indexOf({ kind: 'createQuick' })}
-                    className={`flex cursor-pointer items-center gap-2 px-3 py-2 text-xs text-text-display hover:bg-hover-bg ${highlightIndex === items.findIndex((item) => item.kind === 'createQuick') ? 'bg-hover-bg' : ''}`}
-                    onMouseEnter={() => setHighlightIndex(items.findIndex((item) => item.kind === 'createQuick'))}
+                    aria-selected={highlightIndex === createQuickIndex}
+                    className={`flex cursor-pointer items-center gap-2 px-3 py-2 text-xs text-text-display hover:bg-hover-bg ${highlightIndex === createQuickIndex ? 'bg-hover-bg' : ''}`}
+                    onMouseEnter={() => setHighlightIndex(createQuickIndex)}
                     onClick={() => handleCreateQuick(query)}
                   >
                     <Plus size={13} className="shrink-0" />
@@ -322,9 +443,9 @@ export function SourceControlBranchPicker({
                 )}
                 <div
                   role="option"
-                  aria-selected={highlightIndex === items.findIndex((item) => item.kind === 'createFrom')}
-                  className={`flex cursor-pointer items-center gap-2 px-3 py-2 text-xs text-text-display hover:bg-hover-bg ${highlightIndex === items.findIndex((item) => item.kind === 'createFrom') ? 'bg-hover-bg' : ''}`}
-                  onMouseEnter={() => setHighlightIndex(items.findIndex((item) => item.kind === 'createFrom'))}
+                  aria-selected={highlightIndex === createFromIndex}
+                  className={`flex cursor-pointer items-center gap-2 px-3 py-2 text-xs text-text-display hover:bg-hover-bg ${highlightIndex === createFromIndex ? 'bg-hover-bg' : ''}`}
+                  onMouseEnter={() => setHighlightIndex(createFromIndex)}
                   onClick={() => {
                     const branchStart = highlightedBranchName
                       ?? branches.find((item) => item.current)?.name
@@ -340,88 +461,9 @@ export function SourceControlBranchPicker({
                   <span>{t('sourceControl.createBranchFrom')}</span>
                 </div>
 
-                {groups.recent.length > 0 && (
-                  <div className="px-3 py-1 text-[10px] uppercase tracking-wide text-text-disabled">{t('sourceControl.recentBranches')}</div>
-                )}
-                {groups.recent.map((branch) => {
-                  const itemIndex = items.findIndex((item) => item.kind === 'branch' && item.branch === branch)
-                  const isHighlighted = itemIndex === highlightIndex
-                  const disabledRow = Boolean(branch.worktreePath)
-                  return (
-                    <div
-                      key={`recent-${branch.name}`}
-                      role="option"
-                      aria-selected={branch.current}
-                      aria-disabled={disabledRow}
-                      className={`flex items-center gap-2 px-3 py-2 text-xs ${disabledRow ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-hover-bg'} ${isHighlighted ? 'bg-hover-bg' : ''}`}
-                      title={branch.worktreePath ?? undefined}
-                      onMouseEnter={() => { if (!disabledRow) { setHighlightIndex(itemIndex); setHighlightedBranchName(branch.name) } }}
-                      onClick={() => !disabledRow && handleSelect(branch)}
-                    >
-                      {branch.remote ? <Cloud size={13} className="shrink-0 text-text-secondary" /> : <GitBranchIcon size={13} className="shrink-0 text-text-secondary" />}
-                      <span className="min-w-0 flex-1 truncate text-text-display">{branch.name}</span>
-                      <span className="shrink-0 text-[10px] text-text-disabled">
-                        {branch.worktreePath ? t('sourceControl.worktreeInUse') : (branch.upstream ? branch.upstream : relativeBranchDate(branch.committerDate, i18n.language))}
-                      </span>
-                      {branch.current && <Check size={13} className="shrink-0 text-text-display" />}
-                    </div>
-                  )
-                })}
-
-                {groups.local.length > 0 && (
-                  <div className="px-3 py-1 text-[10px] uppercase tracking-wide text-text-disabled">{t('sourceControl.localBranches')}</div>
-                )}
-                {groups.local.map((branch) => {
-                  const itemIndex = items.findIndex((item) => item.kind === 'branch' && item.branch === branch)
-                  const isHighlighted = itemIndex === highlightIndex
-                  const disabledRow = Boolean(branch.worktreePath)
-                  return (
-                    <div
-                      key={`local-${branch.name}`}
-                      role="option"
-                      aria-selected={branch.current}
-                      aria-disabled={disabledRow}
-                      className={`flex items-center gap-2 px-3 py-2 text-xs ${disabledRow ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-hover-bg'} ${isHighlighted ? 'bg-hover-bg' : ''}`}
-                      title={branch.worktreePath ?? undefined}
-                      onMouseEnter={() => { if (!disabledRow) { setHighlightIndex(itemIndex); setHighlightedBranchName(branch.name) } }}
-                      onClick={() => !disabledRow && handleSelect(branch)}
-                    >
-                      <GitBranchIcon size={13} className="shrink-0 text-text-secondary" />
-                      <span className="min-w-0 flex-1 truncate text-text-display">{branch.name}</span>
-                      <span className="shrink-0 text-[10px] text-text-disabled">
-                        {branch.worktreePath ? t('sourceControl.worktreeInUse') : (branch.upstream ? branch.upstream : relativeBranchDate(branch.committerDate, i18n.language))}
-                      </span>
-                      {branch.current && <Check size={13} className="shrink-0 text-text-display" />}
-                    </div>
-                  )
-                })}
-
-                {groups.remote.length > 0 && (
-                  <div className="px-3 py-1 text-[10px] uppercase tracking-wide text-text-disabled">{t('sourceControl.remoteBranches')}</div>
-                )}
-                {groups.remote.map((branch) => {
-                  const itemIndex = items.findIndex((item) => item.kind === 'branch' && item.branch === branch)
-                  const isHighlighted = itemIndex === highlightIndex
-                  const disabledRow = Boolean(branch.worktreePath)
-                  return (
-                    <div
-                      key={`remote-${branch.name}`}
-                      role="option"
-                      aria-selected={false}
-                      aria-disabled={disabledRow}
-                      className={`flex items-center gap-2 px-3 py-2 text-xs ${disabledRow ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-hover-bg'} ${isHighlighted ? 'bg-hover-bg' : ''}`}
-                      title={branch.worktreePath ?? undefined}
-                      onMouseEnter={() => { if (!disabledRow) { setHighlightIndex(itemIndex); setHighlightedBranchName(branch.name) } }}
-                      onClick={() => !disabledRow && handleSelect(branch)}
-                    >
-                      <Cloud size={13} className="shrink-0 text-text-secondary" />
-                      <span className="min-w-0 flex-1 truncate text-text-display">{branch.name}</span>
-                      <span className="shrink-0 text-[10px] text-text-disabled">
-                        {relativeBranchDate(branch.committerDate, i18n.language)}
-                      </span>
-                    </div>
-                  )
-                })}
+                <BranchGroup title={t('sourceControl.recentBranches')} branches={groups.recent} renderItem={renderBranchRow} />
+                <BranchGroup title={t('sourceControl.localBranches')} branches={groups.local} renderItem={renderBranchRow} />
+                <BranchGroup title={t('sourceControl.remoteBranches')} branches={groups.remote} renderItem={renderBranchRow} />
 
                 {!loading && !error && groups.recent.length === 0 && groups.local.length === 0 && groups.remote.length === 0 && (
                   <div className="px-3 py-2 text-xs text-text-disabled">{t('sourceControl.noBranch')}</div>

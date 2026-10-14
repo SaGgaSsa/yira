@@ -623,6 +623,25 @@ type TranslationResources = {
     savedChangesInBranch: string
     savedChangesMessage: string
     applyChanges: string
+    abortOperation: string
+    abortOperationTitle: string
+    abortOperationMessage: string
+    branchActions: string
+    continueAnyway: string
+    continueDisabledReason: string
+    continueOperation: string
+    filesWithConflicts: string
+    mergeBadge: string
+    mergeBranchInto: string
+    mergeInProgress: string
+    operationUncommittedMessage: string
+    operationUncommittedTitle: string
+    rebaseBadge: string
+    rebaseCurrentOnto: string
+    rebaseInProgress: string
+    rebaseOperation: string
+    rebasePublishedMessage: string
+    rebasePublishedTitle: string
   }
   tile: {
     terminal: string
@@ -1553,6 +1572,25 @@ const en: TranslationResources = {
     savedChangesInBranch: 'Changes saved in this branch',
     savedChangesMessage: 'There are changes (stash) saved when leaving {{branch}}. Apply them now?',
     applyChanges: 'Apply',
+    abortOperation: 'Abort',
+    abortOperationTitle: 'Abort operation?',
+    abortOperationMessage: 'The changes from the in-progress operation will be discarded.',
+    branchActions: 'Branch actions',
+    continueAnyway: 'Continue anyway',
+    continueDisabledReason: 'Resolve conflicts before continuing.',
+    continueOperation: 'Continue',
+    filesWithConflicts: '{{count}} file(s) with conflicts',
+    mergeBadge: 'MERGE',
+    mergeBranchInto: "Merge {{branch}} into {{current}}",
+    mergeInProgress: 'Merge in progress',
+    operationUncommittedMessage: 'There are uncommitted changes. Git may reject the operation if it touches the same files.',
+    operationUncommittedTitle: 'Uncommitted changes',
+    rebaseBadge: 'REBASE',
+    rebaseCurrentOnto: "Rebase {{current}} onto {{branch}}",
+    rebaseInProgress: 'Rebase in progress',
+    rebaseOperation: 'Rebase',
+    rebasePublishedMessage: '{{current}} is already on {{upstream}}. The rebase rewrites its commits and the next push will require force.',
+    rebasePublishedTitle: 'Rebase a published branch',
   },
   tile: {
     terminal: 'Terminal',
@@ -2483,6 +2521,25 @@ const es: TranslationResources = {
     savedChangesInBranch: 'Cambios guardados en este branch',
     savedChangesMessage: 'Hay cambios guardados (stash) al salir de {{branch}}. ¿Aplicarlos ahora?',
     applyChanges: 'Aplicar',
+    abortOperation: 'Abortar',
+    abortOperationTitle: '¿Abortar la operación?',
+    abortOperationMessage: 'Se descartan los cambios de la operación en curso.',
+    branchActions: 'Acciones de rama',
+    continueAnyway: 'Continuar igual',
+    continueDisabledReason: 'Resuelve los conflictos antes de continuar.',
+    continueOperation: 'Continuar',
+    filesWithConflicts: '{{count}} archivo(s) con conflictos',
+    mergeBadge: 'MERGE',
+    mergeBranchInto: "Fusionar {{branch}} en {{current}}",
+    mergeInProgress: 'Merge en curso',
+    operationUncommittedMessage: 'Hay cambios sin commit. Git puede rechazar la operación si tocan los mismos archivos.',
+    operationUncommittedTitle: 'Cambios sin commit',
+    rebaseBadge: 'REBASE',
+    rebaseCurrentOnto: "Rebase {{current}} sobre {{branch}}",
+    rebaseInProgress: 'Rebase en curso',
+    rebaseOperation: 'Rebase',
+    rebasePublishedMessage: '{{current}} ya está en {{upstream}}. El rebase reescribe sus commits y el próximo push va a necesitar force.',
+    rebasePublishedTitle: 'Rebase de un branch publicado',
   },
   tile: {
     terminal: 'Terminal',

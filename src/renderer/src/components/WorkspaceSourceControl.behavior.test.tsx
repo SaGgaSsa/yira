@@ -388,3 +388,155 @@ test('expanding a commit loads files and opens commit diff on file click', async
   }
 })
 
+test('shows the merge operation banner with a disabled continue button and abort flow', async () => {
+  let statusCalls = 0
+  let abortCalls = 0
+  let confirmCalls = 0
+  const statusWithOperation: GitStatusResult = {
+    isRepository: true,
+    branch: 'main',
+    upstream: 'origin/main',
+    ahead: 0,
+    behind: 0,
+    staged: [],
+    unstaged: [{ path: 'README.md', status: 'modified' }],
+    operation: { kind: 'merge', conflicted: ['a.ts'] },
+  }
+  const bridge = {
+    git: {
+      discoverRepositories: async () => [{ relativePath: repositoryPath, name: 'workspace' }],
+      status: async () => {
+        statusCalls += 1
+        return statusWithOperation
+      },
+      history: async () => ({ outgoing: [], upstream: [], local: [] }),
+      stage: async () => undefined,
+      unstage: async () => undefined,
+      commit: async () => undefined,
+      sync: async () => undefined,
+      abortOperation: async () => {
+        abortCalls += 1
+      },
+    },
+    workspace: {
+      update: async () => null,
+    },
+    shell: {
+      openExternal: async () => undefined,
+    },
+  }
+  const previousElectron = (globalThis as AnyRecord).window.electron
+  ;(globalThis as AnyRecord).window.electron = bridge
+  const container = document.createElement('div') as any
+  currentContainer = container
+  const ReactDOM = await import('react-dom/client')
+  const root = ReactDOM.createRoot(container)
+  root.render(React.createElement(
+    I18nextProvider,
+    { i18n },
+    React.createElement(WorkspaceSourceControl, {
+      workspaceId,
+      tiles: [],
+      sourceControlRepositoryPaths: [repositoryPath],
+      sourceControlViewMode: 'list',
+      onWorkspaceUpdated: () => undefined,
+      onOpenWorkspaceSettings: () => undefined,
+      onOpenDiff: () => undefined,
+      requestConfirm: async () => {
+        confirmCalls += 1
+        return true
+      },
+    }),
+  ))
+
+  try {
+    await waitFor(() => statusCalls === 1 && serializedMarkup(container).includes('Merge in progress'))
+    assert.match(serializedMarkup(container), /a\.ts/)
+    const buttons = Array.from(container.getElementsByTagName('button')) as any[]
+    const continueButton = buttons.find((button) => (button.textContent ?? '').trim() === 'Continue')
+    const abortButton = buttons.find((button) => (button.textContent ?? '').trim() === 'Abort')
+    assert.ok(continueButton, 'expected a continue button')
+    assert.ok(abortButton, 'expected an abort button')
+    assert.ok(continueButton.getAttribute('disabled') !== null, 'continue must be disabled while conflicts remain')
+    abortButton.dispatchEvent(new TestEvent('click', { bubbles: true }))
+    await waitFor(() => abortCalls === 1)
+    assert.ok(confirmCalls >= 1, 'abort must request confirmation first')
+  } finally {
+    root.unmount()
+    currentContainer = null
+    ;(globalThis as AnyRecord).window.electron = previousElectron
+  }
+})
+
+test('continues an operation without conflicts', async () => {
+  let statusCalls = 0
+  let continueCalls = 0
+  const statusWithOperation: GitStatusResult = {
+    isRepository: true,
+    branch: 'main',
+    upstream: 'origin/main',
+    ahead: 0,
+    behind: 0,
+    staged: [],
+    unstaged: [],
+    operation: { kind: 'merge', conflicted: [] },
+  }
+  const bridge = {
+    git: {
+      discoverRepositories: async () => [{ relativePath: repositoryPath, name: 'workspace' }],
+      status: async () => {
+        statusCalls += 1
+        return statusWithOperation
+      },
+      history: async () => ({ outgoing: [], upstream: [], local: [] }),
+      stage: async () => undefined,
+      unstage: async () => undefined,
+      commit: async () => undefined,
+      sync: async () => undefined,
+      continueOperation: async () => {
+        continueCalls += 1
+      },
+    },
+    workspace: {
+      update: async () => null,
+    },
+    shell: {
+      openExternal: async () => undefined,
+    },
+  }
+  const previousElectron = (globalThis as AnyRecord).window.electron
+  ;(globalThis as AnyRecord).window.electron = bridge
+  const container = document.createElement('div') as any
+  currentContainer = container
+  const ReactDOM = await import('react-dom/client')
+  const root = ReactDOM.createRoot(container)
+  root.render(React.createElement(
+    I18nextProvider,
+    { i18n },
+    React.createElement(WorkspaceSourceControl, {
+      workspaceId,
+      tiles: [],
+      sourceControlRepositoryPaths: [repositoryPath],
+      sourceControlViewMode: 'list',
+      onWorkspaceUpdated: () => undefined,
+      onOpenWorkspaceSettings: () => undefined,
+      onOpenDiff: () => undefined,
+      requestConfirm: async () => false,
+    }),
+  ))
+
+  try {
+    await waitFor(() => statusCalls === 1 && serializedMarkup(container).includes('Merge in progress'))
+    const buttons = Array.from(container.getElementsByTagName('button')) as any[]
+    const continueButton = buttons.find((button) => (button.textContent ?? '').trim() === 'Continue')
+    assert.ok(continueButton, 'expected a continue button')
+    assert.ok(!continueButton.getAttribute('disabled'), 'continue must be enabled without conflicts')
+    continueButton.dispatchEvent(new TestEvent('click', { bubbles: true }))
+    await waitFor(() => continueCalls === 1)
+  } finally {
+    root.unmount()
+    currentContainer = null
+    ;(globalThis as AnyRecord).window.electron = previousElectron
+  }
+})
+

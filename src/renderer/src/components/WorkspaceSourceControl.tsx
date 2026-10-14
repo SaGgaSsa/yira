@@ -20,6 +20,14 @@ interface WorkspaceSourceControlProps {
   requestConfirm: (options: ConfirmDialogOptions) => Promise<boolean>
 }
 
+// Actions after which the commit history may have changed.
+const HISTORY_CHANGING_ACTIONS = new Set<RepositoryAction['type']>([
+  'commit', 'sync', 'checkout', 'createBranch', 'publish', 'merge', 'rebase', 'abortOperation', 'continueOperation',
+])
+
+// Actions that ask for confirmation first. A retry button would skip it.
+const CONFIRMED_ACTIONS = new Set<RepositoryAction['type']>(['discard', 'checkout', 'merge', 'rebase', 'abortOperation'])
+
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback
 }
@@ -251,9 +259,44 @@ export function WorkspaceSourceControl({
       if (!confirmed || workspaceRef.current !== requestWorkspaceId || pendingActionsRef.current.has(actionKey)) return
     }
 
+    const currentBranchName = statuses[repositoryPath]?.branch ?? null
+    if (repositoryAction.type === 'abortOperation') {
+      const confirmed = await requestConfirm({
+        title: t('sourceControl.abortOperationTitle'),
+        message: t('sourceControl.abortOperationMessage'),
+        confirmLabel: t('sourceControl.abortOperation'),
+        danger: true,
+      })
+      if (!confirmed || workspaceRef.current !== requestWorkspaceId || pendingActionsRef.current.has(actionKey)) return
+    }
+
+    if (repositoryAction.type === 'merge' || repositoryAction.type === 'rebase') {
+      const repositoryStatus = statuses[repositoryPath]
+      const hasChanges = Boolean(repositoryStatus?.staged.length || repositoryStatus?.unstaged.length)
+      if (hasChanges) {
+        const confirmed = await requestConfirm({
+          title: t('sourceControl.operationUncommittedTitle'),
+          message: t('sourceControl.operationUncommittedMessage'),
+          confirmLabel: t('sourceControl.continueAnyway'),
+        })
+        if (!confirmed || workspaceRef.current !== requestWorkspaceId || pendingActionsRef.current.has(actionKey)) return
+      }
+      if (repositoryAction.type === 'rebase' && repositoryStatus?.upstream) {
+        const confirmed = await requestConfirm({
+          title: t('sourceControl.rebasePublishedTitle'),
+          message: t('sourceControl.rebasePublishedMessage', {
+            current: repositoryStatus?.branch ?? currentBranchName ?? '',
+            upstream: repositoryStatus.upstream,
+          }),
+          confirmLabel: t('sourceControl.rebaseOperation'),
+          danger: true,
+        })
+        if (!confirmed || workspaceRef.current !== requestWorkspaceId || pendingActionsRef.current.has(actionKey)) return
+      }
+    }
+
     let stashBeforeCheckout = false
     let pushFailed = false
-    const currentBranchName = statuses[repositoryPath]?.branch ?? null
     if (repositoryAction.type === 'checkout' || repositoryAction.type === 'createBranch') {
       const agentCount = agentsInRepository(tiles, repositoryPath)
       if (agentCount > 0) {
@@ -337,6 +380,14 @@ export function WorkspaceSourceControl({
         await window.electron.git.createBranch(requestWorkspaceId, repositoryPath, repositoryAction.name, repositoryAction.startPoint)
       } else if (repositoryAction.type === 'publish') {
         await window.electron.git.publish(requestWorkspaceId, repositoryPath)
+      } else if (repositoryAction.type === 'merge') {
+        await window.electron.git.merge(requestWorkspaceId, repositoryPath, repositoryAction.branch)
+      } else if (repositoryAction.type === 'rebase') {
+        await window.electron.git.rebase(requestWorkspaceId, repositoryPath, repositoryAction.branch)
+      } else if (repositoryAction.type === 'abortOperation') {
+        await window.electron.git.abortOperation(requestWorkspaceId, repositoryPath)
+      } else if (repositoryAction.type === 'continueOperation') {
+        await window.electron.git.continueOperation(requestWorkspaceId, repositoryPath)
       } else {
         await window.electron.git[repositoryAction.type](requestWorkspaceId, repositoryPath)
       }
@@ -345,8 +396,7 @@ export function WorkspaceSourceControl({
       const repository = repositories.find((candidate) => candidate.relativePath === repositoryPath)
       if (repository) await refreshRepositoryStatus(repository)
 
-      if ((repositoryAction.type === 'commit' || repositoryAction.type === 'sync' || repositoryAction.type === 'checkout' || repositoryAction.type === 'createBranch' || repositoryAction.type === 'publish')
-        && historyLoadedPathsRef.current.has(repositoryPath)) {
+      if (HISTORY_CHANGING_ACTIONS.has(repositoryAction.type) && historyLoadedPathsRef.current.has(repositoryPath)) {
         historyLoadedPathsRef.current.delete(repositoryPath)
         setHistories((current) => ({ ...current, [repositoryPath]: undefined }))
         await loadRepositoryHistory(repositoryPath)
@@ -361,7 +411,7 @@ export function WorkspaceSourceControl({
       if (workspaceRef.current === requestWorkspaceId) {
         setActionErrors((current) => ({ ...current, [repositoryPath]: errorMessage(error, t('sourceControl.loadStatusError')) }))
         // A retry would skip the confirmation dialog, so confirmed actions are not retryable.
-        setRetryActions((current) => ({ ...current, [repositoryPath]: (repositoryAction.type === 'discard' || repositoryAction.type === 'checkout') ? undefined : repositoryAction }))
+        setRetryActions((current) => ({ ...current, [repositoryPath]: CONFIRMED_ACTIONS.has(repositoryAction.type) ? undefined : repositoryAction }))
       }
     } finally {
       pendingActionsRef.current.delete(actionKey)
@@ -400,7 +450,7 @@ export function WorkspaceSourceControl({
   }, [])
 
   const isRepositoryChanged = (repositoryStatus: GitStatusResult | undefined): boolean => Boolean(
-    repositoryStatus?.error || repositoryStatus?.staged.length || repositoryStatus?.unstaged.length,
+    repositoryStatus?.error || repositoryStatus?.staged.length || repositoryStatus?.unstaged.length || repositoryStatus?.operation,
   )
   const orderedRepositories = [...repositories].sort((left, right) => {
     const leftChanged = isRepositoryChanged(statuses[left.relativePath])
@@ -491,7 +541,7 @@ export function WorkspaceSourceControl({
           const repositoryPath = repository.relativePath
           const repositoryStatus = statuses[repositoryPath]
           const changeCount = (repositoryStatus?.staged.length ?? 0) + (repositoryStatus?.unstaged.length ?? 0)
-          const initialExpansion = Boolean(repositoryStatus?.error || changeCount > 0)
+          const initialExpansion = Boolean(repositoryStatus?.error || changeCount > 0 || repositoryStatus?.operation)
           const isExpanded = repositories.length === 1
             || (expandedRepositories[repositoryPath] ?? initialExpansion)
           const duplicateName = repositories.filter((candidate) => candidate.name === repository.name).length > 1
