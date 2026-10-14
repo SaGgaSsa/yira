@@ -1,8 +1,8 @@
 import { ipcMain } from 'electron'
-import type { GitBranchListResult, GitCommitHistoryResult, GitFileChange, GitFileDiffContent, GitRepository, GitStashEntry, GitStatusResult, WorkspaceGitDiffResult } from '@shared/types'
-import { getGitDiffSummary, getGitFileDiffContent } from '../git/diff'
+import type { GitBranchListResult, GitCommitFilesResult, GitCommitHistoryResult, GitFileChange, GitFileDiffContent, GitRepository, GitStashEntry, GitStatusResult, WorkspaceGitDiffResult } from '@shared/types'
+import { getGitCommitFileDiffContent, getGitDiffSummary, getGitFileDiffContent } from '../git/diff'
 import { discoverGitRepositories, resolveConfiguredGitRepository } from '../git/repositories'
-import { commitGitChanges, createGitBranch, checkoutGitBranch, discardGitChanges, type GitDiscardPaths, fetchGitRepository, findGitBranchStash, getGitCommitHistory, getGitStatus, listGitBranches, popGitStash, publishGitBranch, pullGitRepository, pushGitRepository, stageGitFiles, stashGitChangesForBranch, syncGitRepository, unstageGitFiles } from '../git/runner'
+import { abortGitOperation, commitGitChanges, continueGitOperation, createGitBranch, checkoutGitBranch, discardGitChanges, type GitDiscardPaths, fetchGitRepository, findGitBranchStash, getGitCommitFiles, getGitCommitHistory, getGitStatus, listGitBranches, mergeGitBranch, popGitStash, publishGitBranch, pullGitRepository, pushGitRepository, rebaseGitBranch, stageGitFiles, stashGitChangesForBranch, syncGitRepository, unstageGitFiles } from '../git/runner'
 import { getWorkspaceGitConfigById } from './workspace'
 
 interface WorkspaceGitConfig {
@@ -72,6 +72,12 @@ export interface GitIPCDependencies {
   findGitBranchStash?: typeof findGitBranchStash
   popGitStash?: typeof popGitStash
   publishGitBranch?: typeof publishGitBranch
+  getGitCommitFiles?: typeof getGitCommitFiles
+  getGitCommitFileDiffContent?: typeof getGitCommitFileDiffContent
+  mergeGitBranch?: typeof mergeGitBranch
+  rebaseGitBranch?: typeof rebaseGitBranch
+  abortGitOperation?: typeof abortGitOperation
+  continueGitOperation?: typeof continueGitOperation
 }
 
 type GitIPCHandler = (...args: any[]) => unknown
@@ -237,6 +243,43 @@ export function createGitIPCHandlers(dependencies: GitIPCDependencies): Record<s
     'git:publish': async (_event: unknown, workspaceId: string, repositoryPath: string): Promise<void> => {
       await (dependencies.publishGitBranch ?? publishGitBranch)(await resolveRepository(workspaceId, repositoryPath))
     },
+    'git:commitFiles': async (_event: unknown, workspaceId: string, repositoryPath: string, commit: unknown): Promise<GitCommitFilesResult> => {
+      if (typeof commit !== 'string') throw new Error('Commit reference must be a string')
+      try {
+        const result = await (dependencies.getGitCommitFiles ?? getGitCommitFiles)(await resolveRepository(workspaceId, repositoryPath), commit)
+        return result.error ? { ...result, error: safeGitError(result.error) } : result
+      } catch (error) {
+        return { files: [], error: safeGitError(error) }
+      }
+    },
+    'git:commitFileDiff': async (_event: unknown, workspaceId: string, repositoryPath: string, commit: unknown, relativePath: unknown, originalPath?: unknown): Promise<GitFileDiffContent> => {
+      if (typeof commit !== 'string') throw new Error('Commit reference must be a string')
+      if (typeof relativePath !== 'string') throw new Error('File path must be a string')
+      if (originalPath !== undefined && typeof originalPath !== 'string') throw new Error('Original path must be a string')
+      try {
+        return await (dependencies.getGitCommitFileDiffContent ?? getGitCommitFileDiffContent)(await resolveRepository(workspaceId, repositoryPath), {
+          commit,
+          path: relativePath,
+          ...(originalPath !== undefined ? { originalPath } : {}),
+        })
+      } catch (error) {
+        return { original: '', modified: '', error: safeGitError(error) }
+      }
+    },
+    'git:merge': async (_event: unknown, workspaceId: string, repositoryPath: string, name: unknown): Promise<void> => {
+      if (typeof name !== 'string') throw new Error('Branch name must be a string')
+      await (dependencies.mergeGitBranch ?? mergeGitBranch)(await resolveRepository(workspaceId, repositoryPath), name)
+    },
+    'git:rebase': async (_event: unknown, workspaceId: string, repositoryPath: string, name: unknown): Promise<void> => {
+      if (typeof name !== 'string') throw new Error('Branch name must be a string')
+      await (dependencies.rebaseGitBranch ?? rebaseGitBranch)(await resolveRepository(workspaceId, repositoryPath), name)
+    },
+    'git:abortOperation': async (_event: unknown, workspaceId: string, repositoryPath: string): Promise<void> => {
+      await (dependencies.abortGitOperation ?? abortGitOperation)(await resolveRepository(workspaceId, repositoryPath))
+    },
+    'git:continueOperation': async (_event: unknown, workspaceId: string, repositoryPath: string): Promise<void> => {
+      await (dependencies.continueGitOperation ?? continueGitOperation)(await resolveRepository(workspaceId, repositoryPath))
+    },
   }
 }
 
@@ -263,6 +306,12 @@ const defaultGitIPCDependencies: GitIPCDependencies = {
   findGitBranchStash,
   popGitStash,
   publishGitBranch,
+  getGitCommitFiles,
+  getGitCommitFileDiffContent,
+  mergeGitBranch,
+  rebaseGitBranch,
+  abortGitOperation,
+  continueGitOperation,
 }
 
 export function registerGitIPC(

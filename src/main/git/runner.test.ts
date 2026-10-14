@@ -31,6 +31,13 @@ import {
   popGitStash,
   publishGitBranch,
   parseGitCommitLog,
+  parseGitNameStatus,
+  getGitCommitFiles,
+  getGitOperationState,
+  mergeGitBranch,
+  rebaseGitBranch,
+  abortGitOperation,
+  continueGitOperation,
   type GitCommandExecutor,
 } from './runner'
 import { discoverGitRepositories, resolveConfiguredGitRepository } from './repositories'
@@ -699,3 +706,149 @@ test('publishes a branch to a configured bare origin and rejects missing origin'
   }
 })
 
+
+test('parses Git name-status entries including renamed files', () => {
+  const output = ['M', 'modified.ts', 'A', 'added.ts', 'D', 'deleted.ts', 'R100', 'old.ts', 'new.ts'].join('\0')
+  const changes = parseGitNameStatus(output)
+  assert.deepEqual(changes.map((change) => change.status), ['modified', 'added', 'deleted', 'renamed'])
+  assert.equal(changes[3].path, 'new.ts')
+  assert.equal(changes[3].originalPath, 'old.ts')
+})
+
+test('reads commit files including a rename', async () => {
+  const rootPath = await mkdtemp(join(tmpdir(), 'yira-git-commit-files-'))
+  const git = (...args: string[]) => execFileAsync('git', ['-C', rootPath, ...args])
+  try {
+    await git('init', '--quiet', '--initial-branch=main')
+    await git('config', 'user.email', 'test@example.com')
+    await git('config', 'user.name', 'Test')
+    await git('config', 'core.autocrlf', 'false')
+    await writeFile(join(rootPath, 'old.ts'), 'before\n')
+    await git('add', 'old.ts')
+    await git('commit', '--quiet', '-m', 'base')
+    await git('mv', 'old.ts', 'new.ts')
+    await git('commit', '--quiet', '-m', 'rename')
+    const commit = (await git('rev-parse', 'HEAD')).stdout.trim()
+    const result = await getGitCommitFiles(rootPath, commit)
+    assert.equal(result.files.length, 1)
+    assert.equal(result.files[0].status, 'renamed')
+    assert.equal(result.files[0].path, 'new.ts')
+    assert.equal(result.files[0].originalPath, 'old.ts')
+  } finally {
+    await rm(rootPath, { recursive: true, force: true })
+  }
+})
+
+test('merge conflict exposes operation state and can be aborted', async () => {
+  const rootPath = await mkdtemp(join(tmpdir(), 'yira-git-merge-conflict-'))
+  const git = (...args: string[]) => execFileAsync('git', ['-C', rootPath, ...args])
+  try {
+    await git('init', '--quiet', '--initial-branch=main')
+    await git('config', 'user.email', 'test@example.com')
+    await git('config', 'user.name', 'Test')
+    await git('config', 'core.autocrlf', 'false')
+    await writeFile(join(rootPath, 'f.txt'), 'base\n')
+    await git('add', 'f.txt')
+    await git('commit', '--quiet', '-m', 'base')
+    await git('branch', 'feature')
+    await writeFile(join(rootPath, 'f.txt'), 'main\n')
+    await git('add', 'f.txt')
+    await git('commit', '--quiet', '-m', 'main')
+    await git('checkout', 'feature')
+    await writeFile(join(rootPath, 'f.txt'), 'feature\n')
+    await git('add', 'f.txt')
+    await git('commit', '--quiet', '-m', 'feature')
+    await git('checkout', 'main')
+
+    await assert.rejects(mergeGitBranch(rootPath, 'feature'), /./)
+    const conflictedStatus = await getGitStatus(rootPath)
+    assert.deepEqual(conflictedStatus.operation, { kind: 'merge', conflicted: ['f.txt'] })
+    await assert.rejects(continueGitOperation(rootPath), /Resolve conflicts before continuing/)
+    await abortGitOperation(rootPath)
+    const abortedStatus = await getGitStatus(rootPath)
+    assert.equal(abortedStatus.operation, undefined)
+  } finally {
+    await rm(rootPath, { recursive: true, force: true })
+  }
+})
+
+test('merge conflict can be resolved and continued into a commit', async () => {
+  const rootPath = await mkdtemp(join(tmpdir(), 'yira-git-merge-continue-'))
+  const git = (...args: string[]) => execFileAsync('git', ['-C', rootPath, ...args])
+  try {
+    await git('init', '--quiet', '--initial-branch=main')
+    await git('config', 'user.email', 'test@example.com')
+    await git('config', 'user.name', 'Test')
+    await git('config', 'core.autocrlf', 'false')
+    await writeFile(join(rootPath, 'f.txt'), 'base\n')
+    await git('add', 'f.txt')
+    await git('commit', '--quiet', '-m', 'base')
+    await git('branch', 'feature')
+    await writeFile(join(rootPath, 'f.txt'), 'main\n')
+    await git('add', 'f.txt')
+    await git('commit', '--quiet', '-m', 'main')
+    await git('checkout', 'feature')
+    await writeFile(join(rootPath, 'f.txt'), 'feature\n')
+    await git('add', 'f.txt')
+    await git('commit', '--quiet', '-m', 'feature')
+    await git('checkout', 'main')
+
+    await assert.rejects(mergeGitBranch(rootPath, 'feature'), /./)
+    await writeFile(join(rootPath, 'f.txt'), 'resolved\n')
+    await git('add', 'f.txt')
+    await continueGitOperation(rootPath)
+    const status = await getGitStatus(rootPath)
+    assert.equal(status.operation, undefined)
+  } finally {
+    await rm(rootPath, { recursive: true, force: true })
+  }
+})
+
+test('rebase conflict exposes operation state and can be aborted', async () => {
+  const rootPath = await mkdtemp(join(tmpdir(), 'yira-git-rebase-conflict-'))
+  const git = (...args: string[]) => execFileAsync('git', ['-C', rootPath, ...args])
+  try {
+    await git('init', '--quiet', '--initial-branch=main')
+    await git('config', 'user.email', 'test@example.com')
+    await git('config', 'user.name', 'Test')
+    await git('config', 'core.autocrlf', 'false')
+    await writeFile(join(rootPath, 'f.txt'), 'base\n')
+    await git('add', 'f.txt')
+    await git('commit', '--quiet', '-m', 'base')
+    await git('branch', 'feature')
+    await writeFile(join(rootPath, 'f.txt'), 'main\n')
+    await git('add', 'f.txt')
+    await git('commit', '--quiet', '-m', 'main')
+    await git('checkout', 'feature')
+    await writeFile(join(rootPath, 'f.txt'), 'feature\n')
+    await git('add', 'f.txt')
+    await git('commit', '--quiet', '-m', 'feature')
+
+    await assert.rejects(rebaseGitBranch(rootPath, 'main'), /./)
+    const status = await getGitStatus(rootPath)
+    assert.equal(status.operation?.kind, 'rebase')
+    assert.deepEqual(status.operation?.conflicted, ['f.txt'])
+    await abortGitOperation(rootPath)
+    const abortedStatus = await getGitStatus(rootPath)
+    assert.equal(abortedStatus.operation, undefined)
+  } finally {
+    await rm(rootPath, { recursive: true, force: true })
+  }
+})
+
+test('merge rejects a branch that does not exist', async () => {
+  const rootPath = await mkdtemp(join(tmpdir(), 'yira-git-merge-missing-'))
+  const git = (...args: string[]) => execFileAsync('git', ['-C', rootPath, ...args])
+  try {
+    await git('init', '--quiet', '--initial-branch=main')
+    await git('config', 'user.email', 'test@example.com')
+    await git('config', 'user.name', 'Test')
+    await git('config', 'core.autocrlf', 'false')
+    await writeFile(join(rootPath, 'f.txt'), 'base\n')
+    await git('add', 'f.txt')
+    await git('commit', '--quiet', '-m', 'base')
+    await assert.rejects(mergeGitBranch(rootPath, 'does-not-exist'), /Branch does not exist/)
+  } finally {
+    await rm(rootPath, { recursive: true, force: true })
+  }
+})

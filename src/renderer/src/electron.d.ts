@@ -47,6 +47,7 @@ import type {
   FloatingNavigationEvent,
   FloatingNavigationRequest,
   GitBranchListResult,
+  GitCommitFilesResult,
   GitCommitHistoryResult,
   GitFileChange,
   GitFileDiffContent,
@@ -200,6 +201,12 @@ interface ElectronWorld {
     branchStash: (workspaceId: string, repositoryPath: string, branch: string) => Promise<GitStashEntry | null>
     popStash: (workspaceId: string, repositoryPath: string, ref: string) => Promise<void>
     publish: (workspaceId: string, repositoryPath: string) => Promise<void>
+    commitFiles: (workspaceId: string, repositoryPath: string, commit: string) => Promise<GitCommitFilesResult>
+    commitFileDiff: (workspaceId: string, repositoryPath: string, commit: string, relativePath: string, originalPath?: string) => Promise<GitFileDiffContent>
+    merge: (workspaceId: string, repositoryPath: string, name: string) => Promise<void>
+    rebase: (workspaceId: string, repositoryPath: string, name: string) => Promise<void>
+    abortOperation: (workspaceId: string, repositoryPath: string) => Promise<void>
+    continueOperation: (workspaceId: string, repositoryPath: string) => Promise<void>
   }
   canvas: {
     load: (workspaceId: string, workspaceType?: string) => Promise<unknown | null>

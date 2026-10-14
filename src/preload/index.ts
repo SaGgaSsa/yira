@@ -33,6 +33,7 @@ import type {
   FloatingNavigationEvent,
   FloatingNavigationRequest,
   GitBranchListResult,
+  GitCommitFilesResult,
   GitCommitHistoryResult,
   GitFileChange,
   GitFileDiffContent,
@@ -245,6 +246,12 @@ contextBridge.exposeInMainWorld('electron', {
     branchStash: (workspaceId: string, repositoryPath: string, branch: string) => ipcRenderer.invoke('git:branchStash', workspaceId, repositoryPath, branch) as Promise<GitStashEntry | null>,
     popStash: (workspaceId: string, repositoryPath: string, ref: string) => ipcRenderer.invoke('git:popStash', workspaceId, repositoryPath, ref),
     publish: (workspaceId: string, repositoryPath: string) => ipcRenderer.invoke('git:publish', workspaceId, repositoryPath),
+    commitFiles: (workspaceId: string, repositoryPath: string, commit: string) => ipcRenderer.invoke('git:commitFiles', workspaceId, repositoryPath, commit) as Promise<GitCommitFilesResult>,
+    commitFileDiff: (workspaceId: string, repositoryPath: string, commit: string, relativePath: string, originalPath?: string) => ipcRenderer.invoke('git:commitFileDiff', workspaceId, repositoryPath, commit, relativePath, originalPath) as Promise<GitFileDiffContent>,
+    merge: (workspaceId: string, repositoryPath: string, name: string) => ipcRenderer.invoke('git:merge', workspaceId, repositoryPath, name),
+    rebase: (workspaceId: string, repositoryPath: string, name: string) => ipcRenderer.invoke('git:rebase', workspaceId, repositoryPath, name),
+    abortOperation: (workspaceId: string, repositoryPath: string) => ipcRenderer.invoke('git:abortOperation', workspaceId, repositoryPath),
+    continueOperation: (workspaceId: string, repositoryPath: string) => ipcRenderer.invoke('git:continueOperation', workspaceId, repositoryPath),
   },
 
   // Canvas persistence

@@ -507,6 +507,19 @@ export interface GitFileDiffContent {
   error?: string
 }
 
+export type GitOperationKind = 'merge' | 'rebase'
+
+export interface GitOperationState {
+  kind: GitOperationKind
+  /** Repository-relative paths with unresolved conflicts. */
+  conflicted: string[]
+}
+
+export interface GitCommitFilesResult {
+  files: GitFileChange[]
+  error?: string
+}
+
 export interface GitStatusResult {
   isRepository: boolean
   branch: string | null
@@ -516,6 +529,7 @@ export interface GitStatusResult {
   originUrl?: string
   staged: GitFileChange[]
   unstaged: GitFileChange[]
+  operation?: GitOperationState
   error?: string
 }
 
@@ -973,7 +987,7 @@ export function normalizeFileMarkdownViewMode(value: unknown): MarkdownViewMode 
 export interface FileTileOpenOptions {
   markdownView?: MarkdownViewMode
   reveal?: { line: number; column?: number; endLine?: number }
-  diff?: { repositoryPath: string; path: string; originalPath?: string; staged: boolean }
+  diff?: { repositoryPath: string; path: string; originalPath?: string; staged: boolean; commit?: string }
 }
 
 export const NOTE_COLORS: Record<NoteColor, { bg: string; text: string; accent: string }> = {
@@ -1102,7 +1116,7 @@ export interface TileState {
 
   // Files-specific
   filePath?: string
-  fileDiff?: { repositoryPath: string; path: string; originalPath?: string; staged: boolean }
+  fileDiff?: { repositoryPath: string; path: string; originalPath?: string; staged: boolean; commit?: string }
   filePreview?: boolean
   fileDraft?: string
   /** SHA-256 revision expected by a subsequent write. */
