@@ -107,19 +107,24 @@ function createDelayedTerminalFactory(): {
     Terminal: new (options: Record<string, unknown>) => DelayedTerminal
   }
   const callbacks: Array<() => void> = []
+  let released = false
   return {
     factory: (options) => {
       const terminal = new Terminal({ ...options, allowProposedApi: true })
       const originalWrite = terminal.write.bind(terminal)
       terminal.write = (data, callback) => {
         originalWrite(data, () => {
-          if (callback) callbacks.push(callback)
+          if (!callback) return
+          if (released) callback()
+          else callbacks.push(callback)
         })
       }
       return terminal
     },
     pendingWrites: () => callbacks.length,
+    // After release, later writes complete normally so the daemon can drain and close.
     release: () => {
+      released = true
       for (const callback of callbacks.splice(0)) callback()
     },
   }
@@ -1037,3 +1042,155 @@ function postAlert(url: string, token: string, body: unknown): Promise<number> {
     req.end(payload)
   })
 }
+
+test('setOutputPaused pauses and resumes the fake PTY', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'yira-daemon-'))
+  const ptyFactory = new FakePtyFactory()
+  const handle = await startTerminalDaemon({ directory, ptyFactory, token: 'output-pause-token', idleMs: 5_000 })
+  t.after(() => handle.close())
+  const client = await connectClient(handle.endpoint.port)
+  const created = snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    1,
+    'create',
+    spawnParams({ workspaceId: 'w', tileId: 'output-pause' }),
+  ))
+  const pty = ptyFactory.instances[0]
+
+  const pauseBefore = pty.paused
+  const pauseResponse = await request(client.socket, client.messages, handle.endpoint.token, 2, 'setOutputPaused', {
+    identity: created.identity,
+    paused: true,
+  })
+  assert.equal(pauseResponse.error, undefined)
+  assert.equal(pty.paused, pauseBefore + 1)
+
+  const resumeResponse = await request(client.socket, client.messages, handle.endpoint.token, 3, 'setOutputPaused', {
+    identity: created.identity,
+    paused: false,
+  })
+  assert.equal(resumeResponse.error, undefined)
+  assert.equal(pty.resumed >= 1, true)
+  client.socket.destroy()
+})
+
+test('unsubscribing resumes a client-requested output pause', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'yira-daemon-'))
+  const ptyFactory = new FakePtyFactory()
+  const handle = await startTerminalDaemon({ directory, ptyFactory, token: 'unsubscribe-pause-token', idleMs: 5_000 })
+  t.after(() => handle.close())
+  const client = await connectClient(handle.endpoint.port)
+  const created = snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    1,
+    'create',
+    spawnParams({ workspaceId: 'w', tileId: 'unsubscribe-pause' }),
+  ))
+  const pty = ptyFactory.instances[0]
+
+  const pauseResponse = await request(client.socket, client.messages, handle.endpoint.token, 2, 'setOutputPaused', {
+    identity: created.identity,
+    paused: true,
+  })
+  assert.equal(pauseResponse.error, undefined)
+  assert.equal(pty.paused >= 1, true)
+  const resumedBefore = pty.resumed
+
+  client.socket.destroy()
+  await wait(40)
+  assert.equal(pty.resumed > resumedBefore, true)
+  void handle
+})
+
+test('does not resume output while parser flow control is still paused', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'yira-daemon-'))
+  const ptyFactory = new FakePtyFactory()
+  const delayedTerminal = createDelayedTerminalFactory()
+  const handle = await startTerminalDaemon({
+    directory,
+    ptyFactory,
+    terminalFactory: delayedTerminal.factory,
+    token: 'parser-pause-token',
+    idleMs: 5_000,
+  })
+  t.after(() => {
+    delayedTerminal.release()
+    void handle.close()
+  })
+  const client = await connectClient(handle.endpoint.port)
+  const created = snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    1,
+    'create',
+    spawnParams({ workspaceId: 'w', tileId: 'parser-pause' }),
+  ))
+  const pty = ptyFactory.instances[0]
+
+  // The PTY pause happens synchronously during receiveData. Keep the headless
+  // writes blocked so the queue cannot drain and change that state.
+  pty.emitData('x'.repeat(9 * 1024 * 1024))
+  assert.equal(pty.paused >= 1, true)
+  const pausedCount = pty.paused
+  const resumedCount = pty.resumed
+
+  const pauseResponse = await request(client.socket, client.messages, handle.endpoint.token, 2, 'setOutputPaused', {
+    identity: created.identity,
+    paused: true,
+  })
+  assert.equal(pauseResponse.error, undefined)
+  assert.equal(pty.paused, pausedCount)
+
+  client.socket.destroy()
+  await wait(30)
+  assert.equal(pty.resumed, resumedCount)
+  delayedTerminal.release()
+})
+
+test('coalesces many small PTY chunks into fewer larger data events', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'yira-daemon-'))
+  const ptyFactory = new FakePtyFactory()
+  const handle = await startTerminalDaemon({ directory, ptyFactory, token: 'coalescing-token', idleMs: 5_000 })
+  t.after(() => handle.close())
+  const client = await connectClient(handle.endpoint.port)
+  const created = snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    1,
+    'create',
+    spawnParams({ workspaceId: 'w', tileId: 'coalescing' }),
+  ))
+  const pty = ptyFactory.instances[0]
+
+  for (let index = 0; index < 500; index += 1) {
+    pty.emitData('x'.repeat(200))
+  }
+
+  const snapshot = snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    2,
+    'snapshot',
+    created.identity,
+  ))
+  assert.match(snapshot.buffer, /x/)
+
+  const dataMessages = client.messages.filter(message => message.event === 'data')
+  assert.equal(dataMessages.length < 500, true)
+  assert.equal(dataMessages.map(message => String(message.data ?? '')).join(''), 'x'.repeat(500 * 200))
+
+  let previousSequence = 0
+  for (const message of dataMessages) {
+    assert.equal(typeof message.sequence, 'number')
+    assert.equal((message.sequence as number) > previousSequence, true)
+    previousSequence = message.sequence as number
+  }
+  client.socket.destroy()
+})

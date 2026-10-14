@@ -8,6 +8,7 @@ import type {
 } from '@shared/types'
 import type { TerminalSessionIdentity, TerminalSessionTarget } from '@shared/terminalSessionIdentity'
 import {
+  ACK_CHUNK_CHARS,
   createTerminalRuntime,
   type FitAddonLike,
   type ResizeObserverLike,
@@ -328,6 +329,7 @@ interface BridgeHarness {
   readonly destroy: (identity: TerminalSessionIdentity) => Promise<void>
   readonly detach: (identity: TerminalSessionIdentity) => Promise<void>
   readonly acknowledgeAgentAlert: (identity: TerminalSessionIdentity) => Promise<void>
+  readonly ackData: (identity: TerminalSessionIdentity, charCount: number) => void
   readonly onData: (identity: TerminalSessionIdentity, callback: (data: string) => void) => () => void
   readonly onExit: (identity: TerminalSessionIdentity, callback: (event: TerminalExitEvent) => void) => () => void
   readonly onAgentAlert: (tileId: string, callback: (state: unknown) => void) => () => void
@@ -340,6 +342,7 @@ interface BridgeHarness {
   readonly destroyCalls: TerminalSessionIdentity[]
   readonly detachCalls: TerminalSessionIdentity[]
   readonly acknowledgeCalls: TerminalSessionIdentity[]
+  readonly ackDataCalls: Array<{ identity: TerminalSessionIdentity; charCount: number }>
 }
 
 interface RuntimeHarness {
@@ -423,6 +426,7 @@ function createRuntimeHarness(overrides: {
   const destroyCalls: TerminalSessionIdentity[] = []
   const detachCalls: TerminalSessionIdentity[] = []
   const acknowledgeCalls: TerminalSessionIdentity[] = []
+  const ackDataCalls: Array<{ identity: TerminalSessionIdentity; charCount: number }> = []
 
   const bridge: BridgeHarness = {
     create: async (createdTarget, _options) => {
@@ -450,6 +454,9 @@ function createRuntimeHarness(overrides: {
     },
     acknowledgeAgentAlert: async (acknowledgeIdentity) => {
       acknowledgeCalls.push(acknowledgeIdentity)
+    },
+    ackData: (ackIdentity, charCount) => {
+      ackDataCalls.push({ identity: ackIdentity, charCount })
     },
     onData: (listenerIdentity, callback) => {
       events.push('bridge:onData')
@@ -486,6 +493,7 @@ function createRuntimeHarness(overrides: {
     destroyCalls,
     detachCalls,
     acknowledgeCalls,
+    ackDataCalls,
   }
 
   const terminalCreations: Array<{ cols: number; rows: number }> = []
@@ -788,7 +796,7 @@ test('keeps one xterm instance and one replay while parked output continues', as
 
   assert.equal(harness.terminals.length, 1)
   assert.deepEqual(harness.terminals[0].writes, ['initial', 'background'])
-  assert.equal(harness.terminals[0].pendingReplayCallbacks.length, 0)
+  assert.equal(harness.terminals[0].pendingReplayCallbacks.length, 1)
   assert.equal(harness.parkingRoot.children.length, 0)
   assert.equal((secondHost as unknown as FakeElement).children[0], harness.terminals[0].openedIn)
   await runtime.dispose(false)
@@ -1960,5 +1968,50 @@ test('onOutput filters input echo and resize redraws inside the grace window', a
   currentTime += 300
   harness.bridge.emitData('real-output')
   assert.equal(outputEvents().length, 2)
+  await runtime.dispose(false)
+})
+
+test('live processed output sends ackData only after ACK_CHUNK_CHARS characters', async () => {
+  const harness = createRuntimeHarness()
+  const runtime = await createReadyRuntime(harness)
+  const chunk = 'x'.repeat(1024)
+  const ackThresholdWrites = ACK_CHUNK_CHARS / 1024
+
+  for (let writeIndex = 0; writeIndex < ackThresholdWrites - 1; writeIndex += 1) {
+    harness.bridge.emitData(chunk)
+    harness.terminals[0].completeReplay()
+    assert.equal(harness.bridge.ackDataCalls.length, 0)
+  }
+
+  harness.bridge.emitData(chunk)
+  harness.terminals[0].completeReplay()
+
+  assert.equal(harness.bridge.ackDataCalls.length, 1)
+  assert.equal(harness.bridge.ackDataCalls[0].charCount, ACK_CHUNK_CHARS)
+  assert.deepEqual(harness.bridge.ackDataCalls[0].identity, harness.identity)
+  await runtime.dispose(false)
+})
+
+test('output processed after dispose does not send ackData', async () => {
+  const harness = createRuntimeHarness()
+  const runtime = await createReadyRuntime(harness)
+
+  harness.bridge.emitData('x'.repeat(ACK_CHUNK_CHARS))
+  await runtime.dispose(false)
+  // xterm finishes parsing the chunk only after the runtime was disposed.
+  harness.terminals[0].completeReplay()
+
+  assert.equal(harness.bridge.ackDataCalls.length, 0)
+})
+
+test('initial replay buffer does not generate ackData', async () => {
+  const harness = createRuntimeHarness({
+    attachResult: { buffer: 'x'.repeat(ACK_CHUNK_CHARS) },
+  })
+  const runtime = await createTerminalRuntime(harness.options)
+  harness.completeReplay()
+
+  assert.equal(harness.bridge.ackDataCalls.length, 0)
+  assert.deepEqual(harness.terminals[0].writes, ['x'.repeat(ACK_CHUNK_CHARS)])
   await runtime.dispose(false)
 })

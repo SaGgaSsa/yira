@@ -204,6 +204,7 @@ interface ElectronWorld {
     create: (target: TerminalSessionTarget, options: TerminalCreateOptions) => Promise<TerminalCreateResult>
     attach: (identity: TerminalSessionIdentity) => Promise<TerminalCreateResult>
     write: (identity: TerminalSessionIdentity, data: string) => Promise<void>
+    ackData: (identity: TerminalSessionIdentity, charCount: number) => void
     resize: (identity: TerminalSessionIdentity, cols: number, rows: number) => Promise<void>
     destroy: (identity: TerminalSessionIdentity) => Promise<void>
     destroyCurrent: (target: TerminalSessionTarget) => Promise<void>

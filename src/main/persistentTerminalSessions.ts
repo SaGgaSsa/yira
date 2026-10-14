@@ -20,6 +20,10 @@ import { AgentTerminalTitleTracker } from './agents/terminalTitle'
 import { classifyAgentInput } from './agents/terminal'
 import type { TerminalProcessRoot } from './terminalProcessActivity'
 
+const DATA_BATCH_THRESHOLD_CHARS = 256 * 1024
+const FLOW_CONTROL_HIGH_WATERMARK_CHARS = 2_000_000
+const FLOW_CONTROL_LOW_WATERMARK_CHARS = 500_000
+
 /** The small transport surface used by the integration and by its tests. */
 export interface PersistentTerminalTransport {
   request<M extends keyof TerminalDaemonMethods>(
@@ -48,6 +52,8 @@ export interface PersistentTerminalSessionsOptions {
   /** Minimum time between agent title updates; tests shorten it. */
   agentTitleIntervalMs?: number
   onDisconnect?: (error: Error) => void
+  /** Milliseconds to coalesce terminal data sends per renderer (0 disables batching). */
+  dataBatchIntervalMs?: number
 }
 
 interface SessionRecord {
@@ -62,6 +68,10 @@ interface SessionRecord {
   stateEvents: TerminalDaemonEvent[]
   exited: boolean
   exitNotified: boolean
+  pendingData: Map<PersistentTerminalSubscriber, string>
+  dataFlushTimers: Map<PersistentTerminalSubscriber, ReturnType<typeof setTimeout>>
+  rendererUnackedChars: Map<PersistentTerminalSubscriber, number>
+  flowControlPaused: boolean
 }
 
 interface EventCapture {
@@ -135,6 +145,10 @@ export class PersistentTerminalSessions {
 
   private readonly registry: AgentSessionRegistry
 
+  private readonly dataBatchIntervalMs: number
+
+  private supportsOutputPause = true
+
   private readonly onAgentAlert?: PersistentTerminalSessionsOptions['onAgentAlert']
 
   private readonly onAgentExit?: PersistentTerminalSessionsOptions['onAgentExit']
@@ -188,6 +202,7 @@ export class PersistentTerminalSessions {
     this.onAgentExit = options.onAgentExit
     this.onAgentDestroyed = options.onAgentDestroyed
     this.onDisconnect = options.onDisconnect
+    this.dataBatchIntervalMs = options.dataBatchIntervalMs ?? 16
     this.agentTitles = new AgentTerminalTitleTracker({
       publish: (workspaceId, tileId, title) => { this.registry.updateLiveTitle(workspaceId, tileId, title) },
       ...(options.agentTitleIntervalMs !== undefined ? { intervalMs: options.agentTitleIntervalMs } : {}),
@@ -369,7 +384,8 @@ export class PersistentTerminalSessions {
       this.sendAlert(sender, snapshot.identity, snapshot.alert ?? null)
       for (const event of capture.events) {
         if (event.sequence > snapshot.sequence && isEventForIdentity(event, snapshot.identity)) {
-          this.sendEvent(sender, event)
+          if (event.event === 'data') this.queueRendererData(current, sender, event.data)
+          else this.sendEvent(sender, event, current)
         }
       }
       return cloneSnapshot(snapshot)
@@ -521,6 +537,10 @@ export class PersistentTerminalSessions {
       stateEvents: [],
       exited: false,
       exitNotified: false,
+      pendingData: new Map(),
+      dataFlushTimers: new Map(),
+      rendererUnackedChars: new Map(),
+      flowControlPaused: false,
     }
     this.sessions.set(key, record)
     return record
@@ -637,7 +657,10 @@ export class PersistentTerminalSessions {
     }
 
     if (event.event !== 'agent-state') {
-      for (const renderer of [...record.renderers]) this.sendEvent(renderer, event)
+      for (const renderer of [...record.renderers]) {
+        if (event.event === 'data') this.queueRendererData(record, renderer, event.data)
+        else this.sendEvent(renderer, event, record)
+      }
     }
   }
 
@@ -678,6 +701,7 @@ export class PersistentTerminalSessions {
     if (sender.isDestroyed()) return false
     if (record.renderers.has(sender)) return true
     record.renderers.add(sender)
+    record.rendererUnackedChars.set(sender, record.rendererUnackedChars.get(sender) ?? 0)
     const onDestroyed = (): void => { void this.rendererDetach(record.identity, sender) }
     if (sender.once) {
       try {
@@ -685,6 +709,7 @@ export class PersistentTerminalSessions {
         record.rendererCleanup.set(sender, onDestroyed)
       } catch {
         record.renderers.delete(sender)
+        record.rendererUnackedChars.delete(sender)
         return false
       }
     }
@@ -693,11 +718,15 @@ export class PersistentTerminalSessions {
 
   private removeRenderer(record: SessionRecord, sender: PersistentTerminalSubscriber): void {
     if (!record.renderers.delete(sender)) return
+    this.cancelDataFlushTimer(record, sender)
+    record.pendingData.delete(sender)
     const cleanup = record.rendererCleanup.get(sender)
     record.rendererCleanup.delete(sender)
     if (cleanup && sender.removeListener) {
       try { sender.removeListener('destroyed', cleanup) } catch { /* teardown is best effort */ }
     }
+    record.rendererUnackedChars.delete(sender)
+    this.evaluateFlowControl(record)
   }
 
   private removeAllRecordRenderers(record: SessionRecord): void {
@@ -728,12 +757,13 @@ export class PersistentTerminalSessions {
     this.destroyedGenerations.set(target, Math.max(current, identity.generation))
   }
 
-  private sendEvent(sender: PersistentTerminalSubscriber, event: TerminalDaemonEvent): void {
+  private sendEvent(sender: PersistentTerminalSubscriber, event: TerminalDaemonEvent, record?: SessionRecord): void {
     try {
       if (sender.isDestroyed()) return
       if (event.event === 'data') {
         sender.send(terminalSessionDataChannel(event.identity), event.data)
       } else if (event.event === 'exit') {
+        if (record) this.flushRendererData(record, sender)
         sender.send(terminalSessionExitChannel(event.identity), event.exitEvent)
       } else if (event.event === 'alert') {
         this.sendAlert(sender, event.identity, event.alert)
@@ -743,6 +773,77 @@ export class PersistentTerminalSessions {
     }
   }
 
+  private queueRendererData(record: SessionRecord, sender: PersistentTerminalSubscriber, data: string): void {
+    if (!data || sender.isDestroyed()) return
+    const combined = (record.pendingData.get(sender) ?? '') + data
+    if (this.dataBatchIntervalMs <= 0 || combined.length >= DATA_BATCH_THRESHOLD_CHARS) {
+      record.pendingData.delete(sender)
+      this.cancelDataFlushTimer(record, sender)
+      this.sendBatchedData(record, sender, combined)
+      return
+    }
+    record.pendingData.set(sender, combined)
+    if (record.dataFlushTimers.has(sender)) return
+    const timer = setTimeout(() => {
+      this.flushRendererData(record, sender)
+    }, this.dataBatchIntervalMs)
+    record.dataFlushTimers.set(sender, timer)
+  }
+
+  private flushRendererData(record: SessionRecord, sender: PersistentTerminalSubscriber): void {
+    const pending = record.pendingData.get(sender)
+    record.pendingData.delete(sender)
+    this.cancelDataFlushTimer(record, sender)
+    if (pending) this.sendBatchedData(record, sender, pending)
+  }
+
+  private sendBatchedData(record: SessionRecord, sender: PersistentTerminalSubscriber, data: string): void {
+    if (!data || sender.isDestroyed()) return
+    try {
+      sender.send(terminalSessionDataChannel(record.identity), data)
+      const previous = record.rendererUnackedChars.get(sender) ?? 0
+      record.rendererUnackedChars.set(sender, previous + data.length)
+      this.evaluateFlowControl(record)
+    } catch {
+      // Renderer teardown is handled by its destroyed event.
+    }
+  }
+
+  private cancelDataFlushTimer(record: SessionRecord, sender: PersistentTerminalSubscriber): void {
+    const timer = record.dataFlushTimers.get(sender)
+    if (!timer) return
+    clearTimeout(timer)
+    record.dataFlushTimers.delete(sender)
+  }
+
+  private evaluateFlowControl(record: SessionRecord): void {
+    if (this.shuttingDown) return
+    const client = this.client
+    if (!client || !this.supportsOutputPause) return
+    const counts = [...record.rendererUnackedChars.values()]
+    const shouldPause = counts.some(value => value > FLOW_CONTROL_HIGH_WATERMARK_CHARS)
+    const canResume = record.rendererUnackedChars.size === 0
+      || counts.every(value => value <= FLOW_CONTROL_LOW_WATERMARK_CHARS)
+    if (shouldPause && !record.flowControlPaused) {
+      record.flowControlPaused = true
+      void client.request('setOutputPaused', { identity: cloneIdentity(record.identity), paused: true })
+        .catch(() => { this.supportsOutputPause = false })
+    } else if (record.flowControlPaused && canResume) {
+      record.flowControlPaused = false
+      void client.request('setOutputPaused', { identity: cloneIdentity(record.identity), paused: false })
+        .catch(() => { this.supportsOutputPause = false })
+    }
+  }
+
+  acknowledgeData(identity: TerminalSessionIdentity, sender: PersistentTerminalSubscriber, charCount: number): void {
+    const record = this.sessions.get(identityKey(identity))
+    if (!record) return
+    if (!record.rendererUnackedChars.has(sender)) return
+    const current = record.rendererUnackedChars.get(sender) ?? 0
+    record.rendererUnackedChars.set(sender, Math.max(0, current - charCount))
+    this.evaluateFlowControl(record)
+  }
+
   private sendAlert(
     sender: PersistentTerminalSubscriber,
     identity: TerminalSessionIdentity,
@@ -750,6 +851,8 @@ export class PersistentTerminalSessions {
   ): void {
     try {
       if (sender.isDestroyed()) return
+      const record = this.sessions.get(identityKey(identity))
+      if (record) this.flushRendererData(record, sender)
       sender.send(`terminal:agentAlert:${identity.tileId}`, alert ? alertState(alert) : null)
     } catch {
       // Renderer teardown is handled by its destroyed event.
@@ -827,6 +930,9 @@ export class PersistentTerminalSessions {
 
   private installClient(client: PersistentTerminalTransport): void {
     this.client = client
+    // A new daemon connection starts with no pause requests from this process.
+    this.supportsOutputPause = true
+    for (const record of this.sessions.values()) record.flowControlPaused = false
     this.clientEventCleanup = client.onEvent((event) => this.handleEvent(event))
     this.clientDisconnectCleanup = client.onDisconnect((error) => {
       if (this.client !== client) return

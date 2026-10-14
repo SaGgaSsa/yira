@@ -70,6 +70,7 @@ export interface TerminalDaemonMethods {
   rendererDetach: { params: TerminalSessionIdentity; result: null }
   write: { params: { identity: TerminalSessionIdentity; data: string }; result: null }
   resize: { params: { identity: TerminalSessionIdentity; cols: number; rows: number }; result: null }
+  setOutputPaused: { params: { identity: TerminalSessionIdentity; paused: boolean }; result: null }
   acknowledge: { params: TerminalSessionIdentity; result: null }
   destroy: { params: TerminalSessionIdentity; result: null }
   destroyCurrent: { params: TerminalSessionTarget; result: null }

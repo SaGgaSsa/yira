@@ -547,3 +547,160 @@ test('reads the agent title from the restored screen and from later output', asy
   assert.equal(registry.get(identity.workspaceId, identity.tileId)?.liveTitle, '⠂ Review the plan')
   await sessions.shutdown()
 })
+
+test('coalesces data chunks within the batch interval into one send', async () => {
+  const transport = new FakeTransport()
+  transport.setHandler('attach', () => snapshot())
+  transport.setHandler('rendererAttach', () => snapshot())
+  const sessions = createSessions(transport, { dataBatchIntervalMs: 30 })
+  await sessions.attach(target)
+  const sender = new FakeSender()
+  await sessions.rendererAttach(identity, sender)
+
+  transport.emitEvent({ event: 'data', identity: { ...identity }, sequence: 2, data: 'abc' })
+  transport.emitEvent({ event: 'data', identity: { ...identity }, sequence: 3, data: 'def' })
+
+  const before = sender.messages.filter(message => message.channel.includes('terminal:data:'))
+  assert.equal(before.length, 0)
+
+  await new Promise<void>(resolve => setTimeout(resolve, 60))
+  const after = sender.messages.filter(message => message.channel.includes('terminal:data:'))
+  assert.equal(after.length, 1)
+  assert.equal(after[0].payload, 'abcdef')
+})
+
+test('flushes pending batched data before an exit event', async () => {
+  const transport = new FakeTransport()
+  transport.setHandler('attach', () => snapshot())
+  transport.setHandler('rendererAttach', () => snapshot())
+  const sessions = createSessions(transport, { dataBatchIntervalMs: 100 })
+  await sessions.attach(target)
+  const sender = new FakeSender()
+  await sessions.rendererAttach(identity, sender)
+
+  transport.emitEvent({ event: 'data', identity: { ...identity }, sequence: 2, data: 'left' })
+  transport.emitEvent({ event: 'data', identity: { ...identity }, sequence: 3, data: 'over' })
+  transport.emitEvent({ event: 'exit', identity: { ...identity }, sequence: 4, exitEvent: { exitCode: 0 } })
+
+  const dataMessages = sender.messages.filter(message => message.channel.includes('terminal:data:'))
+  const exitMessage = sender.messages.find(message => message.channel.includes('terminal:exit:'))
+  assert.equal(dataMessages.length, 1)
+  assert.equal(dataMessages[0].payload, 'leftover')
+  assert.ok(exitMessage)
+})
+
+test('flushes pending batched data before an alert event', async () => {
+  const transport = new FakeTransport()
+  transport.setHandler('attach', () => snapshot())
+  transport.setHandler('rendererAttach', () => snapshot())
+  const sessions = createSessions(transport, { dataBatchIntervalMs: 100 })
+  await sessions.attach(target)
+  const sender = new FakeSender()
+  await sessions.rendererAttach(identity, sender)
+
+  transport.emitEvent({ event: 'data', identity: { ...identity }, sequence: 2, data: 'left' })
+  transport.emitEvent({ event: 'data', identity: { ...identity }, sequence: 3, data: 'over' })
+  transport.emitEvent({ event: 'alert', identity: { ...identity }, sequence: 4, alert: { provider: 'codex', event: 'permission', tileId: identity.tileId } })
+
+  const dataMessages = sender.messages.filter(message => message.channel.includes('terminal:data:'))
+  assert.equal(dataMessages.length, 1)
+  assert.equal(dataMessages[0].payload, 'leftover')
+})
+
+test('removeRenderer discards pending batched data', async () => {
+  const transport = new FakeTransport()
+  transport.setHandler('attach', () => snapshot())
+  transport.setHandler('rendererAttach', () => snapshot())
+  const sessions = createSessions(transport, { dataBatchIntervalMs: 100 })
+  await sessions.attach(target)
+  const sender = new FakeSender()
+  await sessions.rendererAttach(identity, sender)
+
+  transport.emitEvent({ event: 'data', identity: { ...identity }, sequence: 2, data: 'pending' })
+  await sessions.rendererDetach(identity, sender)
+
+  await new Promise<void>(resolve => setTimeout(resolve, 130))
+  const dataMessages = sender.messages.filter(message => message.channel.includes('terminal:data:'))
+  assert.equal(dataMessages.length, 0)
+  await sessions.shutdown()
+})
+
+test('flow control requests pause once above the high watermark', async () => {
+  const transport = new FakeTransport()
+  transport.setHandler('attach', () => snapshot())
+  transport.setHandler('rendererAttach', () => snapshot())
+  transport.setHandler('setOutputPaused', () => null)
+  const sessions = createSessions(transport, { dataBatchIntervalMs: 0 })
+  await sessions.attach(target)
+  const sender = new FakeSender()
+  await sessions.rendererAttach(identity, sender)
+
+  const huge = 'x'.repeat(2_100_000)
+  transport.emitEvent({ event: 'data', identity: { ...identity }, sequence: 2, data: huge })
+
+  const pauseRequests = transport.requests.filter(request => request.method === 'setOutputPaused')
+  assert.equal(pauseRequests.length, 1)
+  assert.equal((pauseRequests[0].params as { paused: boolean }).paused, true)
+})
+
+test('flow control resumes when unacked characters drop below the low watermark', async () => {
+  const transport = new FakeTransport()
+  transport.setHandler('attach', () => snapshot())
+  transport.setHandler('rendererAttach', () => snapshot())
+  transport.setHandler('setOutputPaused', () => null)
+  const sessions = createSessions(transport, { dataBatchIntervalMs: 0 })
+  await sessions.attach(target)
+  const sender = new FakeSender()
+  await sessions.rendererAttach(identity, sender)
+
+  const huge = 'x'.repeat(2_100_000)
+  transport.emitEvent({ event: 'data', identity: { ...identity }, sequence: 2, data: huge })
+  sessions.acknowledgeData(identity, sender, 2_100_000)
+
+  const pauseRequests = transport.requests.filter(request => request.method === 'setOutputPaused')
+  assert.equal(pauseRequests.length, 2)
+  assert.equal((pauseRequests[0].params as { paused: boolean }).paused, true)
+  assert.equal((pauseRequests[1].params as { paused: boolean }).paused, false)
+})
+
+test('removing a renderer resumes flow control', async () => {
+  const transport = new FakeTransport()
+  transport.setHandler('attach', () => snapshot())
+  transport.setHandler('rendererAttach', () => snapshot())
+  transport.setHandler('setOutputPaused', () => null)
+  const sessions = createSessions(transport, { dataBatchIntervalMs: 0 })
+  await sessions.attach(target)
+  const sender = new FakeSender()
+  await sessions.rendererAttach(identity, sender)
+
+  const huge = 'x'.repeat(2_100_000)
+  transport.emitEvent({ event: 'data', identity: { ...identity }, sequence: 2, data: huge })
+  const pauseCountBefore = transport.requests.filter(request => request.method === 'setOutputPaused').length
+  assert.equal(pauseCountBefore, 1)
+
+  await sessions.rendererDetach(identity, sender)
+  const requests = transport.requests.filter(request => request.method === 'setOutputPaused')
+  assert.equal(requests.length, 2)
+  assert.equal((requests[1].params as { paused: boolean }).paused, false)
+})
+
+test('a failed setOutputPaused request is not retried and does not throw', async () => {
+  const transport = new FakeTransport()
+  transport.setHandler('attach', () => snapshot())
+  transport.setHandler('rendererAttach', () => snapshot())
+  transport.setHandler('setOutputPaused', () => Promise.reject(new Error('unsupported')))
+  const sessions = createSessions(transport, { dataBatchIntervalMs: 0 })
+  await sessions.attach(target)
+  const sender = new FakeSender()
+  await sessions.rendererAttach(identity, sender)
+
+  const huge = 'x'.repeat(2_100_000)
+  transport.emitEvent({ event: 'data', identity: { ...identity }, sequence: 2, data: huge })
+  await Promise.resolve()
+  sessions.acknowledgeData(identity, sender, 2_100_000)
+
+  const requests = transport.requests.filter(request => request.method === 'setOutputPaused')
+  assert.equal(requests.length, 1)
+  assert.equal((requests[0].params as { paused: boolean }).paused, true)
+  await sessions.shutdown()
+})

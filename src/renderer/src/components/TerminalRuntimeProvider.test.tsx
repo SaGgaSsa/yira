@@ -271,6 +271,7 @@ function createTerminalBridge() {
     detach: async () => {},
     destroy: async () => {},
     acknowledgeAgentAlert: async () => {},
+    ackData: () => {},
     onData: (_identity: TerminalSessionIdentity, _callback: (data: string) => void) => () => {},
     onExit: (_identity: TerminalSessionIdentity, _callback: (event: AnyRecord) => void) => () => {},
     onAgentAlert: (_tileId: string, _callback: () => void) => () => {},
@@ -512,6 +513,7 @@ test('hidden activity increments only the target workspace without mutating the 
     detach: async () => {},
     destroy: async () => {},
     acknowledgeAgentAlert: async () => {},
+    ackData: () => {},
     onData: (_sessionIdentity: TerminalSessionIdentity, callback: (data: string) => void) => {
       onData = callback
       return () => { onData = undefined }
@@ -564,6 +566,7 @@ function createOutputCapturingBridge(): { bridge: AnyRecord; emitOutput: (data: 
     detach: async () => {},
     destroy: async () => {},
     acknowledgeAgentAlert: async () => {},
+    ackData: () => {},
     onData: (_sessionIdentity: TerminalSessionIdentity, callback: (data: string) => void) => {
       onDataCallback = callback
       return () => {

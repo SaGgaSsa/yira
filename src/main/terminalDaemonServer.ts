@@ -156,6 +156,7 @@ const METHODS: readonly (keyof TerminalDaemonMethods)[] = [
   'rendererDetach',
   'write',
   'resize',
+  'setOutputPaused',
   'acknowledge',
   'destroy',
   'destroyCurrent',
@@ -601,6 +602,12 @@ class DaemonSession {
 
   private outputPaused = false
 
+  /** True while the PTY is currently paused, by parser or client request. */
+  private ptyPaused = false
+
+  /** Clients that asked this daemon to pause terminal output. */
+  private readonly outputPauseClients = new Set<DaemonClient>()
+
   private dataSubscription: unknown
 
   private exitSubscription: unknown
@@ -704,7 +711,28 @@ class DaemonSession {
   unsubscribe(client: DaemonClient): void {
     this.subscribers.delete(client)
     this.rendererClients.delete(client)
+    this.outputPauseClients.delete(client)
     client.subscriptions.delete(this)
+    this.syncPtyFlowControl()
+  }
+
+  setOutputPaused(client: DaemonClient, paused: boolean): void {
+    if (paused) this.outputPauseClients.add(client)
+    else this.outputPauseClients.delete(client)
+    this.syncPtyFlowControl()
+  }
+
+  /** Pauses the PTY while the parser or any client is behind. */
+  private syncPtyFlowControl(): void {
+    const shouldPause = this.outputPaused || this.outputPauseClients.size > 0
+    if (shouldPause === this.ptyPaused) return
+    this.ptyPaused = shouldPause
+    try {
+      if (shouldPause) this.pty.pause?.()
+      else this.pty.resume?.()
+    } catch {
+      // PTY flow control is optional.
+    }
   }
 
   async flush(): Promise<void> {
@@ -742,7 +770,7 @@ class DaemonSession {
       this.receivedOutputCount += 1
       if (this.outputQueueBytes >= MAX_PENDING_PARSE_BYTES && !this.outputPaused) {
         this.outputPaused = true
-        try { this.pty.pause?.() } catch { /* PTY flow control is optional. */ }
+        this.syncPtyFlowControl()
       }
     }
     this.startOutputDrain()
@@ -841,10 +869,9 @@ class DaemonSession {
     this.terminalDataSubscription = undefined
     this.outputQueue = []
     this.outputQueueBytes = 0
-    if (this.outputPaused) {
-      this.outputPaused = false
-      try { this.pty.resume?.() } catch { /* optional PTY flow control. */ }
-    }
+    this.outputPaused = false
+    this.outputPauseClients.clear()
+    this.syncPtyFlowControl()
     for (const client of [...this.subscribers]) this.unsubscribe(client)
     try { this.serializer.dispose() } catch { /* addon cleanup is best effort. */ }
     try { this.terminal.dispose() } catch { /* terminal cleanup is best effort. */ }
@@ -873,24 +900,41 @@ class DaemonSession {
     if (this.outputDrainPromise || this.disposed) return
     this.outputDrainPromise = (async () => {
       while (!this.disposed && this.outputQueue.length > 0) {
-        const data = this.outputQueue.shift()!
-        this.outputQueueBytes -= byteLength(data)
+        const { data, count } = this.takeQueuedOutput()
         await this.enqueue(async () => {
           if (this.disposed) return
           await this.writeHeadless(data)
           this.publishData(data)
         }).catch(() => undefined)
-        this.processedOutputCount += 1
+        this.processedOutputCount += count
         this.resolveOutputWaiters()
         if (this.outputPaused && this.outputQueueBytes <= RESUME_PARSE_BYTES) {
           this.outputPaused = false
-          try { this.pty.resume?.() } catch { /* optional PTY flow control. */ }
+          this.syncPtyFlowControl()
         }
       }
     })().catch(() => undefined).finally(() => {
       this.outputDrainPromise = undefined
       if (!this.disposed && this.outputQueue.length > 0) this.startOutputDrain()
     })
+  }
+
+  /**
+   * ConPTY delivers output in chunks of a few hundred bytes, and each headless
+   * write waits at least one timer turn. Merging the queued chunks keeps a
+   * burst from draining at a few hundred KB per second.
+   */
+  private takeQueuedOutput(): { data: string; count: number } {
+    const parts: string[] = []
+    let bytes = 0
+    while (this.outputQueue.length > 0) {
+      const partBytes = byteLength(this.outputQueue[0])
+      if (parts.length > 0 && bytes + partBytes > MAX_DATA_EVENT_BYTES) break
+      parts.push(this.outputQueue.shift()!)
+      bytes += partBytes
+    }
+    this.outputQueueBytes -= bytes
+    return { data: parts.join(''), count: parts.length }
   }
 
   private writeHeadless(data: string): Promise<void> {
@@ -1294,6 +1338,14 @@ export class TerminalDaemonServer {
         const rows = normalizePositiveDimension(params.rows, 'rows')
         const session = this.findRequiredSession(identity)
         await session.resize(cols, rows)
+        return null
+      }
+      case 'setOutputPaused': {
+        if (!isRecord(params)) throw new Error('Invalid terminal output pause parameters')
+        const identity = normalizeIdentity(params.identity)
+        if (typeof params.paused !== 'boolean') throw new Error('Invalid terminal output pause state')
+        const session = this.findRequiredSession(identity)
+        session.setOutputPaused(client, params.paused)
         return null
       }
       case 'acknowledge': {
