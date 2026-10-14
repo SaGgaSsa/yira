@@ -498,7 +498,6 @@ function AppContent(): React.ReactElement {
   const [narrowOverride, setNarrowOverride] = useState({ sidebar: false, workspacePanel: false })
   const [activityOpen, setActivityOpen] = useState(false)
   const [homeOpen, setHomeOpen] = useState(true)
-  const [activeSectionExpanded, setActiveSectionExpanded] = useState(true)
   const [expandedActiveWorkspaceIds, setExpandedActiveWorkspaceIds] = useState<Set<string>>(new Set())
   const [agentsMaximizedSessionId, setAgentsMaximizedSessionId] = useState<string | null>(null)
   // Focus view and a maximized agent session also hide the workspace panel without changing its saved state.
@@ -2547,7 +2546,7 @@ function AppContent(): React.ReactElement {
       {/* Sidebar — below the native title bar */}
       <Sidebar
         collapsed={sidebarHidden}
-        footer={
+        footer={activeWorkspaceId && !homeOpen ? (
           <div ref={footerRef} className="relative border-t border-border bg-bg-secondary px-3 py-3">
             {showProfilePicker && (
               <div className="absolute bottom-full left-4 z-9999 mb-3 w-[260px]">
@@ -2620,11 +2619,9 @@ function AppContent(): React.ReactElement {
               </div>
             )}
 
-            {activeWorkspaceId && !homeOpen && (
-              <TileCreationSelector {...tileCreationSelectorProps} />
-            )}
+            <TileCreationSelector {...tileCreationSelectorProps} />
           </div>
-        }
+        ) : undefined}
       >
         <div className="flex h-full flex-col bg-bg-secondary">
           <div className="flex min-h-0 flex-1 flex-col px-3 py-4">
@@ -2671,8 +2668,6 @@ function AppContent(): React.ReactElement {
                 <WorkspaceSidebarSection
                   title={t('sidebar.activeSection')}
                   count={activeSidebarWorkspaces.length}
-                  expanded={activeSectionExpanded}
-                  onToggle={() => setActiveSectionExpanded((expanded) => !expanded)}
                   className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto"
                 >
                   {activeSidebarWorkspaces.length === 0 ? (
