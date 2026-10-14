@@ -52,11 +52,11 @@ export function WorkspaceListItem({
 
   return (
     <div
-      className={`group relative flex h-7 items-center rounded-md ${active ? 'bg-bg-tertiary' : 'hover:bg-hover-bg'} ${className}`.trim()}
+      className={`group relative flex h-7 items-center ${active ? 'bg-bg-tertiary' : 'hover:bg-hover-bg'} ${className}`.trim()}
     >
-      {leading && <div className="flex shrink-0 items-center pl-0.5">{leading}</div>}
+      {leading && <div className="flex shrink-0 items-center pl-3">{leading}</div>}
       <button
-        className={`flex h-full min-w-0 flex-1 items-center pr-2 text-left ${leading ? 'pl-0.5' : 'pl-2'} focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--interactive)`}
+        className={`flex h-full min-w-0 flex-1 items-center pr-2 text-left ${leading ? 'pl-0.5' : 'pl-5'} focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--interactive)`}
         onClick={onClick}
         title={workspace.name}
         type="button"
@@ -66,7 +66,7 @@ export function WorkspaceListItem({
         </span>
       </button>
 
-      <div className="flex shrink-0 items-center gap-1.5 pr-1">
+      <div className="flex shrink-0 items-center gap-1.5 pr-3">
         {trailing}
         {hasWorkspaceGitDiff && (
           <WorkspaceGitDiff
