@@ -1,5 +1,4 @@
 import type { AgentActiveSession, WorkspaceMetadata } from '@shared/types'
-import { getWorkspaceSidebarOrder } from './workspaceOrdering'
 
 const AGENT_STATUS_ORDER: Record<AgentActiveSession['status'], number> = {
   'needs-input': 0,
@@ -30,14 +29,18 @@ export function getActiveSidebarWorkspaces(
   return activeWorkspaces
 }
 
-/** Inactive workspaces use the shared sidebar's most-recently-used ordering. */
-export function getInactiveSidebarWorkspaces(
+/** Keep workspaces whose name or root folder contains every word of the query, ignoring case. */
+export function filterWorkspacesByQuery(
   workspaces: readonly WorkspaceMetadata[],
-  sessionActiveIds: ReadonlySet<string>,
+  query: string,
 ): WorkspaceMetadata[] {
-  return getWorkspaceSidebarOrder(
-    workspaces.filter((workspace) => !sessionActiveIds.has(workspace.id)),
-  )
+  const terms = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean)
+  if (terms.length === 0) return [...workspaces]
+
+  return workspaces.filter((workspace) => {
+    const haystack = `${workspace.name} ${workspace.config.rootFolderPath ?? ''}`.toLocaleLowerCase()
+    return terms.every((term) => haystack.includes(term))
+  })
 }
 
 /** Open agent sessions in a workspace, with attention and completed sessions first. */

@@ -50,7 +50,6 @@ type TranslationResources = {
     open: string
     home: string
     activeSection: string
-    inactiveSection: string
     noActiveWorkspaces: string
   }
   workspaceHome: {
@@ -58,6 +57,9 @@ type TranslationResources = {
     subtitle: string
     newProject: string
     newProjectDescription: string
+    searchPlaceholder: string
+    noResults: string
+    active: string
     lastUsedMinute_one: string
     lastUsedMinute_other: string
     lastUsedHour_one: string
@@ -953,7 +955,6 @@ const en: TranslationResources = {
     open: 'Open sidebar',
     home: 'Home',
     activeSection: 'Active',
-    inactiveSection: 'Inactive',
     noActiveWorkspaces: 'No active workspaces',
   },
   workspaceHome: {
@@ -961,6 +962,9 @@ const en: TranslationResources = {
     subtitle: 'Pick up where you left off, or start a new workspace.',
     newProject: 'New project',
     newProjectDescription: 'Set up a workspace for a new project.',
+    searchPlaceholder: 'Search workspaces',
+    noResults: 'No workspaces match your search.',
+    active: 'Active',
     lastUsedMinute_one: '{{count}} minute ago',
     lastUsedMinute_other: '{{count}} minutes ago',
     lastUsedHour_one: '{{count}} hour ago',
@@ -1856,7 +1860,6 @@ const es: TranslationResources = {
     open: 'Abrir barra lateral',
     home: 'Inicio',
     activeSection: 'Activos',
-    inactiveSection: 'Inactivos',
     noActiveWorkspaces: 'Ningún workspace activo',
   },
   workspaceHome: {
@@ -1864,6 +1867,9 @@ const es: TranslationResources = {
     subtitle: 'Retoma un espacio de trabajo o crea uno nuevo.',
     newProject: 'Nuevo proyecto',
     newProjectDescription: 'Configura un espacio de trabajo para empezar.',
+    searchPlaceholder: 'Buscar workspaces',
+    noResults: 'Ningún workspace coincide con la búsqueda.',
+    active: 'Activo',
     lastUsedMinute_one: 'hace {{count}} minuto',
     lastUsedMinute_other: 'hace {{count}} minutos',
     lastUsedHour_one: 'hace {{count}} hora',
