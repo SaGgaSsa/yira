@@ -49,7 +49,6 @@ type TranslationResources = {
     collapse: string
     open: string
     home: string
-    activeSection: string
     noActiveWorkspaces: string
   }
   workspaceHome: {
@@ -954,7 +953,6 @@ const en: TranslationResources = {
     collapse: 'Collapse sidebar',
     open: 'Open sidebar',
     home: 'Home',
-    activeSection: 'Active',
     noActiveWorkspaces: 'No active workspaces',
   },
   workspaceHome: {
@@ -1859,7 +1857,6 @@ const es: TranslationResources = {
     collapse: 'Contraer barra lateral',
     open: 'Abrir barra lateral',
     home: 'Inicio',
-    activeSection: 'Activos',
     noActiveWorkspaces: 'Ningún workspace activo',
   },
   workspaceHome: {
