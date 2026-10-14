@@ -19,7 +19,6 @@ import { AppDialog, type ConfirmDialogOptions, type PromptDialogOptions } from '
 import { WorkspaceDialog, type WorkspaceDialogRequest, type WorkspaceDialogValue } from './components/WorkspaceDialog'
 import { WorkspaceManagementDialog } from './components/WorkspaceManagementDialog'
 import { ActiveWorkspaceEntry } from './components/ActiveWorkspaceEntry'
-import { InactiveWorkspaceRow } from './components/InactiveWorkspaceRow'
 import { WorkspaceSidebarSection } from './components/WorkspaceSidebarSection'
 import { WorkspaceHome } from './components/WorkspaceHome'
 import { WorkspaceActivityView } from './components/WorkspaceActivityView'
@@ -98,7 +97,6 @@ import { mergeWorkspaceSelectionResult } from './utils/workspaceSelectionActions
 import { getWorkspaceSidebarOrder } from './utils/workspaceOrdering'
 import {
   getActiveSidebarWorkspaces,
-  getInactiveSidebarWorkspaces,
 } from './utils/workspaceSidebarSections'
 import { getInitialWorkspaceDialogCopy, getWorkspaceDialogCopy } from './utils/workspaceDialogCopy'
 import { buildTileConfigurationMenuItems } from './components/tileConfigurationMenu'
@@ -501,7 +499,6 @@ function AppContent(): React.ReactElement {
   const [activityOpen, setActivityOpen] = useState(false)
   const [homeOpen, setHomeOpen] = useState(true)
   const [activeSectionExpanded, setActiveSectionExpanded] = useState(true)
-  const [inactiveSectionExpanded, setInactiveSectionExpanded] = useState(true)
   const [expandedActiveWorkspaceIds, setExpandedActiveWorkspaceIds] = useState<Set<string>>(new Set())
   const [agentsMaximizedSessionId, setAgentsMaximizedSessionId] = useState<string | null>(null)
   // Focus view and a maximized agent session also hide the workspace panel without changing its saved state.
@@ -1152,10 +1149,6 @@ function AppContent(): React.ReactElement {
     () => getActiveSidebarWorkspaces(workspaceMetadata, sessionActiveWorkspaceIds),
     [sessionActiveWorkspaceIds, workspaceMetadata],
   )
-  const inactiveSidebarWorkspaces = useMemo(
-    () => getInactiveSidebarWorkspaces(workspaceMetadata, sessionActiveWorkspaceIds),
-    [sessionActiveWorkspaceIds, workspaceMetadata],
-  )
   const toggleActiveWorkspaceExpanded = useCallback((workspaceId: string) => {
     setExpandedActiveWorkspaceIds((current) => {
       const next = new Set(current)
@@ -1164,17 +1157,6 @@ function AppContent(): React.ReactElement {
       return next
     })
   }, [])
-  const previousActiveWorkspaceCountRef = useRef(activeSidebarWorkspaces.length)
-  useEffect(() => {
-    const hadActiveWorkspace = previousActiveWorkspaceCountRef.current > 0
-    const hasActiveWorkspace = activeSidebarWorkspaces.length > 0
-    if (!hasActiveWorkspace) {
-      setInactiveSectionExpanded(true)
-    } else if (!hadActiveWorkspace) {
-      setInactiveSectionExpanded(false)
-    }
-    previousActiveWorkspaceCountRef.current = activeSidebarWorkspaces.length
-  }, [activeSidebarWorkspaces.length])
 
   const agentSessionWorkspaces = useMemo(
     () => sidebarWorkspaces.filter((workspace) => (
@@ -2150,11 +2132,6 @@ function AppContent(): React.ReactElement {
     switchWorkspace(workspace)
   }, [agentsView.close, agentsView.closeSessionDialog, switchWorkspace])
 
-  const selectInactiveWorkspace = useCallback((workspace: WorkspaceMetadata) => {
-    setInactiveSectionExpanded(false)
-    selectWorkspaceFromHome(workspace)
-  }, [selectWorkspaceFromHome])
-
   const createTerminalFromSidebar = useCallback(() => {
     if (availableProfiles.length <= 1 && defaultProfile && !remoteTerminalConfigured) {
       revealCreatedTile(addTerminal(defaultProfile.id))
@@ -2736,26 +2713,6 @@ function AppContent(): React.ReactElement {
                     </div>
                   )}
                 </WorkspaceSidebarSection>
-                <WorkspaceSidebarSection
-                  title={t('sidebar.inactiveSection')}
-                  count={inactiveSidebarWorkspaces.length}
-                  expanded={inactiveSectionExpanded}
-                  onToggle={() => setInactiveSectionExpanded((expanded) => !expanded)}
-                  className="shrink-0"
-                >
-                  {inactiveSidebarWorkspaces.length > 0 && (
-                    <div className="max-h-[40vh] overflow-y-auto pr-1">
-                      {inactiveSidebarWorkspaces.map((workspace) => (
-                        <InactiveWorkspaceRow
-                          key={workspace.id}
-                          workspace={workspace}
-                          now={workspaceHomeNow}
-                          onSelect={selectInactiveWorkspace}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </WorkspaceSidebarSection>
               </div>
             )}
           </div>
@@ -2941,7 +2898,8 @@ function AppContent(): React.ReactElement {
           )}
           {mainView === 'home' && (
             <WorkspaceHome
-              workspaces={inactiveSidebarWorkspaces}
+              workspaces={sidebarWorkspaces}
+              activeWorkspaceIds={sessionActiveWorkspaceIds}
               now={workspaceHomeNow}
               onSelectWorkspace={selectWorkspaceFromHome}
               onCreateWorkspace={openCreateWorkspaceDialog}

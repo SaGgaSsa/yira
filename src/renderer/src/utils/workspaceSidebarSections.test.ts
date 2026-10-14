@@ -2,8 +2,8 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { AgentActiveSession, WorkspaceMetadata } from '@shared/types'
 import {
+  filterWorkspacesByQuery,
   getActiveSidebarWorkspaces,
-  getInactiveSidebarWorkspaces,
   getWorkspaceAgentEntries,
   getWorkspaceLastUsedParts,
   summarizeWorkspaceAgents,
@@ -47,13 +47,14 @@ test('keeps active workspaces in set order and ignores unknown ids', () => {
   )
 })
 
-test('sorts inactive workspaces by last use after removing active workspaces', () => {
-  const workspaces = [workspace('first', 100), workspace('no-date'), workspace('recent', 300), workspace('tie', 100)]
+test('filters workspaces by every query word in the name or root folder', () => {
+  const api = { ...workspace('Api Server'), config: { ...workspace('x').config, rootFolderPath: 'C:/code/backend' } }
+  const workspaces = [workspace('Yira Desktop'), api, workspace('Docs')]
 
-  assert.deepEqual(
-    getInactiveSidebarWorkspaces(workspaces, new Set(['first'])).map(({ id }) => id),
-    ['recent', 'tie', 'no-date'],
-  )
+  assert.deepEqual(filterWorkspacesByQuery(workspaces, '  ').map(({ id }) => id), ['Yira Desktop', 'Api Server', 'Docs'])
+  assert.deepEqual(filterWorkspacesByQuery(workspaces, 'desk YIRA').map(({ id }) => id), ['Yira Desktop'])
+  assert.deepEqual(filterWorkspacesByQuery(workspaces, 'backend').map(({ id }) => id), ['Api Server'])
+  assert.deepEqual(filterWorkspacesByQuery(workspaces, 'missing'), [])
 })
 
 test('orders open sessions by waiting, done, working, then start time and tile id', () => {
