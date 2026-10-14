@@ -459,7 +459,7 @@ export function AgentSessionDialog({
               )}
               <textarea
                 ref={promptRef}
-                className="min-h-36 w-full flex-1 resize-none rounded-xl border border-border-visible bg-bg-primary px-4 py-3 text-sm leading-6 text-text-primary outline-hidden focus:border-text-secondary"
+                className="min-h-36 w-full flex-1 resize-none rounded-xl border border-border-visible bg-bg-primary px-4 py-3 text-base leading-6 text-text-primary outline-hidden focus:border-text-secondary"
                 value={prompt}
                 onChange={(event) => setPrompt(event.target.value)}
                 onPaste={handlePromptPaste}
