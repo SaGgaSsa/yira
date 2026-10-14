@@ -774,4 +774,15 @@ export function registerTerminalIPC(getWindow: () => BrowserWindow | null): void
       toPersistentSubscriber(event.sender),
     )
   })
+
+  ipcMain.on('terminal:ackData', (event, identity: TerminalSessionIdentity, charCount: unknown) => {
+    if (typeof charCount !== 'number' || !Number.isFinite(charCount) || charCount <= 0) return
+    let runtimeIdentity: TerminalSessionIdentity
+    try {
+      runtimeIdentity = normalizeTerminalSessionIdentity(identity)
+    } catch {
+      return
+    }
+    persistentTerminalSessions.acknowledgeData(runtimeIdentity, toPersistentSubscriber(event.sender), charCount)
+  })
 }

@@ -147,6 +147,9 @@ export interface TerminalRuntime extends TerminalRuntimeHandle {
 
 type DisposableLike = { dispose: () => void } | (() => void) | void
 
+/** Number of processed output chars before renderer confirms progress to main. */
+export const ACK_CHUNK_CHARS = 32 * 1024
+
 /** Grace window after user input or resize where PTY echo/redraws do not count as recent output. */
 export const OUTPUT_ACTIVITY_INPUT_GRACE_MS = 300
 
@@ -362,11 +365,31 @@ function createRuntime(
     }
   }
 
+  let pendingAckChars = 0
+
   const processOutput = (identity: TerminalSessionIdentity, data: string): void => {
-    if (!isCurrentIdentity(identity)) return
+    if (!isCurrentIdentity(identity)) {
+      pendingAckChars = 0
+      return
+    }
 
     try {
-      terminal.write(data)
+      terminal.write(data, () => {
+        if (disposed || !isCurrentIdentity(identity)) {
+          pendingAckChars = 0
+          return
+        }
+        pendingAckChars += data.length
+        if (pendingAckChars < ACK_CHUNK_CHARS) return
+
+        const acknowledgedChars = pendingAckChars
+        pendingAckChars = 0
+        try {
+          dependencies.bridge.ackData(identity, acknowledgedChars)
+        } catch (error) {
+          report(dependencies, target, 'ackData', error)
+        }
+      })
     } catch (error) {
       handleError('write', error)
       return
@@ -948,6 +971,7 @@ function createRuntime(
     const identity = currentIdentity
     disposed = true
     currentIdentity = null
+    pendingAckChars = 0
     currentHost = null
     currentViewOptions = { ...currentViewOptions, visible: false, autoFocus: false }
     fontWaitGeneration += 1

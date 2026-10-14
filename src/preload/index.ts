@@ -274,6 +274,9 @@ contextBridge.exposeInMainWorld('electron', {
     closeWorkspace: (workspaceId: string) => ipcRenderer.invoke('terminal:closeWorkspace', workspaceId) as Promise<void>,
     detach: (identity: TerminalSessionIdentity) => ipcRenderer.invoke('terminal:detach', identity),
     acknowledgeAgentAlert: (identity: TerminalSessionIdentity) => ipcRenderer.invoke('terminal:acknowledgeAgentAlert', identity),
+    ackData: (identity: TerminalSessionIdentity, charCount: number) => {
+      ipcRenderer.send('terminal:ackData', identity, charCount)
+    },
     setAgentAlertsEnabled: (enabled: boolean) => ipcRenderer.invoke('terminal:setAgentAlertsEnabled', enabled),
     sshAvailable: () => ipcRenderer.invoke('terminal:sshAvailable'),
     onData: (identity: TerminalSessionIdentity, callback: (data: string) => void) => {
