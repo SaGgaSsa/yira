@@ -1,6 +1,10 @@
+import type { ShortcutId, ShortcutSettings } from '@shared/shortcuts'
+import { DEFAULT_SHORTCUTS } from '@shared/shortcuts'
+
 export interface ShortcutCatalogItem {
   label: string
   keys: string
+  id?: ShortcutId
 }
 
 export interface ShortcutCatalogGroup {
@@ -8,16 +12,25 @@ export interface ShortcutCatalogGroup {
   items: ShortcutCatalogItem[]
 }
 
-export function getShortcutCatalog(newAgentSessionShortcut = 'Ctrl+N', openHomeShortcut = 'Ctrl+I'): ShortcutCatalogGroup[] {
+/** Render named arrow keys as compact glyphs for the settings catalog. */
+export function formatAccelerator(accelerator: string): string {
+  return accelerator
+    .replace(/ArrowLeft/g, '←')
+    .replace(/ArrowRight/g, '→')
+    .replace(/ArrowUp/g, '↑')
+    .replace(/ArrowDown/g, '↓')
+}
+
+export function getShortcutCatalog(shortcuts: ShortcutSettings = DEFAULT_SHORTCUTS): ShortcutCatalogGroup[] {
   return [
   {
     label: 'Navigation',
     items: [
-      { label: 'Open home', keys: openHomeShortcut },
-      { label: 'Focus left split panel', keys: 'Ctrl+Alt+←' },
-      { label: 'Focus right split panel', keys: 'Ctrl+Alt+→' },
-      { label: 'Previous tab', keys: 'Ctrl+Shift+Tab' },
-      { label: 'Next tab', keys: 'Ctrl+Tab' },
+      { label: 'Open home', keys: formatAccelerator(shortcuts.openHome), id: 'openHome' },
+      { label: 'Focus left split panel', keys: formatAccelerator(shortcuts.focusLeftPanel), id: 'focusLeftPanel' },
+      { label: 'Focus right split panel', keys: formatAccelerator(shortcuts.focusRightPanel), id: 'focusRightPanel' },
+      { label: 'Previous tab', keys: formatAccelerator(shortcuts.previousTab), id: 'previousTab' },
+      { label: 'Next tab', keys: formatAccelerator(shortcuts.nextTab), id: 'nextTab' },
     ],
   },
   {
@@ -29,7 +42,7 @@ export function getShortcutCatalog(newAgentSessionShortcut = 'Ctrl+N', openHomeS
   {
     label: 'Agents',
     items: [
-      { label: 'New agent session', keys: newAgentSessionShortcut },
+      { label: 'New agent session', keys: formatAccelerator(shortcuts.newAgentSession), id: 'newAgentSession' },
     ],
   },
   {
