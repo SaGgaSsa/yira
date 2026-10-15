@@ -1,6 +1,7 @@
 import type { AppThemeId } from './appThemes'
 import type { TerminalThemeId } from './terminalThemes'
 import type { TerminalSessionIdentity } from './terminalSessionIdentity'
+import { DEFAULT_SHORTCUTS, type ShortcutSettings } from './shortcuts'
 
 // ─── Agents ────────────────────────────────────────────────────────────────
 
@@ -626,10 +627,7 @@ export interface UserSettings {
   tiles: {
     creationAvailability: TileCreationAvailability
   }
-  shortcuts: {
-    newAgentSession: string
-    openHome: string
-  }
+  shortcuts: ShortcutSettings
 }
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
@@ -665,10 +663,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
       timer: false,
     },
   },
-  shortcuts: {
-    newAgentSession: 'Ctrl+N',
-    openHome: 'Ctrl+I',
-  },
+  shortcuts: { ...DEFAULT_SHORTCUTS },
 }
 
 export interface AppSettings {

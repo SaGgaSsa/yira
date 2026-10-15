@@ -332,6 +332,7 @@ function AppContent(): React.ReactElement {
   const updateMessage = useUpdateStore((s) => s.message)
   const installUpdate = useUpdateStore((s) => s.installUpdate)
   const agentSettings = useSettingsStore((s) => s.agents)
+  const shortcuts = useSettingsStore((s) => s.shortcuts)
   const newAgentSessionShortcut = useSettingsStore((s) => s.shortcuts.newAgentSession)
   const openHomeShortcut = useSettingsStore((s) => s.shortcuts.openHome)
   const terminalAttentionEnabled = useSettingsStore((s) => s.terminal.attentionEnabled)
@@ -1119,6 +1120,7 @@ function AppContent(): React.ReactElement {
     viewMode,
     fullviewActiveTileId,
     splitViewState,
+    shortcuts,
     focusTile,
     selectTiles,
     setFullviewActiveTileId,

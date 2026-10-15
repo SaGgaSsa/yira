@@ -4,8 +4,9 @@ import { DEFAULT_USER_SETTINGS } from '@shared/types'
 import type { TerminalThemeId } from '@shared/terminalThemes'
 import { clampFontSizePx, normalizeUserSettings } from '@shared/userSettings'
 import type { SupportedLanguage } from '@shared/language'
+import { DEFAULT_SHORTCUTS, normalizeAccelerator, normalizeShortcutSettings } from '@shared/shortcuts'
+import type { ShortcutId } from '@shared/shortcuts'
 import { i18n } from '@/i18n'
-import { normalizeAccelerator } from '@/utils/shortcutResolver'
 
 export interface SettingsState extends UserSettings {
   loaded: boolean
@@ -29,7 +30,7 @@ export interface SettingsState extends UserSettings {
   setNotificationAttentionDelayEnabled: (enabled: boolean) => void
   setDesktopAlertsEnabled: (enabled: boolean) => void
   setTileCreationAvailable: (type: ConfigurableTileCreationType, available: boolean) => void
-  setNewAgentSessionShortcut: (shortcut: string) => void
+  setShortcut: (id: ShortcutId, shortcut: string) => void
   applySettings: (settings: UserSettings) => Promise<void>
   loadSettings: () => Promise<void>
   saveSettings: () => void
@@ -197,21 +198,16 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     scheduleSave()
   },
 
-  setNewAgentSessionShortcut: (shortcut) => {
-    const normalized = normalizeAccelerator(shortcut) ?? DEFAULT_USER_SETTINGS.shortcuts.newAgentSession
-    set((state) => ({ shortcuts: { ...state.shortcuts, newAgentSession: normalized } }))
+  setShortcut: (id, shortcut) => {
+    const normalized = normalizeAccelerator(shortcut) ?? DEFAULT_SHORTCUTS[id]
+    set((state) => ({ shortcuts: { ...state.shortcuts, [id]: normalized } }))
     scheduleSave()
   },
 
   applySettings: async (settings) => {
-    const newAgentSessionShortcut = normalizeAccelerator(settings.shortcuts?.newAgentSession)
-    const openHomeShortcut = normalizeAccelerator(settings.shortcuts?.openHome)
     const normalized = normalizeUserSettings({
       ...settings,
-      shortcuts: {
-        newAgentSession: newAgentSessionShortcut ?? DEFAULT_USER_SETTINGS.shortcuts.newAgentSession,
-        openHome: openHomeShortcut ?? DEFAULT_USER_SETTINGS.shortcuts.openHome,
-      },
+      shortcuts: normalizeShortcutSettings(settings.shortcuts),
       browser: {
         homeUrl: settings.browser.homeUrl.trim() || DEFAULT_USER_SETTINGS.browser.homeUrl,
       },
@@ -241,14 +237,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     try {
       const settings = await window.electron.settings.load()
       if (settings) {
-        const newAgentSessionShortcut = normalizeAccelerator(settings.shortcuts?.newAgentSession)
-        const openHomeShortcut = normalizeAccelerator(settings.shortcuts?.openHome)
         const normalized = normalizeUserSettings({
           ...settings,
-          shortcuts: {
-            newAgentSession: newAgentSessionShortcut ?? DEFAULT_USER_SETTINGS.shortcuts.newAgentSession,
-            openHome: openHomeShortcut ?? DEFAULT_USER_SETTINGS.shortcuts.openHome,
-          },
+          shortcuts: normalizeShortcutSettings(settings.shortcuts),
         })
         const materialState = await window.electron.window.setBackgroundMaterial(normalized.windowBackgroundMaterial)
         set({

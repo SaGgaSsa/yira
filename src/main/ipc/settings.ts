@@ -6,7 +6,7 @@ import { homedir } from 'os'
 import { is } from '@electron-toolkit/utils'
 import { YIRA_HOME } from '../paths'
 import type { AgentProvider, ClaudeStatusLineMutationResult, ClaudeStatusLineState, UserSettings } from '@shared/types'
-import { DEFAULT_USER_SETTINGS } from '@shared/types'
+import { CONFIGURABLE_SHORTCUT_IDS, normalizeShortcutSettings } from '@shared/shortcuts'
 import { normalizeUserSettings } from '@shared/userSettings'
 import { resolveSupportedLanguage } from '@shared/language'
 import { installClaudeHookConfiguration, installCodexHookConfiguration, uninstallClaudeHookConfiguration, uninstallCodexHookConfiguration, type AgentHookProvider } from '../agentHookConfiguration'
@@ -17,54 +17,6 @@ import { getAgentHomeDirectory } from '../agents/providers'
 const SETTINGS_PATH = join(YIRA_HOME, 'settings.json')
 let currentSettings: UserSettings | null = null
 
-const SHORTCUT_KEY_ALIASES: Record<string, string> = {
-  esc: 'Escape',
-  del: 'Delete',
-  spacebar: 'Space',
-  left: 'ArrowLeft',
-  right: 'ArrowRight',
-  up: 'ArrowUp',
-  down: 'ArrowDown',
-}
-
-function normalizeShortcut(value: unknown): string | null {
-  if (typeof value !== 'string') return null
-  const parts = value.split('+').map((part) => part.trim())
-  if (parts.length < 2 || parts.some((part) => !part)) return null
-
-  const modifierAliases: Record<string, string> = {
-    ctrl: 'Ctrl',
-    control: 'Ctrl',
-    cmd: 'Cmd',
-    command: 'Cmd',
-    meta: 'Cmd',
-    alt: 'Alt',
-    option: 'Alt',
-    shift: 'Shift',
-  }
-  const modifiers: string[] = []
-  for (const part of parts.slice(0, -1)) {
-    const modifier = modifierAliases[part.toLowerCase()]
-    if (!modifier || modifiers.includes(modifier)) return null
-    modifiers.push(modifier)
-  }
-  if (!modifiers.some((modifier) => modifier !== 'Shift')) return null
-  if (modifiers.includes('Ctrl') && modifiers.includes('Cmd')) return null
-
-  const rawKey = parts[parts.length - 1]
-  const key = SHORTCUT_KEY_ALIASES[rawKey.toLowerCase()] ?? rawKey
-  const validNamedKeys = new Set([
-    'Backspace', 'Delete', 'End', 'Enter', 'Escape', 'Home', 'Insert', 'PageDown', 'PageUp',
-    'Space', 'Tab', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowUp',
-  ])
-  if (!/^[a-z0-9]$/i.test(key) && !/^F(?:[1-9]|1\d|2[0-4])$/i.test(key) && !validNamedKeys.has(key)) {
-    return null
-  }
-  const normalizedKey = /^[a-z]$/i.test(key) || /^F/i.test(key) ? key.toUpperCase() : key
-  const orderedModifiers = ['Ctrl', 'Cmd', 'Alt', 'Shift'].filter((modifier) => modifiers.includes(modifier))
-  return [...orderedModifiers, normalizedKey].join('+')
-}
-
 function normalizeSettings(raw: unknown): UserSettings {
   const rawSettings = raw && typeof raw === 'object' && !Array.isArray(raw)
     ? raw as Partial<UserSettings>
@@ -72,12 +24,7 @@ function normalizeSettings(raw: unknown): UserSettings {
   const normalized = normalizeUserSettings(rawSettings)
   return {
     ...normalized,
-    shortcuts: {
-      newAgentSession: normalizeShortcut(rawSettings.shortcuts?.newAgentSession)
-        ?? DEFAULT_USER_SETTINGS.shortcuts.newAgentSession,
-      openHome: normalizeShortcut(rawSettings.shortcuts?.openHome)
-        ?? DEFAULT_USER_SETTINGS.shortcuts.openHome,
-    },
+    shortcuts: normalizeShortcutSettings(rawSettings.shortcuts),
   }
 }
 
@@ -206,8 +153,7 @@ export async function loadStoredUserSettings(): Promise<UserSettings | null> {
       || !Object.prototype.hasOwnProperty.call(parsed, 'agents')
       || typeof parsed?.notifications?.desktopAlertsEnabled !== 'boolean'
       || parsed.notifications.desktopAlertsEnabled !== normalized.notifications.desktopAlertsEnabled
-      || parsed?.shortcuts?.newAgentSession !== normalized.shortcuts.newAgentSession
-      || parsed?.shortcuts?.openHome !== normalized.shortcuts.openHome
+      || CONFIGURABLE_SHORTCUT_IDS.some((id) => parsed?.shortcuts?.[id] !== normalized.shortcuts[id])
     ) {
       await fs.writeFile(SETTINGS_PATH, JSON.stringify(normalized, null, 2))
     }

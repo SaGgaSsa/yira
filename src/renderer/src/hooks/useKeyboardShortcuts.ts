@@ -9,6 +9,7 @@ import {
   isTerminalShortcutTarget,
   resolveKeyboardShortcut,
 } from '@/utils/shortcutResolver'
+import type { ShortcutSettings } from '@shared/shortcuts'
 import type { SplitViewState, ViewMode } from '@shared/types'
 
 interface UseKeyboardShortcutsDeps {
@@ -18,6 +19,7 @@ interface UseKeyboardShortcutsDeps {
   viewMode: ViewMode
   fullviewActiveTileId: string | null
   splitViewState: SplitViewState
+  shortcuts: ShortcutSettings
   focusTile: (id: string | null) => void
   selectTiles: (ids: string[]) => void
   setFullviewActiveTileId: (id: string | null) => void
@@ -57,6 +59,7 @@ export function handleKeyboardShortcut(e: KeyboardEvent, deps: UseKeyboardShortc
     viewMode,
     fullviewActiveTileId,
     splitViewState,
+    shortcuts,
     focusTile,
     selectTiles,
     setFullviewActiveTileId,
@@ -81,7 +84,7 @@ export function handleKeyboardShortcut(e: KeyboardEvent, deps: UseKeyboardShortc
   }
 
   const isEditableTarget = isEditableShortcutTarget(e.target)
-  const shortcut = resolveKeyboardShortcut(e)
+  const shortcut = resolveKeyboardShortcut(e, shortcuts)
 
   if (!isEditableTarget && viewMode === 'splitview') {
     if (shortcut === 'focus-left-panel' || shortcut === 'focus-right-panel') {
@@ -151,6 +154,7 @@ export function useKeyboardShortcuts(deps: UseKeyboardShortcutsDeps) {
     viewMode,
     fullviewActiveTileId,
     splitViewState,
+    shortcuts,
     focusTile,
     selectTiles,
     setFullviewActiveTileId,
@@ -169,6 +173,7 @@ export function useKeyboardShortcuts(deps: UseKeyboardShortcutsDeps) {
       viewMode,
       fullviewActiveTileId,
       splitViewState,
+      shortcuts,
       focusTile,
       selectTiles,
       setFullviewActiveTileId,
@@ -186,6 +191,7 @@ export function useKeyboardShortcuts(deps: UseKeyboardShortcutsDeps) {
     fullviewActiveTileId,
     selectedTileIds,
     splitViewState,
+    shortcuts,
     tiles,
     viewMode,
     focusTile,

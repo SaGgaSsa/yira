@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { DEFAULT_USER_SETTINGS, type UserSettings } from '@shared/types'
+import { DEFAULT_SHORTCUTS } from '@shared/shortcuts'
 import { initializeI18n } from '@/i18n'
 import { createUserSettingsDraft, useSettingsStore } from './settingsStore'
 
@@ -98,7 +99,7 @@ test('applySettings persists the complete draft before replacing the active sett
           timer: true,
         },
       },
-      shortcuts: { newAgentSession: 'Alt+K', openHome: 'Ctrl+I' },
+      shortcuts: { ...DEFAULT_SHORTCUTS, newAgentSession: 'Alt+K' },
     }
 
     const applying = useSettingsStore.getState().applySettings(draft)
