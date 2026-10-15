@@ -205,10 +205,12 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   applySettings: async (settings) => {
     const newAgentSessionShortcut = normalizeAccelerator(settings.shortcuts?.newAgentSession)
+    const openHomeShortcut = normalizeAccelerator(settings.shortcuts?.openHome)
     const normalized = normalizeUserSettings({
       ...settings,
       shortcuts: {
         newAgentSession: newAgentSessionShortcut ?? DEFAULT_USER_SETTINGS.shortcuts.newAgentSession,
+        openHome: openHomeShortcut ?? DEFAULT_USER_SETTINGS.shortcuts.openHome,
       },
       browser: {
         homeUrl: settings.browser.homeUrl.trim() || DEFAULT_USER_SETTINGS.browser.homeUrl,
@@ -240,10 +242,12 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       const settings = await window.electron.settings.load()
       if (settings) {
         const newAgentSessionShortcut = normalizeAccelerator(settings.shortcuts?.newAgentSession)
+        const openHomeShortcut = normalizeAccelerator(settings.shortcuts?.openHome)
         const normalized = normalizeUserSettings({
           ...settings,
           shortcuts: {
             newAgentSession: newAgentSessionShortcut ?? DEFAULT_USER_SETTINGS.shortcuts.newAgentSession,
+            openHome: openHomeShortcut ?? DEFAULT_USER_SETTINGS.shortcuts.openHome,
           },
         })
         const materialState = await window.electron.window.setBackgroundMaterial(normalized.windowBackgroundMaterial)

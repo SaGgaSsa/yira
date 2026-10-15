@@ -111,3 +111,10 @@ export function isTerminalShortcutTarget(target: EventTarget | null): boolean {
   const closest = (target as { closest?: unknown }).closest
   return typeof closest === 'function' && Boolean(closest.call(target, '.xterm'))
 }
+
+export function isShortcutCaptureTarget(target: EventTarget | null): boolean {
+  if (!target || typeof target !== 'object') return false
+
+  const closest = (target as { closest?: unknown }).closest
+  return typeof closest === 'function' && Boolean(closest.call(target, '[data-agent-shortcut-capture]'))
+}

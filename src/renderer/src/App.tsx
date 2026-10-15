@@ -38,6 +38,7 @@ import { useSidePanelWidth } from './hooks/useSidePanelWidth'
 import { useWindowWidth } from './hooks/useWindowWidth'
 import { resolveSidebarCollapsedForActivity } from './utils/emptyWorkspaceView'
 import { resolveMainView, resolvePanelLayout } from './utils/layoutState'
+import { isShortcutCaptureTarget, matchesShortcut } from './utils/shortcutResolver'
 import { useUpdateStore } from './store/updateStore'
 import {
   GRID_MAX_TILES,
@@ -332,6 +333,7 @@ function AppContent(): React.ReactElement {
   const installUpdate = useUpdateStore((s) => s.installUpdate)
   const agentSettings = useSettingsStore((s) => s.agents)
   const newAgentSessionShortcut = useSettingsStore((s) => s.shortcuts.newAgentSession)
+  const openHomeShortcut = useSettingsStore((s) => s.shortcuts.openHome)
   const terminalAttentionEnabled = useSettingsStore((s) => s.terminal.attentionEnabled)
   const tileCreationAvailability = useSettingsStore((s) => s.tiles.creationAvailability)
 
@@ -2122,6 +2124,18 @@ function AppContent(): React.ReactElement {
     setAgentsMaximizedSessionId(null)
     setHomeOpen(true)
   }, [agentsView.close, agentsView.closeSessionDialog])
+
+  useEffect(() => {
+    const handleOpenHomeShortcut = (event: KeyboardEvent): void => {
+      if (isShortcutCaptureTarget(event.target) || !matchesShortcut(event, openHomeShortcut)) return
+
+      event.preventDefault()
+      event.stopPropagation()
+      openHome()
+    }
+    window.addEventListener('keydown', handleOpenHomeShortcut, true)
+    return () => window.removeEventListener('keydown', handleOpenHomeShortcut, true)
+  }, [openHome, openHomeShortcut])
 
   const selectWorkspaceFromHome = useCallback((workspace: WorkspaceMetadata) => {
     agentsView.close()

@@ -377,6 +377,7 @@ type TranslationResources = {
     resetToDefault: string
     latestFound: string
     notificationsAndCreation: string
+    openHomeShortcut: string
     openRawCanvasJson: string
     restartToInstall: string
     sections: string
@@ -390,6 +391,7 @@ type TranslationResources = {
     shortcutNavigation: string
     shortcutNextTab: string
     shortcutNewAgentSession: string
+    shortcutOpenHome: string
     shortcutPreviousTab: string
     shortcutContextual: string
     shortcutToggleFullscreen: string
@@ -1326,6 +1328,7 @@ const en: TranslationResources = {
     resetToDefault: 'Reset to default',
     latestFound: 'Latest found: v{{version}}',
     notificationsAndCreation: 'Notifications and creation',
+    openHomeShortcut: 'Open home shortcut',
     openRawCanvasJson: 'Open raw canvas JSON',
     restartToInstall: 'Restart to install',
     sections: 'Sections',
@@ -1339,6 +1342,7 @@ const en: TranslationResources = {
     shortcutNavigation: 'Navigation',
     shortcutNextTab: 'Next tab',
     shortcutNewAgentSession: 'New agent session',
+    shortcutOpenHome: 'Open home',
     shortcutPreviousTab: 'Previous tab',
     shortcutContextual: 'Contextual',
     shortcutToggleFullscreen: 'Toggle fullscreen',
@@ -2275,6 +2279,7 @@ const es: TranslationResources = {
     resetToDefault: 'Restablecer valor predeterminado',
     latestFound: 'Última encontrada: v{{version}}',
     notificationsAndCreation: 'Notificaciones y creación',
+    openHomeShortcut: 'Atajo para abrir el inicio',
     openRawCanvasJson: 'Abrir JSON sin procesar del lienzo',
     restartToInstall: 'Reiniciar para instalar',
     sections: 'Secciones',
@@ -2288,6 +2293,7 @@ const es: TranslationResources = {
     shortcutNavigation: 'Navegación',
     shortcutNextTab: 'Pestaña siguiente',
     shortcutNewAgentSession: 'Nueva sesión de agente',
+    shortcutOpenHome: 'Abrir inicio',
     shortcutPreviousTab: 'Pestaña anterior',
     shortcutContextual: 'Contextual',
     shortcutToggleFullscreen: 'Alternar pantalla completa',

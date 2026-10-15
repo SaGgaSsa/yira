@@ -628,6 +628,7 @@ export interface UserSettings {
   }
   shortcuts: {
     newAgentSession: string
+    openHome: string
   }
 }
 
@@ -666,6 +667,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   },
   shortcuts: {
     newAgentSession: 'Ctrl+N',
+    openHome: 'Ctrl+I',
   },
 }
 

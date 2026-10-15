@@ -108,6 +108,7 @@ function getShortcutItemLabel(t: TFunction, label: string): string {
     case 'Next tab': return t('settings.shortcutNextTab')
     case 'Toggle fullscreen': return t('settings.shortcutToggleFullscreen')
     case 'New agent session': return t('settings.shortcutNewAgentSession')
+    case 'Open home': return t('settings.shortcutOpenHome')
     case 'Close panels or clear selection': return t('settings.shortcutClosePanelsOrClearSelection')
     default: return t('settings.shortcutConfirmDialogAction')
   }
@@ -134,7 +135,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
   const [agentHookMessages, setAgentHookMessages] = useState<Partial<Record<AgentProvider, string>>>({})
   const [agentDetection, setAgentDetection] = useState<AgentDetectionSnapshot | null>(null)
   const [draft, setDraft] = useState<UserSettings>(() => createUserSettingsDraft(useSettingsStore.getState()))
-  const [capturingAgentShortcut, setCapturingAgentShortcut] = useState(false)
+  const [capturingShortcut, setCapturingShortcut] = useState<keyof UserSettings['shortcuts'] | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [supportLinkFailed, setSupportLinkFailed] = useState(false)
@@ -206,11 +207,11 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
       },
     },
   }))
-  const handleAgentShortcutCapture = (event: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleShortcutCapture = (key: keyof UserSettings['shortcuts'], event: React.KeyboardEvent<HTMLInputElement>) => {
     event.preventDefault()
     event.stopPropagation()
     if (event.key === 'Escape') {
-      setCapturingAgentShortcut(false)
+      setCapturingShortcut(null)
       return
     }
     if (['Control', 'Meta', 'Alt', 'Shift'].includes(event.key)) return
@@ -227,9 +228,55 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
     if (!shortcut) return
     setDraft((current) => ({
       ...current,
-      shortcuts: { ...current.shortcuts, newAgentSession: shortcut },
+      shortcuts: { ...current.shortcuts, [key]: shortcut },
     }))
-    setCapturingAgentShortcut(false)
+    setCapturingShortcut(null)
+  }
+  const renderShortcutCapture = (
+    key: keyof UserSettings['shortcuts'],
+    id: string,
+    label: string,
+    description: string,
+  ): React.ReactElement => {
+    const captureId = key.replace(/[A-Z]/g, (char) => `-${char.toLowerCase()}`)
+    const isCapturing = capturingShortcut === key
+    return (
+      <div className="mt-3 flex flex-wrap items-center gap-3 rounded-[20px] border border-border-visible bg-bg-primary px-4 py-4">
+        <div className="min-w-0 flex-1">
+          <label htmlFor={id} className="nd-label block text-text-display">
+            {label}
+          </label>
+          <span className="mt-2 block text-sm leading-6 text-text-secondary">
+            {isCapturing ? t('settings.pressShortcut') : description}
+          </span>
+        </div>
+        <input
+          id={id}
+          data-agent-shortcut-capture={captureId}
+          className="w-40 rounded-full border border-border-visible bg-bg-secondary px-4 py-2 text-center font-mono text-sm text-text-display outline-hidden focus:border-text-secondary"
+          aria-label={label}
+          aria-live="polite"
+          readOnly
+          value={isCapturing ? t('settings.pressShortcut') : draft.shortcuts[key]}
+          onFocus={() => setCapturingShortcut(key)}
+          onBlur={() => setCapturingShortcut(null)}
+          onKeyDown={(event) => handleShortcutCapture(key, event)}
+        />
+        <button
+          type="button"
+          className="rounded-full border border-border-visible px-3 py-2 text-xs text-text-secondary transition-colors hover:text-text-display"
+          onClick={() => {
+            setDraft((current) => ({
+              ...current,
+              shortcuts: { ...current.shortcuts, [key]: DEFAULT_USER_SETTINGS.shortcuts[key] },
+            }))
+            setCapturingShortcut(null)
+          }}
+        >
+          {t('settings.resetToDefault')}
+        </button>
+      </div>
+    )
   }
   const currentVersion = useUpdateStore((s) => s.currentVersion)
   const availableVersion = useUpdateStore((s) => s.availableVersion)
@@ -521,7 +568,6 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
     }
 
     if (activeSection === 'agents') {
-      const newAgentShortcut = draft.shortcuts?.newAgentSession ?? DEFAULT_USER_SETTINGS.shortcuts.newAgentSession
       return (
         <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
           <div className="mb-5 flex items-center gap-3">
@@ -650,41 +696,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
               )
             })}
           </div>
-          <div className="mt-3 flex flex-wrap items-center gap-3 rounded-[20px] border border-border-visible bg-bg-primary px-4 py-4">
-            <div className="min-w-0 flex-1">
-              <label htmlFor="new-agent-session-shortcut" className="nd-label block text-text-display">
-                {t('settings.newAgentSessionShortcut')}
-              </label>
-              <span className="mt-2 block text-sm leading-6 text-text-secondary">
-                {capturingAgentShortcut ? t('settings.pressShortcut') : t('settings.newAgentSessionShortcutDescription')}
-              </span>
-            </div>
-            <input
-              id="new-agent-session-shortcut"
-              data-agent-shortcut-capture="new-agent-session"
-              className="w-40 rounded-full border border-border-visible bg-bg-secondary px-4 py-2 text-center font-mono text-sm text-text-display outline-hidden focus:border-text-secondary"
-              aria-label={t('settings.newAgentSessionShortcut')}
-              aria-live="polite"
-              readOnly
-              value={capturingAgentShortcut ? t('settings.pressShortcut') : newAgentShortcut}
-              onFocus={() => setCapturingAgentShortcut(true)}
-              onBlur={() => setCapturingAgentShortcut(false)}
-              onKeyDown={handleAgentShortcutCapture}
-            />
-            <button
-              type="button"
-              className="rounded-full border border-border-visible px-3 py-2 text-xs text-text-secondary transition-colors hover:text-text-display"
-              onClick={() => {
-                setDraft((current) => ({
-                  ...current,
-                  shortcuts: { ...current.shortcuts, newAgentSession: DEFAULT_USER_SETTINGS.shortcuts.newAgentSession },
-                }))
-                setCapturingAgentShortcut(false)
-              }}
-            >
-              {t('settings.resetToDefault')}
-            </button>
-          </div>
+          {renderShortcutCapture('newAgentSession', 'new-agent-session-shortcut', t('settings.newAgentSessionShortcut'), t('settings.newAgentSessionShortcutDescription'))}
         </section>
       )
     }
@@ -871,7 +883,11 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
           </div>
 
           <div className="space-y-4">
-            {getShortcutCatalog(draft.shortcuts?.newAgentSession ?? DEFAULT_USER_SETTINGS.shortcuts.newAgentSession).map((group) => (
+            {renderShortcutCapture('openHome', 'open-home-shortcut', t('settings.openHomeShortcut'), t('settings.newAgentSessionShortcutDescription'))}
+            {getShortcutCatalog(
+              draft.shortcuts?.newAgentSession ?? DEFAULT_USER_SETTINGS.shortcuts.newAgentSession,
+              draft.shortcuts?.openHome ?? DEFAULT_USER_SETTINGS.shortcuts.openHome,
+            ).map((group) => (
               <div key={group.label} className="rounded-[20px] border border-border-visible bg-bg-primary px-4 py-4">
                 <div className="nd-label text-text-display">{getShortcutGroupLabel(t, group.label)}</div>
                 <div className="mt-3 divide-y divide-border">

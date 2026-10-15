@@ -3,7 +3,7 @@ import type { AgentActiveSessionSnapshot, AgentProvider, UserSettings, Workspace
 import { useAgentSessionSnapshot } from '@/hooks/useAgentSessionSnapshot'
 import { getEffectiveAgentProvider } from '@/utils/effectiveAgent'
 import { selectAgentsViewSessions } from '@/utils/agentsViewSessions'
-import { matchesShortcut } from '@/utils/shortcutResolver'
+import { isShortcutCaptureTarget, matchesShortcut } from '@/utils/shortcutResolver'
 
 interface UseAgentsViewOptions {
   workspaceId: string
@@ -42,12 +42,6 @@ export interface AgentsViewState {
 }
 
 export type ActivityPaletteStep = 'activity' | 'new-session'
-
-function isShortcutCaptureTarget(target: EventTarget | null): boolean {
-  if (!target || typeof target !== 'object') return false
-  const closest = (target as { closest?: unknown }).closest
-  return typeof closest === 'function' && Boolean(closest.call(target, '[data-agent-shortcut-capture]'))
-}
 
 interface SessionDialogRequest {
   step: ActivityPaletteStep

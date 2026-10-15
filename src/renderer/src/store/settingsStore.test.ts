@@ -98,7 +98,7 @@ test('applySettings persists the complete draft before replacing the active sett
           timer: true,
         },
       },
-      shortcuts: { newAgentSession: 'Alt+K' },
+      shortcuts: { newAgentSession: 'Alt+K', openHome: 'Ctrl+I' },
     }
 
     const applying = useSettingsStore.getState().applySettings(draft)
