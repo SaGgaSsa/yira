@@ -384,6 +384,7 @@ type TranslationResources = {
     selectCategory: string
     settingsMatrix: string
     shortcuts: string
+    shortcutsHelp: string
     shortcutClosePanelsOrClearSelection: string
     shortcutConfirmDialogAction: string
     shortcutFocusLeftSplitPanel: string
@@ -393,6 +394,12 @@ type TranslationResources = {
     shortcutNewAgentSession: string
     shortcutOpenHome: string
     shortcutPreviousTab: string
+    shortcutIssueConflict: string
+    shortcutIssueInvalid: string
+    shortcutIssueReservedClipboard: string
+    shortcutIssueReservedEditing: string
+    shortcutIssueReservedSystem: string
+    shortcutWarningTerminal: string
     shortcutContextual: string
     shortcutToggleFullscreen: string
     shortcutWindow: string
@@ -1335,6 +1342,7 @@ const en: TranslationResources = {
     selectCategory: 'Select a category to edit its controls.',
     settingsMatrix: 'Settings Matrix',
     shortcuts: 'Shortcuts',
+    shortcutsHelp: 'Click a shortcut and press a new combination. Esc cancels.',
     shortcutClosePanelsOrClearSelection: 'Close panels or clear selection',
     shortcutConfirmDialogAction: 'Confirm dialog action',
     shortcutFocusLeftSplitPanel: 'Focus left split panel',
@@ -1344,6 +1352,12 @@ const en: TranslationResources = {
     shortcutNewAgentSession: 'New agent session',
     shortcutOpenHome: 'Open home',
     shortcutPreviousTab: 'Previous tab',
+    shortcutIssueConflict: 'Already used by "{{name}}".',
+    shortcutIssueInvalid: 'Use a combination with Ctrl, Cmd, or Alt and a letter, number, or named key.',
+    shortcutIssueReservedClipboard: 'Reserved for copy and paste.',
+    shortcutIssueReservedEditing: 'Reserved for text editing and saving.',
+    shortcutIssueReservedSystem: 'Reserved by the operating system.',
+    shortcutWarningTerminal: 'Terminals and agent CLIs use this key; it will no longer reach them.',
     shortcutContextual: 'Contextual',
     shortcutToggleFullscreen: 'Toggle fullscreen',
     shortcutWindow: 'Window',
@@ -2286,6 +2300,7 @@ const es: TranslationResources = {
     selectCategory: 'Selecciona una categoría para editar sus controles.',
     settingsMatrix: 'Matriz de configuración',
     shortcuts: 'Atajos',
+    shortcutsHelp: 'Haz clic en un atajo y pulsa una nueva combinación. Esc cancela.',
     shortcutClosePanelsOrClearSelection: 'Cerrar paneles o limpiar selección',
     shortcutConfirmDialogAction: 'Confirmar acción del diálogo',
     shortcutFocusLeftSplitPanel: 'Enfocar panel dividido izquierdo',
@@ -2295,6 +2310,12 @@ const es: TranslationResources = {
     shortcutNewAgentSession: 'Nueva sesión de agente',
     shortcutOpenHome: 'Abrir inicio',
     shortcutPreviousTab: 'Pestaña anterior',
+    shortcutIssueConflict: 'Ya lo usa «{{name}}».',
+    shortcutIssueInvalid: 'Usa una combinación con Ctrl, Cmd o Alt y una letra, número o tecla con nombre.',
+    shortcutIssueReservedClipboard: 'Reservado para copiar y pegar.',
+    shortcutIssueReservedEditing: 'Reservado para edición de texto y guardado.',
+    shortcutIssueReservedSystem: 'Reservado por el sistema operativo.',
+    shortcutWarningTerminal: 'Las terminales y los CLI de agentes usan esta tecla; dejará de llegarles.',
     shortcutContextual: 'Contextual',
     shortcutToggleFullscreen: 'Alternar pantalla completa',
     shortcutWindow: 'Ventana',

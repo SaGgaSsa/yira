@@ -11,13 +11,14 @@ import {
 import { createUserSettingsDraft, useSettingsStore } from '@/store/settingsStore'
 import { useUpdateStore } from '@/store/updateStore'
 import { getShortcutCatalog } from '@/utils/shortcutCatalog'
-import { normalizeAccelerator } from '@/utils/shortcutResolver'
+import type { ShortcutId } from '@shared/shortcuts'
 import type { AgentDetectionSnapshot, AgentProvider, UpdateState, UserSettings, WindowBackgroundMaterial } from '@shared/types'
 import { DEFAULT_USER_SETTINGS } from '@shared/types'
 import type { TerminalThemeId } from '@shared/terminalThemes'
 import { TERMINAL_THEMES } from '@shared/terminalThemes'
 import { MAX_FONT_SIZE_PX, MIN_FONT_SIZE_PX } from '@shared/userSettings'
 import { LegalDocuments, type LegalDocumentId } from './LegalDocuments'
+import { ShortcutInput } from './ShortcutInput'
 import { agentProviderDetails } from './AgentUsageIndicator'
 
 export type SettingsSectionId =
@@ -114,6 +115,17 @@ function getShortcutItemLabel(t: TFunction, label: string): string {
   }
 }
 
+function getShortcutName(t: TFunction, id: ShortcutId): string {
+  switch (id) {
+    case 'openHome': return t('settings.shortcutOpenHome')
+    case 'newAgentSession': return t('settings.shortcutNewAgentSession')
+    case 'focusLeftPanel': return t('settings.shortcutFocusLeftSplitPanel')
+    case 'focusRightPanel': return t('settings.shortcutFocusRightSplitPanel')
+    case 'previousTab': return t('settings.shortcutPreviousTab')
+    case 'nextTab': return t('settings.shortcutNextTab')
+  }
+}
+
 function getSectionLabel(t: TFunction, id: SettingsSectionId): string {
   switch (id) {
     case 'appearance': return t('settings.appearance')
@@ -135,7 +147,6 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
   const [agentHookMessages, setAgentHookMessages] = useState<Partial<Record<AgentProvider, string>>>({})
   const [agentDetection, setAgentDetection] = useState<AgentDetectionSnapshot | null>(null)
   const [draft, setDraft] = useState<UserSettings>(() => createUserSettingsDraft(useSettingsStore.getState()))
-  const [capturingShortcut, setCapturingShortcut] = useState<keyof UserSettings['shortcuts'] | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [supportLinkFailed, setSupportLinkFailed] = useState(false)
@@ -207,77 +218,10 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
       },
     },
   }))
-  const handleShortcutCapture = (key: keyof UserSettings['shortcuts'], event: React.KeyboardEvent<HTMLInputElement>) => {
-    event.preventDefault()
-    event.stopPropagation()
-    if (event.key === 'Escape') {
-      setCapturingShortcut(null)
-      return
-    }
-    if (['Control', 'Meta', 'Alt', 'Shift'].includes(event.key)) return
-    if (!event.ctrlKey && !event.metaKey && !event.altKey) return
-
-    const modifiers = [
-      ...(event.ctrlKey ? ['Ctrl'] : []),
-      ...(event.metaKey ? ['Cmd'] : []),
-      ...(event.altKey ? ['Alt'] : []),
-      ...(event.shiftKey ? ['Shift'] : []),
-    ]
-    const pressedKey = event.key === ' ' ? 'Space' : event.key
-    const shortcut = normalizeAccelerator([...modifiers, pressedKey].join('+'))
-    if (!shortcut) return
-    setDraft((current) => ({
-      ...current,
-      shortcuts: { ...current.shortcuts, [key]: shortcut },
-    }))
-    setCapturingShortcut(null)
-  }
-  const renderShortcutCapture = (
-    key: keyof UserSettings['shortcuts'],
-    id: string,
-    label: string,
-    description: string,
-  ): React.ReactElement => {
-    const captureId = key.replace(/[A-Z]/g, (char) => `-${char.toLowerCase()}`)
-    const isCapturing = capturingShortcut === key
-    return (
-      <div className="mt-3 flex flex-wrap items-center gap-3 rounded-[20px] border border-border-visible bg-bg-primary px-4 py-4">
-        <div className="min-w-0 flex-1">
-          <label htmlFor={id} className="nd-label block text-text-display">
-            {label}
-          </label>
-          <span className="mt-2 block text-sm leading-6 text-text-secondary">
-            {isCapturing ? t('settings.pressShortcut') : description}
-          </span>
-        </div>
-        <input
-          id={id}
-          data-agent-shortcut-capture={captureId}
-          className="w-40 rounded-full border border-border-visible bg-bg-secondary px-4 py-2 text-center font-mono text-sm text-text-display outline-hidden focus:border-text-secondary"
-          aria-label={label}
-          aria-live="polite"
-          readOnly
-          value={isCapturing ? t('settings.pressShortcut') : draft.shortcuts[key]}
-          onFocus={() => setCapturingShortcut(key)}
-          onBlur={() => setCapturingShortcut(null)}
-          onKeyDown={(event) => handleShortcutCapture(key, event)}
-        />
-        <button
-          type="button"
-          className="rounded-full border border-border-visible px-3 py-2 text-xs text-text-secondary transition-colors hover:text-text-display"
-          onClick={() => {
-            setDraft((current) => ({
-              ...current,
-              shortcuts: { ...current.shortcuts, [key]: DEFAULT_USER_SETTINGS.shortcuts[key] },
-            }))
-            setCapturingShortcut(null)
-          }}
-        >
-          {t('settings.resetToDefault')}
-        </button>
-      </div>
-    )
-  }
+  const updateDraftShortcut = (id: ShortcutId, accelerator: string) => setDraft((current) => ({
+    ...current,
+    shortcuts: { ...current.shortcuts, [id]: accelerator },
+  }))
   const currentVersion = useUpdateStore((s) => s.currentVersion)
   const availableVersion = useUpdateStore((s) => s.availableVersion)
   const updateStatus = useUpdateStore((s) => s.status)
@@ -696,7 +640,15 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
               )
             })}
           </div>
-          {renderShortcutCapture('newAgentSession', 'new-agent-session-shortcut', t('settings.newAgentSessionShortcut'), t('settings.newAgentSessionShortcutDescription'))}
+          <ShortcutInput
+            shortcutId="newAgentSession"
+            inputId="new-agent-session-shortcut"
+            label={t('settings.newAgentSessionShortcut')}
+            description={t('settings.newAgentSessionShortcutDescription')}
+            shortcuts={draft.shortcuts}
+            onChange={(accelerator) => updateDraftShortcut('newAgentSession', accelerator)}
+            getShortcutName={(id) => getShortcutName(t, id)}
+          />
         </section>
       )
     }
@@ -882,23 +834,38 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
             </div>
           </div>
 
+          <p className="mb-4 text-sm text-text-secondary">{t('settings.shortcutsHelp')}</p>
+
           <div className="space-y-4">
-            {renderShortcutCapture('openHome', 'open-home-shortcut', t('settings.openHomeShortcut'), t('settings.newAgentSessionShortcutDescription'))}
-            {getShortcutCatalog(
-              draft.shortcuts?.newAgentSession ?? DEFAULT_USER_SETTINGS.shortcuts.newAgentSession,
-              draft.shortcuts?.openHome ?? DEFAULT_USER_SETTINGS.shortcuts.openHome,
-            ).map((group) => (
+            {getShortcutCatalog(draft.shortcuts).map((group) => (
               <div key={group.label} className="rounded-[20px] border border-border-visible bg-bg-primary px-4 py-4">
                 <div className="nd-label text-text-display">{getShortcutGroupLabel(t, group.label)}</div>
                 <div className="mt-3 divide-y divide-border">
-                  {group.items.map((item) => (
-                    <div key={`${group.label}-${item.keys}`} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
-                      <span className="text-sm leading-6 text-text-secondary">{getShortcutItemLabel(t, item.label)}</span>
-                      <kbd className="shrink-0 rounded-full border border-border-visible bg-bg-secondary px-3 py-1 font-mono text-xs text-text-display">
-                        {item.keys}
-                      </kbd>
-                    </div>
-                  ))}
+                  {group.items.map((item) => {
+                    const shortcutId = item.id
+                    if (shortcutId) {
+                      return (
+                        <ShortcutInput
+                          key={`${group.label}-${shortcutId}`}
+                          variant="row"
+                          shortcutId={shortcutId}
+                          inputId={`shortcut-${shortcutId}`}
+                          label={getShortcutItemLabel(t, item.label)}
+                          shortcuts={draft.shortcuts}
+                          onChange={(accelerator) => updateDraftShortcut(shortcutId, accelerator)}
+                          getShortcutName={(id) => getShortcutName(t, id)}
+                        />
+                      )
+                    }
+                    return (
+                      <div key={`${group.label}-${item.keys}`} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                        <span className="text-sm leading-6 text-text-secondary">{getShortcutItemLabel(t, item.label)}</span>
+                        <kbd className="shrink-0 rounded-full border border-border-visible bg-bg-secondary px-3 py-1 font-mono text-xs text-text-display">
+                          {item.keys}
+                        </kbd>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             ))}

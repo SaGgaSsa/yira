@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
+import { DEFAULT_SHORTCUTS } from '@shared/shortcuts'
 import { handleKeyboardShortcut } from './useKeyboardShortcuts'
 
 type ShortcutDeps = Parameters<typeof handleKeyboardShortcut>[1]
@@ -25,6 +26,7 @@ function createDeps(overrides: Partial<ShortcutDeps> = {}): ShortcutDeps {
     viewMode: 'fullview',
     fullviewActiveTileId: 'tile-a',
     splitViewState,
+    shortcuts: DEFAULT_SHORTCUTS,
     focusTile: () => {},
     selectTiles: () => {},
     setFullviewActiveTileId: () => {},
