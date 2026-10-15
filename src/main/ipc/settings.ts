@@ -27,7 +27,7 @@ const SHORTCUT_KEY_ALIASES: Record<string, string> = {
   down: 'ArrowDown',
 }
 
-function normalizeAgentSessionShortcut(value: unknown): string | null {
+function normalizeShortcut(value: unknown): string | null {
   if (typeof value !== 'string') return null
   const parts = value.split('+').map((part) => part.trim())
   if (parts.length < 2 || parts.some((part) => !part)) return null
@@ -73,8 +73,10 @@ function normalizeSettings(raw: unknown): UserSettings {
   return {
     ...normalized,
     shortcuts: {
-      newAgentSession: normalizeAgentSessionShortcut(rawSettings.shortcuts?.newAgentSession)
+      newAgentSession: normalizeShortcut(rawSettings.shortcuts?.newAgentSession)
         ?? DEFAULT_USER_SETTINGS.shortcuts.newAgentSession,
+      openHome: normalizeShortcut(rawSettings.shortcuts?.openHome)
+        ?? DEFAULT_USER_SETTINGS.shortcuts.openHome,
     },
   }
 }
@@ -205,6 +207,7 @@ export async function loadStoredUserSettings(): Promise<UserSettings | null> {
       || typeof parsed?.notifications?.desktopAlertsEnabled !== 'boolean'
       || parsed.notifications.desktopAlertsEnabled !== normalized.notifications.desktopAlertsEnabled
       || parsed?.shortcuts?.newAgentSession !== normalized.shortcuts.newAgentSession
+      || parsed?.shortcuts?.openHome !== normalized.shortcuts.openHome
     ) {
       await fs.writeFile(SETTINGS_PATH, JSON.stringify(normalized, null, 2))
     }

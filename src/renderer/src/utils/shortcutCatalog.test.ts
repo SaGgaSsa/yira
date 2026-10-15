@@ -43,3 +43,13 @@ test('shows the configured new-agent shortcut and defaults to Ctrl+N', () => {
   assert.equal(defaultItem?.keys, 'Ctrl+N')
   assert.equal(configuredItem?.keys, 'Alt+K')
 })
+
+test('shows the configured open-home shortcut and defaults to Ctrl+I', () => {
+  const defaultItem = SHORTCUT_CATALOG.flatMap((group) => group.items)
+    .find((item) => item.label === 'Open home')
+  const configuredItem = getShortcutCatalog('Ctrl+N', 'Alt+H').flatMap((group) => group.items)
+    .find((item) => item.label === 'Open home')
+
+  assert.equal(defaultItem?.keys, 'Ctrl+I')
+  assert.equal(configuredItem?.keys, 'Alt+H')
+})

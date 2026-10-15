@@ -8,11 +8,12 @@ export interface ShortcutCatalogGroup {
   items: ShortcutCatalogItem[]
 }
 
-export function getShortcutCatalog(newAgentSessionShortcut = 'Ctrl+N'): ShortcutCatalogGroup[] {
+export function getShortcutCatalog(newAgentSessionShortcut = 'Ctrl+N', openHomeShortcut = 'Ctrl+I'): ShortcutCatalogGroup[] {
   return [
   {
     label: 'Navigation',
     items: [
+      { label: 'Open home', keys: openHomeShortcut },
       { label: 'Focus left split panel', keys: 'Ctrl+Alt+←' },
       { label: 'Focus right split panel', keys: 'Ctrl+Alt+→' },
       { label: 'Previous tab', keys: 'Ctrl+Shift+Tab' },
