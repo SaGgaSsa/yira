@@ -31,6 +31,7 @@ jobs:
         run: npm ci
 
       - name: Run tests
+        timeout-minutes: 15
         run: npm test
 
       - name: Validate TypeScript
@@ -63,6 +64,7 @@ jobs:
         run: npm ci
 
       - name: Run tests
+        timeout-minutes: 15
         run: npm test
 
       - name: Validate TypeScript
@@ -94,6 +96,10 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: 24
+
+      # Checkout can leave the pushed tag as a lightweight ref; the notes read the annotated tag body.
+      - name: Fetch annotated tags
+        run: git fetch --force --tags
 
       - name: Generate release notes
         run: node scripts/generate-release-notes.mjs "${GITHUB_REF_NAME}" > release-notes.md
