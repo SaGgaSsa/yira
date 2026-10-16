@@ -1,6 +1,6 @@
 import type { TerminalThemeColors } from './terminalThemes'
 
-export const COLOR_PRESET_IDS = ['dracula', 'nord', 'tokyo-night', 'catppuccin-mocha', 'gruvbox-dark'] as const
+export const COLOR_PRESET_IDS = ['dracula', 'nord', 'tokyo-night', 'catppuccin-mocha', 'gruvbox-dark', 'one-dark', 'rose-pine', 'kanagawa', 'everforest-dark', 'solarized-dark', 'catppuccin-latte', 'rose-pine-dawn', 'solarized-light'] as const
 export type ColorPresetId = typeof COLOR_PRESET_IDS[number]
 export type AppThemeId = 'default' | ColorPresetId
 
@@ -104,14 +104,16 @@ export function getTranslucentThemeTokens(tokens: AppThemeTokens, light = false)
 interface ColorPreset {
   id: ColorPresetId
   label: string
+  light: boolean
   tokens: AppThemeTokens
   terminal: TerminalThemeColors
 }
 
 // Semantic tokens keep components independent of individual palette names.
-function createTokens(background: string, surface: string, raised: string, border: string, foreground: string, secondary: string, muted: string, accent: string, terminal: TerminalThemeColors): AppThemeTokens {
+// Light palettes start from DEFAULT_LIGHT: dark hover/active overlays and accent text on the surface color.
+function createTokens(background: string, surface: string, raised: string, border: string, foreground: string, secondary: string, muted: string, accent: string, terminal: TerminalThemeColors, light = false): AppThemeTokens {
   return {
-    ...DEFAULT_DARK,
+    ...(light ? DEFAULT_LIGHT : DEFAULT_DARK),
     '--black': background,
     '--text-inverse': background,
     '--surface': surface,
@@ -259,36 +261,289 @@ const GRUVBOX_DARK_TERMINAL: TerminalThemeColors = {
   brightWhite: '#ebdbb2',
 }
 
+const ONE_DARK_TERMINAL: TerminalThemeColors = {
+  background: '#282c34',
+  foreground: '#abb2bf',
+  cursor: '#abb2bf',
+  cursorAccent: '#282c34',
+  selectionBackground: '#61afef40',
+  black: '#21252b',
+  red: '#e06c75',
+  green: '#98c379',
+  yellow: '#e5c07b',
+  blue: '#61afef',
+  magenta: '#c678dd',
+  cyan: '#56b6c2',
+  white: '#abb2bf',
+  brightBlack: '#767676',
+  brightRed: '#e06c75',
+  brightGreen: '#98c379',
+  brightYellow: '#e5c07b',
+  brightBlue: '#61afef',
+  brightMagenta: '#c678dd',
+  brightCyan: '#56b6c2',
+  brightWhite: '#abb2bf',
+}
+
+const ROSE_PINE_TERMINAL: TerminalThemeColors = {
+  background: '#1f1d2e',
+  foreground: '#e0def4',
+  cursor: '#e0def4',
+  cursorAccent: '#1f1d2e',
+  selectionBackground: '#c4a7e740',
+  black: '#26233a',
+  red: '#eb6f92',
+  green: '#31748f',
+  yellow: '#f6c177',
+  blue: '#9ccfd8',
+  magenta: '#c4a7e7',
+  cyan: '#ebbcba',
+  white: '#e0def4',
+  brightBlack: '#6e6a86',
+  brightRed: '#eb6f92',
+  brightGreen: '#31748f',
+  brightYellow: '#f6c177',
+  brightBlue: '#9ccfd8',
+  brightMagenta: '#c4a7e7',
+  brightCyan: '#ebbcba',
+  brightWhite: '#e0def4',
+}
+
+const KANAGAWA_TERMINAL: TerminalThemeColors = {
+  background: '#1f1f28',
+  foreground: '#dcd7ba',
+  cursor: '#dcd7ba',
+  cursorAccent: '#1f1f28',
+  selectionBackground: '#7e9cd840',
+  black: '#090618',
+  red: '#c34043',
+  green: '#76946a',
+  yellow: '#c0a36e',
+  blue: '#7e9cd8',
+  magenta: '#957fb8',
+  cyan: '#6a9589',
+  white: '#c8c093',
+  brightBlack: '#727169',
+  brightRed: '#e82424',
+  brightGreen: '#98bb6c',
+  brightYellow: '#e6c384',
+  brightBlue: '#7fb4ca',
+  brightMagenta: '#938aa9',
+  brightCyan: '#7aa89f',
+  brightWhite: '#dcd7ba',
+}
+
+const EVERFOREST_DARK_TERMINAL: TerminalThemeColors = {
+  background: '#2d353b',
+  foreground: '#d3c6aa',
+  cursor: '#d3c6aa',
+  cursorAccent: '#2d353b',
+  selectionBackground: '#a7c08040',
+  black: '#475258',
+  red: '#e67e80',
+  green: '#a7c080',
+  yellow: '#dbbc7f',
+  blue: '#7fbbb3',
+  magenta: '#d699b6',
+  cyan: '#83c092',
+  white: '#d3c6aa',
+  brightBlack: '#475258',
+  brightRed: '#e67e80',
+  brightGreen: '#a7c080',
+  brightYellow: '#dbbc7f',
+  brightBlue: '#7fbbb3',
+  brightMagenta: '#d699b6',
+  brightCyan: '#83c092',
+  brightWhite: '#d3c6aa',
+}
+
+const SOLARIZED_DARK_TERMINAL: TerminalThemeColors = {
+  background: '#002b36',
+  foreground: '#839496',
+  cursor: '#839496',
+  cursorAccent: '#002b36',
+  selectionBackground: '#268bd240',
+  black: '#073642',
+  red: '#dc322f',
+  green: '#859900',
+  yellow: '#b58900',
+  blue: '#268bd2',
+  magenta: '#d33682',
+  cyan: '#2aa198',
+  white: '#eee8d5',
+  brightBlack: '#335e69',
+  brightRed: '#cb4b16',
+  brightGreen: '#586e75',
+  brightYellow: '#657b83',
+  brightBlue: '#839496',
+  brightMagenta: '#6c71c4',
+  brightCyan: '#93a1a1',
+  brightWhite: '#fdf6e3',
+}
+
+const CATPPUCCIN_LATTE_TERMINAL: TerminalThemeColors = {
+  background: '#eff1f5',
+  foreground: '#4c4f69',
+  cursor: '#4c4f69',
+  cursorAccent: '#eff1f5',
+  selectionBackground: '#8839ef40',
+  black: '#bcc0cc',
+  red: '#d20f39',
+  green: '#40a02b',
+  yellow: '#df8e1d',
+  blue: '#1e66f5',
+  magenta: '#ea76cb',
+  cyan: '#179299',
+  white: '#5c5f77',
+  brightBlack: '#acb0be',
+  brightRed: '#e7103f',
+  brightGreen: '#46b02f',
+  brightYellow: '#e49931',
+  brightBlue: '#3878f6',
+  brightMagenta: '#ef95d7',
+  brightCyan: '#19a1a8',
+  brightWhite: '#6c6f85',
+}
+
+const ROSE_PINE_DAWN_TERMINAL: TerminalThemeColors = {
+  background: '#fffaf3',
+  foreground: '#575279',
+  cursor: '#575279',
+  cursorAccent: '#fffaf3',
+  selectionBackground: '#907aa940',
+  black: '#f2e9e1',
+  red: '#b4637a',
+  green: '#286983',
+  yellow: '#ea9d34',
+  blue: '#56949f',
+  magenta: '#907aa9',
+  cyan: '#d7827e',
+  white: '#575279',
+  brightBlack: '#9893a5',
+  brightRed: '#b4637a',
+  brightGreen: '#286983',
+  brightYellow: '#ea9d34',
+  brightBlue: '#56949f',
+  brightMagenta: '#907aa9',
+  brightCyan: '#d7827e',
+  brightWhite: '#575279',
+}
+
+const SOLARIZED_LIGHT_TERMINAL: TerminalThemeColors = {
+  background: '#fdf6e3',
+  foreground: '#586e75',
+  cursor: '#586e75',
+  cursorAccent: '#fdf6e3',
+  selectionBackground: '#268bd240',
+  black: '#073642',
+  red: '#dc322f',
+  green: '#859900',
+  yellow: '#b58900',
+  blue: '#268bd2',
+  magenta: '#d33682',
+  cyan: '#2aa198',
+  white: '#bbb5a2',
+  brightBlack: '#002b36',
+  brightRed: '#cb4b16',
+  brightGreen: '#586e75',
+  brightYellow: '#657b83',
+  brightBlue: '#839496',
+  brightMagenta: '#6c71c4',
+  brightCyan: '#93a1a1',
+  brightWhite: '#fdf6e3',
+}
+
 export const COLOR_PRESETS: Record<ColorPresetId, ColorPreset> = {
   'dracula': {
     id: 'dracula',
     label: 'Dracula',
+    light: false,
     tokens: createTokens('#21222c', '#282a36', '#343746', '#44475a', '#f8f8f2', '#b8b9ce', '#9193aa', '#bd93f9', DRACULA_TERMINAL),
     terminal: DRACULA_TERMINAL,
   },
   'nord': {
     id: 'nord',
     label: 'Nord',
+    light: false,
     tokens: createTokens('#242933', '#2e3440', '#3b4252', '#4c566a', '#eceff4', '#d8dee9', '#a5b1c2', '#88c0d0', NORD_TERMINAL),
     terminal: NORD_TERMINAL,
   },
   'tokyo-night': {
     id: 'tokyo-night',
     label: 'Tokyo Night',
+    light: false,
     tokens: createTokens('#16161e', '#1a1b26', '#24283b', '#414868', '#c0caf5', '#a9b1d6', '#9aa5ce', '#7aa2f7', TOKYO_NIGHT_TERMINAL),
     terminal: TOKYO_NIGHT_TERMINAL,
   },
   'catppuccin-mocha': {
     id: 'catppuccin-mocha',
     label: 'Catppuccin Mocha',
+    light: false,
     tokens: createTokens('#11111b', '#1e1e2e', '#313244', '#45475a', '#cdd6f4', '#bac2de', '#a6adc8', '#cba6f7', CATPPUCCIN_MOCHA_TERMINAL),
     terminal: CATPPUCCIN_MOCHA_TERMINAL,
   },
   'gruvbox-dark': {
     id: 'gruvbox-dark',
     label: 'Gruvbox Dark',
+    light: false,
     tokens: createTokens('#1d2021', '#282828', '#3c3836', '#504945', '#ebdbb2', '#d5c4a1', '#bdae93', '#fabd2f', GRUVBOX_DARK_TERMINAL),
     terminal: GRUVBOX_DARK_TERMINAL,
+  },
+  'one-dark': {
+    id: 'one-dark',
+    label: 'One Dark',
+    light: false,
+    tokens: createTokens('#21252b', '#282c34', '#2c313a', '#3e4451', '#abb2bf', '#9da5b4', '#828997', '#61afef', ONE_DARK_TERMINAL),
+    terminal: ONE_DARK_TERMINAL,
+  },
+  'rose-pine': {
+    id: 'rose-pine',
+    label: 'Rosé Pine',
+    light: false,
+    tokens: createTokens('#191724', '#1f1d2e', '#26233a', '#403d52', '#e0def4', '#908caa', '#6e6a86', '#c4a7e7', ROSE_PINE_TERMINAL),
+    terminal: ROSE_PINE_TERMINAL,
+  },
+  'kanagawa': {
+    id: 'kanagawa',
+    label: 'Kanagawa',
+    light: false,
+    tokens: createTokens('#16161d', '#1f1f28', '#2a2a37', '#54546d', '#dcd7ba', '#c8c093', '#727169', '#7e9cd8', KANAGAWA_TERMINAL),
+    terminal: KANAGAWA_TERMINAL,
+  },
+  'everforest-dark': {
+    id: 'everforest-dark',
+    label: 'Everforest Dark',
+    light: false,
+    tokens: createTokens('#232a2e', '#2d353b', '#343f44', '#475258', '#d3c6aa', '#9da9a0', '#859289', '#a7c080', EVERFOREST_DARK_TERMINAL),
+    terminal: EVERFOREST_DARK_TERMINAL,
+  },
+  'solarized-dark': {
+    id: 'solarized-dark',
+    label: 'Solarized Dark',
+    light: false,
+    tokens: createTokens('#002b36', '#002b36', '#073642', '#586e75', '#839496', '#657b83', '#586e75', '#268bd2', SOLARIZED_DARK_TERMINAL),
+    terminal: SOLARIZED_DARK_TERMINAL,
+  },
+  'catppuccin-latte': {
+    id: 'catppuccin-latte',
+    label: 'Catppuccin Latte',
+    light: true,
+    tokens: createTokens('#dce0e8', '#eff1f5', '#ccd0da', '#bcc0cc', '#4c4f69', '#5c5f77', '#6c6f85', '#8839ef', CATPPUCCIN_LATTE_TERMINAL, true),
+    terminal: CATPPUCCIN_LATTE_TERMINAL,
+  },
+  'rose-pine-dawn': {
+    id: 'rose-pine-dawn',
+    label: 'Rosé Pine Dawn',
+    light: true,
+    tokens: createTokens('#faf4ed', '#fffaf3', '#f2e9e1', '#dfdad9', '#575279', '#797593', '#9893a5', '#907aa9', ROSE_PINE_DAWN_TERMINAL, true),
+    terminal: ROSE_PINE_DAWN_TERMINAL,
+  },
+  'solarized-light': {
+    id: 'solarized-light',
+    label: 'Solarized Light',
+    light: true,
+    tokens: createTokens('#eee8d5', '#fdf6e3', '#eee8d5', '#93a1a1', '#586e75', '#657b83', '#93a1a1', '#268bd2', SOLARIZED_LIGHT_TERMINAL, true),
+    terminal: SOLARIZED_LIGHT_TERMINAL,
   },
 }
 
@@ -296,6 +551,11 @@ export function normalizeAppThemeId(value: unknown): AppThemeId {
   return typeof value === 'string' && COLOR_PRESET_IDS.includes(value as ColorPresetId)
     ? value as ColorPresetId
     : 'default'
+}
+
+export function isLightColorPreset(value: unknown): boolean {
+  const id = normalizeAppThemeId(value)
+  return id !== 'default' && COLOR_PRESETS[id].light
 }
 
 export function getAppThemeTokens(value: unknown, light = false): AppThemeTokens {

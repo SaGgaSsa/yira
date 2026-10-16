@@ -51,7 +51,7 @@ export function defineYiraThemes(monaco: Monaco): void {
     monaco.editor.defineTheme(`${name}-material`, { base, inherit: true, rules, colors: translucentColors })
   }
   for (const preset of Object.values(COLOR_PRESETS)) {
-    define(`yira-${preset.id}`, 'vs-dark', [
+    define(`yira-${preset.id}`, preset.light ? 'vs' : 'vs-dark', [
       { token: 'comment', foreground: preset.tokens['--text-disabled'].slice(1) },
       { token: 'string', foreground: preset.terminal.green.slice(1) },
       { token: 'keyword', foreground: preset.terminal.magenta.slice(1) },

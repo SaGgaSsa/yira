@@ -1,4 +1,4 @@
-import { getAppThemeTokens, normalizeAppThemeId, type AppThemeId } from '@shared/appThemes'
+import { getAppThemeTokens, isLightColorPreset, normalizeAppThemeId, type AppThemeId } from '@shared/appThemes'
 import { BrowserWindow, ipcMain, nativeTheme } from 'electron'
 import type { WindowBackgroundMaterial, WindowClosePreparationResponse } from '@shared/types'
 import {
@@ -56,7 +56,8 @@ export function registerWindowIPC(getMainWindow: () => BrowserWindow | null): Wi
   let titleBarTheme: TitleBarTheme = 'dark'
   const applyTitleBarTheme = (nativeWindow: BrowserWindow) => {
     const material = getWindowBackgroundMaterial()
-    nativeTheme.themeSource = material === 'none' ? 'system' : titleBarTheme === 'light' ? 'light' : 'dark'
+    const light = titleBarTheme === 'light' || isLightColorPreset(titleBarTheme)
+    nativeTheme.themeSource = material === 'none' ? 'system' : light ? 'light' : 'dark'
     const tokens = getAppThemeTokens(titleBarTheme)
     const colors = titleBarTheme === 'dark' || titleBarTheme === 'light'
       ? TITLE_BAR_OVERLAY_COLORS[titleBarTheme]

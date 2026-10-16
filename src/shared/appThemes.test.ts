@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { APP_THEMES, COLOR_PRESETS, getAppThemeTokens, getTranslucentThemeTokens, normalizeAppThemeId } from './appThemes'
+import { APP_THEMES, COLOR_PRESETS, getAppThemeTokens, getTranslucentThemeTokens, isLightColorPreset, normalizeAppThemeId } from './appThemes'
 import { getTerminalTheme } from './terminalThemes'
 import { normalizeUserSettings } from './userSettings'
 
@@ -16,9 +16,9 @@ test('Default preserves the existing dark and light CSS palettes', () => {
   }
 })
 
-test('the catalog contains Default and five complete shared palettes', () => {
-  assert.equal(APP_THEMES.length, 6)
-  assert.equal(new Set(APP_THEMES.map(({ id }) => id)).size, 6)
+test('the catalog contains Default and thirteen complete shared palettes', () => {
+  assert.equal(APP_THEMES.length, 14)
+  assert.equal(new Set(APP_THEMES.map(({ id }) => id)).size, 14)
   const keys = Object.keys(getAppThemeTokens('default')).sort()
   for (const preset of Object.values(COLOR_PRESETS)) {
     assert.deepEqual(Object.keys(preset.tokens).sort(), keys)
@@ -28,6 +28,38 @@ test('the catalog contains Default and five complete shared palettes', () => {
     assert.equal(terminal.foreground, preset.tokens['--text-primary'])
     assert.equal(Object.keys(terminal).length, 21)
     for (const color of Object.values(terminal)) assert.match(color, /^#[\da-f]{6}([\da-f]{2})?$/i)
+  }
+})
+
+test('Default comes first, then dark palettes, then light palettes', () => {
+  assert.equal(APP_THEMES[0].id, 'default')
+  const lightFlags = APP_THEMES.slice(1).map(({ id }) => COLOR_PRESETS[id as keyof typeof COLOR_PRESETS].light)
+  assert.deepEqual(lightFlags, [...lightFlags].sort((a, b) => Number(a) - Number(b)))
+  assert.deepEqual(APP_THEMES.filter(({ id }) => isLightColorPreset(id)).map(({ id }) => id), ['catppuccin-latte', 'rose-pine-dawn', 'solarized-light'])
+})
+
+function relativeLuminance(hex: string): number {
+  const [red, green, blue] = [1, 3, 5].map((index) => {
+    const channel = Number.parseInt(hex.slice(index, index + 2), 16) / 255
+    return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4
+  })
+  return 0.2126 * red + 0.7152 * green + 0.0722 * blue
+}
+
+function contrastRatio(foreground: string, background: string): number {
+  const [lighter, darker] = [relativeLuminance(foreground), relativeLuminance(background)].sort((a, b) => b - a)
+  return (lighter + 0.05) / (darker + 0.05)
+}
+
+test('light palettes keep primary text readable and use light overlays', () => {
+  const dark = getAppThemeTokens('default')
+  const light = getAppThemeTokens('default', true)
+  for (const preset of Object.values(COLOR_PRESETS)) {
+    const base = preset.light ? light : dark
+    for (const token of ['--hover-bg', '--active-bg', '--accent-text'] as const) assert.equal(preset.tokens[token], base[token], `${preset.id} ${token}`)
+    if (!preset.light) continue
+    const ratio = contrastRatio(preset.tokens['--text-primary'], preset.tokens['--surface'])
+    assert.ok(ratio >= 4.5, `${preset.id} contrast ${ratio.toFixed(2)}`)
   }
 })
 
