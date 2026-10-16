@@ -1,6 +1,6 @@
 import { useLayoutEffect } from 'react'
 import { useSettingsStore } from '@/store/settingsStore'
-import { getAppThemeTokens, getTranslucentThemeTokens } from '@shared/appThemes'
+import { getAppThemeTokens, getTranslucentThemeTokens, isLightColorPreset } from '@shared/appThemes'
 
 export function useTheme() {
   const appearance = useSettingsStore((s) => s.appearance)
@@ -12,7 +12,9 @@ export function useTheme() {
     const mq = window.matchMedia('(prefers-color-scheme: dark)')
 
     const applyTheme = () => {
-      const light = themeId === 'default' && (appearance === 'light' || (appearance === 'system' && !mq.matches))
+      const light = themeId === 'default'
+        ? appearance === 'light' || (appearance === 'system' && !mq.matches)
+        : isLightColorPreset(themeId)
       root.classList.toggle('light', light)
       root.classList.toggle('window-material', activeWindowBackgroundMaterial !== 'none')
       root.dataset.theme = themeId
