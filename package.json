@@ -177,9 +177,11 @@
     "appImage": {
       "executableArgs": [
         "--no-first-run"
-      ]
+      ],
+      "artifactName": "yira-linux.${ext}"
     },
     "nsis": {
+      "artifactName": "yira-windows-setup.${ext}",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
     }

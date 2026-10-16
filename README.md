@@ -24,8 +24,8 @@ Yira is a desktop app that keeps the model small: a workspace owns the flow, til
 
 Download the latest build from [GitHub Releases](https://github.com/SaGgaSsa/yira/releases/latest):
 
-- **Windows:** `Yira-Setup-<version>-x64.exe`
-- **Linux:** `Yira-<version>-amd64.deb` (recommended) or `Yira-<version>-x86_64.AppImage`
+- **Windows:** [`yira-windows-setup.exe`](https://github.com/SaGgaSsa/yira/releases/latest/download/yira-windows-setup.exe)
+- **Linux:** `Yira-<version>-amd64.deb` (recommended) or [`yira-linux.AppImage`](https://github.com/SaGgaSsa/yira/releases/latest/download/yira-linux.AppImage)
 
 Installed builds update automatically from GitHub Releases.
 

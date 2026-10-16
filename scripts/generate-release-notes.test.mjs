@@ -108,6 +108,36 @@ async function linksVersionedLegalAssetsAndPublicIssues() {
   })
 }
 
+async function placesAnnotatedTagSummaryFirst() {
+  await withRepo(async (cwd) => {
+    execFileSync('node', ['-e', "require('node:fs').writeFileSync('app.txt', 'initial\\n')"], { cwd })
+    commit(cwd, 'feat: initial setup')
+    git(cwd, ['tag', 'v0.3.0'])
+
+    execFileSync('node', ['-e', "require('node:fs').appendFileSync('app.txt', 'feature\\n')"], { cwd })
+    commit(cwd, 'feat: add public change')
+    git(cwd, ['tag', '-a', 'v0.3.1', '-m', 'v0.3.1', '-m', '- **Shortcuts:** Every shortcut can be changed.'])
+
+    const notes = runGenerator(cwd, 'v0.3.1')
+
+    assert.match(notes, /^## v0\.3\.1\n\n### Highlights\n\n- \*\*Shortcuts:\*\* Every shortcut can be changed\.\n\n### Features/m)
+  })
+}
+
+async function omitsHighlightsForLightweightTags() {
+  await withRepo(async (cwd) => {
+    execFileSync('node', ['-e', "require('node:fs').writeFileSync('app.txt', 'initial\\n')"], { cwd })
+    commit(cwd, 'feat: initial setup', 'app.txt', 'Commit body that is not a summary.')
+    git(cwd, ['tag', 'v0.4.0'])
+
+    const notes = runGenerator(cwd, 'v0.4.0')
+
+    assert.doesNotMatch(notes, /Highlights|Commit body/)
+  })
+}
+
 await writesCategorizedPublicNotes()
+await placesAnnotatedTagSummaryFirst()
+await omitsHighlightsForLightweightTags()
 await writesMaintenanceFallbackWhenOnlyInternalCommitsExist()
 await linksVersionedLegalAssetsAndPublicIssues()

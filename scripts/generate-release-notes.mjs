@@ -31,6 +31,13 @@ function getPreviousTag(currentTag) {
   return tryGit(['describe', '--tags', '--abbrev=0', `${currentCommit}^`])
 }
 
+// The release summary lives in the body of the annotated tag; its subject is the tag name.
+function getTagSummary(currentTag) {
+  const ref = `refs/tags/${currentTag}`
+  if (tryGit(['for-each-ref', '--format=%(objecttype)', ref]) !== 'tag') return ''
+  return tryGit(['for-each-ref', '--format=%(contents:body)', ref])
+}
+
 function getCommitSubjects(currentTag, previousTag) {
   const range = previousTag ? `${previousTag}..${currentTag}` : currentTag
   return git(['log', '--reverse', '--format=%s', range])
@@ -93,9 +100,13 @@ function buildSections(subjects) {
   return sections
 }
 
-function renderMarkdown(currentTag, sections) {
+function renderMarkdown(currentTag, summary, sections) {
   const lines = [`## ${currentTag}`, '']
   let hasPublicChanges = false
+
+  if (summary) {
+    lines.push('### Highlights', '', summary, '')
+  }
 
   for (const [category] of CATEGORY_ORDER) {
     const entries = sections.get(category) ?? []
@@ -126,7 +137,7 @@ export function generateReleaseNotes(currentTag) {
   const previousTag = getPreviousTag(currentTag)
   const subjects = getCommitSubjects(currentTag, previousTag)
   const sections = buildSections(subjects)
-  return renderMarkdown(currentTag, sections)
+  return renderMarkdown(currentTag, getTagSummary(currentTag), sections)
 }
 
 function main() {
