@@ -1,4 +1,4 @@
-import { APP_THEMES } from '@shared/appThemes'
+import { APP_THEMES, isLightColorPreset } from '@shared/appThemes'
 import { getXtermTheme, resolveTerminalThemeId } from '@/utils/terminalTheme'
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import {
   X, Monitor, Moon, Sun, Type, Grid3x3, Globe, CodeXml, Info, RefreshCw, Download,
-  LayoutGrid, Keyboard, Terminal, ExternalLink, FileText, Bot,
+  LayoutGrid, Keyboard, Terminal, ExternalLink, FileText, Bot, Check,
 } from 'lucide-react'
 import { createUserSettingsDraft, useSettingsStore } from '@/store/settingsStore'
 import { useUpdateStore } from '@/store/updateStore'
@@ -38,6 +38,68 @@ interface SettingsPanelProps {
   onClose: () => void
   onOpenJsonEditor: () => void
   initialSection?: SettingsSectionId
+}
+
+type ThemePreview = {
+  themeId: UserSettings['themeId']
+  appearance: UserSettings['appearance']
+  terminalThemeId: TerminalThemeId
+}
+
+interface CompactSettingRowProps {
+  title: string
+  description?: string
+  children: React.ReactNode
+}
+
+function CompactSettingRow({ title, description, children }: CompactSettingRowProps): React.ReactElement {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-[16px] border border-border-visible bg-bg-secondary px-4 py-3">
+      <div className="min-w-0">
+        <div className="nd-label text-text-display">{title}</div>
+        {description && <div className="mt-1 text-xs text-text-secondary">{description}</div>}
+      </div>
+      {children}
+    </div>
+  )
+}
+
+interface SegmentedControlOption<Value extends string> {
+  value: Value
+  label: string
+  icon?: typeof Monitor
+}
+
+interface SegmentedControlProps<Value extends string> {
+  value: Value
+  options: ReadonlyArray<SegmentedControlOption<Value>>
+  disabled?: boolean
+  onChange: (value: Value) => void
+}
+
+function SegmentedControl<Value extends string>({ value, options, disabled = false, onChange }: SegmentedControlProps<Value>): React.ReactElement {
+  return (
+    <div className="inline-flex rounded-full border border-border p-0.5">
+      {options.map((option) => {
+        const Icon = option.icon
+        return (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={value === option.value}
+            disabled={disabled}
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs transition-colors disabled:opacity-40 ${
+              value === option.value ? 'bg-bg-tertiary text-text-display' : 'text-text-secondary'
+            }`}
+            onClick={() => onChange(option.value)}
+          >
+            {Icon && <Icon size={13} aria-hidden="true" />}
+            <span>{option.label}</span>
+          </button>
+        )
+      })}
+    </div>
+  )
 }
 
 const SUPPORT_REPOSITORY_URL = 'https://github.com/SaGgaSsa/yira'
@@ -155,8 +217,39 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
   const privacyDocumentButtonRef = useRef<HTMLButtonElement | null>(null)
   const termsDocumentButtonRef = useRef<HTMLButtonElement | null>(null)
   const restoreLegalDocumentFocusRef = useRef<LegalDocumentId | null>(null)
+  const themePreviewBaselineRef = useRef<ThemePreview | null>(null)
   const applySettings = useSettingsStore((s) => s.applySettings)
   const windowBackgroundMaterialRequiresRestart = useSettingsStore((s) => s.windowBackgroundMaterialRequiresRestart)
+
+  const previewTheme = useCallback((patch: Partial<ThemePreview>) => {
+    if (!themePreviewBaselineRef.current) {
+      const state = useSettingsStore.getState()
+      themePreviewBaselineRef.current = {
+        themeId: state.themeId,
+        appearance: state.appearance,
+        terminalThemeId: state.terminal.themeId,
+      }
+    }
+    useSettingsStore.setState((state) => ({
+      themeId: patch.themeId ?? state.themeId,
+      appearance: patch.appearance ?? state.appearance,
+      terminal: patch.terminalThemeId !== undefined
+        ? { ...state.terminal, themeId: patch.terminalThemeId }
+        : state.terminal,
+    }))
+  }, [])
+
+  const restoreThemePreview = useCallback(() => {
+    const baseline = themePreviewBaselineRef.current
+    if (!baseline) return
+    themePreviewBaselineRef.current = null
+    useSettingsStore.setState((state) => ({
+      themeId: baseline.themeId,
+      appearance: baseline.appearance,
+      terminal: { ...state.terminal, themeId: baseline.terminalThemeId },
+    }))
+  }, [])
+
   const language = draft.language
   const appearance = draft.appearance
   const interfaceFontSizePx = draft.interfaceFontSizePx
@@ -176,7 +269,14 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
     ...current,
     agents: { ...current.agents, [provider]: { enabled } },
   }))
-  const setAppearance = (appearance: UserSettings['appearance']) => setDraft((current) => ({ ...current, appearance }))
+  const setAppearance = (appearance: UserSettings['appearance']) => {
+    setDraft((current) => ({ ...current, appearance }))
+    previewTheme({ appearance })
+  }
+  const setThemeId = (themeId: UserSettings['themeId']) => {
+    setDraft((current) => ({ ...current, themeId }))
+    previewTheme({ themeId })
+  }
   const setLanguage = (language: UserSettings['language']) => setDraft((current) => ({ ...current, language }))
   const setInterfaceFontSizePx = (interfaceFontSizePx: number) => setDraft((current) => ({ ...current, interfaceFontSizePx }))
   const setTileFontSizePx = (tileFontSizePx: number) => setDraft((current) => ({ ...current, tileFontSizePx }))
@@ -196,10 +296,13 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
     ...current,
     terminal: { ...current.terminal, agentAlertsEnabled },
   }))
-  const setTerminalThemeId = (themeId: TerminalThemeId) => setDraft((current) => ({
-    ...current,
-    terminal: { ...current.terminal, themeId },
-  }))
+  const setTerminalThemeId = (themeId: TerminalThemeId) => {
+    setDraft((current) => ({
+      ...current,
+      terminal: { ...current.terminal, themeId },
+    }))
+    previewTheme({ terminalThemeId: themeId })
+  }
   const setNotificationAttentionDelayEnabled = (attentionDelayEnabled: boolean) => setDraft((current) => ({
     ...current,
     notifications: { ...current.notifications, attentionDelayEnabled },
@@ -258,6 +361,11 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
 
   useEffect(() => {
     if (!open) return
+    return () => restoreThemePreview()
+  }, [open, restoreThemePreview])
+
+  useEffect(() => {
+    if (!open) return
     void window.electron.agents.detect().then(setAgentDetection).catch(() => setAgentDetection(null))
   }, [open])
 
@@ -295,6 +403,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
     setSaveError('')
     try {
       await applySettings(draft)
+      themePreviewBaselineRef.current = null
       onClose()
     } catch (error) {
       console.error('[SettingsPanel] Failed to save settings:', error)
@@ -322,6 +431,20 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
     }
 
     if (activeSection === 'appearance') {
+      const themeGroups = [
+        { label: t('settings.dark'), themes: APP_THEMES.filter((theme) => !isLightColorPreset(theme.id)) },
+        { label: t('settings.light'), themes: APP_THEMES.filter((theme) => isLightColorPreset(theme.id)) },
+      ]
+      const windowBackgroundMaterial = backgroundMaterialSupported.includes(draft.windowBackgroundMaterial)
+        ? draft.windowBackgroundMaterial
+        : 'none'
+      const windowBackgroundOptions = ([
+        { value: 'none' as const, label: t('settings.windowBackgroundNone') },
+        { value: 'mica' as const, label: t('settings.windowBackgroundMica') },
+        { value: 'acrylic' as const, label: t('settings.windowBackgroundAcrylic') },
+        { value: 'translucent' as const, label: t('settings.windowBackgroundTranslucent') },
+      ]).filter(({ value }) => backgroundMaterialSupported.includes(value))
+
       return (
         <section>
           <div className="mb-5 flex items-center gap-3">
@@ -332,102 +455,90 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
             </div>
           </div>
 
-          <p className="mb-4 text-sm text-text-secondary">{t('settings.appThemeDescription')}</p>
-          <div className="mb-5 grid gap-3 lg:grid-cols-2">
-            {APP_THEMES.map((theme) => (
-              <button
-                key={theme.id}
-                type="button"
-                aria-pressed={draft.themeId === theme.id}
-                onClick={() => setDraft((current) => ({ ...current, themeId: theme.id }))}
-                className={`rounded-[20px] border p-4 text-left focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--interactive) ${draft.themeId === theme.id ? 'border-text-primary' : 'border-border-visible'}`}
-                style={{ background: theme.tokens['--surface'], color: theme.tokens['--text-primary'] }}
-              >
-                <span className="flex items-center justify-between gap-2">
-                  <span className="nd-label">{theme.label}</span>
-                  {draft.themeId === theme.id && <span className="nd-caption">[ {t('settings.active')} ]</span>}
-                </span>
-                <span className="mt-4 flex gap-2" aria-hidden="true">
-                  {(['--black', '--surface-raised', '--accent', '--success', '--interactive'] as const).map((token) => (
-                    <span key={token} className="h-5 w-5 rounded-full border" style={{ background: theme.tokens[token], borderColor: theme.tokens['--border-visible'] }} />
+          <div className="mb-4">
+            <p className="text-sm text-text-secondary">{t('settings.appThemeDescription')}</p>
+            <p className="mt-1 text-sm text-text-secondary">{t('settings.themePreviewHint')}</p>
+          </div>
+
+          <div className="space-y-4">
+            {themeGroups.map((group) => (
+              <div key={group.label}>
+                <div className="nd-label mb-2 text-text-secondary">{group.label}</div>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
+                  {group.themes.map((theme) => (
+                    <button
+                      key={theme.id}
+                      type="button"
+                      aria-pressed={draft.themeId === theme.id}
+                      onClick={() => setThemeId(theme.id)}
+                      className={`rounded-[14px] border p-2 text-left focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--interactive) ${
+                        draft.themeId === theme.id
+                          ? 'border-text-display ring-1 ring-text-display'
+                          : 'border-border-visible hover:border-text-secondary'
+                      }`}
+                      style={{ background: theme.tokens['--surface'], color: theme.tokens['--text-primary'] }}
+                    >
+                      <span className="flex h-5 overflow-hidden rounded-[8px]" aria-hidden="true">
+                        {(['--black', '--surface-raised', '--accent', '--success', '--interactive'] as const).map((token) => (
+                          <span key={token} className="flex-1" style={{ background: theme.tokens[token] }} />
+                        ))}
+                      </span>
+                      <span className="mt-2 flex items-center justify-between gap-1">
+                        <span className="truncate text-xs">{theme.label}</span>
+                        {draft.themeId === theme.id && <Check size={12} className="shrink-0" aria-hidden="true" />}
+                      </span>
+                    </button>
                   ))}
-                </span>
-              </button>
-            ))}
-          </div>
-          <p className="mb-3 text-sm text-text-secondary">{t('settings.defaultAppearanceDescription')}</p>
-          <div className="grid gap-3 lg:grid-cols-3">
-            {([
-              { value: 'dark' as const, icon: Moon, label: t('settings.dark') },
-              { value: 'light' as const, icon: Sun, label: t('settings.light') },
-              { value: 'system' as const, icon: Monitor, label: t('settings.system') },
-            ]).map(({ value, icon: Icon, label }) => (
-              <button
-                key={value}
-                className={`rounded-[20px] border px-4 py-4 text-left transition-colors disabled:opacity-40 ${
-                  appearance === value ? 'border-text-display bg-bg-tertiary' : 'border-border bg-bg-secondary'
-                }`}
-                disabled={draft.themeId !== 'default'}
-                aria-pressed={appearance === value}
-                onClick={() => setAppearance(value)}
-              >
-                <div className="flex items-center justify-between">
-                  <Icon size={16} className={appearance === value ? 'text-text-display' : 'text-text-secondary'} />
-                  {appearance === value && <span className="nd-caption text-text-secondary">[ {t('settings.active')} ]</span>}
                 </div>
-                <div className="nd-label mt-6 text-text-secondary">{label}</div>
-              </button>
+              </div>
             ))}
           </div>
-          <div className="mt-5 rounded-[20px] border border-border-visible bg-bg-secondary px-4 py-4">
-            <div className="nd-label text-text-display">{t('settings.windowBackgroundEffect')}</div>
-            {backgroundMaterialSupported.length === 1 && <p className="mt-1 text-sm text-text-secondary">{t('settings.requiresWindows11')}</p>}
-            <div className="mt-4 grid grid-cols-3 gap-3">
-              {([
-                { value: 'none' as const, label: t('settings.windowBackgroundNone') },
-                { value: 'mica' as const, label: t('settings.windowBackgroundMica') },
-                { value: 'acrylic' as const, label: t('settings.windowBackgroundAcrylic') },
-                { value: 'translucent' as const, label: t('settings.windowBackgroundTranslucent') },
-              ]).filter(({ value }) => backgroundMaterialSupported.includes(value)).map(({ value, label }) => (
-                <button
-                  key={value}
-                  className={`rounded-full border px-4 py-3 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-                    (backgroundMaterialSupported.includes(draft.windowBackgroundMaterial) ? draft.windowBackgroundMaterial : 'none') === value ? 'border-text-display bg-bg-tertiary text-text-display' : 'border-border text-text-secondary'
-                  }`}
+
+          <div className="mt-4 space-y-3">
+            <CompactSettingRow title={t('settings.mode')} description={t('settings.defaultAppearanceDescription')}>
+              <SegmentedControl
+                value={appearance}
+                disabled={draft.themeId !== 'default'}
+                onChange={setAppearance}
+                options={[
+                  { value: 'dark', icon: Moon, label: t('settings.dark') },
+                  { value: 'light', icon: Sun, label: t('settings.light') },
+                  { value: 'system', icon: Monitor, label: t('settings.system') },
+                ]}
+              />
+            </CompactSettingRow>
+            <div>
+              <CompactSettingRow
+                title={t('settings.windowBackgroundEffect')}
+                description={backgroundMaterialSupported.length === 1 ? t('settings.requiresWindows11') : undefined}
+              >
+                <SegmentedControl
+                  value={windowBackgroundMaterial}
                   disabled={backgroundMaterialSupported.length === 1}
-                  aria-pressed={(backgroundMaterialSupported.includes(draft.windowBackgroundMaterial) ? draft.windowBackgroundMaterial : 'none') === value}
-                  onClick={() => setDraft((current) => ({ ...current, windowBackgroundMaterial: value }))}
-                >
-                  {label}
-                </button>
-              ))}
+                  onChange={(value) => setDraft((current) => ({ ...current, windowBackgroundMaterial: value }))}
+                  options={windowBackgroundOptions}
+                />
+              </CompactSettingRow>
+              {backgroundMaterialSupported.includes('translucent') && (
+                <div className="mt-2 space-y-1 px-1 text-xs text-text-secondary">
+                  <p>{t('settings.windowBackgroundRequiresRestart')}</p>
+                  {windowBackgroundMaterialRequiresRestart && (
+                    <p>{t('settings.windowBackgroundAppliedAfterRestart')}</p>
+                  )}
+                  <p>{t('settings.windowBackgroundBlurHelp')}</p>
+                </div>
+              )}
             </div>
-            {backgroundMaterialSupported.includes('translucent') && (
-              <div className="mt-3 space-y-1 text-sm text-text-secondary">
-                <p>{t('settings.windowBackgroundRequiresRestart')}</p>
-                {windowBackgroundMaterialRequiresRestart && (
-                  <p>{t('settings.windowBackgroundAppliedAfterRestart')}</p>
-                )}
-                <p>{t('settings.windowBackgroundBlurHelp')}</p>
-              </div>
-            )}
-          </div>
-          <div className="mt-5 rounded-[20px] border border-border-visible bg-bg-secondary px-4 py-4">
-            <div className="nd-label text-text-display">{t('settings.language')}</div>
-            <p className="mt-1 text-sm text-text-secondary">{t('settings.languageDescription')}</p>
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              {(['en', 'es'] as const).map((value) => (
-                <button
-                  key={value}
-                  className={`rounded-full border px-4 py-3 text-sm transition-colors ${
-                    language === value ? 'border-text-display bg-bg-tertiary text-text-display' : 'border-border text-text-secondary'
-                  }`}
-                  onClick={() => setLanguage(value)}
-                >
-                  {value === 'en' ? t('settings.english') : t('settings.spanish')}
-                </button>
-              ))}
-            </div>
+            <CompactSettingRow title={t('settings.language')} description={t('settings.languageDescription')}>
+              <SegmentedControl
+                value={language}
+                onChange={setLanguage}
+                options={[
+                  { value: 'en', label: t('settings.english') },
+                  { value: 'es', label: t('settings.spanish') },
+                ]}
+              />
+            </CompactSettingRow>
           </div>
         </section>
       )
@@ -761,6 +872,9 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
     }
 
     if (activeSection === 'terminal') {
+      const followLight = draft.themeId === 'default'
+        && (draft.appearance === 'light' || (draft.appearance === 'system' && !window.matchMedia('(prefers-color-scheme: dark)').matches))
+
       return (
         <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
           <div className="mb-5 flex items-center gap-3">
@@ -771,46 +885,52 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
             </div>
           </div>
 
+          <p className="mb-4 text-sm text-text-secondary">{t('settings.themePreviewHint')}</p>
+
           <div className="space-y-3">
-            <div className="grid gap-3 lg:grid-cols-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
               {TERMINAL_THEMES.map((theme) => {
-                const colors = getXtermTheme(resolveTerminalThemeId(theme.id, draft.themeId))
+                const colors = getXtermTheme(resolveTerminalThemeId(theme.id, draft.themeId, followLight))
                 const isActive = terminalThemeId === theme.id
 
                 return (
                   <button
                     key={theme.id}
+                    type="button"
                     aria-pressed={isActive}
-                    className={`rounded-[20px] border px-4 py-4 text-left transition-colors ${
-                      isActive ? 'border-text-display bg-bg-primary' : 'border-border-visible bg-bg-primary hover:border-text-secondary'
+                    className={`rounded-[14px] border bg-bg-primary p-1.5 text-left transition-colors ${
+                      isActive ? 'border-text-display ring-1 ring-text-display' : 'border-border-visible hover:border-text-secondary'
                     }`}
-                    onClick={() => setTerminalThemeId(theme.id as TerminalThemeId)}
+                    onClick={() => setTerminalThemeId(theme.id)}
                   >
-                    <span className="flex items-center justify-between gap-3">
-                      <span className="nd-label text-text-display">{theme.id === 'yira-default' ? t('settings.followAppTheme') : theme.label}</span>
-                      {isActive && <span className="nd-caption text-text-secondary">[ {t('settings.active')} ]</span>}
-                    </span>
                     <span
-                      className="mt-4 flex h-12 items-center gap-2 rounded-[14px] border px-3 font-mono text-sm"
+                      className="flex h-9 items-center gap-1.5 rounded-[10px] px-2 font-mono text-[11px]"
                       style={{
                         background: colors.background,
-                        borderColor: colors.brightBlack,
                         color: colors.foreground,
                       }}
                     >
                       <span style={{ color: colors.green }}>$</span>
-                      <span>yira --theme</span>
-                      <span className="ml-auto h-4 w-2" style={{ background: colors.cursor }} />
+                      <span>ls</span>
+                      <span className="h-2 w-2 rounded-full" style={{ background: colors.blue }} />
+                      <span className="h-2 w-2 rounded-full" style={{ background: colors.magenta }} />
+                      <span className="ml-auto h-3 w-1.5" style={{ background: colors.cursor }} />
+                    </span>
+                    <span className="mt-1.5 flex items-center justify-between gap-1 px-0.5">
+                      <span className="truncate text-xs text-text-display">
+                        {theme.id === 'yira-default' ? t('settings.followAppTheme') : theme.label}
+                      </span>
+                      {isActive && <Check size={12} className="shrink-0 text-text-display" aria-hidden="true" />}
                     </span>
                   </button>
                 )
               })}
             </div>
 
-            <label className="flex items-center justify-between gap-4 rounded-[20px] border border-border-visible bg-bg-primary px-4 py-4">
+            <label className="flex items-center justify-between gap-4 rounded-[16px] border border-border-visible bg-bg-secondary px-4 py-3">
               <span>
                 <span className="nd-label block text-text-display">{t('settings.terminalActivity')}</span>
-                <span className="mt-2 block text-sm leading-6 text-text-secondary">{t('settings.terminalActivityDescription')}</span>
+                <span className="mt-1 block text-xs leading-5 text-text-secondary">{t('settings.terminalActivityDescription')}</span>
               </span>
               <input
                 type="checkbox"
