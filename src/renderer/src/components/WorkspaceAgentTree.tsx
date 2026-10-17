@@ -1,9 +1,10 @@
-import React from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AgentActiveSession, WorkspaceMetadata } from '@shared/types'
 import { useNow } from '@/hooks/useNow'
 import { formatActivityElapsed } from '@/utils/activityPalette'
 import { getAgentSessionTitle } from '@/utils/terminalDisplayTitle'
+import { keepAgentSessionOrder } from '@/utils/workspaceSidebarSections'
 
 const ELAPSED_REFRESH_MS = 30_000
 // Spinner glyphs that Claude and Codex put in front of their terminal title.
@@ -42,11 +43,27 @@ export function WorkspaceAgentTree({
 }: WorkspaceAgentTreeProps): React.ReactElement | null {
   const { t } = useTranslation()
   const now = useNow(ELAPSED_REFRESH_MS)
+  // While the pointer or focus is on the list, rows keep their place so a click lands where the user aimed.
+  const [hovered, setHovered] = useState(false)
+  const [focusedWithin, setFocusedWithin] = useState(false)
+  const shownIdsRef = useRef<string[]>([])
+  const shownSessions = hovered || focusedWithin ? keepAgentSessionOrder(sessions, shownIdsRef.current) : sessions
+  useEffect(() => {
+    shownIdsRef.current = shownSessions.map(({ sessionId }) => sessionId)
+  })
   if (sessions.length === 0) return null
 
   return (
-    <div className="mt-px flex flex-col gap-px">
-      {sessions.map((session) => {
+    <div
+      className="mt-px flex flex-col gap-px"
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => setHovered(false)}
+      onFocus={() => setFocusedWithin(true)}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocusedWithin(false)
+      }}
+    >
+      {shownSessions.map((session) => {
         const providerName = t(session.provider === 'claude' ? 'agentsView.claude' : 'agentsView.codex')
         const sessionName = getAgentSessionTitle(session).replace(TITLE_SPINNER_PREFIX, '') || providerName
         const statusLabel = getStatusLabel(session.status, t)

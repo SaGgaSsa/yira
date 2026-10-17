@@ -6,6 +6,7 @@ import {
   getActiveSidebarWorkspaces,
   getWorkspaceAgentEntries,
   getWorkspaceLastUsedParts,
+  keepAgentSessionOrder,
   summarizeWorkspaceAgents,
 } from './workspaceSidebarSections'
 
@@ -57,21 +58,30 @@ test('filters workspaces by every query word in the name or root folder', () => 
   assert.deepEqual(filterWorkspacesByQuery(workspaces, 'missing'), [])
 })
 
-test('orders open sessions by waiting, done, working, then start time and tile id', () => {
+test('orders open sessions with waiting first, then by most recent activity and tile id', () => {
   const sessions = [
-    session({ sessionId: 'working-late', tileId: 'z', startedAt: '2026-01-01T00:02:00.000Z' }),
-    session({ sessionId: 'done-late', status: 'done', startedAt: '2026-01-01T00:02:00.000Z' }),
-    session({ sessionId: 'waiting-tile-z', status: 'needs-input', tileId: 'z' }),
-    session({ sessionId: 'waiting-tile-a', status: 'needs-input', tileId: 'a' }),
-    session({ sessionId: 'done-early', status: 'done', startedAt: '2026-01-01T00:01:00.000Z' }),
-    session({ sessionId: 'working-early', startedAt: '2026-01-01T00:01:00.000Z', tileId: 'b' }),
+    session({ sessionId: 'working-old', tileId: 'z', lastActivityAt: '2026-01-01T00:01:00.000Z' }),
+    session({ sessionId: 'done-new', status: 'done', lastActivityAt: '2026-01-01T00:05:00.000Z' }),
+    session({ sessionId: 'waiting-old', status: 'needs-input', lastActivityAt: '2026-01-01T00:01:00.000Z' }),
+    session({ sessionId: 'waiting-new', status: 'needs-input', lastActivityAt: '2026-01-01T00:03:00.000Z' }),
+    session({ sessionId: 'working-new', tileId: 'b', lastActivityAt: '2026-01-01T00:04:00.000Z' }),
+    session({ sessionId: 'done-old-tile-a', status: 'done', tileId: 'a', lastActivityAt: '2026-01-01T00:01:00.000Z' }),
     session({ sessionId: 'other-workspace', workspaceId: 'workspace-b' }),
     session({ sessionId: 'exited', status: 'exited' }),
   ]
 
   assert.deepEqual(
     getWorkspaceAgentEntries('workspace-a', sessions).map(({ sessionId }) => sessionId),
-    ['waiting-tile-a', 'waiting-tile-z', 'done-early', 'done-late', 'working-early', 'working-late'],
+    ['waiting-new', 'waiting-old', 'done-new', 'working-new', 'done-old-tile-a', 'working-old'],
+  )
+})
+
+test('keeps the previous session order and appends new sessions', () => {
+  const sessions = [session({ sessionId: 'c' }), session({ sessionId: 'new' }), session({ sessionId: 'a' }), session({ sessionId: 'b' })]
+
+  assert.deepEqual(
+    keepAgentSessionOrder(sessions, ['a', 'gone', 'b', 'c']).map(({ sessionId }) => sessionId),
+    ['a', 'b', 'c', 'new'],
   )
 })
 
