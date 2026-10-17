@@ -1,15 +1,10 @@
 import type { AgentActiveSession, WorkspaceMetadata } from '@shared/types'
 
-const AGENT_STATUS_ORDER: Record<AgentActiveSession['status'], number> = {
-  'needs-input': 0,
-  done: 1,
-  working: 2,
-  exited: 3,
-}
-
 function compareAgentSessions(left: AgentActiveSession, right: AgentActiveSession): number {
-  return AGENT_STATUS_ORDER[left.status] - AGENT_STATUS_ORDER[right.status]
-    || left.startedAt.localeCompare(right.startedAt)
+  const leftWaiting = left.status === 'needs-input' ? 0 : 1
+  const rightWaiting = right.status === 'needs-input' ? 0 : 1
+  return leftWaiting - rightWaiting
+    || right.lastActivityAt.localeCompare(left.lastActivityAt)
     || left.tileId.localeCompare(right.tileId)
 }
 
@@ -43,7 +38,7 @@ export function filterWorkspacesByQuery(
   })
 }
 
-/** Open agent sessions in a workspace, with attention and completed sessions first. */
+/** Open agent sessions in a workspace: waiting for a reply first, then most recent activity. */
 export function getWorkspaceAgentEntries(
   workspaceId: string,
   sessions: readonly AgentActiveSession[],
@@ -51,6 +46,18 @@ export function getWorkspaceAgentEntries(
   return sessions
     .filter((session) => session.workspaceId === workspaceId && session.status !== 'exited')
     .sort(compareAgentSessions)
+}
+
+/** Keep sessions in the order of previousIds; sessions not listed there go last in their given order. */
+export function keepAgentSessionOrder(
+  sessions: readonly AgentActiveSession[],
+  previousIds: readonly string[],
+): AgentActiveSession[] {
+  const previousIndex = new Map(previousIds.map((sessionId, index) => [sessionId, index]))
+  return sessions
+    .map((session, index) => ({ session, rank: previousIndex.get(session.sessionId) ?? previousIds.length + index }))
+    .sort((left, right) => left.rank - right.rank)
+    .map(({ session }) => session)
 }
 
 export function summarizeWorkspaceAgents(entries: readonly AgentActiveSession[]): {
