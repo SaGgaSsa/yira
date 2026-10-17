@@ -152,6 +152,7 @@ const METHODS: readonly (keyof TerminalDaemonMethods)[] = [
   'attach',
   'create',
   'snapshot',
+  'setAgentSurface',
   'rendererAttach',
   'rendererDetach',
   'write',
@@ -273,6 +274,7 @@ function normalizeAgent(value: unknown): TerminalDaemonAgent | undefined {
   }
 
   const title = normalizeMetadataString('title', MAX_AGENT_TITLE_LENGTH)
+  const cwd = normalizeMetadataString('cwd', MAX_WORKTREE_PATH_LENGTH)
   const worktreeRoot = normalizeMetadataString('worktreeRoot', MAX_WORKTREE_PATH_LENGTH)
   const worktreeBranch = normalizeMetadataString('worktreeBranch', MAX_ID_LENGTH)
   let worktrees: Array<{ path: string; baseSha: string }> | undefined
@@ -301,6 +303,7 @@ function normalizeAgent(value: unknown): TerminalDaemonAgent | undefined {
     startedAt: normalizeString(value.startedAt, 'terminal agent start time', MAX_ID_LENGTH),
     ...(surface !== undefined ? { surface } : {}),
     ...(title !== undefined ? { title } : {}),
+    ...(cwd !== undefined ? { cwd } : {}),
     ...(worktreeRoot !== undefined ? { worktreeRoot } : {}),
     ...(worktreeBranch !== undefined ? { worktreeBranch } : {}),
     ...(worktrees !== undefined ? { worktrees } : {}),
@@ -1308,6 +1311,19 @@ export class TerminalDaemonServer {
         const identity = normalizeIdentity(params)
         const session = this.findSession(identity)
         if (!session) throw new Error('Terminal session identity is stale')
+        return session.snapshot()
+      }
+      case 'setAgentSurface': {
+        if (!isRecord(params)) throw new Error('Invalid terminal agent surface parameters')
+        const identity = normalizeIdentity(params.identity)
+        const surface = params.surface
+        if (surface !== 'tile' && surface !== 'agents-view') {
+          throw new Error('Invalid terminal agent surface')
+        }
+        const session = this.findSession(identity)
+        if (!session) throw new Error('Terminal session identity is stale')
+        if (!session.spawn.agent) throw new Error('Terminal session has no agent')
+        session.spawn.agent = { ...session.spawn.agent, surface }
         return session.snapshot()
       }
       case 'rendererAttach': {

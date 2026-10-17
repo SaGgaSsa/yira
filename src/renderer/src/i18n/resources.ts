@@ -244,6 +244,12 @@ type TranslationResources = {
     unknownTitle: string
     closeSession: string
     maximizeSession: string
+    pinSession: string
+    pinSessionWorktreeDisabled: string
+    pinSessionTitle: string
+    pinSessionMessage: string
+    pinSessionConfirm: string
+    pinSessionErrorTitle: string
     restoreSession: string
     statusWorking: string
     statusNeedsInput: string
@@ -1202,6 +1208,12 @@ const en: TranslationResources = {
     unknownTitle: 'Untitled session',
     closeSession: 'Close session',
     maximizeSession: 'Maximize session',
+    pinSession: 'Keep as agent tile',
+    pinSessionWorktreeDisabled: 'Sessions in a worktree cannot be moved to a tile',
+    pinSessionTitle: 'Move session to an agent tile?',
+    pinSessionMessage: 'The session moves to the canvas as an agent tile and leaves the Agents View. The agent keeps running and is not restarted. Closing the tile ends the agent.',
+    pinSessionConfirm: 'Move to tile',
+    pinSessionErrorTitle: 'Could not move agent session',
     restoreSession: 'Restore session',
     statusWorking: 'Working',
     statusNeedsInput: 'Needs input',
@@ -2119,6 +2131,12 @@ const es: TranslationResources = {
     unknownTitle: 'Sesión sin título',
     closeSession: 'Cerrar sesión',
     maximizeSession: 'Maximizar sesión',
+    pinSession: 'Fijar como tile de agente',
+    pinSessionWorktreeDisabled: 'Las sesiones en un worktree no se pueden mover a un tile',
+    pinSessionTitle: '¿Mover la sesión a un tile de agente?',
+    pinSessionMessage: 'La sesión pasa al canvas como tile de agente y deja la vista de agentes. El agente sigue corriendo y no se reinicia. Al cerrar el tile se termina el agente.',
+    pinSessionConfirm: 'Mover a tile',
+    pinSessionErrorTitle: 'No se pudo mover la sesión del agente',
     restoreSession: 'Restaurar sesión',
     statusWorking: 'Trabajando',
     statusNeedsInput: 'Requiere intervención',

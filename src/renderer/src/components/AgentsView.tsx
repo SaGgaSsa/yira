@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo } from 'react'
-import { Bot, Maximize2, Minimize2, Plus, X } from 'lucide-react'
+import { Bot, Maximize2, Minimize2, Pin, Plus, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type {
   AgentActiveSession,
@@ -27,6 +27,7 @@ export interface AgentsViewProps {
   shortcutLabel?: string
   onOpenBrowserTile?: (url: string) => void
   onOpenFileTile?: (relativePath: string, options?: FileTileOpenOptions) => void | Promise<void>
+  onPinSession?: (session: AgentActiveSession) => void
 }
 
 const MIN_SCROLLING_TILE_HEIGHT = 180
@@ -41,6 +42,7 @@ interface SessionCardProps {
   onFocus: () => void
   onClose: () => void
   onToggleMaximize: () => void
+  onPin?: () => void
   onOpenBrowserTile?: (url: string) => void
   onOpenFileTile?: (relativePath: string, options?: FileTileOpenOptions) => void | Promise<void>
 }
@@ -83,6 +85,7 @@ function AgentSessionCard({
   onFocus,
   onClose,
   onToggleMaximize,
+  onPin,
   onOpenBrowserTile,
   onOpenFileTile,
 }: SessionCardProps): React.ReactElement {
@@ -97,6 +100,10 @@ function AgentSessionCard({
   const providerColor = 'text-activity'
   const statusLabel = getStatusLabel(session.status, t)
   const maximizeLabel = isMaximized ? t('agentsView.restoreSession') : t('agentsView.maximizeSession')
+  const pinDisabled = session.status === 'exited' || Boolean(session.worktreeRoot)
+  const pinLabel = session.worktreeRoot
+    ? t('agentsView.pinSessionWorktreeDisabled')
+    : t('agentsView.pinSession')
 
   return (
     <article
@@ -120,6 +127,21 @@ function AgentSessionCard({
         <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] ${getStatusBadgeClass(session.status)}`} data-agent-status={session.status}>
           {statusLabel}
         </span>
+        {onPin && (
+          <button
+            type="button"
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
+            aria-label={pinLabel}
+            title={pinLabel}
+            disabled={pinDisabled}
+            onClick={(event) => {
+              event.stopPropagation()
+              onPin()
+            }}
+          >
+            <Pin size={13} aria-hidden="true" />
+          </button>
+        )}
         <button
           type="button"
           className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
@@ -174,6 +196,7 @@ export function AgentsView({
   shortcutLabel = 'Ctrl+N',
   onOpenBrowserTile,
   onOpenFileTile,
+  onPinSession,
 }: AgentsViewProps): React.ReactElement {
   const { t } = useTranslation()
   const visibleSessions = useMemo(
@@ -247,6 +270,7 @@ export function AgentsView({
                     onFocus={() => onFocusSession(session.tileId)}
                     onClose={() => onCloseSession(session)}
                     onToggleMaximize={() => onMaximizedSessionChange(isMaximized ? null : session.tileId)}
+                    onPin={onPinSession ? () => onPinSession(session) : undefined}
                     onOpenBrowserTile={onOpenBrowserTile}
                     onOpenFileTile={onOpenFileTile}
                   />

@@ -12,6 +12,7 @@ import type {
   AgentSessionCloseResult,
   AgentSessionCreateResult,
   AgentSessionHistoryResult,
+  AgentSessionPinResult,
   AgentSessionTranscriptQuery,
   AgentSessionTranscriptResult,
   AgentActiveSessionSnapshot,
@@ -93,6 +94,7 @@ export interface AgentIPCOptions {
   workspaces?: () => Promise<Array<{ id: string; rootFolderPath: string }>>
   createSession?: (target: TerminalSessionTarget, spec: AgentsViewLaunchSpec) => Promise<unknown>
   destroySession?: (target: TerminalSessionTarget) => Promise<void>
+  moveSessionToTile?: (target: TerminalSessionTarget) => Promise<void>
   workspaceAgentConfig?: (workspaceId: string) => Promise<Pick<WorkspaceConfig, 'rootFolderPath' | 'sourceControlRepositoryPaths' | 'agentProvider' | 'agentProviders'> | null>
   worktrees?: AgentIPCWorktrees
 }
@@ -359,6 +361,15 @@ async function destroyAgentSession(options: AgentIPCOptions, target: TerminalSes
   await terminal.destroyAgentsViewSession(target)
 }
 
+async function moveAgentSessionToTile(options: AgentIPCOptions, target: TerminalSessionTarget): Promise<void> {
+  if (options.moveSessionToTile) {
+    await options.moveSessionToTile(target)
+    return
+  }
+  const terminal = await import('./terminal')
+  await terminal.moveAgentsViewSessionToTile(target)
+}
+
 /** Register all renderer-facing agent operations with validated, data-only inputs. */
 export function registerAgentsIPC(options: AgentIPCOptions = {}): void {
   const registry = options.registry ?? agentSessionRegistry
@@ -509,6 +520,7 @@ export function registerAgentsIPC(options: AgentIPCOptions = {}): void {
       ...(input.resumeSessionId ? { resumeSessionId: input.resumeSessionId } : {}),
       cwd,
       title,
+      ...(worktree ? {} : { relativeCwd: input.resumeCwd ?? '.' }),
       ...(worktree ? {
         worktree: {
           root: worktree.root,
@@ -572,6 +584,28 @@ export function registerAgentsIPC(options: AgentIPCOptions = {}): void {
       }
     }
     return { worktree: worktreeResult, ...(worktreeResult === 'kept' && worktreeRoot ? { worktreeRoot } : {}) }
+  })
+
+  ipcMain.handle('agents:sessions:pin', async (_event, rawInput: unknown): Promise<AgentSessionPinResult> => {
+    if (!isRecord(rawInput)) throw new Error('Invalid agent session input')
+    const workspaceId = normalizeAgentOpaqueId(rawInput.workspaceId)
+    const tileId = normalizeAgentOpaqueId(rawInput.tileId)
+    if (!workspaceId || !tileId) throw new Error('Invalid agent session id')
+
+    const session = registry.get(workspaceId, tileId)
+    if (!session) throw new Error('Agent session not found')
+    if (session.surface !== 'agents-view') throw new Error('Only Agents View sessions can be pinned')
+    if (session.status === 'exited') throw new Error('Agent session is no longer running')
+    if (session.worktreeRoot) throw new Error('Agent sessions in a worktree cannot be moved to a tile')
+
+    await moveAgentSessionToTile(options, { workspaceId, tileId })
+    return {
+      provider: session.provider,
+      // A sessionId equal to the tile id is synthetic (a fresh Codex session)
+      // and cannot resume the conversation from a tile.
+      ...(session.sessionId !== tileId ? { sessionId: session.sessionId } : {}),
+      ...(session.cwd !== undefined ? { cwd: session.cwd } : {}),
+    }
   })
 
   ipcMain.handle('agents:sessions:snapshot', (_event, workspaceId: unknown): AgentActiveSessionSnapshot => {

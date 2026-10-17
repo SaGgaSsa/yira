@@ -690,3 +690,77 @@ test('keeps the root worktree when a real child worktree has uncommitted changes
   await access(worktree.worktrees[0].path)
   await access(childWorktree.path)
 })
+
+test('moves an Agents View session to a canvas tile and reports resumable metadata', async () => {
+  const ipcMain = new FakeIpcMain()
+  const { registerAgentsIPC } = loadAgentsIPC(ipcMain)
+  const registry = new AgentSessionRegistry()
+  const moved: Array<{ workspaceId: string; tileId: string }> = []
+  registerAgentsIPC({
+    registry,
+    moveSessionToTile: async (target) => { moved.push(target) },
+  })
+  registry.register({
+    sessionId: 'claude-session-1',
+    tileId: 'agent-pin-1',
+    workspaceId: 'workspace-a',
+    provider: 'claude',
+    surface: 'agents-view',
+    cwd: 'packages/app',
+  })
+  registry.register({
+    sessionId: 'agent-pin-2',
+    tileId: 'agent-pin-2',
+    workspaceId: 'workspace-a',
+    provider: 'codex',
+    surface: 'agents-view',
+  })
+
+  assert.deepEqual(await ipcMain.call('agents:sessions:pin', new FakeWebContents(66), {
+    workspaceId: 'workspace-a',
+    tileId: 'agent-pin-1',
+  }), {
+    provider: 'claude',
+    sessionId: 'claude-session-1',
+    cwd: 'packages/app',
+  })
+  // A Codex session id equal to the tile id is synthetic, so it is omitted.
+  assert.deepEqual(await ipcMain.call('agents:sessions:pin', new FakeWebContents(67), {
+    workspaceId: 'workspace-a',
+    tileId: 'agent-pin-2',
+  }), { provider: 'codex' })
+  assert.deepEqual(moved, [
+    { workspaceId: 'workspace-a', tileId: 'agent-pin-1' },
+    { workspaceId: 'workspace-a', tileId: 'agent-pin-2' },
+  ])
+})
+
+test('rejects pinning an Agents View session that runs in a worktree', async () => {
+  const ipcMain = new FakeIpcMain()
+  const { registerAgentsIPC } = loadAgentsIPC(ipcMain)
+  const registry = new AgentSessionRegistry()
+  let moves = 0
+  registerAgentsIPC({
+    registry,
+    moveSessionToTile: async () => { moves += 1 },
+  })
+  registry.register({
+    sessionId: 'worktree-session',
+    tileId: 'agent-worktree',
+    workspaceId: 'workspace-a',
+    provider: 'claude',
+    surface: 'agents-view',
+    worktreeRoot: 'C:\\worktrees\\agent-worktree',
+    worktreeBranch: 'yira/agent-worktree',
+    worktrees: [{ path: 'C:\\worktrees\\agent-worktree', baseSha: 'a'.repeat(40) }],
+  })
+
+  await assert.rejects(
+    () => ipcMain.call('agents:sessions:pin', new FakeWebContents(68), {
+      workspaceId: 'workspace-a',
+      tileId: 'agent-worktree',
+    }) as Promise<unknown>,
+    /worktree cannot be moved to a tile/,
+  )
+  assert.equal(moves, 0)
+})

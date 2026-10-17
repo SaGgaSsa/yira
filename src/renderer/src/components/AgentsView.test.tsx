@@ -122,6 +122,8 @@ const translationCopy: Record<string, string> = {
   'agentsView.unknownTitle': 'Untitled session',
   'agentsView.closeSession': 'Close session',
   'agentsView.maximizeSession': 'Maximize session',
+  'agentsView.pinSession': 'Keep as agent tile',
+  'agentsView.pinSessionWorktreeDisabled': 'Sessions in a worktree cannot be moved to a tile',
   'agentsView.restoreSession': 'Restore session',
   'agentsView.statusWorking': 'Working',
   'agentsView.statusNeedsInput': 'Needs input',
@@ -181,6 +183,7 @@ function createView(
     onCloseSession?: (value: AgentActiveSession) => void
     onFocusSession?: (id: string) => void
     onMaximizedSessionChange?: (id: string | null) => void
+    onPinSession?: (value: AgentActiveSession) => void
     shortcutLabel?: string
   } = {},
 ): { container: any; root: { unmount: () => void } } {
@@ -202,6 +205,7 @@ function createView(
         }}
         onCloseSession={callbacks.onCloseSession ?? (() => undefined)}
         onNewSession={() => undefined}
+        onPinSession={callbacks.onPinSession}
         shortcutLabel={callbacks.shortcutLabel}
       />
     )
@@ -291,6 +295,35 @@ test('reports the maximized session so the app can hide the sidebar', async () =
     findButton(container, 'Restore session').dispatchEvent(new TestEvent('click', { bubbles: true, cancelable: true }))
     await settle()
     assert.deepEqual(changes, ['agent-a', null])
+  } finally {
+    root.unmount()
+  }
+})
+
+test('reports the pinned session through the callback', async () => {
+  const pinned: AgentActiveSession[] = []
+  const { container, root } = createView([session()], {
+    onPinSession: (value) => pinned.push(value),
+  })
+
+  try {
+    await settle()
+    findButton(container, 'Keep as agent tile').dispatchEvent(new TestEvent('click', { bubbles: true, cancelable: true }))
+    await settle()
+    assert.equal(pinned.length, 1)
+    assert.equal(pinned[0].tileId, 'agent-a')
+  } finally {
+    root.unmount()
+  }
+})
+
+test('hides the pin button when the view has no pin callback', async () => {
+  const { container, root } = createView([session()])
+
+  try {
+    await settle()
+    assert.equal(findButton(container, 'Keep as agent tile'), null)
+    assert.ok(findButton(container, 'Maximize session'))
   } finally {
     root.unmount()
   }

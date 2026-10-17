@@ -67,6 +67,8 @@ import type {
   AgentSessionCreateResult,
   AgentSessionHistoryQuery,
   AgentSessionHistoryResult,
+  AgentSessionPinInput,
+  AgentSessionPinResult,
   AgentSessionTranscriptQuery,
   AgentSessionTranscriptResult,
   AgentUsageSnapshot,
@@ -116,6 +118,7 @@ interface ElectronWorld {
     createSession: (input: AgentSessionCreateInput) => Promise<AgentSessionCreateResult>
     savePromptImage: (input: AgentPromptImageSaveInput) => Promise<AgentPromptImage>
     closeSession: (input: AgentSessionCloseInput) => Promise<AgentSessionCloseResult>
+    pinSession: (input: AgentSessionPinInput) => Promise<AgentSessionPinResult>
     sessionsSnapshot: (workspaceId?: string) => Promise<AgentActiveSessionSnapshot>
     getSessions: (workspaceId?: string) => Promise<AgentActiveSessionSnapshot>
     subscribeSessions: (workspaceId?: string) => Promise<string | false>
