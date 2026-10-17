@@ -2447,6 +2447,38 @@ function AppContent(): React.ReactElement {
         focusAgentTile(tileId)
       }
     : undefined
+  const pinAgentsSession = tileCreationAvailability.agent && defaultProfile
+    ? async (session: AgentActiveSession) => {
+        const confirmed = await requestConfirm({
+          title: t('agentsView.pinSessionTitle'),
+          message: t('agentsView.pinSessionMessage'),
+          confirmLabel: t('agentsView.pinSessionConfirm'),
+          cancelLabel: t('common.cancel'),
+        })
+        if (!confirmed) return
+        try {
+          const result = await window.electron.agents.pinSession({ workspaceId: session.workspaceId, tileId: session.tileId })
+          // The tile reuses the session's tileId, so its terminal attaches to the running agent.
+          const cwd = sanitizeAgentCwd(result.cwd)
+          const tileId = addTerminal(defaultProfile.id, {
+            provider: result.provider,
+            ...(result.sessionId ? { sessionId: result.sessionId } : {}),
+            ...(cwd ? { cwd } : {}),
+          }, { id: session.tileId })
+          if (!tileId) return
+          agentsView.close()
+          setActivityOpen(false)
+          focusAgentTile(tileId)
+        } catch (error) {
+          void requestConfirm({
+            title: t('agentsView.pinSessionErrorTitle'),
+            message: error instanceof Error ? error.message : String(error),
+            confirmLabel: t('common.close'),
+            hideCancel: true,
+          })
+        }
+      }
+    : undefined
   const tileCreationSelectorProps: TileCreationSelectorProps = {
     canCreateAgent: Boolean(tileCreationAvailability.agent && agentTileProvider && defaultProfile),
     canCreateNote,
@@ -2893,6 +2925,7 @@ function AppContent(): React.ReactElement {
                 maximizedSessionId={agentsMaximizedSessionId}
                 onMaximizedSessionChange={setAgentsMaximizedSessionId}
                 onCloseSession={(session) => { void closeAgentsSession(session) }}
+                onPinSession={pinAgentsSession ? (session) => { void pinAgentsSession(session) } : undefined}
                 onNewSession={agentsView.openNewSessionDialog}
                 shortcutLabel={newAgentSessionShortcut}
                 onOpenBrowserTile={(url) => addBrowser(url)}

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { BrowserWindow, ipcMain, type WebContents } from 'electron'
 import { promises as fs } from 'fs'
 import { dirname, join } from 'path'
@@ -187,6 +188,8 @@ export interface AgentsViewLaunchSpec {
   prompt?: string
   resumeSessionId?: string
   cwd: string
+  /** Workspace-relative directory; absent when the session runs in a worktree. */
+  relativeCwd?: string
   title?: string
   worktree?: {
     root: string
@@ -493,6 +496,10 @@ export async function createAgentsViewSession(
         ? ['--resume', resumeSessionId]
         : ['resume', resumeSessionId]))
     }
+    // A Claude session presets its conversation id so a canvas tile can resume
+    // it later, the same mechanism buildFixedProviderCommand uses for tiles.
+    const presetSessionId = spec.provider === 'claude' && !resumeSessionId ? randomUUID() : undefined
+    if (presetSessionId) args.push('--session-id', presetSessionId)
 
     const launch = buildAgentShellCommand({
       shellProfileId: shellProfile.id,
@@ -507,10 +514,11 @@ export async function createAgentsViewSession(
     const startedAt = new Date().toISOString()
     const agent = {
       provider: spec.provider,
-      sessionId: resumeSessionId ?? runtimeTarget.tileId,
+      sessionId: resumeSessionId ?? presetSessionId ?? runtimeTarget.tileId,
       startedAt,
       surface: 'agents-view' as const,
       ...(spec.title !== undefined ? { title: spec.title } : {}),
+      ...(spec.relativeCwd !== undefined ? { cwd: spec.relativeCwd } : {}),
       ...(spec.worktree ? {
         worktreeRoot: spec.worktree.root,
         worktreeBranch: spec.worktree.branch,
@@ -536,6 +544,10 @@ export async function createAgentsViewSession(
 
 export function destroyAgentsViewSession(target: TerminalSessionTarget): Promise<void> {
   return persistentTerminalSessions.destroyCurrent(normalizeTerminalSessionTarget(target, true))
+}
+
+export function moveAgentsViewSessionToTile(target: TerminalSessionTarget): Promise<void> {
+  return persistentTerminalSessions.setAgentSurface(normalizeTerminalSessionTarget(target, true), 'tile')
 }
 
 async function buildTerminalDaemonSpawn(

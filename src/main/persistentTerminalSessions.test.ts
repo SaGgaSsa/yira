@@ -284,6 +284,42 @@ test('hydrate restores agent metadata and maps alert and exit state', async () =
   assert.deepEqual(alerts[0], alert)
 })
 
+test('moves a running agent session to a tile surface and updates the registry', async () => {
+  const transport = new FakeTransport()
+  const registry = new AgentSessionRegistry({ now: () => 1_700_000_000_000 })
+  const agent = {
+    provider: 'claude' as const,
+    sessionId: 'session-pin',
+    startedAt: '2024-01-01T00:00:00.000Z',
+    surface: 'agents-view' as const,
+    cwd: 'packages/app',
+  }
+  transport.setHandler('attach', () => snapshot({ agent }))
+  transport.setHandler('setAgentSurface', (params) => {
+    const surface = (params as { surface: 'tile' | 'agents-view' }).surface
+    return snapshot({ agent: { ...agent, surface } })
+  })
+  const sessions = createSessions(transport, { registry })
+  await sessions.attach(target)
+  assert.equal(registry.get(identity.workspaceId, identity.tileId)?.surface, 'agents-view')
+  assert.equal(registry.get(identity.workspaceId, identity.tileId)?.cwd, agent.cwd)
+
+  await sessions.setAgentSurface(target, 'tile')
+
+  const request = transport.requests.find(entry => entry.method === 'setAgentSurface')
+  assert.deepEqual(request?.params, { identity, surface: 'tile' })
+  assert.equal(registry.get(identity.workspaceId, identity.tileId)?.surface, 'tile')
+})
+
+test('rejects moving an agent session that is no longer running', async () => {
+  const transport = new FakeTransport()
+  transport.setHandler('attach', () => null)
+  const sessions = createSessions(transport)
+
+  await assert.rejects(sessions.setAgentSurface(target, 'tile'), /Agent session is no longer running/)
+  assert.equal(transport.requestCount('setAgentSurface'), 0)
+})
+
 test('working state updates the registry without reaching the agent-alert callback', async () => {
   const transport = new FakeTransport()
   const registry = new AgentSessionRegistry({ now: () => 1_700_000_000_000 })

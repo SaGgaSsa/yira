@@ -18,6 +18,8 @@ import type {
   AgentSessionCreateResult,
   AgentSessionHistoryQuery,
   AgentSessionHistoryResult,
+  AgentSessionPinInput,
+  AgentSessionPinResult,
   AgentSessionTranscriptQuery,
   AgentSessionTranscriptResult,
   AgentUsageDetailsSnapshot,
@@ -101,6 +103,8 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.invoke('agents:promptImages:save', input) as Promise<AgentPromptImage>,
     closeSession: (input: AgentSessionCloseInput) =>
       ipcRenderer.invoke('agents:sessions:close', input) as Promise<AgentSessionCloseResult>,
+    pinSession: (input: AgentSessionPinInput) =>
+      ipcRenderer.invoke('agents:sessions:pin', input) as Promise<AgentSessionPinResult>,
     sessionsSnapshot: (workspaceId?: string) =>
       ipcRenderer.invoke('agents:sessions:snapshot', workspaceId) as Promise<AgentActiveSessionSnapshot>,
     getSessions: (workspaceId?: string) =>

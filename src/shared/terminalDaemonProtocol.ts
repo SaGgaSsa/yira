@@ -18,6 +18,8 @@ export interface TerminalDaemonAgent {
   /** Missing values from older daemons are interpreted as 'tile'. */
   surface?: AgentSessionSurface
   title?: string
+  /** Workspace-relative directory the agent started in, when known. */
+  cwd?: string
   worktreeRoot?: string
   worktreeBranch?: string
   worktrees?: Array<{ path: string; baseSha: string }>
@@ -66,6 +68,7 @@ export interface TerminalDaemonMethods {
   attach: { params: TerminalSessionTarget; result: TerminalDaemonSnapshot | null }
   create: { params: TerminalDaemonSpawn; result: TerminalDaemonSnapshot }
   snapshot: { params: TerminalSessionIdentity; result: TerminalDaemonSnapshot }
+  setAgentSurface: { params: { identity: TerminalSessionIdentity; surface: AgentSessionSurface }; result: TerminalDaemonSnapshot }
   rendererAttach: { params: TerminalSessionIdentity; result: TerminalDaemonSnapshot }
   rendererDetach: { params: TerminalSessionIdentity; result: null }
   write: { params: { identity: TerminalSessionIdentity; data: string }; result: null }

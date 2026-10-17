@@ -23,6 +23,7 @@ export interface AgentSessionRegistration {
   startedAt?: string
   surface?: AgentSessionSurface
   title?: string
+  cwd?: string
   worktreeRoot?: string
   worktreeBranch?: string
   worktrees?: Array<{ path: string; baseSha: string }>
@@ -90,6 +91,7 @@ function normalizeRegistration(input: AgentSessionRegistration): AgentSessionReg
     throw new Error('Invalid agent surface')
   }
   const title = normalizeMetadataString(input.title, 'title', 200)
+  const cwd = normalizeMetadataString(input.cwd, 'cwd', 4_096)
   const worktreeRoot = normalizeMetadataString(input.worktreeRoot, 'worktree root', 4_096)
   const worktreeBranch = normalizeMetadataString(input.worktreeBranch, 'worktree branch', 256)
   let worktrees: Array<{ path: string; baseSha: string }> | undefined
@@ -115,6 +117,7 @@ function normalizeRegistration(input: AgentSessionRegistration): AgentSessionReg
     ...(startedAt ? { startedAt } : {}),
     ...(surface !== undefined ? { surface } : {}),
     ...(title !== undefined ? { title } : {}),
+    ...(cwd !== undefined ? { cwd } : {}),
     ...(worktreeRoot !== undefined ? { worktreeRoot } : {}),
     ...(worktreeBranch !== undefined ? { worktreeBranch } : {}),
     ...(worktrees !== undefined ? { worktrees } : {}),
@@ -163,6 +166,7 @@ export class AgentSessionRegistry {
       lastActivityAt: currentTime,
       ...(normalized.surface !== undefined ? { surface: normalized.surface } : {}),
       ...(normalized.title !== undefined ? { title: normalized.title } : {}),
+      ...(normalized.cwd !== undefined ? { cwd: normalized.cwd } : {}),
       ...(normalized.worktreeRoot !== undefined ? { worktreeRoot: normalized.worktreeRoot } : {}),
       ...(normalized.worktreeBranch !== undefined ? { worktreeBranch: normalized.worktreeBranch } : {}),
       ...(normalized.worktrees !== undefined ? { worktrees: normalized.worktrees } : {}),
@@ -243,6 +247,19 @@ export class AgentSessionRegistry {
     const liveTitle = normalizeAgentTerminalTitle(title)
     if (!session || session.status === 'exited' || !liveTitle || session.liveTitle === liveTitle) return false
     session.liveTitle = liveTitle
+    this.emit()
+    return true
+  }
+
+  /** Move a running session between the Agents View and a canvas tile. */
+  updateSurface(workspaceId: string, tileId: string, surface: AgentSessionSurface): boolean {
+    if (surface !== 'tile' && surface !== 'agents-view') return false
+    const workspace = normalizeAgentOpaqueId(workspaceId)
+    const tile = normalizeAgentOpaqueId(tileId)
+    if (!workspace || !tile) return false
+    const session = this.sessions.get(sessionKey(workspace, tile))
+    if (!session || session.status === 'exited' || session.surface === surface) return false
+    session.surface = surface
     this.emit()
     return true
   }

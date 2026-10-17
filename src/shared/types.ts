@@ -81,6 +81,8 @@ export interface AgentActiveSession {
   title?: string
   /** Latest title the agent set on its terminal, as the agent wrote it. */
   liveTitle?: string
+  /** Workspace-relative directory the agent started in, when known. */
+  cwd?: string
   worktreeRoot?: string
   worktreeBranch?: string
   worktrees?: Array<{ path: string; baseSha: string }>
@@ -219,6 +221,19 @@ export interface AgentSessionCloseInput {
 export interface AgentSessionCloseResult {
   worktree: 'none' | 'removed' | 'kept' | 'missing'
   worktreeRoot?: string
+}
+
+export interface AgentSessionPinInput {
+  workspaceId: string
+  tileId: string
+}
+
+/** Metadata the renderer stores on the canvas tile that adopts the session. */
+export interface AgentSessionPinResult {
+  provider: AgentProvider
+  /** Provider conversation id, omitted when Yira does not know it. */
+  sessionId?: string
+  cwd?: string
 }
 
 export interface AgentSessionCapabilities {

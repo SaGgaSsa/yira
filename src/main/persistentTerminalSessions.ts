@@ -14,7 +14,7 @@ import {
   type TerminalSessionIdentity,
   type TerminalSessionTarget,
 } from '@shared/terminalSessionIdentity'
-import type { TerminalCreateResult } from '@shared/types'
+import type { AgentSessionSurface, TerminalCreateResult } from '@shared/types'
 import { agentSessionRegistry, type AgentSessionRegistry } from './agents/registry'
 import { AgentTerminalTitleTracker } from './agents/terminalTitle'
 import { classifyAgentInput } from './agents/terminal'
@@ -281,6 +281,19 @@ export class PersistentTerminalSessions {
       if (this.destroyedWorkspaces.has(snapshot.identity.workspaceId)) return null
       if (!this.adoptSnapshot(snapshot)) return null
       return cloneSnapshot(snapshot)
+    })
+  }
+
+  /** Move a running agent session between the Agents View and a canvas tile. */
+  async setAgentSurface(target: TerminalSessionTarget, surface: AgentSessionSurface): Promise<void> {
+    return this.runTarget(keyFor(target), async () => {
+      const client = await this.ensureClient()
+      const snapshot = await client.request('attach', target)
+      if (!snapshot) throw new Error('Agent session is no longer running')
+      const updated = await client.request('setAgentSurface', { identity: snapshot.identity, surface })
+      const record = this.sessions.get(identityKey(snapshot.identity))
+      if (record) record.snapshot = cloneSnapshot(updated)
+      this.registry.updateSurface(snapshot.identity.workspaceId, snapshot.identity.tileId, surface)
     })
   }
 
@@ -588,6 +601,7 @@ export class PersistentTerminalSessions {
         initialStatus: origin === 'created' ? 'working' : 'done',
         ...(snapshot.agent.surface !== undefined ? { surface: snapshot.agent.surface } : {}),
         ...(snapshot.agent.title !== undefined ? { title: snapshot.agent.title } : {}),
+        ...(snapshot.agent.cwd !== undefined ? { cwd: snapshot.agent.cwd } : {}),
         ...(snapshot.agent.worktreeRoot !== undefined ? { worktreeRoot: snapshot.agent.worktreeRoot } : {}),
         ...(snapshot.agent.worktreeBranch !== undefined ? { worktreeBranch: snapshot.agent.worktreeBranch } : {}),
         ...(snapshot.agent.worktrees !== undefined ? { worktrees: snapshot.agent.worktrees } : {}),

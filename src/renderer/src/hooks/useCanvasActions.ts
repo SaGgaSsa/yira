@@ -127,13 +127,13 @@ export function useCanvasActions({ requestConfirm, destroyTerminalRuntime }: Use
   )
 
   const addTerminal = useCallback(
-    (profileId: ShellProfileId, agent?: TerminalAgentMetadata) => {
+    (profileId: ShellProfileId, agent?: TerminalAgentMetadata, options: { id?: string } = {}) => {
       const state = useCanvasStore.getState()
       const size = getDefaultTileSize('terminal')
       const pos = getSpawnPos(size.width, size.height, 40)
 
       const tile: TileState = {
-        id: generateId(),
+        id: options.id ?? generateId(),
         type: 'terminal',
         x: pos.x,
         y: pos.y,
