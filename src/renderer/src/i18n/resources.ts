@@ -309,7 +309,6 @@ type TranslationResources = {
     permission: string
   }
   settings: {
-    active: string
     agentAlerts: string
     agentAlertsDescription: string
     desktopAlerts: string
@@ -342,6 +341,8 @@ type TranslationResources = {
     windowBackgroundBlurHelp: string
     requiresWindows11: string
     defaultAppearanceDescription: string
+    mode: string
+    themePreviewHint: string
     followAppTheme: string
     appearance: string
     aboutAndUpdates: string
@@ -1273,7 +1274,6 @@ const en: TranslationResources = {
     footerClose: 'close',
   },
   settings: {
-    active: 'ACTIVE',
     agentAlerts: 'Agent alerts',
     agentAlertsDescription: 'Show semantic completion and intervention alerts from configured Codex and Claude hooks.',
     desktopAlerts: 'Desktop notifications',
@@ -1305,7 +1305,9 @@ const en: TranslationResources = {
     windowBackgroundAppliedAfterRestart: 'It will be applied when Yira restarts.',
     windowBackgroundBlurHelp: 'Blur depends on your desktop: in GNOME, use the Blur my Shell extension (Applications, Yira class); in KDE, Hyprland, and other compositors, add a blur rule for the Yira class.',
     requiresWindows11: 'Requires Windows 11 or Linux',
-    defaultAppearanceDescription: 'Light, dark, and system modes apply to Default. The other presets use their own dark palette.',
+    defaultAppearanceDescription: 'Applies only to the Default theme.',
+    mode: 'Mode',
+    themePreviewHint: 'Changes preview instantly. Save to keep them or Cancel to revert.',
     followAppTheme: 'Default · Follow application',
     appearance: 'Appearance',
     aboutAndUpdates: 'About & Updates',
@@ -2237,7 +2239,6 @@ const es: TranslationResources = {
     lastActivity: 'Última actividad',
   },
   settings: {
-    active: 'ACTIVO',
     agentAlerts: 'Alertas de agentes',
     agentAlertsDescription: 'Muestra alertas semánticas de finalización e intervención de los hooks configurados de Codex y Claude.',
     desktopAlerts: 'Notificaciones de escritorio',
@@ -2269,7 +2270,9 @@ const es: TranslationResources = {
     windowBackgroundAppliedAfterRestart: 'Se aplicará al reiniciar Yira.',
     windowBackgroundBlurHelp: 'El desenfoque depende del escritorio: en GNOME usa la extensión Blur my Shell (Applications, clase Yira); en KDE, Hyprland y otros compositores, una regla de blur para la clase Yira.',
     requiresWindows11: 'Requiere Windows 11 o Linux',
-    defaultAppearanceDescription: 'Los modos claro, oscuro y del sistema se aplican a Default. Los otros temas usan su propia paleta oscura.',
+    defaultAppearanceDescription: 'Solo se aplica al tema Default.',
+    mode: 'Modo',
+    themePreviewHint: 'Los cambios se ven al instante. Guarda para conservarlos o cancela para revertirlos.',
     followAppTheme: 'Default · Seguir aplicación',
     appearance: 'Apariencia',
     aboutAndUpdates: 'Acerca de y actualizaciones',
