@@ -128,6 +128,8 @@ export type TerminalRuntimeOptions = TerminalRuntimeCreateOptions
 export interface TerminalRuntime extends TerminalRuntimeHandle {
   readonly terminal: TerminalLike
   readonly runtimeRoot: HTMLDivElement
+  /** Conversation the agent runs, which can differ from the one the tile asked for. */
+  readonly agentSessionId?: string
   startReplay: (result: Pick<TerminalCreateResult, 'buffer' | 'exitEvent'>) => void
   attachHost: (host: HTMLElement | null, options?: TerminalRuntimeViewOptions) => void
   updateView: (options: TerminalRuntimeViewOptions) => void
@@ -1014,6 +1016,7 @@ function createRuntime(
     target,
     terminal,
     runtimeRoot,
+    ...(created.agentSessionId !== undefined ? { agentSessionId: created.agentSessionId } : {}),
     startReplay: (result) => {
       if (disposed || replayStarted || !replayController) return
       replayStarted = true

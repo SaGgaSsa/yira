@@ -111,6 +111,7 @@ export function terminalResultFromSnapshot(snapshot: TerminalDaemonSnapshot): Te
     rows: snapshot.rows,
     buffer: snapshot.buffer,
     ...(snapshot.exitEvent ? { exitEvent: { ...snapshot.exitEvent } } : {}),
+    ...(snapshot.agent ? { agentSessionId: snapshot.agent.sessionId } : {}),
   }
 }
 

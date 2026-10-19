@@ -615,6 +615,16 @@ export function TerminalTileWrapper({
 
     let preparationProgressCleanup: (() => void) | null = null
 
+    // Main may start a new conversation instead of resuming the saved one.
+    // Keep the tile on the conversation that is actually running.
+    const syncAgentSessionId = (agentSessionId: string | undefined): void => {
+      const state = useCanvasStore.getState()
+      if (agentSessionId === undefined || state.activeWorkspaceId !== workspaceId) return
+      const agent = state.tiles.find((candidate) => candidate.id === tile.id)?.agent
+      if (agent?.sessionId === undefined || agent.sessionId === agentSessionId) return
+      state.updateTile(tile.id, { agent: { ...agent, sessionId: agentSessionId } })
+    }
+
     const releasePreparationProgress = (): void => {
       const cleanup = preparationProgressCleanup
       preparationProgressCleanup = null
@@ -658,6 +668,7 @@ export function TerminalTileWrapper({
       (nextRuntime) => {
         releasePreparationProgress()
         if (!active) return
+        syncAgentSessionId(nextRuntime.agentSessionId)
         setRuntime(nextRuntime)
         setAcquirePending(false)
         setAcquireError(null)
