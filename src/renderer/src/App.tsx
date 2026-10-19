@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useMemo, useRef, useState } from 'react'
+import React, { Suspense, useEffect, useCallback, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Canvas, getCanvasMethods } from './components/Canvas'
 import { TileCreationSelector, type TileCreationSelectorProps } from './components/TileCreationSelector'
@@ -6,28 +6,20 @@ import { TileCreationMenu } from './components/TileCreationMenu'
 import { TopBar } from './components/TopBar'
 import { Sidebar } from './components/Sidebar'
 import { WorkspacePanel } from './components/WorkspacePanel'
-import { SettingsPanel, type SettingsSectionId } from './components/SettingsPanel'
-import { RawJsonEditor } from './components/RawJsonEditor'
+import type { SettingsSectionId } from './components/SettingsPanel'
 import { ContextMenu, type MenuItem } from './components/ContextMenu'
-import { SplitviewPanel } from './components/SplitviewPanel'
-import { GridView } from './components/GridView'
 import { UpdateBanner } from './components/UpdateBanner'
-import { BoardView } from './components/BoardView'
 import { FloatingTileWindow } from './components/FloatingTileWindow'
 import { TerminalRuntimeProvider, useTerminalRuntimeContext } from './components/TerminalRuntimeProvider'
 import { AgentTextSendContextProvider } from './components/AgentTextSendContext'
 import { AppDialog, type ConfirmDialogOptions, type PromptDialogOptions } from './components/AppDialog'
 import { WorkspaceDialog, type WorkspaceDialogRequest, type WorkspaceDialogValue } from './components/WorkspaceDialog'
-import { WorkspaceManagementDialog } from './components/WorkspaceManagementDialog'
 import { ActiveWorkspaceEntry } from './components/ActiveWorkspaceEntry'
 import { WorkspaceHome } from './components/WorkspaceHome'
-import { WorkspaceActivityView } from './components/WorkspaceActivityView'
-import { AgentsView } from './components/AgentsView'
-import { ActivityPalette } from './components/ActivityPalette'
 import { useWorkspaceTerminalCounts } from './hooks/useWorkspaceTerminalCounts'
 import { useTerminalProcessActivity } from './hooks/useTerminalProcessActivity'
 import { buildWorkspaceActivityCards, resolveActivationFocusTarget } from './utils/workspaceActivity'
-import { TileEditorDialog, type TileEditorRequest, type TileEditorValue } from './components/TileEditorDialog'
+import type { TileEditorRequest, TileEditorValue } from './components/TileEditorDialog'
 import { useCanvasStore } from './store/canvasStore'
 import { useSettingsStore } from './store/settingsStore'
 import { useCanvasActions } from './hooks/useCanvasActions'
@@ -112,6 +104,17 @@ import {
 } from './utils/terminalRuntimeCleanup'
 import type { TerminalSessionTarget } from '@shared/terminalSessionIdentity'
 import { Terminal, StickyNote, SlidersHorizontal, Plus, House } from 'lucide-react'
+
+const BoardView = React.lazy(() => import('./components/BoardView').then((module) => ({ default: module.BoardView })))
+const GridView = React.lazy(() => import('./components/GridView').then((module) => ({ default: module.GridView })))
+const SplitviewPanel = React.lazy(() => import('./components/SplitviewPanel').then((module) => ({ default: module.SplitviewPanel })))
+const AgentsView = React.lazy(() => import('./components/AgentsView').then((module) => ({ default: module.AgentsView })))
+const WorkspaceActivityView = React.lazy(() => import('./components/WorkspaceActivityView').then((module) => ({ default: module.WorkspaceActivityView })))
+const ActivityPalette = React.lazy(() => import('./components/ActivityPalette').then((module) => ({ default: module.ActivityPalette })))
+const SettingsPanel = React.lazy(() => import('./components/SettingsPanel').then((module) => ({ default: module.SettingsPanel })))
+const RawJsonEditor = React.lazy(() => import('./components/RawJsonEditor').then((module) => ({ default: module.RawJsonEditor })))
+const WorkspaceManagementDialog = React.lazy(() => import('./components/WorkspaceManagementDialog').then((module) => ({ default: module.WorkspaceManagementDialog })))
+const TileEditorDialog = React.lazy(() => import('./components/TileEditorDialog').then((module) => ({ default: module.TileEditorDialog })))
 
 const EMPTY_BOARD_STATE: BoardState = {
   enabled: false,
@@ -305,6 +308,13 @@ function isPromptDialog(dialog: PromptDialogState | ConfirmDialogState): dialog 
   return dialog.request.mode === 'prompt'
 }
 
+// Lazy dialogs must mount on their first open but stay mounted afterwards to keep their state.
+function useHasBeenOpen(open: boolean): boolean {
+  const [hasOpened, setHasOpened] = useState(open)
+  if (open && !hasOpened) setHasOpened(true)
+  return hasOpened
+}
+
 function AppContent(): React.ReactElement {
   const windowWidth = useWindowWidth()
   const [sidePanelWidth] = useSidePanelWidth()
@@ -485,15 +495,19 @@ function AppContent(): React.ReactElement {
   const [showNotePicker, setShowNotePicker] = useState(false)
   const [remoteSshAvailable, setRemoteSshAvailable] = useState(false)
   const [showWorkspaceManager, setShowWorkspaceManager] = useState(false)
+  const hasOpenedWorkspaceManager = useHasBeenOpen(showWorkspaceManager)
   const [workspaceMetadata, setWorkspaceMetadata] = useState<WorkspaceMetadata[]>([])
   const [pendingWorkspaceDeactivationIds, setPendingWorkspaceDeactivationIds] = useState<Set<string>>(new Set())
   const [boardState, setBoardState] = useState<BoardState>(EMPTY_BOARD_STATE)
   const [showSettings, setShowSettings] = useState(false)
   const [settingsSection, setSettingsSection] = useState<SettingsSectionId>('appearance')
+  const hasOpenedSettings = useHasBeenOpen(showSettings)
   const [showJsonEditor, setShowJsonEditor] = useState(false)
+  const hasOpenedJsonEditor = useHasBeenOpen(showJsonEditor)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [narrowOverride, setNarrowOverride] = useState({ sidebar: false, workspacePanel: false })
   const [activityOpen, setActivityOpen] = useState(false)
+  const hasOpenedActivityPalette = useHasBeenOpen(agentsView.activityPaletteStep !== null)
   const [homeOpen, setHomeOpen] = useState(true)
   const [expandedActiveWorkspaceIds, setExpandedActiveWorkspaceIds] = useState<Set<string>>(new Set())
   const [agentsMaximizedSessionId, setAgentsMaximizedSessionId] = useState<string | null>(null)
@@ -574,6 +588,7 @@ function AppContent(): React.ReactElement {
   const previousActivityOpenRef = useRef(false)
   const [workspaceEditor, setWorkspaceEditor] = useState<WorkspaceEditorState>(null)
   const [tileEditor, setTileEditor] = useState<TileEditorState>(null)
+  const hasOpenedTileEditor = useHasBeenOpen(tileEditor !== null)
   const [tileRefreshKeys, setTileRefreshKeys] = useState<Record<string, number>>({})
   const [tileMenu, setTileMenu] = useState<{ tileId: string; x: number; y: number } | null>(null)
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -2771,71 +2786,77 @@ function AppContent(): React.ReactElement {
               inert={tilesHidden}
             >
               {viewMode === 'splitview' && (
-                <SplitviewPanel
-                  tiles={sortedTiles}
-                  splitViewState={splitViewState}
-                  attentionCounts={terminalAttentionCounts}
-                  agentTitles={agentTitles}
-                  onActivateTile={activateSplitTile}
-                  onCloseTile={(panel, tileId) => {
-                    void closeTileFromSplitview(panel, tileId)
-                  }}
-                  onEditTile={openTileEditor}
-                  onFocusTile={focusTileInFullview}
-                  onDuplicateTile={(panel, tile) => {
-                    const duplicateId = duplicateTerminalTile(tile.id, { splitPanel: panel })
-                    if (duplicateId) setFullviewActiveTileId(duplicateId)
-                  }}
-                  onRefreshTile={handleRefreshTile}
-                  onToggleNotificationsMuted={toggleTileNotificationsMuted}
-                  onMoveTile={moveTileToSplitPanel}
-                  onFocusPanel={setSplitFocusedPanel}
-                  onToggleLock={(tileId) => {
-                    const tile = tiles.find((entry) => entry.id === tileId)
-                    if (!tile) return
-                    updateTile(tileId, { locked: !tile.locked })
-                  }}
-                />
+                <Suspense fallback={<div className="h-full w-full" />}>
+                  <SplitviewPanel
+                    tiles={sortedTiles}
+                    splitViewState={splitViewState}
+                    attentionCounts={terminalAttentionCounts}
+                    agentTitles={agentTitles}
+                    onActivateTile={activateSplitTile}
+                    onCloseTile={(panel, tileId) => {
+                      void closeTileFromSplitview(panel, tileId)
+                    }}
+                    onEditTile={openTileEditor}
+                    onFocusTile={focusTileInFullview}
+                    onDuplicateTile={(panel, tile) => {
+                      const duplicateId = duplicateTerminalTile(tile.id, { splitPanel: panel })
+                      if (duplicateId) setFullviewActiveTileId(duplicateId)
+                    }}
+                    onRefreshTile={handleRefreshTile}
+                    onToggleNotificationsMuted={toggleTileNotificationsMuted}
+                    onMoveTile={moveTileToSplitPanel}
+                    onFocusPanel={setSplitFocusedPanel}
+                    onToggleLock={(tileId) => {
+                      const tile = tiles.find((entry) => entry.id === tileId)
+                      if (!tile) return
+                      updateTile(tileId, { locked: !tile.locked })
+                    }}
+                  />
+                </Suspense>
               )}
 
               <div className="relative min-h-0 flex-1">
                 {viewMode === 'board' && boardEnabled && boardVisible ? (
-                  <BoardView
-                    workspaceId={activeWorkspaceId}
-                    board={boardState}
-                    onClose={closeBoard}
-                    onCreateTask={handleCreateBoardTask}
-                    onUpdateTask={updateBoardTask}
-                    onAddNote={addBoardNote}
-                    onDeleteBacklogTask={deleteBacklogBoardTask}
-                    onApproveReviewTask={approveReviewBoardTask}
-                    onRejectReviewTask={rejectReviewBoardTask}
-                  />
+                  <Suspense fallback={<div className="h-full w-full" />}>
+                    <BoardView
+                      workspaceId={activeWorkspaceId}
+                      board={boardState}
+                      onClose={closeBoard}
+                      onCreateTask={handleCreateBoardTask}
+                      onUpdateTask={updateBoardTask}
+                      onAddNote={addBoardNote}
+                      onDeleteBacklogTask={deleteBacklogBoardTask}
+                      onApproveReviewTask={approveReviewBoardTask}
+                      onRejectReviewTask={rejectReviewBoardTask}
+                    />
+                  </Suspense>
                 ) : activeWorkspaceType === 'grid' && viewMode === 'gridview' ? (
-                  <GridView
-                    key={activeWorkspaceId}
-                    workspaceId={activeWorkspaceId}
-                    workspaceConfig={activeWorkspaceConfig}
-                    rootNode={gridViewState.rootNode}
-                    tiles={attachedTiles}
-                    tileRefreshKeys={tileRefreshKeys}
-                    focusedTileId={focusedTileId}
-                    agentTitles={agentTitles}
-                    onFocusTile={(tileId) => {
-                      focusTile(tileId)
-                      selectTiles([tileId])
-                    }}
-                    onUpdateTile={updateTile}
-                    onSetRootNode={(rootNode) => setGridViewState({ rootNode })}
-                    onConfigureTile={(tile, trigger) => openTileConfigurationMenu(tile.id, trigger)}
-                    onFocusTileInView={focusTileInFullview}
-                    onDetachTile={detachTile}
-                    onCloseTile={deleteTile}
-                    onOpenBrowserTile={(url) => addBrowser(url)}
-                    onOpenFileTile={openFileTile}
-                    tileCreationSelectorProps={tileCreationSelectorProps}
-                    workspaceRootPath={workspaceRootPath}
-                  />
+                  <Suspense fallback={<div className="h-full w-full" />}>
+                    <GridView
+                      key={activeWorkspaceId}
+                      workspaceId={activeWorkspaceId}
+                      workspaceConfig={activeWorkspaceConfig}
+                      rootNode={gridViewState.rootNode}
+                      tiles={attachedTiles}
+                      tileRefreshKeys={tileRefreshKeys}
+                      focusedTileId={focusedTileId}
+                      agentTitles={agentTitles}
+                      onFocusTile={(tileId) => {
+                        focusTile(tileId)
+                        selectTiles([tileId])
+                      }}
+                      onUpdateTile={updateTile}
+                      onSetRootNode={(rootNode) => setGridViewState({ rootNode })}
+                      onConfigureTile={(tile, trigger) => openTileConfigurationMenu(tile.id, trigger)}
+                      onFocusTileInView={focusTileInFullview}
+                      onDetachTile={detachTile}
+                      onCloseTile={deleteTile}
+                      onOpenBrowserTile={(url) => addBrowser(url)}
+                      onOpenFileTile={openFileTile}
+                      tileCreationSelectorProps={tileCreationSelectorProps}
+                      workspaceRootPath={workspaceRootPath}
+                    />
+                  </Suspense>
                 ) : (
                   <Canvas
                     key={activeWorkspaceId}
@@ -2872,33 +2893,37 @@ function AppContent(): React.ReactElement {
             </div>
           )}
           {mainView === 'activity' && (
-            <WorkspaceActivityView
-              cards={activityCards}
-              agentUsage={agentUsage}
-              workspaces={workspaceMetadata}
-              onOpenWorkspace={openActivityWorkspace}
-              onGoToTerminal={goToWorkspaceTerminal}
-              onOpenSettings={openSettings}
-              agents={agentSettings}
-            />
+            <Suspense fallback={<div className="h-full w-full" />}>
+              <WorkspaceActivityView
+                cards={activityCards}
+                agentUsage={agentUsage}
+                workspaces={workspaceMetadata}
+                onOpenWorkspace={openActivityWorkspace}
+                onGoToTerminal={goToWorkspaceTerminal}
+                onOpenSettings={openSettings}
+                agents={agentSettings}
+              />
+            </Suspense>
           )}
           {mainView === 'agents' && activeWorkspaceId && agentsView.effectiveProvider && (
             <div className="flex min-h-0 min-w-0 flex-1">
-              <AgentsView
-                workspaceId={activeWorkspaceId}
-                workspaceConfig={activeWorkspaceConfig}
-                sessions={agentsView.sessions}
-                focusedSessionId={agentsView.focusedSessionId}
-                onFocusSession={agentsView.openForSession}
-                maximizedSessionId={agentsMaximizedSessionId}
-                onMaximizedSessionChange={setAgentsMaximizedSessionId}
-                onCloseSession={(session) => { void closeAgentsSession(session) }}
-                onPinSession={pinAgentsSession ? (session) => { void pinAgentsSession(session) } : undefined}
-                onNewSession={agentsView.openNewSessionDialog}
-                shortcutLabel={newAgentSessionShortcut}
-                onOpenBrowserTile={(url) => addBrowser(url)}
-                onOpenFileTile={openFileTile}
-              />
+              <Suspense fallback={<div className="h-full w-full" />}>
+                <AgentsView
+                  workspaceId={activeWorkspaceId}
+                  workspaceConfig={activeWorkspaceConfig}
+                  sessions={agentsView.sessions}
+                  focusedSessionId={agentsView.focusedSessionId}
+                  onFocusSession={agentsView.openForSession}
+                  maximizedSessionId={agentsMaximizedSessionId}
+                  onMaximizedSessionChange={setAgentsMaximizedSessionId}
+                  onCloseSession={(session) => { void closeAgentsSession(session) }}
+                  onPinSession={pinAgentsSession ? (session) => { void pinAgentsSession(session) } : undefined}
+                  onNewSession={agentsView.openNewSessionDialog}
+                  shortcutLabel={newAgentSessionShortcut}
+                  onOpenBrowserTile={(url) => addBrowser(url)}
+                  onOpenFileTile={openFileTile}
+                />
+              </Suspense>
             </div>
           )}
           {mainView === 'home' && (
@@ -2956,51 +2981,61 @@ function AppContent(): React.ReactElement {
       </div>
 
       {/* Settings panel */}
-      <SettingsPanel
-        open={showSettings}
-        initialSection={settingsSection}
-        onClose={() => setShowSettings(false)}
-        onOpenJsonEditor={() => {
-          setShowSettings(false)
-          setShowJsonEditor(true)
-        }}
-      />
-      {workspaceMetadata.length > 0 && (
-        <ActivityPalette
-          step={agentsView.activityPaletteStep}
-          fromActivity={agentsView.sessionDialogFromActivity}
-          workspaces={sidebarWorkspaces}
-          sessionWorkspaces={agentSessionWorkspaces}
-          sessions={agentsView.snapshot.sessions}
-          agents={agentSettings}
-          initialWorkspaceId={agentsView.sessionDialogInitialWorkspaceId}
-          initialPrompt={agentsView.sessionDialogInitialPrompt}
-          focusRequestId={agentsView.sessionDialogFocusRequestId}
-          shortcutLabel={newAgentSessionShortcut}
-          onClose={agentsView.closeSessionDialog}
-          onNewSession={agentsView.showNewSessionStep}
-          onBack={agentsView.backToActivity}
-          onCreated={handleAgentSessionCreated}
-          onOpenAgent={openActivityPaletteAgent}
-        />
+      {hasOpenedSettings && (
+        <Suspense fallback={null}>
+          <SettingsPanel
+            open={showSettings}
+            initialSection={settingsSection}
+            onClose={() => setShowSettings(false)}
+            onOpenJsonEditor={() => {
+              setShowSettings(false)
+              setShowJsonEditor(true)
+            }}
+          />
+        </Suspense>
       )}
-      <RawJsonEditor
-        open={showJsonEditor}
-        workspaceId={activeWorkspaceId}
-        workspaceType={activeWorkspaceType}
-        state={activeWorkspaceId ? (activeWorkspaceType === 'grid' ? currentGridState : currentCanvasState) : null}
-        onClose={() => setShowJsonEditor(false)}
-        onApply={(state) => {
-          if (activeWorkspaceType === 'grid') {
-            restoreGridWorkspaceState(activeWorkspaceId, activeWorkspaceName, activeWorkspaceConfig, state as GridWorkspaceState)
-          } else {
-            restoreWorkspaceState(activeWorkspaceId, activeWorkspaceName, activeWorkspaceConfig, state as CanvasState)
-          }
-          if (activeWorkspaceId) {
-            window.electron.canvas.save(activeWorkspaceId, state, activeWorkspaceType)
-          }
-        }}
-      />
+      {workspaceMetadata.length > 0 && hasOpenedActivityPalette && (
+        <Suspense fallback={null}>
+          <ActivityPalette
+            step={agentsView.activityPaletteStep}
+            fromActivity={agentsView.sessionDialogFromActivity}
+            workspaces={sidebarWorkspaces}
+            sessionWorkspaces={agentSessionWorkspaces}
+            sessions={agentsView.snapshot.sessions}
+            agents={agentSettings}
+            initialWorkspaceId={agentsView.sessionDialogInitialWorkspaceId}
+            initialPrompt={agentsView.sessionDialogInitialPrompt}
+            focusRequestId={agentsView.sessionDialogFocusRequestId}
+            shortcutLabel={newAgentSessionShortcut}
+            onClose={agentsView.closeSessionDialog}
+            onNewSession={agentsView.showNewSessionStep}
+            onBack={agentsView.backToActivity}
+            onCreated={handleAgentSessionCreated}
+            onOpenAgent={openActivityPaletteAgent}
+          />
+        </Suspense>
+      )}
+      {hasOpenedJsonEditor && (
+        <Suspense fallback={null}>
+          <RawJsonEditor
+            open={showJsonEditor}
+            workspaceId={activeWorkspaceId}
+            workspaceType={activeWorkspaceType}
+            state={activeWorkspaceId ? (activeWorkspaceType === 'grid' ? currentGridState : currentCanvasState) : null}
+            onClose={() => setShowJsonEditor(false)}
+            onApply={(state) => {
+              if (activeWorkspaceType === 'grid') {
+                restoreGridWorkspaceState(activeWorkspaceId, activeWorkspaceName, activeWorkspaceConfig, state as GridWorkspaceState)
+              } else {
+                restoreWorkspaceState(activeWorkspaceId, activeWorkspaceName, activeWorkspaceConfig, state as CanvasState)
+              }
+              if (activeWorkspaceId) {
+                window.electron.canvas.save(activeWorkspaceId, state, activeWorkspaceType)
+              }
+            }}
+          />
+        </Suspense>
+      )}
       {tileMenu && activeTileMenu && (
         <ContextMenu
           x={tileMenu.x}
@@ -3023,17 +3058,25 @@ function AppContent(): React.ReactElement {
         }}
         onConfirm={handleConfirmWorkspaceEditor}
       />
-      <WorkspaceManagementDialog
-        open={showWorkspaceManager}
-        workspaces={workspaceMetadata}
-        onCancel={() => setShowWorkspaceManager(false)}
-        onSave={handleSaveWorkspaceManagement}
-      />
-      <TileEditorDialog
-        request={tileEditor?.request ?? null}
-        onCancel={() => setTileEditor(null)}
-        onConfirm={handleConfirmTileEditor}
-      />
+      {hasOpenedWorkspaceManager && (
+        <Suspense fallback={null}>
+          <WorkspaceManagementDialog
+            open={showWorkspaceManager}
+            workspaces={workspaceMetadata}
+            onCancel={() => setShowWorkspaceManager(false)}
+            onSave={handleSaveWorkspaceManagement}
+          />
+        </Suspense>
+      )}
+      {hasOpenedTileEditor && (
+        <Suspense fallback={null}>
+          <TileEditorDialog
+            request={tileEditor?.request ?? null}
+            onCancel={() => setTileEditor(null)}
+            onConfirm={handleConfirmTileEditor}
+          />
+        </Suspense>
+      )}
     </div>
   )
 }
