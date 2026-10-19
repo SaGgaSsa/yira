@@ -81,16 +81,11 @@ export function registerWindowIPC(getMainWindow: () => BrowserWindow | null): Wi
     applyTitleBarTheme(nativeWindow)
   })
 
-  // Zen sessions maximize the window and restore it afterwards. Returns whether
-  // the window was maximized before the change.
-  ipcMain.handle('window:setMaximized', (event, maximized: unknown): boolean => {
+  // Zen sessions run in full screen. Leaving it restores the previous window state.
+  ipcMain.handle('window:setFullScreen', (event, fullScreen: unknown): void => {
     const nativeWindow = BrowserWindow.fromWebContents(event.sender)
-    if (!nativeWindow || nativeWindow.isDestroyed() || typeof maximized !== 'boolean') return false
-
-    const wasMaximized = nativeWindow.isMaximized()
-    if (maximized && !wasMaximized) nativeWindow.maximize()
-    if (!maximized && wasMaximized) nativeWindow.unmaximize()
-    return wasMaximized
+    if (!nativeWindow || nativeWindow.isDestroyed() || typeof fullScreen !== 'boolean') return
+    if (nativeWindow.isFullScreen() !== fullScreen) nativeWindow.setFullScreen(fullScreen)
   })
 
   ipcMain.handle('window:getBackgroundMaterialState', () => getWindowBackgroundMaterialState())
