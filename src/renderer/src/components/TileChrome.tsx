@@ -67,9 +67,10 @@ export function TileChrome({
   const [isResizing, setIsResizing] = useState<ResizeDirection | null>(null)
   const dragStartRef = useRef<{ mx: number; my: number; positions: Array<{ id: string; x: number; y: number }>; anchorX: number; anchorY: number } | null>(null)
   const resizeStartRef = useRef<{ mx: number; my: number; w: number; h: number; tx: number; ty: number } | null>(null)
-  const tiles = useCanvasStore((s) => s.tiles)
-  const selectedTileIds = useCanvasStore((s) => s.selectedTileIds)
-  const zoom = useCanvasStore((s) => s.viewport.zoom)
+  const onUpdateRef = useRef(onUpdate)
+  const onUpdatePositionsRef = useRef(onUpdatePositions)
+  onUpdateRef.current = onUpdate
+  onUpdatePositionsRef.current = onUpdatePositions
   const gridSize = useSettingsStore((s) => s.gridSize)
   const snapToGrid = useSettingsStore((s) => s.snapToGrid)
   const isFullview = mode === 'fullview'
@@ -86,8 +87,8 @@ export function TileChrome({
     const width = Math.max(minWidth, tile.width)
     const height = Math.max(minHeight, tile.height)
     if (width === tile.width && height === tile.height) return
-    onUpdate({ width, height })
-  }, [isFixedView, minHeight, minWidth, tile.height, tile.width, onUpdate])
+    onUpdateRef.current({ width, height })
+  }, [isFixedView, minHeight, minWidth, tile.height, tile.width])
 
   // ─── Drag ───────────────────────────────────────────────────────────────
   const handleDragStart = useCallback(
@@ -96,6 +97,7 @@ export function TileChrome({
       e.preventDefault()
       e.stopPropagation()
       onFocus()
+      const { tiles, selectedTileIds } = useCanvasStore.getState()
       const movableIds = new Set(isSelected ? selectedTileIds : [tile.id])
       const positions = tiles
         .filter((entry) => (
@@ -115,7 +117,7 @@ export function TileChrome({
       }
       setIsDragging(true)
     },
-    [tile, onFocus, isFixedView, isInteractionLocked, isSelected, selectedTileIds, tiles],
+    [tile, onFocus, isFixedView, isInteractionLocked, isSelected],
   )
 
   // ─── Resize ─────────────────────────────────────────────────────────────
@@ -141,6 +143,7 @@ export function TileChrome({
   // ─── Global mouse move/up ──────────────────────────────────────────────
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
+      const zoom = useCanvasStore.getState().viewport.zoom
       if (isDragging && dragStartRef.current) {
         const dx = (e.clientX - dragStartRef.current.mx) / zoom
         const dy = (e.clientY - dragStartRef.current.my) / zoom
@@ -154,7 +157,7 @@ export function TileChrome({
           deltaY = snappedY - dragStartRef.current.anchorY
         }
 
-        onUpdatePositions(
+        onUpdatePositionsRef.current(
           dragStartRef.current.positions.map((position) => ({
             id: position.id,
             x: position.x + deltaX,
@@ -201,7 +204,7 @@ export function TileChrome({
           if (dir.includes('n')) newY = resizeStartRef.current.ty + (resizeStartRef.current.h - newH)
         }
 
-        onUpdate({ width: newW, height: newH, x: newX, y: newY })
+        onUpdateRef.current({ width: newW, height: newH, x: newX, y: newY })
       }
     }
 
@@ -218,7 +221,7 @@ export function TileChrome({
       window.removeEventListener('mousemove', handleMouseMove)
       window.removeEventListener('mouseup', handleMouseUp)
     }
-  }, [gridSize, isDragging, isResizing, minHeight, minWidth, onUpdate, onUpdatePositions, snapToGrid, zoom])
+  }, [gridSize, isDragging, isResizing, minHeight, minWidth, snapToGrid])
 
   const cursor = isDragging ? 'grabbing' : isResizing ? `${isResizing}-resize` : 'default'
   const splitStyle = getSplitPanelFrame(splitOrientation, splitPanel)

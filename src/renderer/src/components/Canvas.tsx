@@ -76,6 +76,117 @@ interface CanvasProps extends CanvasCreationMenuInput {
   workspaceRootPath: string
 }
 
+interface CanvasTileProps {
+  tile: TileState
+  workspaceId: string
+  workspaceConfig: WorkspaceConfig
+  workspaceRootPath: string
+  isFocused: boolean
+  isSelected: boolean
+  isHiddenInFullview: boolean
+  splitPanel: SplitPanelId | undefined
+  splitOrientation: SplitOrientation
+  viewMode: ViewMode
+  refreshKey: number
+  autoFocus: boolean
+  onFocusTile: (tileId: string, splitPanel: SplitPanelId | undefined) => void
+  onUpdateTile: (tileId: string, patch: Partial<TileState>) => void
+  onUpdateTilePositions: (positions: Array<{ id: string; x: number; y: number }>) => void
+  onConfigureTile: (tile: TileState, x: number, y: number) => void
+  onFocusTileInView: (tile: TileState) => void
+  onDetachTile: (tile: TileState) => void
+  onDeleteTile: (tileId: string) => Promise<boolean>
+  onOpenBrowserTile: (url: string) => void
+  onOpenFileTile: (relativePath: string, options?: FileTileOpenOptions) => void | Promise<void>
+}
+
+const CanvasTile = React.memo(function CanvasTile({
+  tile,
+  workspaceId,
+  workspaceConfig,
+  workspaceRootPath,
+  isFocused,
+  isSelected,
+  isHiddenInFullview,
+  splitPanel,
+  splitOrientation,
+  viewMode,
+  refreshKey,
+  autoFocus,
+  onFocusTile,
+  onUpdateTile,
+  onUpdateTilePositions,
+  onConfigureTile,
+  onFocusTileInView,
+  onDetachTile,
+  onDeleteTile,
+  onOpenBrowserTile,
+  onOpenFileTile,
+}: CanvasTileProps): React.ReactElement {
+  const isFixedView = viewMode === 'fullview' || viewMode === 'splitview'
+
+  const handleFocus = useCallback(() => {
+    onFocusTile(tile.id, splitPanel)
+  }, [onFocusTile, splitPanel, tile.id])
+
+  const handleUpdate = useCallback((patch: Partial<TileState>) => {
+    onUpdateTile(tile.id, patch)
+  }, [onUpdateTile, tile.id])
+
+  const handleConfigure = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect()
+    onConfigureTile(tile, rect.left, rect.bottom + 6)
+  }, [onConfigureTile, tile])
+
+  const handleFocusView = useCallback(() => {
+    onFocusTileInView(tile)
+  }, [onFocusTileInView, tile])
+
+  const handleDetach = useCallback(() => {
+    onDetachTile(tile)
+  }, [onDetachTile, tile])
+
+  const handleDelete = useCallback(() => {
+    void onDeleteTile(tile.id)
+  }, [onDeleteTile, tile.id])
+
+  return (
+    <TileChrome
+      tile={tile}
+      isFocused={isFocused}
+      isSelected={isSelected}
+      mode={viewMode}
+      isHiddenInFullview={isHiddenInFullview}
+      splitPanel={splitPanel}
+      splitOrientation={splitOrientation}
+      onFocus={handleFocus}
+      onUpdate={handleUpdate}
+      onUpdatePositions={onUpdateTilePositions}
+      onConfigure={handleConfigure}
+      onFocusView={handleFocusView}
+      onDetach={handleDetach}
+      onDelete={handleDelete}
+    >
+      <TileContent
+        key={`${tile.id}:${refreshKey}`}
+        tile={tile}
+        workspaceId={workspaceId}
+        workspaceConfig={workspaceConfig}
+        isFocused={isFocused}
+        edgeToEdge={isFixedView}
+        isVisible={!(isFixedView && isHiddenInFullview)}
+        autoFocus={autoFocus}
+        onFocus={handleFocus}
+        onUpdate={handleUpdate}
+        onDelete={handleDelete}
+        onOpenBrowserTile={onOpenBrowserTile}
+        onOpenFileTile={onOpenFileTile}
+        workspaceRootPath={workspaceRootPath}
+      />
+    </TileChrome>
+  )
+})
+
 export function Canvas({
   workspaceId,
   workspaceConfig,
@@ -118,7 +229,6 @@ export function Canvas({
   const setViewport = useCanvasStore((s) => s.setViewport)
   const focusedTileId = useCanvasStore((s) => s.focusedTileId)
   const selectTiles = useCanvasStore((s) => s.selectTiles)
-  const bringToFront = useCanvasStore((s) => s.bringToFront)
   const updateTile = useCanvasStore((s) => s.updateTile)
   const updateTilePositions = useCanvasStore((s) => s.updateTilePositions)
   const focusTile = useCanvasStore((s) => s.focusTile)
@@ -127,6 +237,52 @@ export function Canvas({
   const isFixedView = isFullview || isSplitview
   const showGrid = useSettingsStore((s) => s.showGrid)
   const gridSize = useSettingsStore((s) => s.gridSize)
+
+  // Keep tile callbacks stable so memoized tiles survive viewport-only renders.
+  const onConfigureTileRef = useRef(onConfigureTile)
+  const onFocusTileInViewRef = useRef(onFocusTileInView)
+  const onDetachTileRef = useRef(onDetachTile)
+  const onDeleteTileRef = useRef(onDeleteTile)
+  const onOpenBrowserTileRef = useRef(onOpenBrowserTile)
+  const onOpenFileTileRef = useRef(onOpenFileTile)
+  const onFocusSplitPanelRef = useRef(onFocusSplitPanel)
+  onConfigureTileRef.current = onConfigureTile
+  onFocusTileInViewRef.current = onFocusTileInView
+  onDetachTileRef.current = onDetachTile
+  onDeleteTileRef.current = onDeleteTile
+  onOpenBrowserTileRef.current = onOpenBrowserTile
+  onOpenFileTileRef.current = onOpenFileTile
+  onFocusSplitPanelRef.current = onFocusSplitPanel
+
+  const handleFocusTile = useCallback((tileId: string, splitPanel: SplitPanelId | undefined) => {
+    if (isSplitview && splitPanel) onFocusSplitPanelRef.current?.(splitPanel)
+    const state = useCanvasStore.getState()
+    state.focusTile(tileId)
+    if (!state.selectedTileIds.includes(tileId)) state.selectTiles([tileId])
+    if (!isFixedView) state.bringToFront(tileId)
+  }, [isFixedView, isSplitview])
+
+  const handleConfigureTile = useCallback((tile: TileState, x: number, y: number) => {
+    onConfigureTileRef.current(tile, x, y)
+  }, [])
+
+  const handleFocusTileInView = useCallback((tile: TileState) => {
+    onFocusTileInViewRef.current(tile)
+  }, [])
+
+  const handleDetachTile = useCallback((tile: TileState) => {
+    onDetachTileRef.current(tile)
+  }, [])
+
+  const handleDeleteTile = useCallback((tileId: string) => onDeleteTileRef.current(tileId), [])
+
+  const handleOpenBrowserTile = useCallback((url: string) => {
+    onOpenBrowserTileRef.current(url)
+  }, [])
+
+  const handleOpenFileTile = useCallback((relativePath: string, options?: FileTileOpenOptions) => (
+    onOpenFileTileRef.current(relativePath, options)
+  ), [])
 
   const setClampedViewport = useCallback(
     (nextViewport: { tx: number; ty: number; zoom: number }) => {
@@ -485,55 +641,30 @@ export function Canvas({
                 : false
 
             return (
-              <TileChrome
+              <CanvasTile
                 key={tile.id}
                 tile={tile}
+                workspaceId={workspaceId}
+                workspaceConfig={workspaceConfig}
+                workspaceRootPath={workspaceRootPath}
                 isFocused={tile.id === focusedTileId}
                 isSelected={selectedTileIds.includes(tile.id)}
-                mode={viewMode}
                 isHiddenInFullview={hiddenInFixedView}
                 splitPanel={splitPanel}
                 splitOrientation={splitOrientation}
-                onFocus={() => {
-                  if (isSplitview && splitPanel) onFocusSplitPanel?.(splitPanel)
-                  focusTile(tile.id)
-                  if (!selectedTileIds.includes(tile.id)) selectTiles([tile.id])
-                  if (!isFixedView) bringToFront(tile.id)
-                }}
-                onUpdate={(patch) => updateTile(tile.id, patch)}
-                onUpdatePositions={updateTilePositions}
-                onConfigure={(event) => {
-                  const rect = event.currentTarget.getBoundingClientRect()
-                  onConfigureTile(tile, rect.left, rect.bottom + 6)
-                }}
-                onFocusView={() => onFocusTileInView(tile)}
-                onDetach={() => onDetachTile(tile)}
-                onDelete={() => {
-                  void onDeleteTile(tile.id)
-                }}
-              >
-                <TileContent
-                  key={`${tile.id}:${tileRefreshKeys[tile.id] ?? 0}`}
-                  tile={tile}
-                  workspaceId={workspaceId}
-                  workspaceConfig={workspaceConfig}
-                  isFocused={tile.id === focusedTileId}
-                  edgeToEdge={isFixedView}
-                  isVisible={!(isFixedView && hiddenInFixedView)}
-                  autoFocus={shouldAutoFocusTile(viewMode, tile.id, fullviewActiveTileId, !hiddenInFixedView)}
-                  onFocus={() => {
-                    if (isSplitview && splitPanel) onFocusSplitPanel?.(splitPanel)
-                    focusTile(tile.id)
-                    if (!selectedTileIds.includes(tile.id)) selectTiles([tile.id])
-                    if (!isFixedView) bringToFront(tile.id)
-                  }}
-                  onUpdate={(patch) => updateTile(tile.id, patch)}
-                  onDelete={() => onDeleteTile(tile.id)}
-                  onOpenBrowserTile={onOpenBrowserTile}
-                  onOpenFileTile={onOpenFileTile}
-                  workspaceRootPath={workspaceRootPath}
-                />
-              </TileChrome>
+                viewMode={viewMode}
+                refreshKey={tileRefreshKeys[tile.id] ?? 0}
+                autoFocus={shouldAutoFocusTile(viewMode, tile.id, fullviewActiveTileId, !hiddenInFixedView)}
+                onFocusTile={handleFocusTile}
+                onUpdateTile={updateTile}
+                onUpdateTilePositions={updateTilePositions}
+                onConfigureTile={handleConfigureTile}
+                onFocusTileInView={handleFocusTileInView}
+                onDetachTile={handleDetachTile}
+                onDeleteTile={handleDeleteTile}
+                onOpenBrowserTile={handleOpenBrowserTile}
+                onOpenFileTile={handleOpenFileTile}
+              />
             )
           })}
 

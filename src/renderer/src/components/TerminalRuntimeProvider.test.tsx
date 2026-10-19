@@ -219,6 +219,7 @@ require.cache[unicode11Module] = { exports: { Unicode11Addon: FakeUnicode11Addon
 const ReactDOM = await import('react-dom/client')
 const {
   TerminalRuntimeProvider,
+  useTerminalRuntimeApi,
   useTerminalRuntimeContext,
 } = loadModule<typeof import('./TerminalRuntimeProvider')>('./TerminalRuntimeProvider.tsx')
 const { TerminalRuntimeRegistry } = loadModule<typeof import('../utils/terminalRuntimeRegistry')>('../utils/terminalRuntimeRegistry.ts')
@@ -549,6 +550,55 @@ test('hidden activity increments only the target workspace without mutating the 
   assert.equal(useCanvasStore.getState().terminalAttention[target.tileId], undefined)
   root.unmount()
   await flushReact()
+})
+
+test('runtime API context stays stable while attention counts change', async () => {
+  const registry = new TerminalRuntimeRegistry<any>()
+  const { bridge, emitOutput } = createOutputCapturingBridge()
+  const previousElectron = (globalThis as AnyRecord).window.electron
+  ;(globalThis as AnyRecord).window.electron = {
+    terminal: bridge,
+    shell: { openExternal: async () => {} },
+    clipboard: { writeText: async () => {} },
+  }
+  useCanvasStore.getState().setWorkspace('workspace-active', 'Active')
+
+  let api: AnyRecord | null = null
+  let context: AnyRecord | null = null
+  const Probe = (): React.ReactElement => {
+    api = useTerminalRuntimeApi() as AnyRecord
+    context = useTerminalRuntimeContext() as AnyRecord
+    return React.createElement('span')
+  }
+  let root: AnyRecord | undefined
+  try {
+    root = renderProvider(registry, () => React.createElement(Probe)).root
+    await flushReact()
+    const initialApi = api
+    const initialContext = context
+    assert.ok(initialApi)
+    assert.ok(initialContext)
+
+    await registry.acquire(target, () => context!.createRuntime({
+      target,
+      createOptions,
+      viewOptions,
+    }))
+    emitOutput('chunk-context-stability')
+    await flushReact()
+
+    assert.equal(api, initialApi)
+    assert.notEqual(context, initialContext)
+    assert.deepEqual(context!.recentOutputCounts, { 'workspace-hidden': 1 })
+    assert.deepEqual(context!.workspaceAttentionCounts, { 'workspace-hidden': 1 })
+  } finally {
+    try {
+      root?.unmount()
+      if (root) await flushReact()
+    } finally {
+      ;(globalThis as AnyRecord).window.electron = previousElectron
+    }
+  }
 })
 
 function createOutputCapturingBridge(): { bridge: AnyRecord; emitOutput: (data: string) => void } {
