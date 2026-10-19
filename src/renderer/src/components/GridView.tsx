@@ -19,6 +19,7 @@ import {
   samePendingGridDragAction,
 } from '@/utils/gridDragPreview'
 import { getTerminalDisplayTitle } from '@/utils/terminalDisplayTitle'
+import { useCanvasStore } from '@/store/canvasStore'
 
 interface GridViewProps {
   workspaceId: string
@@ -27,7 +28,6 @@ interface GridViewProps {
   tiles: TileState[]
   tileRefreshKeys: Record<string, number>
   focusedTileId: string | null
-  terminalTitles: Record<string, string>
   /** Agent session names by tile id. */
   agentTitles?: Record<string, string>
   onFocusTile: (tileId: string) => void
@@ -105,7 +105,6 @@ export function GridView({
   tiles,
   tileRefreshKeys,
   focusedTileId,
-  terminalTitles,
   agentTitles = {},
   onFocusTile,
   onUpdateTile,
@@ -120,6 +119,7 @@ export function GridView({
   workspaceRootPath,
 }: GridViewProps): React.ReactElement {
   const { t } = useTranslation()
+  const terminalTitles = useCanvasStore((s) => s.terminalTitles)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const resizeDragRef = useRef<ResizeDragState | null>(null)
   const rootNodeRef = useRef<GridLayoutNode | null>(rootNode)

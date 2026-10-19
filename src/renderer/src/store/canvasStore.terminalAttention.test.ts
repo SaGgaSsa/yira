@@ -31,11 +31,22 @@ const firstMarked = useCanvasStore.getState().markTerminalOutput('terminal', 3_0
 if (!firstMarked) throw new Error('first output after startup grace must mark attention')
 if (useCanvasStore.getState().terminalAttention.terminal?.count !== 1) throw new Error('first marked output must count 1')
 
+const attentionBeforeSameBurst = useCanvasStore.getState().terminalAttention
 const sameBurstMarked = useCanvasStore.getState().markTerminalOutput('terminal', 4_500)
 if (sameBurstMarked) throw new Error('same burst output must update state without requesting a new mark')
+if (useCanvasStore.getState().terminalAttention !== attentionBeforeSameBurst) {
+  throw new Error('same burst output must not publish a new attention state')
+}
 if (useCanvasStore.getState().terminalAttention.terminal?.count !== 1) throw new Error('same burst output must not increment count')
 
-const secondBurstMarked = useCanvasStore.getState().markTerminalOutput('terminal', 6_501)
+const renewedBurstMarked = useCanvasStore.getState().markTerminalOutput('terminal', 6_000)
+if (renewedBurstMarked) throw new Error('output inside the renewed burst window must not request a new mark')
+if (useCanvasStore.getState().terminalAttention !== attentionBeforeSameBurst) {
+  throw new Error('output inside the renewed burst window must not publish a new attention state')
+}
+if (useCanvasStore.getState().terminalAttention.terminal?.count !== 1) throw new Error('renewed burst must not increment count')
+
+const secondBurstMarked = useCanvasStore.getState().markTerminalOutput('terminal', 8_001)
 if (!secondBurstMarked) throw new Error('output after burst pause must request a new mark')
 if (useCanvasStore.getState().terminalAttention.terminal?.count !== 2) throw new Error('second burst must increment count')
 
@@ -43,6 +54,9 @@ useCanvasStore.getState().clearTerminalAttention('terminal')
 if (useCanvasStore.getState().terminalAttention.terminal) throw new Error('clear must remove terminal attention state')
 
 useCanvasStore.getState().markTerminalOutput('terminal', 9_000)
+if (useCanvasStore.getState().terminalAttention.terminal?.count !== 1) {
+  throw new Error('clear must reset burst detection')
+}
 useCanvasStore.getState().removeTile('terminal')
 if (useCanvasStore.getState().terminalAttention.terminal) throw new Error('removing a tile must remove terminal attention state')
 

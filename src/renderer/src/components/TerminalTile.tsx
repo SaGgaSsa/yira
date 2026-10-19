@@ -16,7 +16,7 @@ import type { TerminalLinkTarget } from '@/utils/terminalContextMenu'
 import { ContextMenu, type MenuItem } from './ContextMenu'
 import { useAgentTextSendContext } from './AgentTextSendContext'
 import {
-  useTerminalRuntimeContext,
+  useTerminalRuntimeApi,
   type TerminalRuntimeCreateRequest,
 } from './TerminalRuntimeProvider'
 import type { TerminalRuntime, TerminalRuntimeSnapshot, TerminalRuntimeViewOptions } from '@/utils/terminalRuntime'
@@ -334,7 +334,7 @@ export function TerminalTileWrapper({
     registry,
     createRuntime,
     getHoveredLinkTarget,
-  } = useTerminalRuntimeContext()
+  } = useTerminalRuntimeApi()
   const containerRef = useRef<HTMLDivElement>(null)
   const target = useMemo<TerminalSessionTarget>(() => ({ workspaceId, tileId: tile.id }), [tile.id, workspaceId])
   const terminalConnection = tile.terminalConnection === 'remote-ssh' ? 'remote-ssh' : undefined

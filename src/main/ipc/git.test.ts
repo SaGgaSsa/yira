@@ -29,6 +29,7 @@ class FakeIpcMain {
 interface LoadedGitIPC {
   createGitIPCHandlers: typeof import('./git').createGitIPCHandlers
   registerGitIPC: typeof import('./git').registerGitIPC
+  createWorkspaceDiffCache: typeof import('./git').createWorkspaceDiffCache
 }
 
 function loadGitIPC(ipcMain: FakeIpcMain): LoadedGitIPC {
@@ -399,6 +400,7 @@ test('automatically sums shallow repositories, preserves selected deep repositor
   let failChild = false
   const readPaths: string[] = []
   const handlers = createGitIPCHandlers({
+    workspaceDiffCacheTtlMs: 0,
     getWorkspaceGitConfigById: async () => ({ rootFolderPath: '/workspace', sourceControlRepositoryPaths: configuredPaths }),
     discoverGitRepositories: async (rootPath, maxDepth) => {
       assert.equal(rootPath, '/workspace')
@@ -473,6 +475,7 @@ test('calculates a real multimodule workspace diff without a root repository or 
 
     const { createGitIPCHandlers } = loadGitIPC(new FakeIpcMain())
     const handlers = createGitIPCHandlers({
+      workspaceDiffCacheTtlMs: 0,
       getWorkspaceGitConfigById: async () => ({ rootFolderPath: rootPath, sourceControlRepositoryPaths: [] }),
       discoverGitRepositories,
       resolveConfiguredGitRepository,
@@ -498,6 +501,64 @@ test('calculates a real multimodule workspace diff without a root repository or 
   } finally {
     await rm(rootPath, { recursive: true, force: true })
   }
+})
+
+test('expires cached workspace diffs after the TTL and clears them on demand', async () => {
+  const { createWorkspaceDiffCache } = loadGitIPC(new FakeIpcMain())
+  let now = 1_000
+  const cache = createWorkspaceDiffCache(5_000, () => now)
+  const diff = Promise.resolve({ additions: 1, deletions: 2, available: true })
+
+  assert.equal(cache.get('workspace'), undefined)
+  cache.set('workspace', diff)
+  assert.equal(cache.get('workspace'), diff)
+
+  now = 5_999
+  assert.equal(cache.get('workspace'), diff)
+  now = 6_000
+  assert.equal(cache.get('workspace'), undefined)
+
+  cache.set('workspace', diff)
+  cache.clear()
+  assert.equal(cache.get('workspace'), undefined)
+})
+
+test('reuses a workspace diff read until a Git mutation invalidates it', async () => {
+  const { createGitIPCHandlers } = loadGitIPC(new FakeIpcMain())
+  let diffReads = 0
+  const handlers = createGitIPCHandlers({
+    getWorkspaceGitConfigById: async () => ({ rootFolderPath: '/workspace', sourceControlRepositoryPaths: ['.'] }),
+    discoverGitRepositories: async () => [],
+    resolveConfiguredGitRepository: async () => ({ absolutePath: '/workspace', relativePath: '.', repository: { relativePath: '.', name: 'workspace' } }),
+    getGitStatus: async () => statusResult(),
+    getGitCommitHistory: async () => historyResult(),
+    getGitDiffSummary: async () => {
+      diffReads += 1
+      return { additions: diffReads, deletions: diffReads, available: true }
+    },
+    stageGitFiles: async () => undefined,
+    unstageGitFiles: async () => undefined,
+    commitGitChanges: async () => undefined,
+    fetchGitRepository: async () => undefined,
+    pullGitRepository: async () => undefined,
+    pushGitRepository: async () => undefined,
+    syncGitRepository: async () => undefined,
+  })
+
+  const [first, second] = await Promise.all([
+    handlers['git:workspaceDiff']({}, 'workspace-a'),
+    handlers['git:workspaceDiff']({}, 'workspace-a'),
+  ])
+  assert.deepEqual(first, { additions: 1, deletions: 1, available: true })
+  assert.deepEqual(second, { additions: 1, deletions: 1, available: true })
+  assert.equal(diffReads, 1)
+
+  assert.deepEqual(await handlers['git:workspaceDiff']({}, 'workspace-a'), { additions: 1, deletions: 1, available: true })
+  assert.equal(diffReads, 1)
+
+  await handlers['git:stage']({}, 'workspace-a', '.', 'src/app.ts')
+  assert.deepEqual(await handlers['git:workspaceDiff']({}, 'workspace-a'), { additions: 2, deletions: 2, available: true })
+  assert.equal(diffReads, 2)
 })
 
 test('stages and unstages every listed change, including rename sources, in one call', async () => {

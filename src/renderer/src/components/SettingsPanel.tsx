@@ -17,9 +17,11 @@ import { DEFAULT_USER_SETTINGS } from '@shared/types'
 import type { TerminalThemeId } from '@shared/terminalThemes'
 import { TERMINAL_THEMES } from '@shared/terminalThemes'
 import { MAX_FONT_SIZE_PX, MIN_FONT_SIZE_PX } from '@shared/userSettings'
-import { LegalDocuments, type LegalDocumentId } from './LegalDocuments'
+import type { LegalDocumentId } from './LegalDocuments'
 import { ShortcutInput } from './ShortcutInput'
 import { agentProviderDetails } from './AgentUsageIndicator'
+
+const LegalDocuments = React.lazy(() => import('./LegalDocuments').then((module) => ({ default: module.LegalDocuments })))
 
 export type SettingsSectionId =
   | 'appearance'
@@ -427,7 +429,11 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
 
   const renderActiveSection = (): React.ReactElement => {
     if (legalDocument) {
-      return <LegalDocuments documentId={legalDocument} onBack={handleLegalDocumentBack} />
+      return (
+        <React.Suspense fallback={null}>
+          <LegalDocuments documentId={legalDocument} onBack={handleLegalDocumentBack} />
+        </React.Suspense>
+      )
     }
 
     if (activeSection === 'appearance') {

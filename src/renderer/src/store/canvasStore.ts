@@ -50,6 +50,10 @@ const EMPTY_GRID_VIEW_STATE: GridViewState = {
   rootNode: null,
 }
 
+// Burst detection needs the latest output timestamp, but publishing it on every
+// chunk would re-render every terminal attention subscriber.
+const terminalAttentionLastOutputAt = new Map<string, number>()
+
 function moveTileIdToFront(tileIds: string[], tileId: string | null): string[] {
   if (!tileId) return tileIds
   if (!tileIds.includes(tileId)) return tileIds
@@ -311,6 +315,9 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     const nextTerminalAttentionGraceUntil = Object.fromEntries(
       Object.entries(s.terminalAttentionGraceUntil).filter(([tileId]) => nextIds.has(tileId)),
     )
+    for (const tileId of terminalAttentionLastOutputAt.keys()) {
+      if (!unmutedTerminalIds.has(tileId)) terminalAttentionLastOutputAt.delete(tileId)
+    }
 
     return {
       tiles: normalizedTiles,
@@ -321,6 +328,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   }),
 
   restoreState: (state) => set(() => {
+    terminalAttentionLastOutputAt.clear()
     const inputTiles = state.tiles.filter(isSupportedTile)
     const normalizedTiles = inputTiles.map(normalizeTile)
     const viewport = normalizeFiniteViewport(state.viewport)
@@ -382,57 +390,63 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     }
   }),
 
-  removeTile: (tileId) => set((s) => {
-    const nextSplitViewState = {
-      ...s.splitViewState,
-      leftTileIds: s.splitViewState.leftTileIds.filter((id) => id !== tileId),
-      rightTileIds: s.splitViewState.rightTileIds.filter((id) => id !== tileId),
-    }
+  removeTile: (tileId) => {
+    terminalAttentionLastOutputAt.delete(tileId)
+    set((s) => {
+      const nextSplitViewState = {
+        ...s.splitViewState,
+        leftTileIds: s.splitViewState.leftTileIds.filter((id) => id !== tileId),
+        rightTileIds: s.splitViewState.rightTileIds.filter((id) => id !== tileId),
+      }
 
-    return {
-      tiles: s.tiles.filter(t => t.id !== tileId),
-      focusedTileId: s.focusedTileId === tileId ? null : s.focusedTileId,
-      fullviewActiveTileId: s.fullviewActiveTileId === tileId ? null : s.fullviewActiveTileId,
-      splitViewState: {
-        ...nextSplitViewState,
-        activeLeftTileId: nextSplitViewState.activeLeftTileId === tileId
-          ? nextSplitViewState.leftTileIds[0] ?? null
-          : nextSplitViewState.activeLeftTileId,
-        activeRightTileId: nextSplitViewState.activeRightTileId === tileId
-          ? nextSplitViewState.rightTileIds[0] ?? null
-          : nextSplitViewState.activeRightTileId,
-      },
-      gridViewState: {
-        rootNode: removeTileFromGridLayout(s.gridViewState.rootNode, tileId),
-      },
-      selectedTileIds: s.selectedTileIds.filter(id => id !== tileId),
-      terminalTitles: Object.fromEntries(
-        Object.entries(s.terminalTitles).filter(([id]) => id !== tileId),
-      ),
-      terminalAttention: Object.fromEntries(
-        Object.entries(s.terminalAttention).filter(([id]) => id !== tileId),
-      ),
-      terminalAttentionGraceUntil: Object.fromEntries(
-        Object.entries(s.terminalAttentionGraceUntil).filter(([id]) => id !== tileId),
-      ),
-    }
-  }),
+      return {
+        tiles: s.tiles.filter(t => t.id !== tileId),
+        focusedTileId: s.focusedTileId === tileId ? null : s.focusedTileId,
+        fullviewActiveTileId: s.fullviewActiveTileId === tileId ? null : s.fullviewActiveTileId,
+        splitViewState: {
+          ...nextSplitViewState,
+          activeLeftTileId: nextSplitViewState.activeLeftTileId === tileId
+            ? nextSplitViewState.leftTileIds[0] ?? null
+            : nextSplitViewState.activeLeftTileId,
+          activeRightTileId: nextSplitViewState.activeRightTileId === tileId
+            ? nextSplitViewState.rightTileIds[0] ?? null
+            : nextSplitViewState.activeRightTileId,
+        },
+        gridViewState: {
+          rootNode: removeTileFromGridLayout(s.gridViewState.rootNode, tileId),
+        },
+        selectedTileIds: s.selectedTileIds.filter(id => id !== tileId),
+        terminalTitles: Object.fromEntries(
+          Object.entries(s.terminalTitles).filter(([id]) => id !== tileId),
+        ),
+        terminalAttention: Object.fromEntries(
+          Object.entries(s.terminalAttention).filter(([id]) => id !== tileId),
+        ),
+        terminalAttentionGraceUntil: Object.fromEntries(
+          Object.entries(s.terminalAttentionGraceUntil).filter(([id]) => id !== tileId),
+        ),
+      }
+    })
+  },
 
-  updateTile: (tileId, patch) => set((s) => {
-    const nextTiles = s.tiles.map((tile) => (
-      tile.id === tileId
-        ? normalizeTile(pinFilesTileForPatch(tile, patch))
-        : tile
-    ))
-    if (patch.notificationsMuted !== true) return { tiles: nextTiles }
+  updateTile: (tileId, patch) => {
+    if (patch.notificationsMuted === true) terminalAttentionLastOutputAt.delete(tileId)
+    set((s) => {
+      const nextTiles = s.tiles.map((tile) => (
+        tile.id === tileId
+          ? normalizeTile(pinFilesTileForPatch(tile, patch))
+          : tile
+      ))
+      if (patch.notificationsMuted !== true) return { tiles: nextTiles }
 
-    return {
-      tiles: nextTiles,
-      terminalAttention: Object.fromEntries(
-        Object.entries(s.terminalAttention).filter(([id]) => id !== tileId),
-      ),
-    }
-  }),
+      return {
+        tiles: nextTiles,
+        terminalAttention: Object.fromEntries(
+          Object.entries(s.terminalAttention).filter(([id]) => id !== tileId),
+        ),
+      }
+    })
+  },
 
   detachTileToFloating: (tileId, bounds) => set((s) => {
     const detached = detachTileForFloating({
@@ -569,8 +583,17 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     if (!tile || tile.type !== 'terminal' || isTerminalNotificationMuted(tile)) return false
 
     const current = state.terminalAttention[tileId]
-    const next = getNextTerminalAttentionEntry(current, now)
+    const previous = current
+      ? {
+          count: current.count,
+          lastOutputAt: terminalAttentionLastOutputAt.get(tileId) ?? current.lastOutputAt,
+        }
+      : undefined
+    const next = getNextTerminalAttentionEntry(previous, now)
+    terminalAttentionLastOutputAt.set(tileId, now)
     const countChanged = next.count !== (current?.count ?? 0)
+
+    if (!countChanged) return false
 
     set((s) => ({
       terminalAttention: {
@@ -579,15 +602,21 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       },
     }))
 
-    return countChanged
+    return true
   },
-  clearTerminalAttention: (tileId) => set((s) => {
-    if (s.terminalAttention[tileId] === undefined) return {}
+  clearTerminalAttention: (tileId) => {
+    terminalAttentionLastOutputAt.delete(tileId)
+    set((s) => {
+      if (s.terminalAttention[tileId] === undefined) return {}
 
-    const { [tileId]: _removed, ...terminalAttention } = s.terminalAttention
-    return { terminalAttention }
-  }),
-  clearAllTerminalAttention: () => set({ terminalAttention: {} }),
+      const { [tileId]: _removed, ...terminalAttention } = s.terminalAttention
+      return { terminalAttention }
+    })
+  },
+  clearAllTerminalAttention: () => {
+    terminalAttentionLastOutputAt.clear()
+    set({ terminalAttention: {} })
+  },
 
   selectTiles: (tileIds) => set({ selectedTileIds: tileIds }),
 
@@ -610,6 +639,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     }
   }),
   restoreWorkspaceState: (id, name, config = normalizeWorkspaceConfig({}), state) => set(() => {
+    terminalAttentionLastOutputAt.clear()
     const normalizedConfig = normalizeWorkspaceConfig(config)
     const normalizedTiles = state.tiles.map(normalizeTile)
     const viewport = normalizeFiniteViewport(state.viewport)
@@ -640,6 +670,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     }
   }),
   restoreGridWorkspaceState: (id, name, config = normalizeWorkspaceConfig({ type: 'grid' }), state) => set(() => {
+    terminalAttentionLastOutputAt.clear()
     const normalizedConfig = normalizeWorkspaceConfig({ ...config, type: 'grid' })
     const normalized = normalizeGridWorkspaceState(state ?? createEmptyGridWorkspaceState())
 

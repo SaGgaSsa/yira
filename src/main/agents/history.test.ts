@@ -390,6 +390,35 @@ test('streams Codex transcripts larger than 2 MiB', async () => {
   }
 })
 
+test('resolves each distinct cwd once per history query', async () => {
+  const root = await makeFixtureRoot()
+  const originalRealpath = fs.realpath
+  const cwd = join(root, 'project')
+  let cwdResolutions = 0
+  try {
+    await fs.mkdir(cwd, { recursive: true })
+    for (const identifier of ['first', 'second', 'third']) {
+      await writeJsonLines(join(root, 'claude', `${identifier}.jsonl`), [
+        { type: 'system', sessionId: identifier, cwd },
+        { type: 'user', sessionId: identifier, cwd, content: `Prompt ${identifier}` },
+      ])
+    }
+    fs.realpath = (async (path: string, ...args: unknown[]) => {
+      if (path === cwd) cwdResolutions += 1
+      return originalRealpath(path, ...(args as []))
+    }) as typeof fs.realpath
+
+    const result = await readClaudeSessionHistory({ rootPath: join(root, 'claude'), workspaceRoot: root })
+
+    assert.equal(result.items.length, 3)
+    assert.equal(cwdResolutions, 1)
+    assert.deepEqual(result.items.map((item) => item.cwd), ['project', 'project', 'project'])
+  } finally {
+    fs.realpath = originalRealpath
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
 test('reuses cached transcripts and refreshes them when size or mtime changes', async () => {
   const root = await makeFixtureRoot()
   const transcriptPath = join(root, 'claude', 'cached.jsonl')

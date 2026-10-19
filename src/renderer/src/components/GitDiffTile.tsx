@@ -1,3 +1,4 @@
+import '../monaco'
 import React, { useCallback, useEffect, useState } from 'react'
 import { DiffEditor } from '@monaco-editor/react'
 import { Columns2, RefreshCw, Rows2 } from 'lucide-react'
