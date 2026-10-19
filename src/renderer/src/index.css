@@ -336,6 +336,12 @@
   background-color: transparent !important;
 }
 
+/* BlockNote portals menus into themed `.bn-root` elements outside the note editor, so override the font at the root. */
+:root .bn-root,
+:root .bn-container {
+  --bn-font-family: var(--font-body);
+}
+
 .yira-note-editor {
   min-height: 100%;
   background: transparent;
