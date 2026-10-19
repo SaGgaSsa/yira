@@ -16,6 +16,7 @@ import { FloatingTileWindow } from './components/FloatingTileWindow'
 import { TerminalRuntimeProvider, useTerminalRuntimeContext } from './components/TerminalRuntimeProvider'
 import { AgentTextSendContextProvider } from './components/AgentTextSendContext'
 import { AppDialog, type ConfirmDialogOptions, type PromptDialogOptions } from './components/AppDialog'
+import { ZenSummaryDialog } from './components/ZenSummaryDialog'
 import { WorkspaceDialog, type WorkspaceDialogRequest, type WorkspaceDialogValue } from './components/WorkspaceDialog'
 import { WorkspaceManagementDialog } from './components/WorkspaceManagementDialog'
 import { ActiveWorkspaceEntry } from './components/ActiveWorkspaceEntry'
@@ -40,6 +41,7 @@ import { resolveSidebarCollapsedForActivity } from './utils/emptyWorkspaceView'
 import { resolveMainView, resolvePanelLayout } from './utils/layoutState'
 import { isShortcutCaptureTarget, matchesShortcut } from './utils/shortcutResolver'
 import { useUpdateStore } from './store/updateStore'
+import { getZenRemainingMs, shouldQueueAlertForZen, useZenStore } from './store/zenStore'
 import {
   GRID_MAX_TILES,
   getDefaultTileSize,
@@ -593,6 +595,7 @@ function AppContent(): React.ReactElement {
   const prevZoomRef = useRef(1)
   const footerRef = useRef<HTMLDivElement | null>(null)
   const fileTileOpenRequestsRef = useRef(createFileTileOpenRequestTracker())
+  const zenWasMaximizedRef = useRef(false)
 
   useEffect(() => {
     const wasOpen = previousActivityOpenRef.current
@@ -692,6 +695,56 @@ function AppContent(): React.ReactElement {
   useEffect(() => {
     void window.electron.window.setTitle(windowTitle)
   }, [windowTitle])
+
+  const zenSummary = useZenStore((state) => state.summary)
+  const zenSessionRunning = useZenStore((state) => state.session?.status === 'running')
+  const zenSessionEndsAt = useZenStore((state) => state.session?.endsAt ?? null)
+
+  useEffect(() => {
+    return useZenStore.subscribe((state, previousState) => {
+      if (previousState.session === null && state.session !== null) {
+        void window.electron.window.setMaximized(true).then((wasMaximized) => {
+          zenWasMaximizedRef.current = wasMaximized
+        }).catch((error: unknown) => {
+          console.error('[App] Failed to maximize window for zen mode:', error)
+        })
+        return
+      }
+
+      if (previousState.session !== null && state.session === null) {
+        if (zenWasMaximizedRef.current) {
+          zenWasMaximizedRef.current = false
+          return
+        }
+        void window.electron.window.setMaximized(false).catch((error: unknown) => {
+          console.error('[App] Failed to restore window after zen mode:', error)
+        })
+      }
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!zenSessionRunning) return
+
+    const finishIfElapsed = () => {
+      const session = useZenStore.getState().session
+      if (!session || session.status !== 'running') return
+      if (getZenRemainingMs(session, Date.now()) === 0) useZenStore.getState().finish('completed')
+    }
+
+    finishIfElapsed()
+    const interval = window.setInterval(finishIfElapsed, 1000)
+    return () => window.clearInterval(interval)
+  }, [zenSessionEndsAt, zenSessionRunning])
+
+  useEffect(() => {
+    if (zenSummary?.reason !== 'completed') return
+
+    playAgentAlertSound('completed')
+    void window.electron.notifications.requestAttention().catch((error: unknown) => {
+      console.error('[App] Failed to request attention for zen summary:', error)
+    })
+  }, [zenSummary])
 
   const currentCanvasState = useMemo(
     () => createCanvasSnapshot({
@@ -1836,6 +1889,11 @@ function AppContent(): React.ReactElement {
 
   useEffect(() => {
     return window.electron.agents.onAlert((event) => {
+      if (shouldQueueAlertForZen(useZenStore.getState().session, event.workspaceId)) {
+        useZenStore.getState().queueAlert(event)
+        return
+      }
+
       const canvasState = useCanvasStore.getState()
       const tile = canvasState.tiles.find((entry) => entry.id === event.tileId)
       const decision = decideAgentAlertNotification({
@@ -2599,6 +2657,12 @@ function AppContent(): React.ReactElement {
         onFitToContent={() => getCanvasMethods()?.fitViewToContent()}
         onZoomToggle={handleZoomToggle}
         onOpenSettings={() => openSettings()}
+        onOpenZenWorkspace={(workspaceId) => {
+          if (workspaceId === activeWorkspaceId) return
+          const workspace = workspaceMetadata.find((entry) => entry.id === workspaceId)
+          if (!workspace) return
+          goToWorkspaceTerminal(workspace, null)
+        }}
       />
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -3052,6 +3116,24 @@ function AppContent(): React.ReactElement {
           y={tileMenu.y}
           items={tileMenuItems}
           onClose={() => setTileMenu(null)}
+        />
+      )}
+      {zenSummary && (
+        <ZenSummaryDialog
+          summary={zenSummary}
+          workspaceName={(workspaceId) => workspaceMetadata.find((entry) => entry.id === workspaceId)?.name ?? null}
+          onOpenAlert={(alert) => {
+            useZenStore.getState().dismissSummary()
+            if (!alert.workspaceId) return
+            if (alert.surface === 'agents-view') {
+              openAgentsViewSession(alert.workspaceId, alert.tileId)
+              return
+            }
+            const workspace = workspaceMetadata.find((entry) => entry.id === alert.workspaceId)
+            if (!workspace) return
+            goToWorkspaceTerminal(workspace, alert.tileId)
+          }}
+          onClose={() => useZenStore.getState().dismissSummary()}
         />
       )}
       <AppDialog
