@@ -676,6 +676,7 @@ type TranslationResources = {
     newAgent: string
     newNote: string
     newBrowser: string
+    newTile: string
     newTimer: string
     newFiles: string
     tileSettings: string
@@ -1641,6 +1642,7 @@ const en: TranslationResources = {
     newAgent: 'New agent',
     newNote: 'New note',
     newBrowser: 'New browser',
+    newTile: 'New tile',
     newTimer: 'New timer',
     newFiles: 'New files',
     tileSettings: 'Tile Settings',
@@ -2606,6 +2608,7 @@ const es: TranslationResources = {
     newAgent: 'Nuevo agente',
     newNote: 'Nueva nota',
     newBrowser: 'Nuevo navegador',
+    newTile: 'Nuevo tile',
     newTimer: 'Nuevo temporizador',
     newFiles: 'Nuevos archivos',
     tileSettings: 'Configuración del panel',

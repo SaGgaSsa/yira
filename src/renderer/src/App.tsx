@@ -2574,6 +2574,18 @@ function AppContent(): React.ReactElement {
         hasWorkspacePanel={hasWorkspacePanel}
         workspacePanelOpen={workspacePanelVisible}
         onToggleWorkspacePanel={toggleWorkspacePanel}
+        tileLauncher={{
+          canCreateTerminal: Boolean(defaultProfile),
+          canCreateAgent: Boolean(tileCreationSelectorProps.canCreateAgent),
+          canCreateNote,
+          canCreateBrowser,
+          onCreateTerminal: () => {
+            if (defaultProfile) revealCreatedTile(addTerminal(defaultProfile.id))
+          },
+          onCreateAgent: () => tileCreationSelectorProps.onCreateAgent?.(),
+          onCreateNote: () => revealCreatedTile(addNote('rich')),
+          onCreateBrowser: () => revealCreatedTile(addBrowser()),
+        }}
         onSetViewMode={(mode) => {
           const overlayOpen = mainView !== 'workspace'
           agentsView.close()

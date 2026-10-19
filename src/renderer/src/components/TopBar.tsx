@@ -5,6 +5,7 @@ import type { AgentProvider, AgentUsageSnapshot, SplitOrientation, ViewMode, Wor
 import type { MainView } from '../utils/layoutState'
 import { AgentUsageIndicator } from './AgentUsageIndicator'
 import { WorkspaceRunControl } from './WorkspaceRunControl'
+import { TileLauncher, type TileLauncherProps } from './TileLauncher'
 import { useSettingsStore } from '@/store/settingsStore'
 
 interface TopBarProps {
@@ -35,6 +36,7 @@ interface TopBarProps {
   hasWorkspacePanel: boolean
   workspacePanelOpen: boolean
   onToggleWorkspacePanel: () => void
+  tileLauncher: TileLauncherProps
   onSetViewMode: (mode: ViewMode) => void
   onFitToContent: () => void
   onZoomToggle: () => void
@@ -113,6 +115,7 @@ export function TopBar({
   hasWorkspacePanel,
   workspacePanelOpen,
   onToggleWorkspacePanel,
+  tileLauncher,
   onSetViewMode,
   onFitToContent,
   onZoomToggle,
@@ -128,6 +131,7 @@ export function TopBar({
   const homeOpen = mainView === 'home'
   // With Agents, Activity or Home on top, no view button is selected and the tile controls are hidden.
   const overlayOpen = mainView !== 'workspace'
+  const tileViewOpen = !overlayOpen && viewMode !== 'board'
 
   return (
     <header className="window-titlebar nd-panel relative flex shrink-0 items-center border-x-0 border-t-0">
@@ -223,6 +227,12 @@ export function TopBar({
                   />
                 )}
               </button>
+            )}
+            {/* Anchored past the switcher so expanding it never shifts the centered buttons. */}
+            {tileViewOpen && (
+              <div className="absolute left-full top-1/2 ml-1.5 -translate-y-1/2">
+                <TileLauncher {...tileLauncher} />
+              </div>
             )}
           </div>
 
