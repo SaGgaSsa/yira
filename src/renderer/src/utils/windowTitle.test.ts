@@ -71,7 +71,10 @@ test('follows the agent session shown in the agents view instead of the hidden t
   const agentsViewSession = { tileId: 'agent-1', title: 'Fix login' }
   assert.equal(getActiveWindowTitle({
     ...state, agentsViewSession, terminalTitles: { ...state.terminalTitles, 'agent-1': '✳ Fixing login' },
-  }), '✳ Fixing login - Yira')
+  }), 'Fixing login - Yira')
+  assert.equal(getActiveWindowTitle({
+    ...state, agentsViewSession, terminalTitles: { ...state.terminalTitles, 'agent-1': '✳ Claude Code' },
+  }), 'Fix login - Yira')
   assert.equal(getActiveWindowTitle({ ...state, agentsViewSession }), 'Fix login - Yira')
   assert.equal(getActiveWindowTitle({
     ...state, agentsViewSession: { tileId: 'agent-1' }, terminalTitles: { 'agent-1': '⠋' },
@@ -86,4 +89,11 @@ test('reports the visible active tile per view mode', () => {
     ...state, viewMode: 'splitview', splitViewState: { ...state.splitViewState, focusedPanel: 'right' },
   }), note.id)
   assert.equal(getVisibleActiveTileId({ ...state, focusedTileId: 'missing' }), null)
+})
+
+test('names agent tiles like their tab title', () => {
+  const agentTile: TileState = { id: 'agent-2', type: 'terminal', x: 0, y: 0, width: 0, height: 0, zIndex: 0, label: 'Login', agent: { provider: 'claude' } }
+  assert.equal(getTileWindowTitle(agentTile, { 'agent-2': '⠂ Fix login' }, 'Project', { 'agent-2': 'Prompt' }), 'Fix login - Yira')
+  assert.equal(getTileWindowTitle(agentTile, { 'agent-2': '✳ Claude Code' }, 'Project', { 'agent-2': 'Prompt' }), 'Login - Yira')
+  assert.equal(getTileWindowTitle({ ...agentTile, label: undefined }, {}, 'Project', { 'agent-2': 'Prompt' }), 'Prompt - Yira')
 })

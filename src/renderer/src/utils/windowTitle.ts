@@ -1,17 +1,17 @@
 import type { SplitViewState, TileState, ViewMode } from '@shared/types'
 import { getAttachedTiles } from '@shared/floatingTiles'
-import { normalizeTerminalWindowTitle } from './terminalDisplayTitle'
+import { getTerminalName, normalizeTerminalWindowTitle } from './terminalDisplayTitle'
 
 export function getTileWindowTitle(
   tile: TileState | null,
   terminalTitles: Record<string, string>,
   workspaceName: string,
+  agentTitles: Record<string, string> = {},
 ): string {
-  const label = tile?.label?.trim()
-  const dynamicTitle = tile?.type === 'terminal' ? terminalTitles[tile.id]?.trim() : ''
-  // Terminal applications can emit a spinner as their entire OSC title.
-  const terminalName = dynamicTitle && /[\p{L}\p{N}]/u.test(dynamicTitle) ? dynamicTitle : ''
-  const title = normalizeTerminalWindowTitle(label || terminalName || workspaceName)
+  const name = tile?.type === 'terminal'
+    ? getTerminalName(tile, terminalTitles, agentTitles)
+    : tile?.label?.trim()
+  const title = normalizeTerminalWindowTitle(name || workspaceName)
   return !title || title.toLowerCase() === 'yira' ? 'Yira' : `${title} - Yira`
 }
 
@@ -23,6 +23,7 @@ export function getActiveWindowTitle(state: {
   focusedTileId: string | null
   fullviewActiveTileId: string | null
   splitViewState: SplitViewState
+  agentTitles?: Record<string, string>
   /** Agent session shown in the agents view, which hides the workspace tiles. */
   agentsViewSession?: { tileId: string; title?: string } | null
 }): string {
@@ -30,12 +31,13 @@ export function getActiveWindowTitle(state: {
   if (session !== undefined) {
     if (!session) return getTileWindowTitle(null, state.terminalTitles, state.activeWorkspaceName)
     const sessionTile: TileState = { id: session.tileId, type: 'terminal', x: 0, y: 0, width: 0, height: 0, zIndex: 0 }
-    return getTileWindowTitle(sessionTile, state.terminalTitles, session.title?.trim() || state.activeWorkspaceName)
+    const sessionTitles = session.title?.trim() ? { [session.tileId]: session.title } : {}
+    return getTileWindowTitle(sessionTile, state.terminalTitles, state.activeWorkspaceName, sessionTitles)
   }
 
   const activeTileId = getVisibleActiveTileId(state)
   const tile = getAttachedTiles(state.tiles).find((candidate) => candidate.id === activeTileId) ?? null
-  return getTileWindowTitle(tile, state.terminalTitles, state.activeWorkspaceName)
+  return getTileWindowTitle(tile, state.terminalTitles, state.activeWorkspaceName, state.agentTitles)
 }
 
 /** Tile the user is looking at in the current view mode, or null when none is focused. */

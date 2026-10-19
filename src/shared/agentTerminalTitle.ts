@@ -11,3 +11,17 @@ export function normalizeAgentTerminalTitle(value: unknown): string {
     .trim()
     .slice(0, MAX_AGENT_TERMINAL_TITLE_LENGTH)
 }
+
+// Agents prefix their terminal title with a status glyph or spinner frame.
+const AGENT_TITLE_STATUS_PREFIX = /^[·*✢-✽◐-◓⠀-⣿]+\s*/u
+const GENERIC_AGENT_TITLES = new Set(['claude', 'claude code', 'codex'])
+
+/**
+ * Session name the agent wrote on its terminal, without the status glyph.
+ * Returns '' while the title only names the agent or is a spinner frame.
+ */
+export function getAgentNamedTitle(value: string | undefined): string {
+  const title = (value ?? '').trim().replace(AGENT_TITLE_STATUS_PREFIX, '')
+  if (!/[\p{L}\p{N}]/u.test(title) || GENERIC_AGENT_TITLES.has(title.toLowerCase())) return ''
+  return title
+}

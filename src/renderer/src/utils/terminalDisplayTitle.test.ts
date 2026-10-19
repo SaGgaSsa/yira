@@ -30,8 +30,20 @@ if (getTerminalDisplayTitle({ ...terminalTile, label: undefined }, {}) !== 'Term
 
 const agentTile: TileState = { ...terminalTile, label: undefined, agent: { provider: 'claude' } }
 
-if (getTerminalDisplayTitle(agentTile, { [agentTile.id]: 'shell title' }, { [agentTile.id]: '✳ Fix login' }) !== '✳ Fix login') {
-  throw new Error('agent session name must win over the dynamic terminal title')
+if (getTerminalDisplayTitle(agentTile, { [agentTile.id]: 'Claude Code' }, { [agentTile.id]: 'Fix login prompt' }) !== 'Fix login prompt') {
+  throw new Error('agent session name must win over a terminal title that only names the agent')
+}
+
+if (getTerminalDisplayTitle({ ...agentTile, label: 'Login' }, { [agentTile.id]: '⠂ Fix login' }, { [agentTile.id]: 'Prompt' }) !== 'Fix login') {
+  throw new Error('the title the agent set must win over the label and the prompt title, without its spinner')
+}
+
+if (getTerminalDisplayTitle({ ...agentTile, label: 'Login' }, { [agentTile.id]: '✳ Claude Code' }, { [agentTile.id]: 'Prompt' }) !== 'Login') {
+  throw new Error('the manual label must win over the prompt title while the agent has not named the session')
+}
+
+if (getTerminalDisplayTitle(agentTile, { [agentTile.id]: '⠋' }) !== 'Claude') {
+  throw new Error('an agent spinner frame must fall back to the agent name')
 }
 
 if (getTerminalDisplayTitle(agentTile, {}) !== 'Claude') {
@@ -44,8 +56,8 @@ const agentTitles = getAgentSessionTitles([
   { sessionId: 's3', tileId: 'tile-3', workspaceId: 'w1', provider: 'claude', status: 'working', startedAt: '', lastActivityAt: '' },
   { sessionId: 's4', tileId: 'tile-4', workspaceId: 'w2', provider: 'claude', status: 'working', startedAt: '', lastActivityAt: '', liveTitle: 'Other' },
 ], 'w1')
-if (JSON.stringify(agentTitles) !== JSON.stringify({ 'tile-1': 'Prompt', 'tile-2': '⠂ Live' })) {
-  throw new Error('agent session titles must prefer the prompt title and keep only named sessions of the workspace')
+if (JSON.stringify(agentTitles) !== JSON.stringify({ 'tile-1': 'Live', 'tile-2': 'Live' })) {
+  throw new Error('agent session titles must prefer the title the agent set and keep only named sessions of the workspace')
 }
 
 const normalizedWindowTitle = normalizeTerminalWindowTitle(`  ${'dev '.repeat(40)}  `)

@@ -7,8 +7,6 @@ import { getAgentSessionTitle } from '@/utils/terminalDisplayTitle'
 import { keepAgentSessionOrder } from '@/utils/workspaceSidebarSections'
 
 const ELAPSED_REFRESH_MS = 30_000
-// Spinner glyphs that Claude and Codex put in front of their terminal title.
-const TITLE_SPINNER_PREFIX = /^[·*✢-✽◐-◓⠀-⣿]+\s*/u
 
 export interface WorkspaceAgentTreeProps {
   workspace: WorkspaceMetadata
@@ -65,7 +63,7 @@ export function WorkspaceAgentTree({
     >
       {shownSessions.map((session) => {
         const providerName = t(session.provider === 'claude' ? 'agentsView.claude' : 'agentsView.codex')
-        const sessionName = getAgentSessionTitle(session).replace(TITLE_SPINNER_PREFIX, '') || providerName
+        const sessionName = getAgentSessionTitle(session) || providerName
         const statusLabel = getStatusLabel(session.status, t)
         const focused = focusedTileId !== null && session.tileId === focusedTileId
         const waiting = session.status === 'needs-input'

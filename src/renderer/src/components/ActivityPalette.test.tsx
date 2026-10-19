@@ -380,10 +380,10 @@ test('shows every open agent, with waiting workspaces first and done agents last
   }
 })
 
-test('names each agent by its prompt title, then its terminal title, then its provider', async () => {
+test('names each agent by its terminal title, then its prompt title, then its provider', async () => {
   const { container, root } = renderActivityStep([
-    session({ sessionId: 'prompted', tileId: 'tile-1', title: 'Refactor', liveTitle: 'Terminal name' }),
-    session({ sessionId: 'renamed', tileId: 'tile-2', liveTitle: '✳ Fix the login flow' }),
+    session({ sessionId: 'prompted', tileId: 'tile-1', title: 'Refactor', liveTitle: '✳ Claude Code' }),
+    session({ sessionId: 'renamed', tileId: 'tile-2', title: 'Prompt text', liveTitle: '✳ Fix the login flow' }),
     session({ sessionId: 'unnamed', tileId: 'tile-3' }),
   ])
 
@@ -393,9 +393,9 @@ test('names each agent by its prompt title, then its terminal title, then its pr
       .map((element) => element.textContent as string)
     assert.equal(rows.length, 3)
     assert.ok(rows[0].startsWith('Refactor'), rows[0])
-    assert.ok(rows[1].startsWith('✳ Fix the login flow'), rows[1])
+    assert.ok(rows[1].startsWith('Fix the login flow'), rows[1])
     assert.ok(rows[2].startsWith('Claude'), rows[2])
-    assert.doesNotMatch(container.textContent, /Terminal name/)
+    assert.doesNotMatch(container.textContent, /Prompt text/)
   } finally {
     root.unmount()
   }

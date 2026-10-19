@@ -70,7 +70,7 @@ import { getAttachedTiles, isTileDetached, selectFloatingTileWindowOpenRequests 
 import { refreshGridTileContent } from './utils/gridTileRefresh'
 import { DEFAULT_SPLIT_ORIENTATION, placeTilesSideBySide, toggleSplitOrientation } from './utils/splitViewState'
 import { getActiveWindowTitle, getVisibleActiveTileId } from './utils/windowTitle'
-import { getAgentSessionTitles } from './utils/terminalDisplayTitle'
+import { getAgentSessionTitle, getAgentSessionTitles } from './utils/terminalDisplayTitle'
 import {
   buildAgentAlertNotificationText,
   decideAgentAlertNotification,
@@ -680,7 +680,7 @@ function AppContent(): React.ReactElement {
     const sessions = agentsView.sessions
     const session = sessions.find((candidate) => candidate.tileId === agentsView.focusedSessionId)
       ?? (sessions.length === 1 ? sessions[0] : undefined)
-    return session ? { tileId: session.tileId, title: session.title } : null
+    return session ? { tileId: session.tileId, title: getAgentSessionTitle(session) } : null
   }, [activityOpen, agentsView.focusedSessionId, agentsView.isOpen, agentsView.sessions])
 
   const focusedAgentTileId = useMemo(() => {
@@ -710,8 +710,9 @@ function AppContent(): React.ReactElement {
     focusedTileId,
     fullviewActiveTileId,
     splitViewState,
+    agentTitles,
     agentsViewSession: agentsViewTitleSession,
-  }), [activeWorkspaceName, agentsViewTitleSession, focusedTileId, fullviewActiveTileId, splitViewState, tiles, viewMode, windowTitleTerminalTitles])
+  }), [activeWorkspaceName, agentTitles, agentsViewTitleSession, focusedTileId, fullviewActiveTileId, splitViewState, tiles, viewMode, windowTitleTerminalTitles])
 
   useEffect(() => {
     void window.electron.window.setTitle(windowTitle)
