@@ -350,6 +350,7 @@ contextBridge.exposeInMainWorld('electron', {
 
   window: {
     setTitle: (title: string) => ipcRenderer.invoke('window:setTitle', title),
+    setMaximized: (maximized: boolean) => ipcRenderer.invoke('window:setMaximized', maximized) as Promise<boolean>,
     getBackgroundMaterialState: () => ipcRenderer.invoke('window:getBackgroundMaterialState') as Promise<WindowBackgroundMaterialState>,
     setBackgroundMaterial: (material: WindowBackgroundMaterial) => ipcRenderer.invoke('window:setBackgroundMaterial', material) as Promise<WindowBackgroundMaterialState>,
     setTitleBarOverlayTheme: (theme: 'dark' | 'light' | AppThemeId) =>

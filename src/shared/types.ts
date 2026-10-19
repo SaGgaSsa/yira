@@ -1146,6 +1146,8 @@ export interface TileState {
   timerEndsAt?: number
   timerCompletedAt?: number
   timerNotifiedAt?: number
+  // Starting this timer starts a zen session for its workspace.
+  timerZen?: boolean
 }
 
 // ─── Canvas State ──────────────────────────────────────────────────────────

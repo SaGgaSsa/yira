@@ -256,6 +256,7 @@ interface ElectronWorld {
   }
   window: {
     setTitle: (title: string) => Promise<void>
+    setMaximized: (maximized: boolean) => Promise<boolean>
     getBackgroundMaterialState: () => Promise<WindowBackgroundMaterialState>
     setBackgroundMaterial: (material: WindowBackgroundMaterial) => Promise<WindowBackgroundMaterialState>
     setTitleBarOverlayTheme: (theme: 'dark' | 'light' | AppThemeId) => Promise<void>
