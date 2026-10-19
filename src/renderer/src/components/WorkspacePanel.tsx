@@ -35,7 +35,6 @@ interface WorkspacePanelProps {
   agentProvider?: AgentProvider
   agentProviders: AgentProvidersConfig
   tiles: TileState[]
-  terminalTitles: Record<string, string>
   onFocusTile: (tileId: string) => void
   onOpenAgentsSession: (tileId: string) => void
   onResumeInTile?: (item: AgentSessionHistoryItem) => void
@@ -58,7 +57,6 @@ export function WorkspacePanel({
   agentProvider,
   agentProviders,
   tiles,
-  terminalTitles,
   onFocusTile,
   onOpenAgentsSession,
   onResumeInTile,
@@ -132,7 +130,6 @@ export function WorkspacePanel({
             selectedProvider={effectiveAgentProvider}
             agentProviders={agentProviders}
             tiles={tiles}
-            terminalTitles={terminalTitles}
             onFocusTile={onFocusTile}
             onOpenAgentsSession={onOpenAgentsSession}
             onResumeInTile={onResumeInTile}

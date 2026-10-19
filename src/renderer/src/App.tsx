@@ -11,6 +11,7 @@ import { RawJsonEditor } from './components/RawJsonEditor'
 import { ContextMenu, type MenuItem } from './components/ContextMenu'
 import { SplitviewPanel } from './components/SplitviewPanel'
 import { GridView } from './components/GridView'
+import { UpdateBanner } from './components/UpdateBanner'
 import { BoardView } from './components/BoardView'
 import { FloatingTileWindow } from './components/FloatingTileWindow'
 import { TerminalRuntimeProvider, useTerminalRuntimeContext } from './components/TerminalRuntimeProvider'
@@ -110,7 +111,7 @@ import {
   pruneWorkspaceTerminalRuntimes,
 } from './utils/terminalRuntimeCleanup'
 import type { TerminalSessionTarget } from '@shared/terminalSessionIdentity'
-import { Terminal, StickyNote, SlidersHorizontal, Download, X, Plus, House } from 'lucide-react'
+import { Terminal, StickyNote, SlidersHorizontal, Plus, House } from 'lucide-react'
 
 const EMPTY_BOARD_STATE: BoardState = {
   enabled: false,
@@ -326,11 +327,6 @@ function AppContent(): React.ReactElement {
   useTheme()
   useFontSize()
   const initializeUpdates = useUpdateStore((s) => s.initialize)
-  const updateStatus = useUpdateStore((s) => s.status)
-  const updateAvailableVersion = useUpdateStore((s) => s.availableVersion)
-  const updateProgressPercent = useUpdateStore((s) => s.progressPercent)
-  const updateMessage = useUpdateStore((s) => s.message)
-  const installUpdate = useUpdateStore((s) => s.installUpdate)
   const agentSettings = useSettingsStore((s) => s.agents)
   const shortcuts = useSettingsStore((s) => s.shortcuts)
   const newAgentSessionShortcut = useSettingsStore((s) => s.shortcuts.newAgentSession)
@@ -340,7 +336,7 @@ function AppContent(): React.ReactElement {
 
   // Canvas state
   const tiles = useCanvasStore((s) => s.tiles)
-  const viewport = useCanvasStore((s) => s.viewport)
+  const viewportZoom = useCanvasStore((s) => s.viewport.zoom)
   const nextZIndex = useCanvasStore((s) => s.nextZIndex)
   const focusedTileId = useCanvasStore((s) => s.focusedTileId)
   const selectedTileIds = useCanvasStore((s) => s.selectedTileIds)
@@ -349,7 +345,6 @@ function AppContent(): React.ReactElement {
   const boardVisible = useCanvasStore((s) => s.boardVisible)
   const splitViewState = useCanvasStore((s) => s.splitViewState)
   const gridViewState = useCanvasStore((s) => s.gridViewState)
-  const terminalTitles = useCanvasStore((s) => s.terminalTitles)
   const terminalAttention = useCanvasStore((s) => s.terminalAttention)
   const activeWorkspaceId = useCanvasStore((s) => s.activeWorkspaceId)
   const activeWorkspaceName = useCanvasStore((s) => s.activeWorkspaceName)
@@ -579,7 +574,6 @@ function AppContent(): React.ReactElement {
   const previousActivityOpenRef = useRef(false)
   const [workspaceEditor, setWorkspaceEditor] = useState<WorkspaceEditorState>(null)
   const [tileEditor, setTileEditor] = useState<TileEditorState>(null)
-  const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState<string | null>(null)
   const [tileRefreshKeys, setTileRefreshKeys] = useState<Record<string, number>>({})
   const [tileMenu, setTileMenu] = useState<{ tileId: string; x: number; y: number } | null>(null)
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -678,46 +672,63 @@ function AppContent(): React.ReactElement {
     return getVisibleActiveTileId({ tiles, viewMode, focusedTileId, fullviewActiveTileId, splitViewState })
   }, [activityOpen, agentsViewTitleSession, focusedTileId, fullviewActiveTileId, splitViewState, tiles, viewMode])
 
+  const windowTitleTileId = agentsViewTitleSession !== undefined
+    ? agentsViewTitleSession?.tileId ?? null
+    : getVisibleActiveTileId({ tiles, viewMode, focusedTileId, fullviewActiveTileId, splitViewState })
+  const windowTitleTerminalTitle = useCanvasStore((s) => (
+    windowTitleTileId ? s.terminalTitles[windowTitleTileId] : undefined
+  ))
+  const windowTitleTerminalTitles = useMemo(
+    () => windowTitleTileId && windowTitleTerminalTitle
+      ? { [windowTitleTileId]: windowTitleTerminalTitle }
+      : {},
+    [windowTitleTerminalTitle, windowTitleTileId],
+  )
+
   const windowTitle = useMemo(() => getActiveWindowTitle({
     tiles,
-    terminalTitles,
+    terminalTitles: windowTitleTerminalTitles,
     activeWorkspaceName,
     viewMode,
     focusedTileId,
     fullviewActiveTileId,
     splitViewState,
     agentsViewSession: agentsViewTitleSession,
-  }), [activeWorkspaceName, agentsViewTitleSession, focusedTileId, fullviewActiveTileId, splitViewState, terminalTitles, tiles, viewMode])
+  }), [activeWorkspaceName, agentsViewTitleSession, focusedTileId, fullviewActiveTileId, splitViewState, tiles, viewMode, windowTitleTerminalTitles])
 
   useEffect(() => {
     void window.electron.window.setTitle(windowTitle)
   }, [windowTitle])
 
   const currentCanvasState = useMemo(
-    () => createCanvasSnapshot({
-      tiles,
-      viewport,
-      nextZIndex,
-      focusedTileId,
-      viewMode,
-      fullviewActiveTileId,
-      boardVisible,
-      splitViewState,
-    }),
-    [tiles, viewport, nextZIndex, focusedTileId, viewMode, fullviewActiveTileId, boardVisible, splitViewState],
+    () => showJsonEditor && activeWorkspaceType === 'canvas'
+      ? createCanvasSnapshot({
+          tiles,
+          viewport: useCanvasStore.getState().viewport,
+          nextZIndex,
+          focusedTileId,
+          viewMode,
+          fullviewActiveTileId,
+          boardVisible,
+          splitViewState,
+        })
+      : null,
+    [activeWorkspaceType, boardVisible, focusedTileId, fullviewActiveTileId, nextZIndex, showJsonEditor, splitViewState, tiles, viewMode],
   )
   const currentGridState = useMemo(
-    () => createGridSnapshot({
-      tiles,
-      nextZIndex,
-      focusedTileId,
-      viewMode,
-      fullviewActiveTileId,
-      boardVisible,
-      gridViewState,
-      splitViewState,
-    }),
-    [tiles, nextZIndex, focusedTileId, viewMode, fullviewActiveTileId, boardVisible, gridViewState, splitViewState],
+    () => showJsonEditor && activeWorkspaceType === 'grid'
+      ? createGridSnapshot({
+          tiles,
+          nextZIndex,
+          focusedTileId,
+          viewMode,
+          fullviewActiveTileId,
+          boardVisible,
+          gridViewState,
+          splitViewState,
+        })
+      : null,
+    [activeWorkspaceType, boardVisible, focusedTileId, fullviewActiveTileId, gridViewState, nextZIndex, showJsonEditor, splitViewState, tiles, viewMode],
   )
 
   const refreshWorkspaceMetadata = useCallback(async (): Promise<WorkspaceMetadata[]> => {
@@ -1096,7 +1107,16 @@ function AppContent(): React.ReactElement {
     }
 
     scheduleSave()
-  }, [tiles, viewport, nextZIndex, viewMode, fullviewActiveTileId, splitViewState, gridViewState, activeWorkspaceId, scheduleSave])
+  }, [tiles, nextZIndex, viewMode, fullviewActiveTileId, splitViewState, gridViewState, activeWorkspaceId, scheduleSave])
+
+  // Viewport changes bypass React state, so persist them through the store subscription.
+  useEffect(() => {
+    return useCanvasStore.subscribe((state, previousState) => {
+      if (state.viewport === previousState.viewport) return
+      if (!state.activeWorkspaceId || skipNextAutosaveRef.current) return
+      scheduleSave()
+    })
+  }, [scheduleSave])
 
   useEffect(() => {
     if (!showProfilePicker && !showNotePicker) return
@@ -1111,6 +1131,16 @@ function AppContent(): React.ReactElement {
     window.addEventListener('mousedown', handlePointerDown)
     return () => window.removeEventListener('mousedown', handlePointerDown)
   }, [showNotePicker, showProfilePicker])
+
+  const closePicker = useCallback(() => {
+    setShowProfilePicker(false)
+    setShowWorkspaceManager(false)
+    setShowSettings(false)
+    setTileMenu(null)
+    setTileEditor(null)
+    setHomeOpen(false)
+    closeActiveDialog()
+  }, [closeActiveDialog])
 
   // Keyboard shortcuts (extracted hook)
   useKeyboardShortcuts({
@@ -1128,15 +1158,7 @@ function AppContent(): React.ReactElement {
     activityOpen: activityOpen || homeOpen,
     agentsViewOpen: agentsView.isOpen,
     onCloseAgentsView: agentsView.close,
-    onClosePicker: () => {
-      setShowProfilePicker(false)
-      setShowWorkspaceManager(false)
-      setShowSettings(false)
-      setTileMenu(null)
-      setTileEditor(null)
-      setHomeOpen(false)
-      closeActiveDialog()
-    },
+    onClosePicker: closePicker,
   })
 
   // Default profile
@@ -1448,6 +1470,7 @@ function AppContent(): React.ReactElement {
 
   // Zoom toggle: switch between 100% and previous zoom
   const handleZoomToggle = useCallback(() => {
+    const viewport = useCanvasStore.getState().viewport
     if (viewport.zoom === 1) {
       // Go back to previous zoom
       setViewport({
@@ -1460,7 +1483,7 @@ function AppContent(): React.ReactElement {
       prevZoomRef.current = viewport.zoom
       setViewport({ tx: 0, ty: 0, zoom: 1 })
     }
-  }, [viewport, setViewport])
+  }, [setViewport])
 
   const activateSplitTile = useCallback((panel: SplitPanelId, tileId: string) => {
     focusTile(tileId)
@@ -2396,40 +2419,6 @@ function AppContent(): React.ReactElement {
     activateSplitTile(targetPanel, tileId)
   }, [activateSplitTile, setSplitViewState, splitViewState])
 
-  const currentUpdateBannerKey = updateStatus === 'downloaded'
-    ? `downloaded:${updateAvailableVersion ?? 'ready'}`
-    : `progress:${updateAvailableVersion ?? updateStatus}`
-  const showUpdateBanner =
-    (updateStatus === 'available' || updateStatus === 'downloading' || updateStatus === 'downloaded') &&
-    dismissedUpdateVersion !== currentUpdateBannerKey
-
-  const updateBannerCopy = (() => {
-    if (updateStatus === 'downloaded') {
-      return {
-        title: t('ui.updateReady', { version: updateAvailableVersion ?? '' }),
-        message: t('ui.restartUpdateMessage'),
-      }
-    }
-
-    if (updateStatus === 'downloading') {
-      return {
-        title: updateAvailableVersion
-          ? t('ui.downloadingUpdate', { version: updateAvailableVersion })
-          : t('ui.downloadingUpdateUnknown'),
-        message: updateProgressPercent !== null
-          ? t('ui.updateProgress', { percent: updateProgressPercent })
-          : t('ui.downloadingUpdateMessage'),
-      }
-    }
-
-    return {
-      title: updateAvailableVersion
-        ? t('ui.updateFound', { version: updateAvailableVersion })
-        : t('ui.updateFoundUnknown'),
-      message: updateMessage ?? t('update.downloading'),
-    }
-  })()
-
   const agentTileProvider = activeWorkspaceId ? agentsView.effectiveProvider : null
   const resumeHistoryInTile = tileCreationAvailability.agent && defaultProfile
     ? (item: AgentSessionHistoryItem) => {
@@ -2541,7 +2530,7 @@ function AppContent(): React.ReactElement {
         workspaceConfig={activeWorkspaceConfig}
         onEditWorkspaceScripts={() => openActiveWorkspaceEditor('scripts')}
         onSaveWorkspaceCommand={saveActiveWorkspaceCommand}
-        zoom={viewport.zoom}
+        zoom={viewportZoom}
         viewMode={viewMode}
         splitOrientation={splitViewState.orientation}
         workspaceType={activeWorkspaceType}
@@ -2772,39 +2761,7 @@ function AppContent(): React.ReactElement {
         value={agentTextSendContext}
         className="flex min-w-0 flex-1 flex-col"
       >
-        {showUpdateBanner && (
-          <div className="border-b border-border bg-bg-secondary px-6 py-3">
-            <div className="flex items-center justify-between gap-4 rounded-[20px] border border-border-visible bg-bg-tertiary px-4 py-3">
-              <div className="min-w-0">
-                <div className="nd-label text-text-secondary">{t('ui.updates')}</div>
-                <div className="mt-1 text-sm text-text-display">{updateBannerCopy.title}</div>
-                <div className="mt-1 text-sm text-text-secondary">{updateBannerCopy.message}</div>
-              </div>
-
-              <div className="flex shrink-0 items-center gap-2">
-                {updateStatus === 'downloaded' && (
-                  <button
-                    className="inline-flex items-center gap-2 rounded-full border border-text-display px-4 py-2 text-sm text-text-display transition-colors hover:bg-bg-secondary"
-                    onClick={() => {
-                      void installUpdate()
-                    }}
-                  >
-                    <Download size={14} />
-                    <span>{t('update.restartToInstall')}</span>
-                  </button>
-                )}
-
-                <button
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border-visible text-text-secondary transition-colors hover:text-text-display"
-                  onClick={() => setDismissedUpdateVersion(currentUpdateBannerKey)}
-                  title={t('ui.dismissUpdateBanner')}
-                >
-                  <X size={16} />
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <UpdateBanner />
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
           {activeWorkspaceId && (
@@ -2863,7 +2820,6 @@ function AppContent(): React.ReactElement {
                     tiles={attachedTiles}
                     tileRefreshKeys={tileRefreshKeys}
                     focusedTileId={focusedTileId}
-                    terminalTitles={terminalTitles}
                     agentTitles={agentTitles}
                     onFocusTile={(tileId) => {
                       focusTile(tileId)
@@ -2987,7 +2943,6 @@ function AppContent(): React.ReactElement {
                 agentProvider={agentsView.effectiveProvider}
                 agentProviders={activeWorkspaceConfig.agentProviders}
                 tiles={tiles}
-                terminalTitles={terminalTitles}
                 onFocusTile={focusAgentTile}
                 onOpenAgentsSession={agentsView.openForSession}
                 requestConfirm={requestConfirm}
