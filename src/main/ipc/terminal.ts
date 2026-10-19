@@ -19,6 +19,7 @@ import type { TerminalSessionIdentity, TerminalSessionTarget } from '@shared/ter
 import type { TerminalDaemonSpawn } from '@shared/terminalDaemonProtocol'
 import type { TerminalProcessActivitySnapshot } from '@shared/terminalProcessActivity'
 import { normalizeAgentProviderConfig } from '@shared/workspaceConfig'
+import { getAgentNamedTitle } from '@shared/agentTerminalTitle'
 import { detectShellProfiles, detectSshClient } from '../shell-profiles'
 import { buildTerminalHistorySetup } from '../terminal-history'
 import { resolveTerminalWorkspaceRoot } from '../workspace-root'
@@ -105,7 +106,7 @@ const agentAlerts = new SemanticAgentAlertState({
           provider: state.provider,
           event: state.event,
           priority: state.priority,
-          sessionTitle: session?.title ?? null,
+          sessionTitle: (getAgentNamedTitle(session?.liveTitle) || session?.title) ?? null,
           surface: session?.surface ?? 'tile',
         }
         window.webContents.send('agents:alert', alertEvent)

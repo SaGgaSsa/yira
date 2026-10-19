@@ -23,6 +23,8 @@ import {
   shouldRequestAgentData,
 } from '@/utils/agentPanel'
 import { useCanvasStore } from '@/store/canvasStore'
+import { getAgentSessionTitle } from '@/utils/terminalDisplayTitle'
+import { getAgentNamedTitle } from '@shared/agentTerminalTitle'
 
 const AgentTranscriptDialog = React.lazy(async () => {
   const module = await import('./AgentTranscriptDialog')
@@ -82,10 +84,10 @@ function getHistoryTitle(item: AgentSessionHistoryItem, fallback: string): strin
 }
 
 function getTerminalTitle(session: AgentActiveSession, tile: TileState | undefined, terminalTitles: Record<string, string>, fallback: string): string {
-  const liveTitle = terminalTitles[session.tileId]?.trim()
-  if (liveTitle) return liveTitle
-  const tileLabel = tile?.label?.trim()
-  return tileLabel || fallback
+  return getAgentNamedTitle(terminalTitles[session.tileId])
+    || tile?.label?.trim()
+    || getAgentSessionTitle(session)
+    || fallback
 }
 
 function RunningSessionCard({
