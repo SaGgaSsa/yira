@@ -688,6 +688,37 @@ type TranslationResources = {
     pause: string
     reset: string
     minutes: string
+    resume: string
+    stop: string
+    done: string
+    addFive: string
+    addMinute: string
+    subtractMinute: string
+    statusReady: string
+    statusRunning: string
+    statusPaused: string
+    statusDone: string
+    durationMinutes: string
+    endsAt: string
+    pausedRemaining: string
+    finished: string
+  }
+  zen: {
+    label: string
+    toggle: string
+    toggleDescription: string
+    start: string
+    stop: string
+    exit: string
+    waiting: string
+    summaryCompleted: string
+    summaryStopped: string
+    summaryEmpty: string
+    whileAway: string
+    goTo: string
+    back: string
+    ago: string
+    justNow: string
   }
   files: {
     actions: string
@@ -1654,6 +1685,37 @@ const en: TranslationResources = {
     pause: 'Pause',
     reset: 'Reset',
     minutes: 'Minutes',
+    resume: 'Resume',
+    stop: 'Stop',
+    done: 'Done',
+    addFive: '+5 min',
+    addMinute: 'Add one minute',
+    subtractMinute: 'Subtract one minute',
+    statusReady: 'TIMER',
+    statusRunning: 'RUNNING',
+    statusPaused: 'PAUSED',
+    statusDone: 'DONE',
+    durationMinutes: '{{count}} min',
+    endsAt: 'Ends at {{time}}',
+    pausedRemaining: 'Paused · {{count}} min left',
+    finished: '{{count}} min session finished',
+  },
+  zen: {
+    label: 'ZEN',
+    toggle: 'Zen mode',
+    toggleDescription: 'Other workspaces wait until the end',
+    start: 'Start zen',
+    stop: 'Stop zen',
+    exit: 'Exit zen mode',
+    waiting: '{{count}} waiting',
+    summaryCompleted: 'ZEN SESSION FINISHED',
+    summaryStopped: 'ZEN SESSION STOPPED',
+    summaryEmpty: 'Nothing happened in other workspaces.',
+    whileAway: 'WHILE YOU WERE IN ZEN',
+    goTo: 'Go',
+    back: 'Back to work',
+    ago: '{{count}} min ago',
+    justNow: 'just now',
   },
   files: {
     actions: 'Actions',
@@ -2620,6 +2682,37 @@ const es: TranslationResources = {
     pause: 'Pausar',
     reset: 'Restablecer',
     minutes: 'Minutos',
+    resume: 'Seguir',
+    stop: 'Detener',
+    done: 'Listo',
+    addFive: '+5 min',
+    addMinute: 'Sumar un minuto',
+    subtractMinute: 'Restar un minuto',
+    statusReady: 'TIMER',
+    statusRunning: 'EN CURSO',
+    statusPaused: 'EN PAUSA',
+    statusDone: 'TERMINADO',
+    durationMinutes: '{{count}} min',
+    endsAt: 'Termina a las {{time}}',
+    pausedRemaining: 'En pausa · quedan {{count}} min',
+    finished: 'Sesión de {{count}} min terminada',
+  },
+  zen: {
+    label: 'ZEN',
+    toggle: 'Modo zen',
+    toggleDescription: 'Los otros workspaces esperan al final',
+    start: 'Iniciar zen',
+    stop: 'Detener zen',
+    exit: 'Salir del modo zen',
+    waiting: '{{count}} en espera',
+    summaryCompleted: 'SESIÓN ZEN TERMINADA',
+    summaryStopped: 'SESIÓN ZEN DETENIDA',
+    summaryEmpty: 'No pasó nada en otros workspaces.',
+    whileAway: 'MIENTRAS ESTABAS EN ZEN',
+    goTo: 'Ir',
+    back: 'Volver al trabajo',
+    ago: 'hace {{count}} min',
+    justNow: 'recién',
   },
   files: {
     actions: 'Acciones',
