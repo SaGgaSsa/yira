@@ -2507,11 +2507,11 @@ function AppContent(): React.ReactElement {
     ? (item: AgentSessionHistoryItem) => {
         // Reuse the tile that already holds this conversation instead of opening it twice.
         const existing = tiles.find((tile) => tile.agent?.provider === item.provider && tile.agent.sessionId === item.identifier)
-        const cwd = sanitizeAgentCwd(item.cwd)
+        // A cwd marks the tile as a saved conversation, so it resumes after an app restart.
         const tileId = existing?.id ?? addTerminal(defaultProfile.id, {
           provider: item.provider,
           sessionId: item.identifier,
-          ...(cwd ? { cwd } : {}),
+          cwd: sanitizeAgentCwd(item.cwd) ?? '.',
         })
         if (!tileId) return
         agentsView.close()

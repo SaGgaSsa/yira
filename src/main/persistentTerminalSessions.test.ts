@@ -13,6 +13,7 @@ import {
   PersistentTerminalSessions,
   type PersistentTerminalSubscriber,
   type PersistentTerminalTransport,
+  terminalResultFromSnapshot,
 } from './persistentTerminalSessions'
 import { AgentSessionRegistry } from './agents/registry'
 
@@ -108,6 +109,12 @@ function createSessions(
 ): PersistentTerminalSessions {
   return new PersistentTerminalSessions({ connect: async () => transport, ...options })
 }
+
+test('create results report the conversation an agent terminal runs', () => {
+  const agent = { provider: 'claude' as const, sessionId: 'fresh-session', startedAt: '2026-01-01T00:00:00.000Z' }
+  assert.equal(terminalResultFromSnapshot(snapshot({ agent })).agentSessionId, 'fresh-session')
+  assert.equal('agentSessionId' in terminalResultFromSnapshot(snapshot()), false)
+})
 
 test('reattach checks attach before the builder and runs launch preparation once', async () => {
   const transport = new FakeTransport()

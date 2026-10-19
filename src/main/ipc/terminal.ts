@@ -11,6 +11,7 @@ import type {
   RemotePreparationStatus,
   RemoteTerminalConfig,
   ShellProfile,
+  TerminalAgentMetadata,
   TerminalCreateOptions,
   TerminalCreateResult,
   TerminalExitEvent,
@@ -551,6 +552,21 @@ export function moveAgentsViewSessionToTile(target: TerminalSessionTarget): Prom
   return persistentTerminalSessions.setAgentSurface(normalizeTerminalSessionTarget(target, true), 'tile')
 }
 
+/** Agent conversations launched since the app started. */
+const launchedAgentSessionIds = new Set<string>()
+
+/**
+ * A Claude tile created as a new session keeps its preset ID only to resume
+ * after the agent exits. In a later app run it starts a new conversation.
+ * Tiles opened from a saved conversation carry its cwd and keep resuming it.
+ */
+function startsFreshAgentSession(agent: TerminalAgentMetadata): boolean {
+  return agent.provider === 'claude'
+    && agent.cwd === undefined
+    && agent.sessionId !== undefined
+    && !launchedAgentSessionIds.has(agent.sessionId)
+}
+
 async function buildTerminalDaemonSpawn(
   runtimeTarget: TerminalSessionTarget,
   options: TerminalCreateOptions,
@@ -607,17 +623,21 @@ async function buildTerminalDaemonSpawn(
   if (isAgent) {
     const startupDir = process.platform !== 'win32' ? join(YIRA_HOME, 'agent-shell') : undefined
     if (startupDir) await ensureAgentShellStartupFiles(startupDir)
-    const agentSessionId = options.agent!.sessionId
+    const requestedAgent = options.agent!
+    const savedConversation = requestedAgent.sessionId !== undefined
+      && await agentSessionExists(requestedAgent.provider, requestedAgent.sessionId)
+    const startFresh = savedConversation && startsFreshAgentSession(requestedAgent)
+    const agent = startFresh ? { ...requestedAgent, sessionId: randomUUID() } : requestedAgent
     agentLaunch = buildAgentTerminalLaunch({
       tileId: runtimeTarget.tileId,
       workspaceId: runtimeTarget.workspaceId,
-      agent: options.agent!,
+      agent,
       providerConfig: options.agentProviderConfig,
       workspaceRoot: workspaceRootFolderPath ?? options.workspaceDir,
       fallbackCwd: terminalRoot?.cwd ?? process.cwd(),
-      newSession: agentSessionId !== undefined
-        && !(await agentSessionExists(options.agent!.provider, agentSessionId)),
+      newSession: agent.sessionId !== undefined && (startFresh || !savedConversation),
     })
+    launchedAgentSessionIds.add(agentLaunch.sessionId)
     agentShellCommand = buildAgentShellCommand({
       shellProfileId: agentShellProfile!.id,
       command: agentLaunch.command,

@@ -790,6 +790,8 @@ export interface TerminalCreateResult {
   buffer: string
   identity: TerminalSessionIdentity
   exitEvent?: TerminalExitEvent
+  /** Conversation an agent terminal runs. */
+  agentSessionId?: string
 }
 
 export interface ShellProfile {
