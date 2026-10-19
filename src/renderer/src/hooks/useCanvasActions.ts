@@ -259,6 +259,10 @@ export function useCanvasActions({ requestConfirm, destroyTerminalRuntime }: Use
     if (!tileCreationAvailability.timer) return null
 
     const state = useCanvasStore.getState()
+    // A workspace has a single timer, like its board: creating another reveals it.
+    const existingTimer = state.tiles.find((tile) => tile.type === 'timer')
+    if (existingTimer) return existingTimer.id
+
     const size = getDefaultTileSize('timer')
     const pos = getSpawnPos(size.width, size.height, 40)
     const defaultDurationMs = 25 * 60 * 1000
