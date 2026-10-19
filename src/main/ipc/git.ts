@@ -10,6 +10,49 @@ interface WorkspaceGitConfig {
   configuredRepositoryPaths: string[]
 }
 
+const WORKSPACE_DIFF_CACHE_TTL_MS = 5_000
+
+interface WorkspaceDiffCacheEntry {
+  expiresAt: number
+  result: Promise<WorkspaceGitDiffResult>
+}
+
+export interface WorkspaceDiffCache {
+  get(key: string): Promise<WorkspaceGitDiffResult> | undefined
+  set(key: string, result: Promise<WorkspaceGitDiffResult>): Promise<WorkspaceGitDiffResult>
+  clear(): void
+}
+
+export function createWorkspaceDiffCache(
+  ttlMs = WORKSPACE_DIFF_CACHE_TTL_MS,
+  now: () => number = Date.now,
+): WorkspaceDiffCache {
+  const entries = new Map<string, WorkspaceDiffCacheEntry>()
+  return {
+    get(key) {
+      const entry = entries.get(key)
+      if (!entry) return undefined
+      if (entry.expiresAt <= now()) {
+        entries.delete(key)
+        return undefined
+      }
+      return entry.result
+    },
+    set(key, result) {
+      const entry = { expiresAt: now() + ttlMs, result }
+      entries.set(key, entry)
+      // Do not keep a failed read cached for the whole TTL.
+      void result.catch(() => {
+        if (entries.get(key) === entry) entries.delete(key)
+      })
+      return result
+    },
+    clear() {
+      entries.clear()
+    },
+  }
+}
+
 function mutationPaths(relativePath: string, originalPath?: string): string[] {
   if (typeof relativePath !== 'string') throw new Error('Path must be a string')
   if (originalPath !== undefined && typeof originalPath !== 'string') throw new Error('Original path must be a string')
@@ -56,6 +99,7 @@ export interface GitIPCDependencies {
   getGitStatus: typeof getGitStatus
   getGitCommitHistory: typeof getGitCommitHistory
   getGitDiffSummary: typeof getGitDiffSummary
+  workspaceDiffCacheTtlMs?: number
   getGitFileDiffContent?: typeof getGitFileDiffContent
   stageGitFiles: typeof stageGitFiles
   unstageGitFiles: typeof unstageGitFiles
@@ -110,6 +154,53 @@ export function createGitIPCHandlers(dependencies: GitIPCDependencies): Record<s
     return repository.absolutePath
   }
 
+  const unavailableWorkspaceDiff: WorkspaceGitDiffResult = { additions: 0, deletions: 0, available: false }
+  const workspaceDiffCache = createWorkspaceDiffCache(dependencies.workspaceDiffCacheTtlMs)
+  const invalidateDiffAfter = (operation: GitIPCHandler): GitIPCHandler => async (...args) => {
+    try {
+      return await operation(...args)
+    } finally {
+      workspaceDiffCache.clear()
+    }
+  }
+  const computeWorkspaceDiff = async (rootPath: string, configuredRepositoryPaths: string[]): Promise<WorkspaceGitDiffResult> => {
+    const discoveredRepositories = await dependencies.discoverGitRepositories(rootPath, 1)
+    const repositoryPaths = [...new Set([
+      ...configuredRepositoryPaths,
+      ...discoveredRepositories.map(({ relativePath }) => relativePath),
+    ])]
+    if (repositoryPaths.length === 0) return { ...unavailableWorkspaceDiff, repositoryCount: 0 }
+
+    const repositoryRoots: string[] = []
+    const seenRepositoryPaths = new Set<string>()
+    for (const repositoryPath of repositoryPaths) {
+      // Automatic discovery only expands this read. Mutations still require configured paths.
+      const repository = await dependencies.resolveConfiguredGitRepository(rootPath, repositoryPaths, repositoryPath)
+      const canonicalPath = process.platform === 'win32' ? repository.absolutePath.toLowerCase() : repository.absolutePath
+      if (seenRepositoryPaths.has(canonicalPath)) continue
+      seenRepositoryPaths.add(canonicalPath)
+      repositoryRoots.push(repository.absolutePath)
+    }
+
+    const results = await Promise.all(repositoryRoots.map((repositoryRoot) => dependencies.getGitDiffSummary(repositoryRoot)))
+    let additions = 0
+    let deletions = 0
+    for (const result of results) {
+      if (!result.available
+        || !Number.isSafeInteger(result.additions)
+        || !Number.isSafeInteger(result.deletions)
+        || result.additions < 0
+        || result.deletions < 0) {
+        return unavailableWorkspaceDiff
+      }
+      additions += result.additions
+      deletions += result.deletions
+      if (!Number.isSafeInteger(additions) || !Number.isSafeInteger(deletions)) return unavailableWorkspaceDiff
+    }
+
+    return { additions, deletions, available: true }
+  }
+
   return {
     'git:discoverRepositories': async (_event: unknown, workspaceId: string): Promise<GitRepository[]> =>
       toSafeRepositories(await dependencies.discoverGitRepositories((await getConfig(workspaceId)).rootPath)),
@@ -132,41 +223,15 @@ export function createGitIPCHandlers(dependencies: GitIPCDependencies): Record<s
       }
     },
     'git:workspaceDiff': async (_event: unknown, workspaceId: string): Promise<WorkspaceGitDiffResult> => {
-      const unavailable: WorkspaceGitDiffResult = { additions: 0, deletions: 0, available: false }
       try {
         const { rootPath, configuredRepositoryPaths } = await getConfig(workspaceId)
-        const discoveredRepositories = await dependencies.discoverGitRepositories(rootPath, 1)
-        const repositoryPaths = [...new Set([
-          ...configuredRepositoryPaths,
-          ...discoveredRepositories.map(({ relativePath }) => relativePath),
-        ])]
-        if (repositoryPaths.length === 0) return { ...unavailable, repositoryCount: 0 }
+        const cacheKey = JSON.stringify([rootPath, configuredRepositoryPaths])
+        const cached = workspaceDiffCache.get(cacheKey)
+        if (cached) return await cached
 
-        const seenRepositoryPaths = new Set<string>()
-        let additions = 0
-        let deletions = 0
-        for (const repositoryPath of repositoryPaths) {
-          // Automatic discovery only expands this read. Mutations still require configured paths.
-          const repository = await dependencies.resolveConfiguredGitRepository(rootPath, repositoryPaths, repositoryPath)
-          const canonicalPath = process.platform === 'win32' ? repository.absolutePath.toLowerCase() : repository.absolutePath
-          if (seenRepositoryPaths.has(canonicalPath)) continue
-          seenRepositoryPaths.add(canonicalPath)
-          const result = await dependencies.getGitDiffSummary(repository.absolutePath)
-          if (!result.available
-            || !Number.isSafeInteger(result.additions)
-            || !Number.isSafeInteger(result.deletions)
-            || result.additions < 0
-            || result.deletions < 0) {
-            return unavailable
-          }
-          additions += result.additions
-          deletions += result.deletions
-          if (!Number.isSafeInteger(additions) || !Number.isSafeInteger(deletions)) return unavailable
-        }
-
-        return { additions, deletions, available: true }
+        return await workspaceDiffCache.set(cacheKey, computeWorkspaceDiff(rootPath, configuredRepositoryPaths))
       } catch {
-        return unavailable
+        return unavailableWorkspaceDiff
       }
     },
     'git:fileDiff': async (_event: unknown, workspaceId: string, repositoryPath: string, relativePath: string, staged: boolean, originalPath?: string): Promise<GitFileDiffContent> => {
@@ -180,36 +245,36 @@ export function createGitIPCHandlers(dependencies: GitIPCDependencies): Record<s
         return { original: '', modified: '', error: safeGitError(error) }
       }
     },
-    'git:stage': async (_event: unknown, workspaceId: string, repositoryPath: string, relativePath: string, originalPath?: string) => {
+    'git:stage': invalidateDiffAfter(async (_event: unknown, workspaceId: string, repositoryPath: string, relativePath: string, originalPath?: string) => {
       await dependencies.stageGitFiles(await resolveRepository(workspaceId, repositoryPath), mutationPaths(relativePath, originalPath))
-    },
-    'git:unstage': async (_event: unknown, workspaceId: string, repositoryPath: string, relativePath: string, originalPath?: string) => {
+    }),
+    'git:unstage': invalidateDiffAfter(async (_event: unknown, workspaceId: string, repositoryPath: string, relativePath: string, originalPath?: string) => {
       await dependencies.unstageGitFiles(await resolveRepository(workspaceId, repositoryPath), mutationPaths(relativePath, originalPath))
-    },
-    'git:stageChanges': async (_event: unknown, workspaceId: string, repositoryPath: string, changes: GitFileChange[]) => {
+    }),
+    'git:stageChanges': invalidateDiffAfter(async (_event: unknown, workspaceId: string, repositoryPath: string, changes: GitFileChange[]) => {
       await dependencies.stageGitFiles(await resolveRepository(workspaceId, repositoryPath), changePaths(changes))
-    },
-    'git:unstageChanges': async (_event: unknown, workspaceId: string, repositoryPath: string, changes: GitFileChange[]) => {
+    }),
+    'git:unstageChanges': invalidateDiffAfter(async (_event: unknown, workspaceId: string, repositoryPath: string, changes: GitFileChange[]) => {
       await dependencies.unstageGitFiles(await resolveRepository(workspaceId, repositoryPath), changePaths(changes))
-    },
-    'git:discard': async (_event: unknown, workspaceId: string, repositoryPath: string, changes: GitFileChange[]) => {
+    }),
+    'git:discard': invalidateDiffAfter(async (_event: unknown, workspaceId: string, repositoryPath: string, changes: GitFileChange[]) => {
       await (dependencies.discardGitChanges ?? discardGitChanges)(await resolveRepository(workspaceId, repositoryPath), discardPaths(changes))
-    },
-    'git:commit': async (_event: unknown, workspaceId: string, repositoryPath: string, message: string) => {
+    }),
+    'git:commit': invalidateDiffAfter(async (_event: unknown, workspaceId: string, repositoryPath: string, message: string) => {
       await dependencies.commitGitChanges(await resolveRepository(workspaceId, repositoryPath), message)
-    },
-    'git:sync': async (_event: unknown, workspaceId: string, repositoryPath: string) => {
+    }),
+    'git:sync': invalidateDiffAfter(async (_event: unknown, workspaceId: string, repositoryPath: string) => {
       await dependencies.syncGitRepository(await resolveRepository(workspaceId, repositoryPath))
-    },
-    'git:fetch': async (_event: unknown, workspaceId: string, repositoryPath: string) => {
+    }),
+    'git:fetch': invalidateDiffAfter(async (_event: unknown, workspaceId: string, repositoryPath: string) => {
       await dependencies.fetchGitRepository(await resolveRepository(workspaceId, repositoryPath))
-    },
-    'git:pull': async (_event: unknown, workspaceId: string, repositoryPath: string) => {
+    }),
+    'git:pull': invalidateDiffAfter(async (_event: unknown, workspaceId: string, repositoryPath: string) => {
       await dependencies.pullGitRepository(await resolveRepository(workspaceId, repositoryPath))
-    },
-    'git:push': async (_event: unknown, workspaceId: string, repositoryPath: string) => {
+    }),
+    'git:push': invalidateDiffAfter(async (_event: unknown, workspaceId: string, repositoryPath: string) => {
       await dependencies.pushGitRepository(await resolveRepository(workspaceId, repositoryPath))
-    },
+    }),
     'git:branches': async (_event: unknown, workspaceId: string, repositoryPath: string): Promise<GitBranchListResult> => {
       try {
         const result = await (dependencies.listGitBranches ?? listGitBranches)(await resolveRepository(workspaceId, repositoryPath))
@@ -218,31 +283,31 @@ export function createGitIPCHandlers(dependencies: GitIPCDependencies): Record<s
         return { branches: [], error: safeGitError(error) }
       }
     },
-    'git:checkout': async (_event: unknown, workspaceId: string, repositoryPath: string, name: unknown, remote: unknown): Promise<void> => {
+    'git:checkout': invalidateDiffAfter(async (_event: unknown, workspaceId: string, repositoryPath: string, name: unknown, remote: unknown): Promise<void> => {
       if (typeof name !== 'string') throw new Error('Branch name must be a string')
       if (typeof remote !== 'boolean') throw new Error('Remote flag must be a boolean')
       await (dependencies.checkoutGitBranch ?? checkoutGitBranch)(await resolveRepository(workspaceId, repositoryPath), name, remote)
-    },
-    'git:createBranch': async (_event: unknown, workspaceId: string, repositoryPath: string, name: unknown, startPoint?: unknown): Promise<void> => {
+    }),
+    'git:createBranch': invalidateDiffAfter(async (_event: unknown, workspaceId: string, repositoryPath: string, name: unknown, startPoint?: unknown): Promise<void> => {
       if (typeof name !== 'string') throw new Error('Branch name must be a string')
       if (startPoint !== undefined && typeof startPoint !== 'string') throw new Error('Start point must be a string')
       await (dependencies.createGitBranch ?? createGitBranch)(await resolveRepository(workspaceId, repositoryPath), name, startPoint as string | undefined)
-    },
-    'git:stashForBranch': async (_event: unknown, workspaceId: string, repositoryPath: string, branch: unknown): Promise<void> => {
+    }),
+    'git:stashForBranch': invalidateDiffAfter(async (_event: unknown, workspaceId: string, repositoryPath: string, branch: unknown): Promise<void> => {
       if (typeof branch !== 'string') throw new Error('Branch name must be a string')
       await (dependencies.stashGitChangesForBranch ?? stashGitChangesForBranch)(await resolveRepository(workspaceId, repositoryPath), branch)
-    },
+    }),
     'git:branchStash': async (_event: unknown, workspaceId: string, repositoryPath: string, branch: unknown): Promise<GitStashEntry | null> => {
       if (typeof branch !== 'string') throw new Error('Branch name must be a string')
       return (dependencies.findGitBranchStash ?? findGitBranchStash)(await resolveRepository(workspaceId, repositoryPath), branch)
     },
-    'git:popStash': async (_event: unknown, workspaceId: string, repositoryPath: string, ref: unknown): Promise<void> => {
+    'git:popStash': invalidateDiffAfter(async (_event: unknown, workspaceId: string, repositoryPath: string, ref: unknown): Promise<void> => {
       if (typeof ref !== 'string') throw new Error('Stash reference must be a string')
       await (dependencies.popGitStash ?? popGitStash)(await resolveRepository(workspaceId, repositoryPath), ref)
-    },
-    'git:publish': async (_event: unknown, workspaceId: string, repositoryPath: string): Promise<void> => {
+    }),
+    'git:publish': invalidateDiffAfter(async (_event: unknown, workspaceId: string, repositoryPath: string): Promise<void> => {
       await (dependencies.publishGitBranch ?? publishGitBranch)(await resolveRepository(workspaceId, repositoryPath))
-    },
+    }),
     'git:commitFiles': async (_event: unknown, workspaceId: string, repositoryPath: string, commit: unknown): Promise<GitCommitFilesResult> => {
       if (typeof commit !== 'string') throw new Error('Commit reference must be a string')
       try {
@@ -266,20 +331,20 @@ export function createGitIPCHandlers(dependencies: GitIPCDependencies): Record<s
         return { original: '', modified: '', error: safeGitError(error) }
       }
     },
-    'git:merge': async (_event: unknown, workspaceId: string, repositoryPath: string, name: unknown): Promise<void> => {
+    'git:merge': invalidateDiffAfter(async (_event: unknown, workspaceId: string, repositoryPath: string, name: unknown): Promise<void> => {
       if (typeof name !== 'string') throw new Error('Branch name must be a string')
       await (dependencies.mergeGitBranch ?? mergeGitBranch)(await resolveRepository(workspaceId, repositoryPath), name)
-    },
-    'git:rebase': async (_event: unknown, workspaceId: string, repositoryPath: string, name: unknown): Promise<void> => {
+    }),
+    'git:rebase': invalidateDiffAfter(async (_event: unknown, workspaceId: string, repositoryPath: string, name: unknown): Promise<void> => {
       if (typeof name !== 'string') throw new Error('Branch name must be a string')
       await (dependencies.rebaseGitBranch ?? rebaseGitBranch)(await resolveRepository(workspaceId, repositoryPath), name)
-    },
-    'git:abortOperation': async (_event: unknown, workspaceId: string, repositoryPath: string): Promise<void> => {
+    }),
+    'git:abortOperation': invalidateDiffAfter(async (_event: unknown, workspaceId: string, repositoryPath: string): Promise<void> => {
       await (dependencies.abortGitOperation ?? abortGitOperation)(await resolveRepository(workspaceId, repositoryPath))
-    },
-    'git:continueOperation': async (_event: unknown, workspaceId: string, repositoryPath: string): Promise<void> => {
+    }),
+    'git:continueOperation': invalidateDiffAfter(async (_event: unknown, workspaceId: string, repositoryPath: string): Promise<void> => {
       await (dependencies.continueGitOperation ?? continueGitOperation)(await resolveRepository(workspaceId, repositoryPath))
-    },
+    }),
   }
 }
 

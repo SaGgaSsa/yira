@@ -96,21 +96,21 @@
 
 @font-face {
   font-family: 'Doto';
-  src: url('./assets/fonts/Doto-VariableFont_ROND,wght.ttf') format('truetype');
+  src: url('./assets/fonts/Doto-VariableFont_ROND,wght.woff2') format('woff2');
   font-weight: 400 700;
   font-style: normal;
 }
 
 @font-face {
   font-family: 'Saira';
-  src: url('./assets/fonts/Saira-VariableFont_wdth,wght.ttf') format('truetype');
+  src: url('./assets/fonts/Saira-VariableFont_wdth,wght.woff2') format('woff2');
   font-weight: 300 700;
   font-style: normal;
 }
 
 @font-face {
   font-family: 'IBM Plex Mono';
-  src: url('./assets/fonts/IBMPlexMono-Regular.ttf') format('truetype');
+  src: url('./assets/fonts/IBMPlexMono-Regular.woff2') format('woff2');
   font-weight: 400;
   font-style: normal;
 }
@@ -334,6 +334,12 @@
 .xterm .xterm-viewport,
 .xterm .xterm-screen {
   background-color: transparent !important;
+}
+
+/* BlockNote portals menus into themed `.bn-root` elements outside the note editor, so override the font at the root. */
+:root .bn-root,
+:root .bn-container {
+  --bn-font-family: var(--font-body);
 }
 
 .yira-note-editor {

@@ -99,10 +99,11 @@ export function WorkspaceActivityView({
           providers,
           enabled,
         )
-        const nextHistory = await window.electron.agents.usageHistory(historyRequest)
-        const nextToday = todayRequest
-          ? await window.electron.agents.usageHistory(todayRequest)
-          : nextHistory
+        const [nextHistory, todayResult] = await Promise.all([
+          window.electron.agents.usageHistory(historyRequest),
+          todayRequest ? window.electron.agents.usageHistory(todayRequest) : null,
+        ])
+        const nextToday = todayRequest ? todayResult : nextHistory
         if (!active) return
         activityHistoryCache.set(cacheKey, { history: nextHistory, todayHistory: nextToday })
         setHistory(nextHistory)

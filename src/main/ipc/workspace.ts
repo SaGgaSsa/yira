@@ -9,6 +9,7 @@ import {
   normalizeWorkspaceRootFolderPath,
 } from '@shared/workspaceConfig'
 import { createSerialTaskQueue } from '@shared/serialTaskQueue'
+import { writeFileAtomic } from '@shared/atomicWrite'
 import {
   latestWorkspaceSelectionTimestamp,
   normalizeWorkspaceSelectionMetadata,
@@ -26,6 +27,14 @@ import {
 const { ipcMain, dialog, BrowserWindow } = electron
 const configMutationQueue = createSerialTaskQueue()
 let lastSelectionTimestamp = 0
+
+interface ConfigCacheEntry {
+  config: Config
+  mtimeMs: number
+  size: number
+}
+
+let configCache: ConfigCacheEntry | null = null
 
 async function ensureDir(dir: string): Promise<void> {
   await fs.mkdir(dir, { recursive: true })
@@ -89,7 +98,23 @@ function nextSelectionTimestamp(workspaces: Workspace[]): number {
   return lastSelectionTimestamp
 }
 
+async function readConfigStats(): Promise<{ mtimeMs: number; size: number } | null> {
+  try {
+    const stats = await fs.stat(CONFIG_PATH)
+    return { mtimeMs: stats.mtimeMs, size: stats.size }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+    throw error
+  }
+}
+
 async function readConfig(): Promise<Config> {
+  const stats = await readConfigStats()
+  if (configCache && stats && stats.mtimeMs === configCache.mtimeMs && stats.size === configCache.size) {
+    // Callers mutate the returned config and hand its workspaces to the renderer.
+    return structuredClone(configCache.config)
+  }
+
   let raw: string | null = null
   try {
     raw = await fs.readFile(CONFIG_PATH, 'utf8')
@@ -98,6 +123,7 @@ async function readConfig(): Promise<Config> {
   }
 
   if (raw === null) {
+    configCache = null
     return { workspaces: [], activeWorkspaceId: '', settings: { ...DEFAULT_SETTINGS } }
   }
 
@@ -109,12 +135,18 @@ async function readConfig(): Promise<Config> {
     ? parsed.activeWorkspaceId
     : workspaces[0]?.id ?? ''
 
-  return {
+  const config: Config = {
     ...parsed,
     workspaces,
     activeWorkspaceId,
     settings: { ...DEFAULT_SETTINGS, ...(parsed.settings ?? {}) },
   }
+
+  if (stats) {
+    configCache = { config: structuredClone(config), mtimeMs: stats.mtimeMs, size: stats.size }
+  }
+
+  return config
 }
 
 export function readSettingsSync(): AppSettings {
@@ -128,9 +160,9 @@ export function readSettingsSync(): AppSettings {
 }
 
 async function writeConfig(config: Config): Promise<void> {
-  const temporaryPath = `${CONFIG_PATH}.tmp`
-  await fs.writeFile(temporaryPath, JSON.stringify(config, null, 2))
-  await fs.rename(temporaryPath, CONFIG_PATH)
+  await writeFileAtomic(CONFIG_PATH, JSON.stringify(config, null, 2))
+  const stats = await fs.stat(CONFIG_PATH)
+  configCache = { config: structuredClone(config), mtimeMs: stats.mtimeMs, size: stats.size }
 }
 
 export async function getWorkspacePathById(workspaceId: string): Promise<string | null> {

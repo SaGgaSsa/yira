@@ -1,8 +1,12 @@
 import { promises as fs } from 'node:fs'
 import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { mapWithConcurrency } from '@shared/mapWithConcurrency'
 import type { GitRepository } from '@shared/types'
 import { normalizeSourceControlRepositoryPaths } from '@shared/workspaceConfig'
 import { execGitCommand } from './runner'
+
+// Each candidate spawns git; a wide root folder must not start one process per subdirectory at once.
+const DISCOVERY_CONCURRENCY = 8
 
 const IGNORED_DIRECTORY_NAMES = new Set([
   '.git',
@@ -165,26 +169,26 @@ function compareRepositories(left: GitRepository, right: GitRepository): number 
 export async function discoverGitRepositories(rootPathInput: unknown, maxDepth: 1 | 2 = 2): Promise<GitRepository[]> {
   const rootPath = await resolveWorkspaceRootPath(rootPathInput)
   const candidates = await listCandidateDirectories(rootPath, maxDepth)
-  const repositories: GitRepository[] = []
-
-  for (const candidate of candidates) {
+  const repositories = await mapWithConcurrency(candidates, DISCOVERY_CONCURRENCY, async (candidate): Promise<GitRepository | undefined> => {
     let canonicalCandidatePath: string
     try {
       canonicalCandidatePath = await fs.realpath(candidate.absolutePath)
     } catch {
-      continue
+      return undefined
     }
-    if (normalizeForCompare(candidate.absolutePath) !== normalizeForCompare(canonicalCandidatePath)) continue
-    if (!isInsidePath(normalizeForCompare(rootPath), normalizeForCompare(canonicalCandidatePath))) continue
-    if (!(await isActualGitRoot(canonicalCandidatePath))) continue
+    if (normalizeForCompare(candidate.absolutePath) !== normalizeForCompare(canonicalCandidatePath)) return undefined
+    if (!isInsidePath(normalizeForCompare(rootPath), normalizeForCompare(canonicalCandidatePath))) return undefined
+    if (!(await isActualGitRoot(canonicalCandidatePath))) return undefined
 
-    repositories.push({
+    return {
       relativePath: toPosixRelativePath(rootPath, canonicalCandidatePath),
       name: basename(canonicalCandidatePath),
-    })
-  }
+    }
+  })
 
-  return repositories.sort(compareRepositories)
+  return repositories
+    .filter((repository): repository is GitRepository => repository !== undefined)
+    .sort(compareRepositories)
 }
 
 async function resolveDirectoryWithoutSymlinks(rootPath: string, relativePath: string): Promise<string> {

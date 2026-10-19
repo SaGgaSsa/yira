@@ -549,6 +549,8 @@ export class AgentUsageService {
 
   private refreshInFlight: Promise<void> | null = null
 
+  private lastRefreshCompletedAt: number | null = null
+
   private started = false
 
   constructor(options: AgentUsageServiceOptions) {
@@ -563,6 +565,11 @@ export class AgentUsageService {
 
   getSnapshot(): AgentUsageSnapshot {
     return cloneSnapshot(this.snapshot)
+  }
+
+  isStale(maxAgeMs: number): boolean {
+    return this.lastRefreshCompletedAt === null
+      || this.now() - this.lastRefreshCompletedAt > maxAgeMs
   }
 
   subscribe(subscriber: AgentUsageSnapshotSubscriber): () => void {
@@ -641,6 +648,7 @@ export class AgentUsageService {
     }
 
     this.snapshot = next
+    this.lastRefreshCompletedAt = this.now()
     this.emit()
   }
 

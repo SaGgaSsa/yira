@@ -7,7 +7,7 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 import test from 'node:test'
-import type { AgentActiveSessionSnapshot, AgentSessionTranscriptResult } from '@shared/types'
+import type { AgentActiveSessionSnapshot, AgentSessionTranscriptResult, AgentUsageSnapshot } from '@shared/types'
 import { AgentSessionRegistry } from '../agents/registry'
 import { createAgentWorkspaceWorktrees, resolveWorkspaceWorktreeRepositories } from '../agents/worktree'
 import { execGitCommand } from '../git/runner'
@@ -146,6 +146,33 @@ function loadAgentsIPC(ipcMain: FakeIpcMain): typeof import('./agents') {
     nodeModule._load = originalLoad
   }
 }
+
+test('returns a fresh usage snapshot without refreshing and refreshes a stale one', async () => {
+  const ipcMain = new FakeIpcMain()
+  const { registerAgentsIPC } = loadAgentsIPC(ipcMain)
+  const snapshot: AgentUsageSnapshot = {
+    claude: { provider: 'claude', status: 'unavailable', windows: [] },
+    codex: { provider: 'codex', status: 'unavailable', windows: [] },
+  }
+  let stale = false
+  let refreshes = 0
+  registerAgentsIPC({
+    usageService: {
+      getSnapshot: () => snapshot,
+      isStale: () => stale,
+      refresh: async () => { refreshes += 1 },
+      subscribe: () => () => undefined,
+    },
+  })
+
+  const sender = new FakeWebContents(70)
+  assert.deepEqual(await ipcMain.call('agents:usage:snapshot', sender), snapshot)
+  assert.equal(refreshes, 0)
+
+  stale = true
+  assert.deepEqual(await ipcMain.call('agents:usage:snapshot', sender), snapshot)
+  assert.equal(refreshes, 1)
+})
 
 test('rejects malformed transcript queries and passes normalized IDs to the reader', async () => {
   const ipcMain = new FakeIpcMain()

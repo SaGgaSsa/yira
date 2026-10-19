@@ -22,6 +22,7 @@ import {
   shouldShowAgentHistoryMore,
   shouldRequestAgentData,
 } from '@/utils/agentPanel'
+import { useCanvasStore } from '@/store/canvasStore'
 
 const AgentTranscriptDialog = React.lazy(async () => {
   const module = await import('./AgentTranscriptDialog')
@@ -33,7 +34,6 @@ export interface AgentPanelProps {
   selectedProvider?: AgentProvider
   agentProviders: AgentProvidersConfig
   tiles: TileState[]
-  terminalTitles: Record<string, string>
   onFocusTile: (tileId: string) => void
   onOpenAgentsSession: (tileId: string) => void
   /** Missing when the workspace cannot create agent tiles. */
@@ -226,13 +226,13 @@ export function AgentPanel({
   selectedProvider,
   agentProviders,
   tiles,
-  terminalTitles,
   onFocusTile,
   onOpenAgentsSession,
   onResumeInTile,
   onOpenWorkspaceSettings,
 }: AgentPanelProps): React.ReactElement {
   const { t } = useTranslation()
+  const terminalTitles = useCanvasStore((s) => s.terminalTitles)
   const [availability, setAvailability] = useState<AgentProviderAvailabilitySnapshot | null>(null)
   const sessionSnapshot = useAgentSessionSnapshot(shouldRequestAgentData(selectedProvider))
   const sessions = useMemo(() => filterAgentSessions(sessionSnapshot, workspaceId, selectedProvider), [sessionSnapshot, workspaceId, selectedProvider])

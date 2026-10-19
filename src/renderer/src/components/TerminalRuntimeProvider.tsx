@@ -68,7 +68,14 @@ interface TerminalRuntimeContextValue {
   getHoveredLinkTarget: (target: TerminalSessionTarget) => TerminalLinkTarget | undefined
 }
 
+interface TerminalRuntimeApi {
+  registry: TerminalRuntimeRegistry<TerminalRuntime>
+  createRuntime: (request: TerminalRuntimeCreateRequest) => Promise<TerminalRuntime>
+  getHoveredLinkTarget: (target: TerminalSessionTarget) => TerminalLinkTarget | undefined
+}
+
 const TerminalRuntimeContext = createContext<TerminalRuntimeContextValue | null>(null)
+const TerminalRuntimeApiContext = createContext<TerminalRuntimeApi | null>(null)
 
 function createParkingRootStyle(): React.CSSProperties {
   return {
@@ -424,9 +431,14 @@ export function TerminalRuntimeProvider({
     })
   }, [handleTerminalOutput, incrementWorkspaceAttention, registry])
 
-  const contextValue = useMemo<TerminalRuntimeContextValue>(() => ({
+  const apiValue = useMemo<TerminalRuntimeApi>(() => ({
     registry,
     createRuntime,
+    getHoveredLinkTarget,
+  }), [createRuntime, getHoveredLinkTarget, registry])
+
+  const contextValue = useMemo<TerminalRuntimeContextValue>(() => ({
+    ...apiValue,
     workspaceAttentionCounts,
     recentOutputCounts,
     updateWorkspaceAttentionCount: updateWorkspaceAttention,
@@ -434,36 +446,41 @@ export function TerminalRuntimeProvider({
     clearWorkspaceAttentionCount: clearWorkspaceAttention,
     pruneWorkspaceAttentionCounts: pruneWorkspaceAttention,
     clearAllWorkspaceAttentionCounts: clearAllWorkspaceAttention,
-    getHoveredLinkTarget,
   }), [
+    apiValue,
     clearAllWorkspaceAttention,
     clearWorkspaceAttention,
-    createRuntime,
-    getHoveredLinkTarget,
     incrementWorkspaceAttention,
     pruneWorkspaceAttention,
     recentOutputCounts,
-    registry,
     updateWorkspaceAttention,
     workspaceAttentionCounts,
   ])
 
   return (
-    <TerminalRuntimeContext.Provider value={contextValue}>
-      {children}
-      <div
-        ref={parkingRootRef}
-        data-terminal-runtime-parking-root="true"
-        aria-hidden="true"
-        style={createParkingRootStyle()}
-      />
-    </TerminalRuntimeContext.Provider>
+    <TerminalRuntimeApiContext.Provider value={apiValue}>
+      <TerminalRuntimeContext.Provider value={contextValue}>
+        {children}
+        <div
+          ref={parkingRootRef}
+          data-terminal-runtime-parking-root="true"
+          aria-hidden="true"
+          style={createParkingRootStyle()}
+        />
+      </TerminalRuntimeContext.Provider>
+    </TerminalRuntimeApiContext.Provider>
   )
 }
 
 export function useTerminalRuntimeContext(): TerminalRuntimeContextValue {
   const context = useContext(TerminalRuntimeContext)
   if (!context) throw new Error('useTerminalRuntimeContext must be used inside TerminalRuntimeProvider')
+  return context
+}
+
+export function useTerminalRuntimeApi(): TerminalRuntimeApi {
+  const context = useContext(TerminalRuntimeApiContext)
+  if (!context) throw new Error('useTerminalRuntimeApi must be used inside TerminalRuntimeProvider')
   return context
 }
 

@@ -9,12 +9,26 @@ import {
 } from '@shared/board'
 import type { BoardState } from '@shared/types'
 import { enableBoardFile, loadBoardFile, saveBoardFile } from '@shared/boardStorage'
+import { createSerialTaskQueue, type SerialTaskQueue } from '@shared/serialTaskQueue'
 import { YIRA_HOME } from '../paths'
 
+const boardQueuesByWorkspace = new Map<string, SerialTaskQueue>()
+
+function boardQueueForWorkspace(workspaceId: string): SerialTaskQueue {
+  let queue = boardQueuesByWorkspace.get(workspaceId)
+  if (!queue) {
+    queue = createSerialTaskQueue()
+    boardQueuesByWorkspace.set(workspaceId, queue)
+  }
+  return queue
+}
+
 async function mutateBoard(workspaceId: string, update: (state: BoardState) => BoardState): Promise<BoardState> {
-  const board = update(await loadBoardFile(YIRA_HOME, workspaceId))
-  await saveBoardFile(YIRA_HOME, workspaceId, board)
-  return board
+  return boardQueueForWorkspace(workspaceId).run(async () => {
+    const board = update(await loadBoardFile(YIRA_HOME, workspaceId))
+    await saveBoardFile(YIRA_HOME, workspaceId, board)
+    return board
+  })
 }
 
 export function registerBoardsIPC(): void {
@@ -23,7 +37,7 @@ export function registerBoardsIPC(): void {
   })
 
   ipcMain.handle('board:enable', async (_, workspaceId: string): Promise<BoardState> => {
-    return enableBoardFile(YIRA_HOME, workspaceId)
+    return boardQueueForWorkspace(workspaceId).run(() => enableBoardFile(YIRA_HOME, workspaceId))
   })
 
   ipcMain.handle('board:createUserTask', async (_, workspaceId: string, input: { title: string; task: string }): Promise<BoardState> => {

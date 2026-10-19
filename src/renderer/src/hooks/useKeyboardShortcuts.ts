@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import {
   focusSplitPanelByShortcut,
   switchFocusViewTabByShortcut,
@@ -147,60 +147,14 @@ export function handleKeyboardShortcut(e: KeyboardEvent, deps: UseKeyboardShortc
 }
 
 export function useKeyboardShortcuts(deps: UseKeyboardShortcutsDeps) {
-  const {
-    tiles,
-    focusedTileId,
-    selectedTileIds,
-    viewMode,
-    fullviewActiveTileId,
-    splitViewState,
-    shortcuts,
-    focusTile,
-    selectTiles,
-    setFullviewActiveTileId,
-    setSplitViewState,
-    onClosePicker,
-    activityOpen = false,
-    agentsViewOpen = false,
-    onCloseAgentsView,
-  } = deps
+  // Keep the listener stable so parent renders with inline callbacks do not resubscribe it.
+  const depsRef = useRef(deps)
+  depsRef.current = deps
 
   useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => handleKeyboardShortcut(e, {
-      tiles,
-      focusedTileId,
-      selectedTileIds,
-      viewMode,
-      fullviewActiveTileId,
-      splitViewState,
-      shortcuts,
-      focusTile,
-      selectTiles,
-      setFullviewActiveTileId,
-      setSplitViewState,
-      onClosePicker,
-      activityOpen,
-      agentsViewOpen,
-      onCloseAgentsView,
-    })
+    const onKeyDown = (e: KeyboardEvent) => handleKeyboardShortcut(e, depsRef.current)
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [
-    focusedTileId,
-    fullviewActiveTileId,
-    selectedTileIds,
-    splitViewState,
-    shortcuts,
-    tiles,
-    viewMode,
-    focusTile,
-    selectTiles,
-    setFullviewActiveTileId,
-    setSplitViewState,
-    onClosePicker,
-    activityOpen,
-    agentsViewOpen,
-    onCloseAgentsView,
-  ])
+  }, [])
 }

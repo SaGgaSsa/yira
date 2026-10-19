@@ -1,3 +1,4 @@
+import '../monaco'
 import { COLOR_PRESETS } from '@shared/appThemes'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import Editor, { type Monaco } from '@monaco-editor/react'
@@ -274,6 +275,7 @@ function TextFileTile({ tile, rootPath, isFocused, isVisible, onUpdate, onOpenFi
     }
 
     const interval = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') return
       void poll()
     }, FILE_POLL_INTERVAL_MS)
     return () => {

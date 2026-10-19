@@ -259,7 +259,6 @@ async function renderGridView(
       tiles: [tile],
       tileRefreshKeys: nextTileRefreshKeys,
       focusedTileId: tile.id,
-      terminalTitles: {},
       onFocusTile: () => {},
       onUpdateTile: () => {},
       onSetRootNode: () => {},

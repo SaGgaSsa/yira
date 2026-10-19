@@ -24,7 +24,6 @@ function renderConfiguredAgentPanel(): string {
       selectedProvider="claude"
       agentProviders={configuredAgentProviders}
       tiles={[]}
-      terminalTitles={{}}
       onFocusTile={() => undefined}
       onOpenAgentsSession={() => undefined}
       onOpenWorkspaceSettings={() => undefined}
