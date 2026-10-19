@@ -66,6 +66,7 @@ import type { TerminalSessionTarget } from '@shared/terminalSessionIdentity'
 
 export const AGENT_SESSIONS_CHANGED_CHANNEL = 'agents:sessions:changed'
 export const AGENT_USAGE_CHANGED_CHANNEL = 'agents:usage:changed'
+const USAGE_SNAPSHOT_MAX_AGE_MS = 30_000
 
 interface AgentSubscription {
   sender: WebContents
@@ -86,7 +87,7 @@ export interface AgentIPCOptions {
     query: AgentSessionTranscriptQuery,
     options: { workspaceRoot?: string },
   ) => Promise<AgentSessionTranscriptResult>
-  usageService?: Pick<AgentUsageService, 'getSnapshot' | 'refresh' | 'subscribe'>
+  usageService?: Pick<AgentUsageService, 'getSnapshot' | 'isStale' | 'refresh' | 'subscribe'>
   usageDetailsService?: Pick<AgentUsageDetailsService, 'getSnapshot'>
   usageIndex?: Pick<AgentUsageIndex, 'getHistory'>
   promptImageDirectory?: string
@@ -400,8 +401,9 @@ export function registerAgentsIPC(options: AgentIPCOptions = {}): void {
     return result
   })
   ipcMain.handle('agents:usage:snapshot', async (): Promise<AgentUsageSnapshot | null> => {
-    await usageService?.refresh()
-    return usageService?.getSnapshot() ?? null
+    if (!usageService) return null
+    if (usageService.isStale(USAGE_SNAPSHOT_MAX_AGE_MS)) await usageService.refresh()
+    return usageService.getSnapshot()
   })
   ipcMain.handle('agents:usage:details', async (): Promise<AgentUsageDetailsSnapshot | null> => {
     try {

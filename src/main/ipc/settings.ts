@@ -28,6 +28,15 @@ function normalizeSettings(raw: unknown): UserSettings {
   }
 }
 
+// Usage services only read `agents`; other settings re-render the UI but do not
+// change which providers they collect.
+function agentUsageSettingsChanged(previous: UserSettings | null, next: UserSettings): boolean {
+  if (!previous) return true
+  return (['claude', 'codex'] as const).some(
+    (provider) => previous.agents[provider].enabled !== next.agents[provider].enabled,
+  )
+}
+
 export function getEnabledAgentProviders(): AgentProvider[] {
   const settings = currentSettings
   return (['claude', 'codex'] as const).filter((provider) => settings?.agents[provider].enabled === true)
@@ -181,13 +190,14 @@ export function registerSettingsIPC(options: { onSave?: () => void } = {}): void
   })
 
   ipcMain.handle('settings:save', async (_, settings: UserSettings): Promise<void> => {
+    const previous = currentSettings
     const normalized = normalizeSettings(settings)
     setMainLanguage(normalized.language)
     currentSettings = normalized
 
     await fs.mkdir(YIRA_HOME, { recursive: true })
     await fs.writeFile(SETTINGS_PATH, JSON.stringify(normalized, null, 2))
-    options.onSave?.()
+    if (agentUsageSettingsChanged(previous, normalized)) options.onSave?.()
   })
 
   ipcMain.handle('agentHooks:configure', async (_, provider: AgentHookProvider) => mutateAgentHooks(provider, 'install'))

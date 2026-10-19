@@ -212,6 +212,25 @@ test('ignores sparse Codex updates with unsupported durations', async () => {
   await service.stop()
 })
 
+test('reports stale snapshots until a refresh completes and after the maximum age', async () => {
+  let currentNow = 1_700_000_000_000
+  const service = new AgentUsageService({
+    getConfiguredProviders: () => [],
+    now: () => currentNow,
+  })
+
+  assert.equal(service.isStale(30_000), true)
+
+  await service.refresh()
+  assert.equal(service.isStale(30_000), false)
+
+  currentNow += 30_000
+  assert.equal(service.isStale(30_000), false)
+
+  currentNow += 1
+  assert.equal(service.isStale(30_000), true)
+})
+
 test('deduplicates configured providers and never starts Codex when it is not configured', async () => {
   let factoryCalls = 0
   const client = new FakeCodexClient(fullRateLimits())
