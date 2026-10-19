@@ -4,7 +4,7 @@ import { useSettingsStore } from '@/store/settingsStore'
 import { getSplitPanelFrame } from '@/utils/splitViewLayout'
 import type { TileState, ViewMode, SplitPanelId, SplitOrientation } from '@shared/types'
 import { getTileSizePreset, NOTE_COLORS } from '@shared/types'
-import { GripVertical, StickyNote, Globe, Terminal, Clock, Lock } from 'lucide-react'
+import { GripVertical, StickyNote, Globe, Terminal, Lock } from 'lucide-react'
 import { TileActionButtons } from './TileActionButtons'
 import { TerminalTileActivityIcon } from './TerminalActivityIcon'
 
@@ -32,14 +32,12 @@ const TYPE_ICONS: Record<string, typeof Terminal> = {
   terminal: Terminal,
   note: StickyNote,
   browser: Globe,
-  timer: Clock,
 }
 
 const TYPE_LABELS: Record<string, string> = {
   terminal: 'Terminal',
   note: 'Note',
   browser: 'Browser',
-  timer: 'Timer',
 }
 
 function getTileDisplayLabel(tile: TileState): string {

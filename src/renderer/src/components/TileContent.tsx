@@ -1,10 +1,9 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { Terminal, StickyNote, Globe, Clock, FileText } from 'lucide-react'
+import { Terminal, StickyNote, Globe, FileText } from 'lucide-react'
 import type { FileTileOpenOptions, TileState, WorkspaceConfig } from '@shared/types'
 import { TerminalTileWrapper } from './TerminalTile'
 import { BrowserTile } from './BrowserTile'
-import { TimerTile } from './TimerTile'
 
 const NoteTile = React.lazy(() => import('./NoteTile').then((module) => ({ default: module.NoteTile })))
 const FilesTile = React.lazy(() => import('./FilesTile').then((module) => ({ default: module.FilesTile })))
@@ -16,7 +15,6 @@ export const TILE_META = {
   terminal: { label: 'Terminal', icon: Terminal },
   note: { label: 'Note', icon: StickyNote },
   browser: { label: 'Browser', icon: Globe },
-  timer: { label: 'Timer', icon: Clock },
   files: { label: 'File', icon: FileText },
 } as const
 
@@ -72,10 +70,6 @@ export function TileContent({ tile, workspaceId, workspaceConfig, isFocused, edg
 
   if (tile.type === 'browser') {
     return <BrowserTile tile={tile} autoFocus={autoFocus} onUpdate={onUpdate} />
-  }
-
-  if (tile.type === 'timer') {
-    return <TimerTile tile={tile} isFocused={isFocused} onUpdate={onUpdate} />
   }
 
   if (tile.type === 'files') {

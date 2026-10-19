@@ -8,7 +8,6 @@ const state: CanvasState = {
     { id: 'note', type: 'note', x: 0, y: 0, width: 10, height: 10, zIndex: 2 },
     { id: 'browser', type: 'browser', x: 0, y: 0, width: 10, height: 10, zIndex: 3 },
     { id: 'kanban', type: 'kanban', x: 0, y: 0, width: 10, height: 10, zIndex: 4 } as unknown as CanvasState['tiles'][number],
-    { id: 'timer', type: 'timer', x: 0, y: 0, width: 10, height: 10, zIndex: 5 },
     { id: 'files', type: 'files', x: 0, y: 0, width: 10, height: 10, zIndex: 6 } as unknown as CanvasState['tiles'][number],
     {
       id: 'restored-file',
@@ -76,7 +75,6 @@ const expected = new Map([
   ['terminal', { width: 900, height: 400 }],
   ['note', { width: 900, height: 800 }],
   ['browser', { width: 1800, height: 800 }],
-  ['timer', { width: 900, height: 400 }],
   ['restored-file', { width: 900, height: 500 }],
 ])
 

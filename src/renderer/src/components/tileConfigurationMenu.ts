@@ -53,11 +53,9 @@ export function buildTileConfigurationMenuItems({
       icon: RefreshCw,
       action: runTileAction(tile, onRefresh, onBeforeAction),
     },
-    ...(tile.type === 'terminal' || tile.type === 'timer'
+    ...(tile.type === 'terminal'
       ? [{
-          label: tile.type === 'terminal'
-            ? tile.notificationsMuted ? label('ui.unmuteActivity', 'Unmute Activity') : label('ui.muteActivity', 'Mute Activity')
-            : tile.notificationsMuted ? label('ui.unmuteNotifications', 'Unmute Notifications') : label('ui.muteNotifications', 'Mute Notifications'),
+          label: tile.notificationsMuted ? label('ui.unmuteActivity', 'Unmute Activity') : label('ui.muteActivity', 'Mute Activity'),
           icon: tile.notificationsMuted ? Bell : BellOff,
           action: runTileAction(tile, onToggleNotificationsMuted, onBeforeAction),
         }]

@@ -550,14 +550,6 @@ if (terminalCopy.description !== 'settings.terminalActivityDescription') {
   throw new Error('terminal editor copy must describe output counters without native attention')
 }
 
-const timerCopy = getTileNotificationCopy('timer', translate)
-if (timerCopy.label !== 'settings.timerNativeAttention') {
-  throw new Error('timer editor copy must retain native-attention wording')
-}
-if (timerCopy.description !== 'settings.timerNativeAttentionDescription') {
-  throw new Error('timer editor copy must explain timer native attention')
-}
-
 test('agent tiles close only when the user exits the agent', () => {
   const agentTile = { agent: { provider: 'claude' as const } }
   assert.equal(shouldCloseExitedAgentTile(agentTile, null), false)

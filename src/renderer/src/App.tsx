@@ -487,7 +487,7 @@ function AppContent(): React.ReactElement {
     await destroyTerminalRuntime(registry, target, true, window.electron.terminal.destroyCurrent)
   }, [registry])
 
-  const { addTerminal, addRemoteTerminal, duplicateTerminalTile, addNote, addBrowser, addTimer, deleteTile: deleteCanvasTile, resetZoom } = useCanvasActions({
+  const { addTerminal, addRemoteTerminal, duplicateTerminalTile, addNote, addBrowser, deleteTile: deleteCanvasTile, resetZoom } = useCanvasActions({
     requestConfirm,
     destroyTerminalRuntime: destroyTerminalRuntimeForTile,
   })
@@ -604,7 +604,6 @@ function AppContent(): React.ReactElement {
   const prevZoomRef = useRef(1)
   const footerRef = useRef<HTMLDivElement | null>(null)
   const fileTileOpenRequestsRef = useRef(createFileTileOpenRequestTracker())
-  const zenWasMaximizedRef = useRef(false)
 
   useEffect(() => {
     const wasOpen = previousActivityOpenRef.current
@@ -719,31 +718,41 @@ function AppContent(): React.ReactElement {
   }, [windowTitle])
 
   const zenSummary = useZenStore((state) => state.summary)
+  const zenFullScreen = useZenStore((state) => state.fullScreen)
   const zenSessionRunning = useZenStore((state) => state.session?.status === 'running')
   const zenSessionEndsAt = useZenStore((state) => state.session?.endsAt ?? null)
 
   useEffect(() => {
     return useZenStore.subscribe((state, previousState) => {
-      if (previousState.session === null && state.session !== null) {
-        void window.electron.window.setMaximized(true).then((wasMaximized) => {
-          zenWasMaximizedRef.current = wasMaximized
-        }).catch((error: unknown) => {
-          console.error('[App] Failed to maximize window for zen mode:', error)
-        })
+      if (state.fullScreen === previousState.fullScreen) return
+      void window.electron.window.setFullScreen(state.fullScreen).catch((error: unknown) => {
+        console.error('[App] Failed to change full screen for zen mode:', error)
+      })
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!zenFullScreen) return
+
+    let lastEscapeAt = 0
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+
+      const now = Date.now()
+      if (now - lastEscapeAt <= 500) {
+        event.preventDefault()
+        event.stopPropagation()
+        useZenStore.getState().setFullScreen(false)
+        lastEscapeAt = 0
         return
       }
 
-      if (previousState.session !== null && state.session === null) {
-        if (zenWasMaximizedRef.current) {
-          zenWasMaximizedRef.current = false
-          return
-        }
-        void window.electron.window.setMaximized(false).catch((error: unknown) => {
-          console.error('[App] Failed to restore window after zen mode:', error)
-        })
-      }
-    })
-  }, [])
+      lastEscapeAt = now
+    }
+
+    window.addEventListener('keydown', handleKeyDown, true)
+    return () => window.removeEventListener('keydown', handleKeyDown, true)
+  }, [zenFullScreen])
 
   useEffect(() => {
     if (!zenSessionRunning) return
@@ -1829,7 +1838,7 @@ function AppContent(): React.ReactElement {
       patch.startupCommand = value.startupCommand.trim() || undefined
     }
 
-    if (tile.type === 'terminal' || tile.type === 'timer') {
+    if (tile.type === 'terminal') {
       patch.notificationsMuted = value.notificationsMuted ? true : undefined
     }
 
@@ -2578,7 +2587,7 @@ function AppContent(): React.ReactElement {
     },
     onCreateTimer: () => {
       setShowProfilePicker(false)
-      revealCreatedTile(addTimer())
+      useZenStore.getState().setMenuOpen(true)
     },
     onCreateBoard: () => {
       void handleBoardButton()
@@ -2932,7 +2941,7 @@ function AppContent(): React.ReactElement {
                     onCreateRichNote={() => revealCreatedTile(addNote('rich'))}
                     onCreateMarkdownNote={() => revealCreatedTile(addNote('markdown'))}
                     onCreateBrowser={() => revealCreatedTile(addBrowser())}
-                    onCreateTimer={() => revealCreatedTile(addTimer())}
+                    onCreateTimer={() => useZenStore.getState().setMenuOpen(true)}
                     onOpenBrowserTile={(url) => addBrowser(url)}
                     onOpenFileTile={openFileTile}
                     canCreateNote={canCreateNote}

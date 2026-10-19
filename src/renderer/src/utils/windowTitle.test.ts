@@ -40,7 +40,7 @@ test('follows focus changes and the focused split panel', () => {
 })
 
 test('uses manual names for every tile type, including terminals with animated titles', () => {
-  for (const type of ['terminal', 'note', 'files', 'browser', 'timer'] as const) {
+  for (const type of ['terminal', 'note', 'files', 'browser'] as const) {
     assert.equal(getTileWindowTitle({ ...terminal, type, label: ' API ' }, { [terminal.id]: '⠋' }, 'Project'), 'API - Yira')
   }
 })

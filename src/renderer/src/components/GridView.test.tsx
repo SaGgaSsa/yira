@@ -179,7 +179,6 @@ const mockedModules: Record<string, Record<string, unknown>> = {
       files: { icon: testIcon, label: 'File' },
       note: { icon: testIcon, label: 'Note' },
       terminal: { icon: testIcon, label: 'Terminal' },
-      timer: { icon: testIcon, label: 'Timer' },
     },
     getTileTypeLabel: (type: string) => type,
     TileContent: (props: Record<string, unknown>) => {
@@ -214,15 +213,12 @@ const { GridView } = loadModule<typeof import('./GridView')>('./GridView.tsx')
 
 const tile = {
   id: 'tile-a',
-  type: 'timer',
+  type: 'note',
   x: 0,
   y: 0,
   width: 320,
   height: 200,
   zIndex: 1,
-  timerDurationMs: 60_000,
-  timerRemainingMs: 60_000,
-  timerStatus: 'idle',
 } as any
 const rootNode = { id: 'leaf-a', type: 'leaf', tileId: tile.id } as any
 const workspaceId = 'workspace-grid'

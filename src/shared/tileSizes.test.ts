@@ -12,7 +12,6 @@ const expected: Record<TileType, { defaultWidth: number; defaultHeight: number; 
   terminal: { defaultWidth: 900, defaultHeight: 400, minWidth: 900, minHeight: 400 },
   note: { defaultWidth: 900, defaultHeight: 800, minWidth: 900, minHeight: 800 },
   browser: { defaultWidth: 1800, defaultHeight: 800, minWidth: 1800, minHeight: 800 },
-  timer: { defaultWidth: 900, defaultHeight: 400, minWidth: 900, minHeight: 400 },
   files: { defaultWidth: 1200, defaultHeight: 800, minWidth: 900, minHeight: 500 },
 }
 

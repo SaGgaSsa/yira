@@ -12,10 +12,10 @@ const terminalTile: TileState = {
   shellProfileId: 'bash',
 }
 
-const timerTile: TileState = {
+const mutedTerminalTile: TileState = {
   ...terminalTile,
-  id: 'timer-1',
-  type: 'timer',
+  id: 'muted-terminal-1',
+  notificationsMuted: true,
 }
 
 const noteTile: TileState = {
@@ -49,14 +49,14 @@ for (const expectedLabel of ['Edit', 'Duplicate', 'Refresh', 'Mute Activity', 'L
   }
 }
 
-const mutedTimerLabels = labelsFor({ ...timerTile, notificationsMuted: true })
-if (!mutedTimerLabels.includes('Unmute Notifications')) {
-  throw new Error('timer configuration menu must include unmute when muted')
+const mutedTerminalLabels = labelsFor(mutedTerminalTile)
+if (!mutedTerminalLabels.includes('Unmute Activity')) {
+  throw new Error('terminal configuration menu must include unmute when muted')
 }
 
-const timerLabels = labelsFor(timerTile)
-if (!timerLabels.includes('Mute Notifications')) {
-  throw new Error('timer configuration menu must retain notification wording')
+const unmutedTerminalLabels = labelsFor({ ...mutedTerminalTile, notificationsMuted: false })
+if (!unmutedTerminalLabels.includes('Mute Activity')) {
+  throw new Error('terminal configuration menu must include mute when unmuted')
 }
 
 const noteLabels = labelsFor(noteTile)

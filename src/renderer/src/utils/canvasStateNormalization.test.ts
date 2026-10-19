@@ -9,7 +9,7 @@ const state: CanvasState = {
     { id: 'legacy-note', type: 'note', x: 0, y: 0, width: 10, height: 20, zIndex: 7 },
     { id: 'browser', type: 'browser', x: 0, y: 0, width: 10, height: 20, zIndex: 3 },
     { id: 'kanban', type: 'kanban', x: 0, y: 0, width: 10, height: 20, zIndex: 4 } as unknown as CanvasState['tiles'][number],
-    { id: 'timer', type: 'timer', x: 0, y: 0, width: 10, height: 20, zIndex: 5 },
+    { id: 'timer', type: 'timer', x: 0, y: 0, width: 10, height: 20, zIndex: 5 } as unknown as CanvasState['tiles'][number],
     { id: 'legacy-files', type: 'files', x: 0, y: 0, width: 10, height: 20, zIndex: 6 } as unknown as CanvasState['tiles'][number],
     {
       id: 'files',
@@ -59,12 +59,14 @@ const expected = new Map([
   ['new-markdown', { width: 900, height: 800 }],
   ['legacy-note', { width: 900, height: 800 }],
   ['browser', { width: 1800, height: 800 }],
-  ['timer', { width: 900, height: 400 }],
   ['files', { width: 900, height: 500 }],
 ])
 
 if (normalized.tiles.some((tile) => tile.id === 'kanban' || tile.id === 'legacy-files')) {
   throw new Error('legacy pathless files and kanban tiles must be dropped from normalized canvas JSON')
+}
+if (normalized.tiles.some((tile) => tile.id === 'timer')) {
+  throw new Error('persisted timer tiles must be dropped from normalized canvas JSON')
 }
 if ('groups' in normalized) {
   throw new Error('canvas normalization must discard legacy groups')
