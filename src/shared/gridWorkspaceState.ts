@@ -80,7 +80,6 @@ function isSupportedTile(tile: TileState): boolean {
   return tile.type === 'terminal' ||
     tile.type === 'note' ||
     tile.type === 'browser' ||
-    tile.type === 'timer' ||
     (tile.type === 'files' && typeof tile.filePath === 'string' && tile.filePath.trim().length > 0)
 }
 

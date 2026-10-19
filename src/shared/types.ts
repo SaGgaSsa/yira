@@ -976,8 +976,7 @@ export const BOARD_COLUMNS: Array<{ id: BoardStatus; label: string }> = [
 
 // ─── Tile Types ────────────────────────────────────────────────────────────
 
-export type TileType = 'terminal' | 'note' | 'browser' | 'timer' | 'files'
-export type TimerStatus = 'idle' | 'running' | 'paused' | 'done'
+export type TileType = 'terminal' | 'note' | 'browser' | 'files'
 
 export type NoteColor = 'yellow' | 'green' | 'blue' | 'pink' | 'purple' | 'orange' | 'white' | 'dark'
 export type NoteFont = 'sans' | 'rounded' | 'serif' | 'marker' | 'handwritten'
@@ -1032,7 +1031,6 @@ export const TILE_SIZE_PRESETS: Record<TileType, TileSizePreset> = {
   terminal: { defaultWidth: 900, defaultHeight: 400, minWidth: 900, minHeight: 400 },
   note: { defaultWidth: 900, defaultHeight: 800, minWidth: 900, minHeight: 800 },
   browser: { defaultWidth: 1800, defaultHeight: 800, minWidth: 1800, minHeight: 800 },
-  timer: { defaultWidth: 900, defaultHeight: 400, minWidth: 900, minHeight: 400 },
   files: { defaultWidth: 1200, defaultHeight: 800, minWidth: 900, minHeight: 500 },
 }
 
@@ -1138,16 +1136,6 @@ export interface TileState {
   fileMarkdownView?: MarkdownViewMode
   /** One-shot editor navigation request; removed by canvas persistence normalization. */
   fileRevealRequest?: { id: string; line: number; column?: number; endLine?: number }
-
-  // Timer-specific
-  timerDurationMs?: number
-  timerRemainingMs?: number
-  timerStatus?: TimerStatus
-  timerEndsAt?: number
-  timerCompletedAt?: number
-  timerNotifiedAt?: number
-  // Starting this timer starts a zen session for its workspace.
-  timerZen?: boolean
 }
 
 // ─── Canvas State ──────────────────────────────────────────────────────────

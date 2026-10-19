@@ -255,33 +255,6 @@ export function useCanvasActions({ requestConfirm, destroyTerminalRuntime }: Use
     [finalizeAddedTile, getSpawnPos, tileCreationAvailability.note],
   )
 
-  const addTimer = useCallback(() => {
-    if (!tileCreationAvailability.timer) return null
-
-    const state = useCanvasStore.getState()
-    // A workspace has a single timer, like its board: creating another reveals it.
-    const existingTimer = state.tiles.find((tile) => tile.type === 'timer')
-    if (existingTimer) return existingTimer.id
-
-    const size = getDefaultTileSize('timer')
-    const pos = getSpawnPos(size.width, size.height, 40)
-    const defaultDurationMs = 25 * 60 * 1000
-
-    const tile: TileState = {
-      id: generateId(),
-      type: 'timer',
-      x: pos.x,
-      y: pos.y,
-      width: size.width,
-      height: size.height,
-      zIndex: state.nextZIndex,
-      timerDurationMs: defaultDurationMs,
-      timerRemainingMs: defaultDurationMs,
-      timerStatus: 'idle',
-    }
-    return finalizeAddedTile(tile) ? tile.id : null
-  }, [finalizeAddedTile, getSpawnPos, tileCreationAvailability.timer])
-
   const deleteTile = useCallback(
     async (tileId: string): Promise<boolean> => {
       const state = useCanvasStore.getState()
@@ -321,7 +294,6 @@ export function useCanvasActions({ requestConfirm, destroyTerminalRuntime }: Use
     duplicateTerminalTile,
     addBrowser,
     addNote,
-    addTimer,
     deleteTile,
     resetZoom,
     focusTile,

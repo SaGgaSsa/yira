@@ -6,7 +6,7 @@ import type { MainView } from '../utils/layoutState'
 import { AgentUsageIndicator } from './AgentUsageIndicator'
 import { WorkspaceRunControl } from './WorkspaceRunControl'
 import { TileLauncher, type TileLauncherProps } from './TileLauncher'
-import { ZenTopBarTimer } from './ZenTopBarTimer'
+import { ZenTimerControl } from './ZenTimerControl'
 import { useSettingsStore } from '@/store/settingsStore'
 
 interface TopBarProps {
@@ -240,7 +240,10 @@ export function TopBar({
           </div>
 
           <div className="ml-auto flex items-center justify-end gap-1">
-            <ZenTopBarTimer onOpenWorkspace={onOpenZenWorkspace} />
+            <ZenTimerControl
+              workspaceId={workspaceId ?? null}
+              onOpenWorkspace={onOpenZenWorkspace ?? (() => {})}
+            />
             {!isGridWorkspace && !overlayOpen && (
               <>
                 <button

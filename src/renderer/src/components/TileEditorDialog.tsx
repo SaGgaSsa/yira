@@ -30,19 +30,12 @@ export interface TileNotificationCopy {
 }
 
 export function getTileNotificationCopy(
-  tileType: TileState['type'],
+  _tileType: TileState['type'],
   translate: (key: string) => string,
 ): TileNotificationCopy {
-  if (tileType === 'terminal') {
-    return {
-      label: translate('settings.terminalActivity'),
-      description: translate('settings.terminalActivityDescription'),
-    }
-  }
-
   return {
-    label: translate('settings.timerNativeAttention'),
-    description: translate('settings.timerNativeAttentionDescription'),
+    label: translate('settings.terminalActivity'),
+    description: translate('settings.terminalActivityDescription'),
   }
 }
 
@@ -91,7 +84,7 @@ export function TileEditorDialog({ request, onCancel, onConfirm }: TileEditorDia
 
   if (!request || !value) return null
 
-  const showNotificationsField = request.tileType === 'terminal' || request.tileType === 'timer'
+  const showNotificationsField = request.tileType === 'terminal'
   const notificationCopy = getTileNotificationCopy(request.tileType, t)
 
   return createPortal(

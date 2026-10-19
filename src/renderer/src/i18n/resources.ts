@@ -719,6 +719,11 @@ type TranslationResources = {
     back: string
     ago: string
     justNow: string
+    timer: string
+    openTimer: string
+    fullScreen: string
+    fullScreenHint: string
+    goToWorkspace: string
   }
   files: {
     actions: string
@@ -1716,6 +1721,11 @@ const en: TranslationResources = {
     back: 'Back to work',
     ago: '{{count}} min ago',
     justNow: 'just now',
+    timer: 'Timer',
+    openTimer: 'Zen timer',
+    fullScreen: 'Back to full screen',
+    fullScreenHint: 'Esc Esc leaves full screen',
+    goToWorkspace: 'Go to workspace',
   },
   files: {
     actions: 'Actions',
@@ -2713,6 +2723,11 @@ const es: TranslationResources = {
     back: 'Volver al trabajo',
     ago: 'hace {{count}} min',
     justNow: 'recién',
+    timer: 'Timer',
+    openTimer: 'Timer zen',
+    fullScreen: 'Volver a pantalla completa',
+    fullScreenHint: 'Esc Esc sale de pantalla completa',
+    goToWorkspace: 'Ir al workspace',
   },
   files: {
     actions: 'Acciones',
