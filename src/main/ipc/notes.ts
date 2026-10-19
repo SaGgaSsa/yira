@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import { promises as fs } from 'fs'
 import { join } from 'path'
+import { writeFileAtomic } from '@shared/atomicWrite'
 import { YIRA_HOME } from '../paths'
 import type { MarkdownViewMode, NoteBlocks, NoteKind } from '@shared/types'
 
@@ -33,7 +34,7 @@ export function registerNotesIPC(): void {
     const path = noteDataPath(tileId)
     const dir = join(YIRA_HOME, 'notes')
     await fs.mkdir(dir, { recursive: true })
-    await fs.writeFile(path, JSON.stringify(data, null, 2))
+    await writeFileAtomic(path, JSON.stringify(data, null, 2))
   })
 
   ipcMain.handle('note:load', async (_, tileId: string): Promise<NoteData | null> => {

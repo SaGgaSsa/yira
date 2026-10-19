@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import test from 'node:test'
-import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { access, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { AgentProvider, Workspace } from '@shared/types'
+import type { AgentProvider, BoardState, Workspace } from '@shared/types'
 import { normalizeWorkspaceConfig } from '@shared/workspaceConfig'
 
 type WorkspaceModule = typeof import('./workspace')
+type CanvasModule = typeof import('./canvas')
+type BoardsModule = typeof import('./boards')
 
 type Handler = (event: unknown, ...args: unknown[]) => unknown
 
@@ -25,7 +27,7 @@ class FakeIpcMain {
   }
 }
 
-function loadWorkspaceModule(ipcMain: FakeIpcMain): WorkspaceModule {
+function loadModuleWithElectron<T>(modulePath: string, ipcMain: FakeIpcMain): T {
   const nodeRequire = createRequire(import.meta.url)
   const nodeModule = nodeRequire('node:module') as {
     _load: (request: string, parent: unknown, isMain: boolean) => unknown
@@ -37,10 +39,14 @@ function loadWorkspaceModule(ipcMain: FakeIpcMain): WorkspaceModule {
   }
 
   try {
-    return nodeRequire('./workspace.ts') as WorkspaceModule
+    return nodeRequire(modulePath) as T
   } finally {
     nodeModule._load = originalLoad
   }
+}
+
+function loadWorkspaceModule(ipcMain: FakeIpcMain): WorkspaceModule {
+  return loadModuleWithElectron<WorkspaceModule>('./workspace.ts', ipcMain)
 }
 
 const previousYiraHome = process.env.YIRA_HOME
@@ -48,6 +54,8 @@ const ipcConfigRoot = await mkdtemp(join(tmpdir(), 'yira-workspace-ipc-'))
 process.env.YIRA_HOME = ipcConfigRoot
 const ipcMain = new FakeIpcMain()
 const workspaceModule = loadWorkspaceModule(ipcMain)
+const canvasModule = loadModuleWithElectron<CanvasModule>('./canvas.ts', ipcMain)
+const boardsModule = loadModuleWithElectron<BoardsModule>('./boards.ts', ipcMain)
 const { createWorkspaceFromInput, getWorkspaceRemoteTerminalById, normalizeWorkspace, updateWorkspace } = workspaceModule
 
 test.after(async () => {
@@ -413,4 +421,62 @@ test('creates an empty config file on first run', async () => {
   } finally {
     await restoreStoredConfig(previous)
   }
+})
+
+test('caches config until an external edit changes its stat', async () => {
+  workspaceModule.registerWorkspaceIPC()
+  const created = await ipcMain.invoke('workspace:create', { name: 'Cache probe' }) as Workspace
+  const listed = await ipcMain.invoke('workspace:list') as Workspace[]
+  const cached = listed.find((workspace) => workspace.id === created.id)
+  assert.ok(cached)
+
+  cached.name = 'mutated in memory'
+  const untouched = (await ipcMain.invoke('workspace:list') as Workspace[])
+    .find((workspace) => workspace.id === created.id)
+  assert.equal(untouched?.name, 'Cache probe')
+
+  const configPath = join(ipcConfigRoot, 'config.json')
+  const stored = JSON.parse(await readFile(configPath, 'utf8')) as { workspaces: Workspace[] }
+  const workspaceToRename = stored.workspaces.find((workspace) => workspace.id === created.id)
+  assert.ok(workspaceToRename)
+  // Same byte length, so only the mtime can invalidate the cache.
+  workspaceToRename.name = 'Cache Probe'
+
+  await new Promise((resolve) => setTimeout(resolve, 30))
+  await writeFile(configPath, JSON.stringify(stored, null, 2), 'utf8')
+
+  const reloaded = (await ipcMain.invoke('workspace:list') as Workspace[])
+    .find((workspace) => workspace.id === created.id)
+  assert.equal(reloaded?.name, 'Cache Probe')
+})
+
+test('skips canvas saves when the serialized state is unchanged', async () => {
+  canvasModule.registerCanvasIPC()
+  const workspaceId = 'canvas-unchanged'
+  const state = { tiles: [{ id: 'tile-1' }], viewport: { x: 1, y: 2, zoom: 1 } }
+  const statePath = join(ipcConfigRoot, 'workspaces', workspaceId, '.yira', 'canvas-state.json')
+
+  await ipcMain.invoke('canvas:save', workspaceId, state)
+  const first = await stat(statePath)
+
+  await new Promise((resolve) => setTimeout(resolve, 30))
+  await ipcMain.invoke('canvas:save', workspaceId, structuredClone(state))
+  const second = await stat(statePath)
+
+  assert.equal(second.mtimeMs, first.mtimeMs)
+  assert.deepEqual(JSON.parse(await readFile(statePath, 'utf8')), state)
+})
+
+test('serializes concurrent board mutations for the same workspace', async () => {
+  boardsModule.registerBoardsIPC()
+  const workspaceId = 'board-concurrent'
+  await ipcMain.invoke('board:enable', workspaceId)
+
+  await Promise.all([
+    ipcMain.invoke('board:createUserTask', workspaceId, { title: 'First', task: 'first task' }),
+    ipcMain.invoke('board:createUserTask', workspaceId, { title: 'Second', task: 'second task' }),
+  ])
+
+  const board = await ipcMain.invoke('board:load', workspaceId) as BoardState
+  assert.deepEqual(board.tasks.map((task) => task.title).sort(), ['First', 'Second'])
 })

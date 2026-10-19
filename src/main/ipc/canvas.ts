@@ -1,7 +1,21 @@
 import { ipcMain } from 'electron'
 import { promises as fs } from 'fs'
 import { join } from 'path'
+import { writeFileAtomic } from '@shared/atomicWrite'
+import { createSerialTaskQueue, type SerialTaskQueue } from '@shared/serialTaskQueue'
 import { YIRA_HOME } from '../paths'
+
+const lastSavedContentByPath = new Map<string, string>()
+const saveQueuesByPath = new Map<string, SerialTaskQueue>()
+
+function saveQueueForPath(path: string): SerialTaskQueue {
+  let queue = saveQueuesByPath.get(path)
+  if (!queue) {
+    queue = createSerialTaskQueue()
+    saveQueuesByPath.set(path, queue)
+  }
+  return queue
+}
 
 function assertSafeId(id: string): void {
   if (/[\/\\]|\.\./.test(id)) throw new Error(`Unsafe ID: ${id}`)
@@ -27,7 +41,15 @@ export function registerCanvasIPC(): void {
   ipcMain.handle('canvas:save', async (_, workspaceId: string, state: unknown, workspaceType?: string) => {
     const path = workspaceStatePath(workspaceId, workspaceType)
     const dir = join(YIRA_HOME, 'workspaces', workspaceId, '.yira')
-    await fs.mkdir(dir, { recursive: true })
-    await fs.writeFile(path, JSON.stringify(state, null, 2))
+    const serialized = JSON.stringify(state, null, 2)
+
+    // Autosave repeats unchanged states; keep writes ordered per file and skip identical ones.
+    await saveQueueForPath(path).run(async () => {
+      if (lastSavedContentByPath.get(path) === serialized) return
+
+      await fs.mkdir(dir, { recursive: true })
+      await writeFileAtomic(path, serialized)
+      lastSavedContentByPath.set(path, serialized)
+    })
   })
 }

@@ -1,5 +1,6 @@
 import { promises as fs } from 'fs'
 import { join } from 'path'
+import { writeFileAtomic } from './atomicWrite'
 import { enableBoard, normalizeBoardState } from './board'
 import type { BoardState } from './types'
 
@@ -25,7 +26,7 @@ export async function loadBoardFile(yiraHome: string, workspaceId: string): Prom
 export async function saveBoardFile(yiraHome: string, workspaceId: string, state: BoardState): Promise<void> {
   const path = boardDataPath(yiraHome, workspaceId)
   await fs.mkdir(join(yiraHome, 'workspaces', workspaceId, '.yira', 'board'), { recursive: true })
-  await fs.writeFile(path, JSON.stringify(normalizeBoardState(state), null, 2))
+  await writeFileAtomic(path, JSON.stringify(normalizeBoardState(state), null, 2))
 }
 
 export async function enableBoardFile(yiraHome: string, workspaceId: string): Promise<BoardState> {
