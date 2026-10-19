@@ -2,6 +2,7 @@ import { createReadStream, promises as fs } from 'node:fs'
 import { basename, extname, isAbsolute, join, relative, resolve, sep, win32 } from 'node:path'
 import { createInterface } from 'node:readline'
 
+import { mapWithConcurrency } from '@shared/mapWithConcurrency'
 import type {
   AgentProvider,
   AgentSessionHistoryItem,
@@ -25,6 +26,7 @@ export const MAX_TRANSCRIPT_BYTES = 64 * 1024 * 1024
 const MAX_TRANSCRIPT_LINE_LENGTH = 256 * 1024
 const MAX_TRANSCRIPT_FILES = 1_000
 const MAX_TRANSCRIPT_DEPTH = 8
+const TRANSCRIPT_PARSE_CONCURRENCY = 8
 const MAX_TITLE_LENGTH = 120
 const MAX_PREVIEW_LENGTH = 280
 
@@ -64,6 +66,8 @@ interface ParsedSession {
 
 interface TranscriptFile {
   path: string
+  size: number
+  mtimeMs: number
 }
 
 interface TranscriptCacheEntry {
@@ -182,7 +186,7 @@ async function listTranscriptFiles(rootPath: string): Promise<TranscriptFile[]> 
       try {
         const stats = await fs.stat(candidate)
         if (!stats.isFile() || stats.size > MAX_TRANSCRIPT_BYTES) continue
-        files.push({ path: candidate })
+        files.push({ path: candidate, size: stats.size, mtimeMs: stats.mtimeMs })
       } catch {
         // Files can disappear while a provider is writing them.
       }
@@ -205,19 +209,21 @@ function cacheTranscript(path: string, size: number, mtimeMs: number, parsed: Pa
 
 async function parseTranscriptFile(
   provider: AgentProvider,
-  path: string,
+  file: TranscriptFile,
 ): Promise<{ parsed: ParsedSession | null; modifiedAt: string } | null> {
-  const initialStats = await fs.stat(path)
-  if (!initialStats.isFile() || initialStats.size > MAX_TRANSCRIPT_BYTES) return null
+  // The listing already stat'ed the file; reuse that snapshot instead of
+  // paying for a second syscall before every read.
+  if (file.size > MAX_TRANSCRIPT_BYTES) return null
+  const modifiedAt = new Date(file.mtimeMs).toISOString()
 
-  const cached = transcriptCache.get(path)
-  if (cached && cached.size === initialStats.size && cached.mtimeMs === initialStats.mtimeMs) {
-    transcriptCache.delete(path)
-    transcriptCache.set(path, cached)
-    return { parsed: cached.parsed, modifiedAt: initialStats.mtime.toISOString() }
+  const cached = transcriptCache.get(file.path)
+  if (cached && cached.size === file.size && cached.mtimeMs === file.mtimeMs) {
+    transcriptCache.delete(file.path)
+    transcriptCache.set(file.path, cached)
+    return { parsed: cached.parsed, modifiedAt }
   }
 
-  const input = createReadStream(path, { encoding: 'utf8' })
+  const input = createReadStream(file.path, { encoding: 'utf8' })
   const lines = createInterface({ input, crlfDelay: Infinity })
   let parsed: ParsedSession | null = null
   let excluded = false
@@ -252,11 +258,12 @@ async function parseTranscriptFile(
   }
 
   if (excluded || !parsed || parsed.messageCount === 0) parsed = null
-  const finalStats = await fs.stat(path)
-  if (finalStats.size === initialStats.size && finalStats.mtimeMs === initialStats.mtimeMs) {
-    cacheTranscript(path, initialStats.size, initialStats.mtimeMs, parsed)
+  // Providers append while we read; only cache when the file did not change.
+  const finalStats = await fs.stat(file.path)
+  if (finalStats.size === file.size && finalStats.mtimeMs === file.mtimeMs) {
+    cacheTranscript(file.path, file.size, file.mtimeMs, parsed)
   }
-  return { parsed, modifiedAt: initialStats.mtime.toISOString() }
+  return { parsed, modifiedAt }
 }
 
 async function canonicalDirectory(value: string | undefined): Promise<string | null> {
@@ -315,6 +322,21 @@ async function canonicalCwd(value: string | undefined): Promise<string | undefin
   }
 }
 
+type CanonicalCwdResolver = (value: string | undefined) => Promise<string | undefined>
+
+function createCanonicalCwdResolver(): CanonicalCwdResolver {
+  // Transcripts commonly repeat a cwd; resolve each distinct path once per query.
+  const cache = new Map<string, Promise<string | undefined>>()
+  return (value) => {
+    if (!value) return Promise.resolve(undefined)
+    const cached = cache.get(value)
+    if (cached) return cached
+    const resolved = canonicalCwd(value)
+    cache.set(value, resolved)
+    return resolved
+  }
+}
+
 function normalizeSearch(value: unknown): string | undefined {
   if (typeof value !== 'string' || /[\u0000-\u001f\u007f]/.test(value)) return undefined
   const normalized = value.trim().replace(/\s+/g, ' ').toLowerCase()
@@ -370,25 +392,31 @@ async function readProviderSessionHistory(
   const search = normalizeSearch(options.search)
   const limit = normalizeLimit(options.limit)
   const files = await listTranscriptFiles(canonicalRoot)
+  const resolveCwd = createCanonicalCwdResolver()
   const sessions = new Map<string, AgentSessionHistoryItem>()
 
-  for (const file of files) {
+  const fileItems = await mapWithConcurrency(files, TRANSCRIPT_PARSE_CONCURRENCY, async (file) => {
     try {
-      const transcript = await parseTranscriptFile(provider, file.path)
-      if (!transcript) continue
+      const transcript = await parseTranscriptFile(provider, file)
+      if (!transcript) return null
       const { parsed } = transcript
-      if (!parsed) continue
-      const cwd = await canonicalCwd(parsed.cwd)
-      if (workspaceRoot && (!cwd || !pathWithinRoot(cwd, workspaceRoot))) continue
+      if (!parsed) return null
+      const cwd = await resolveCwd(parsed.cwd)
+      if (workspaceRoot && (!cwd || !pathWithinRoot(cwd, workspaceRoot))) return null
       const item = resultItem(parsed, provider, transcript.modifiedAt, relativeCwdWithinRoot(cwd, workspaceRoot ?? undefined))
-      if (!matchesSearch(item, search)) continue
-      const current = sessions.get(item.identifier)
-      if (!current || current.lastActivityAt < item.lastActivityAt) sessions.set(item.identifier, item)
+      return matchesSearch(item, search) ? item : null
     } catch {
       // A malformed or pathological individual transcript must not abort the
       // rest of the provider history query.
-      continue
+      return null
     }
+  })
+
+  // Merge in listing order so duplicate identifiers keep the same winning item.
+  for (const item of fileItems) {
+    if (!item) continue
+    const current = sessions.get(item.identifier)
+    if (!current || current.lastActivityAt < item.lastActivityAt) sessions.set(item.identifier, item)
   }
 
   const sorted = [...sessions.values()].sort((left, right) => {
@@ -422,14 +450,15 @@ export async function findAgentTranscriptFile(
   const files = await listTranscriptFiles(canonicalRoot)
   const likelyFiles = files.filter((file) => basename(file.path).includes(normalizedIdentifier))
   const remainingFiles = files.filter((file) => !basename(file.path).includes(normalizedIdentifier))
+  const resolveCwd = createCanonicalCwdResolver()
 
   for (const file of [...likelyFiles, ...remainingFiles]) {
     try {
-      const transcript = await parseTranscriptFile(provider, file.path)
+      const transcript = await parseTranscriptFile(provider, file)
       const parsed = transcript?.parsed
       if (!parsed || parsed.identifier !== normalizedIdentifier) continue
 
-      const cwd = await canonicalCwd(parsed.cwd)
+      const cwd = await resolveCwd(parsed.cwd)
       if (workspaceRoot && (!cwd || !pathWithinRoot(cwd, workspaceRoot))) continue
       return file.path
     } catch {

@@ -7,12 +7,14 @@ import { basename, isAbsolute, relative, resolve, sep } from 'path'
 import type { FileEntry, FileListOptions, FileListResult, FileSearchEntry, FileSearchResult, FileSelectFolderResult, FileWriteInput, FileCreateInput, FileRenameInput } from '@shared/types'
 import { compileFileSearchQuery } from '@shared/fileSearch'
 import { shouldHideEntry } from '@shared/hiddenEntries'
+import { mapWithConcurrency } from '@shared/mapWithConcurrency'
 import { canonicalizeRootFolderPath } from '../workspace-root'
 import { mainText } from '../i18n'
 import { createEntry, readFile, readPreviewAsset, renameEntry, resolveRootTarget, statFile, trashEntry, writeFile } from './file-access'
 
 const electronApi = createRequire(import.meta.url)('electron') as typeof import('electron')
 const { BrowserWindow, dialog, ipcMain } = electronApi
+const LIST_STAT_CONCURRENCY = 32
 
 function isInsidePath(rootPath: string, targetPath: string): boolean {
   const relativePath = relative(rootPath, targetPath)
@@ -55,27 +57,26 @@ async function listFiles(
 
   const currentDir = resolved.relativePath
   const dirents = await fs.readdir(resolved.targetPath, { withFileTypes: true })
-  const entries: FileEntry[] = []
-
-  for (const dirent of dirents) {
-    if (!options.showIgnored && shouldHideEntry(dirent.name)) continue
+  const entries = (await mapWithConcurrency(dirents, LIST_STAT_CONCURRENCY, async (dirent): Promise<FileEntry | null> => {
+    if (!options.showIgnored && shouldHideEntry(dirent.name)) return null
 
     const entryPath = resolve(resolved.targetPath, dirent.name)
-    if (!isInsidePath(resolved.rootPath, entryPath)) continue
+    if (!isInsidePath(resolved.rootPath, entryPath)) return null
 
     try {
       const stat = await fs.lstat(entryPath)
-      entries.push({
+      return {
         name: dirent.name,
         relativePath: joinRendererPath(currentDir, dirent.name),
         kind: dirent.isDirectory() ? 'directory' : 'file',
         size: stat.size,
         modifiedAt: stat.mtime.toISOString(),
-      })
+      }
     } catch {
       // Skip entries that disappear or cannot be read while listing.
+      return null
     }
-  }
+  })).filter((entry): entry is FileEntry => entry !== null)
 
   entries.sort((a, b) => {
     if (a.kind !== b.kind) return a.kind === 'directory' ? -1 : 1
@@ -112,16 +113,27 @@ async function collectSearchEntries(
 
     const entryPath = resolve(directory.readPath, dirent.name)
 
-    let entryStat: import('fs').Stats
-    try {
-      entryStat = await fs.lstat(entryPath)
-    } catch {
-      // Skip entries that disappear or cannot be read while searching.
-      continue
+    let kind: 'directory' | 'file' | 'skip'
+    if (dirent.isSymbolicLink()) continue
+    if (dirent.isDirectory()) {
+      kind = 'directory'
+    } else if (dirent.isFile()) {
+      kind = 'file'
+    } else {
+      // Some filesystems report unknown entry types; keep the previous lstat
+      // behavior for those instead of silently skipping them.
+      let entryStat: Stats
+      try {
+        entryStat = await fs.lstat(entryPath)
+      } catch {
+        // Skip entries that disappear or cannot be read while searching.
+        continue
+      }
+      if (entryStat.isSymbolicLink()) continue
+      kind = entryStat.isDirectory() ? 'directory' : entryStat.isFile() ? 'file' : 'skip'
     }
 
-    if (entryStat.isSymbolicLink()) continue
-    if (entryStat.isDirectory()) {
+    if (kind === 'directory') {
       const childDirectory = await openSearchDirectory(rootPath, entryPath, true)
       if (!childDirectory) continue
       try {
@@ -134,8 +146,9 @@ async function collectSearchEntries(
       }
       continue
     }
+    if (kind !== 'file') continue
     const relativePath = joinRendererPath(directory.relativePath, dirent.name)
-    if (!entryStat.isFile() || !matches(dirent.name, relativePath)) continue
+    if (!matches(dirent.name, relativePath)) continue
 
     entries.push({
       name: dirent.name,
