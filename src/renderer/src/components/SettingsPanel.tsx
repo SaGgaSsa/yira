@@ -11,6 +11,7 @@ import {
 import { createUserSettingsDraft, useSettingsStore } from '@/store/settingsStore'
 import { useUpdateStore } from '@/store/updateStore'
 import { getShortcutCatalog } from '@/utils/shortcutCatalog'
+import { MOD_PANEL_PROMPT } from '@/utils/modPanelPrompt'
 import type { ShortcutId } from '@shared/shortcuts'
 import type { AgentDetectionSnapshot, AgentProvider, UpdateState, UserSettings, WindowBackgroundMaterial } from '@shared/types'
 import { DEFAULT_USER_SETTINGS } from '@shared/types'
@@ -209,6 +210,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
   const { t } = useTranslation()
   const [activeSection, setActiveSection] = useState<SettingsSectionId>('appearance')
   const [agentHookMessages, setAgentHookMessages] = useState<Partial<Record<AgentProvider, string>>>({})
+  const [modPanelPromptCopied, setModPanelPromptCopied] = useState(false)
   const [agentDetection, setAgentDetection] = useState<AgentDetectionSnapshot | null>(null)
   const [draft, setDraft] = useState<UserSettings>(() => createUserSettingsDraft(useSettingsStore.getState()))
   const [saving, setSaving] = useState(false)
@@ -756,6 +758,32 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
                 </article>
               )
             })}
+            <article className="rounded-[20px] border border-border-visible bg-bg-primary px-4 py-4">
+              <div className="flex items-start gap-3">
+                <div className="min-w-0 flex-1">
+                  <h4 className="nd-label text-text-display">{t('settings.modPanels')}</h4>
+                  <p className="mt-2 text-sm leading-6 text-text-secondary">{t('settings.modPanelsDescription')}</p>
+                  <p className="mt-2 text-sm leading-6 text-text-secondary">{t('settings.modPanelsSteps')}</p>
+                </div>
+                <button
+                  type="button"
+                  className="shrink-0 rounded-full border border-border-visible px-3 py-1.5 text-xs text-text-display"
+                  onClick={() => {
+                    void window.electron.clipboard.writeText(MOD_PANEL_PROMPT).then(() => setModPanelPromptCopied(true))
+                  }}
+                >
+                  {modPanelPromptCopied ? t('settings.modPanelPromptCopied') : t('settings.copyModPanelPrompt')}
+                </button>
+              </div>
+              <details className="mt-3 border-t border-border pt-3">
+                <summary className="cursor-pointer text-xs text-text-secondary hover:text-text-display">
+                  {t('settings.showModPanelPrompt')}
+                </summary>
+                <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded-xl bg-bg-tertiary p-3 font-mono text-xs text-text-secondary">
+                  {MOD_PANEL_PROMPT}
+                </pre>
+              </details>
+            </article>
           </div>
           <ShortcutInput
             shortcutId="newAgentSession"

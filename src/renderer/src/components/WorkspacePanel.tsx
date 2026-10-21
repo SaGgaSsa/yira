@@ -14,11 +14,12 @@ import { AgentPanel } from './AgentPanel'
 import { useSettingsStore } from '@/store/settingsStore'
 import { getEffectiveAgentProvider } from '@/utils/effectiveAgent'
 import { WorkspaceExplorer } from './WorkspaceExplorer'
+import { WorkspaceModPanels } from './WorkspaceModPanels'
 import { WorkspaceSourceControl } from './WorkspaceSourceControl'
 import { useSidePanelWidth } from '@/hooks/useSidePanelWidth'
 import type { ConfirmDialogOptions } from './AppDialog'
 
-type WorkspacePanelTab = 'explorer' | 'agents' | 'source-control'
+type WorkspacePanelTab = 'explorer' | 'agents' | 'source-control' | 'mods'
 
 interface WorkspacePanelProps {
   rootPath: string
@@ -111,6 +112,7 @@ export function WorkspacePanel({
           ['explorer', 'Explorer'],
           ['agents', 'Agents'],
           ['source-control', 'Source Control'],
+          ['mods', 'Mods'],
         ] as Array<[WorkspacePanelTab, string]>).map(([id, label]) => (
           <button
             key={id}
@@ -151,6 +153,7 @@ export function WorkspacePanel({
             requestConfirm={requestConfirm}
           />
         )}
+        {tab === 'mods' && <WorkspaceModPanels tiles={tiles} onFocusTile={onFocusTile} />}
       </div>
     </aside>
   )

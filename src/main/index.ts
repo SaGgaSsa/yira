@@ -3,6 +3,7 @@ import { join } from 'path'
 import { existsSync } from 'fs'
 import { mkdir, writeFile } from 'fs/promises'
 import { is } from '@electron-toolkit/utils'
+import { MOD_PANEL_BRIDGE_FILE_ENV } from '@shared/modPanels'
 import { getWorkspaceRootFolders, initWorkspaces, registerWorkspaceIPC } from './ipc/workspace'
 import { registerCanvasIPC } from './ipc/canvas'
 import {
@@ -43,11 +44,20 @@ import { loadWindowState, saveWindowState } from './windowState'
 import { coordinateWindowClose, type CloseFailureDecision } from './windowCloseCoordinator'
 import { getWindowMaterialOptions, setWindowBackgroundMaterial } from './windowMaterial'
 import { mainText } from './i18n'
+import { ModPanelBridge } from './modPanelBridge'
+import { broadcastModPanelChange, registerModPanelsIPC } from './ipc/modPanels'
 
 const appDisplayName = is.dev ? DEV_APP_NAME : APP_NAME
 const REACT_DEVTOOLS_HINT = 'Download the React DevTools'
 const appIconPath = is.dev ? join(__dirname, '../../resources/icon.png') : join(process.resourcesPath, 'icon.png')
 const WINDOW_STATE_PATH = join(YIRA_HOME, 'window-state.json')
+const MOD_PANEL_DISCOVERY_PATH = join(YIRA_HOME, 'run', 'mod-bridge.json')
+const modPanelBridge = new ModPanelBridge({
+  discoveryFile: MOD_PANEL_DISCOVERY_PATH,
+  onChange: broadcastModPanelChange,
+})
+// Terminals inherit process.env, so mods can find the bridge before any spawns.
+process.env[MOD_PANEL_BRIDGE_FILE_ENV] = MOD_PANEL_DISCOVERY_PATH
 const supportsTitleBarOverlay = process.platform === 'win32' || process.platform === 'linux'
 app.setAppUserModelId(is.dev ? DEV_APP_ID : APP_ID)
 if (process.platform === 'win32') {
@@ -162,6 +172,7 @@ async function requestApplicationQuit(): Promise<void> {
 app.on('before-quit', (event) => {
   if (closePreparationApproved) {
     stopTerminalProcessActivityMonitor()
+    void modPanelBridge.close()
     return
   }
   event.preventDefault()
@@ -298,6 +309,10 @@ app.whenReady().then(async () => {
     workspaces: getWorkspaceRootFolders,
   })
   registerCanvasIPC()
+  registerModPanelsIPC(modPanelBridge)
+  void modPanelBridge.start().catch((error) => {
+    console.warn('[main] mod panel bridge failed:', error instanceof Error ? error.message : String(error))
+  })
   registerTerminalIPC(() => mainWindow)
   registerScriptsIPC()
   void hydrateTerminalSessions().catch((error) => {
