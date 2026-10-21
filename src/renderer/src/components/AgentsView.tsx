@@ -1,17 +1,18 @@
 import React, { useEffect, useMemo } from 'react'
-import { Bot, Maximize2, Minimize2, Pin, Plus, X } from 'lucide-react'
+import { Bot, GripVertical, Maximize2, Minimize2, Pin, Plus, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type {
   AgentActiveSession,
   FileTileOpenOptions,
   WorkspaceConfig,
 } from '@shared/types'
-import { AGENTS_VIEW_SCROLL_THRESHOLD, computeAgentsViewLayout } from '@/utils/agentsViewLayout'
 import { selectAgentsViewSessions } from '@/utils/agentsViewSessions'
 import { useCanvasStore } from '@/store/canvasStore'
 import { getAgentSessionTitle } from '@/utils/terminalDisplayTitle'
 import { getAgentNamedTitle } from '@shared/agentTerminalTitle'
+import { useAgentsViewLayout } from '@/hooks/useAgentsViewLayout'
 import { AgentSessionTerminal } from './AgentSessionTerminal'
+import { GridLayoutSurface, type GridLayoutTileRenderState } from './GridLayoutSurface'
 
 export interface AgentsViewProps {
   workspaceId: string
@@ -32,8 +33,6 @@ export interface AgentsViewProps {
   onPinSession?: (session: AgentActiveSession) => void
 }
 
-const MIN_SCROLLING_TILE_HEIGHT = 180
-
 interface SessionCardProps {
   session: AgentActiveSession
   workspaceId: string
@@ -41,9 +40,11 @@ interface SessionCardProps {
   isFocused: boolean
   isMaximized: boolean
   isVisible: boolean
+  isDragged: boolean
   onFocus: () => void
   onClose: () => void
   onToggleMaximize: () => void
+  onStartMove?: (event: React.PointerEvent) => void
   onPin?: () => void
   onOpenBrowserTile?: (url: string) => void
   onOpenFileTile?: (relativePath: string, options?: FileTileOpenOptions) => void | Promise<void>
@@ -84,9 +85,11 @@ function AgentSessionCard({
   isFocused,
   isMaximized,
   isVisible,
+  isDragged,
   onFocus,
   onClose,
   onToggleMaximize,
+  onStartMove,
   onPin,
   onOpenBrowserTile,
   onOpenFileTile,
@@ -114,6 +117,18 @@ function AgentSessionCard({
       tabIndex={0}
     >
       <header className="flex min-h-11 shrink-0 items-center gap-2 border-b border-border px-2.5">
+        {onStartMove && (
+          <button
+            type="button"
+            className="inline-flex h-7 w-7 shrink-0 cursor-grab items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display active:cursor-grabbing"
+            aria-label={t('ui.moveTile')}
+            title={t('ui.moveTile')}
+            onPointerDown={onStartMove}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <GripVertical size={13} aria-hidden="true" />
+          </button>
+        )}
         <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-bg-primary ${providerColor}`} title={providerLabel}>
           <Bot size={14} aria-hidden="true" />
         </span>
@@ -167,7 +182,7 @@ function AgentSessionCard({
           <X size={13} aria-hidden="true" />
         </button>
       </header>
-      <div className="min-h-0 min-w-0 flex-1">
+      <div className={`min-h-0 min-w-0 flex-1 ${isDragged ? 'opacity-40' : ''}`}>
         <AgentSessionTerminal
           session={session}
           workspaceId={workspaceId}
@@ -210,19 +225,69 @@ export function AgentsView({
     }
   }, [maximizedSessionId, onMaximizedSessionChange, visibleSessions])
 
-  const layout = computeAgentsViewLayout(visibleSessions.length)
-  // Past the threshold, keep tiles usable and let the view scroll instead of shrinking them.
-  const scrolls = visibleSessions.length > AGENTS_VIEW_SCROLL_THRESHOLD && maximizedSessionId === null
-  const smallestSpan = layout.rows / Math.max(1, ...layout.stacks)
-  const rowTrackMin = scrolls ? `${Math.ceil(MIN_SCROLLING_TILE_HEIGHT / smallestSpan)}px` : '0'
-  const gridStyle: React.CSSProperties = {
-    gridTemplateColumns: `repeat(${layout.columns}, minmax(0, 1fr))`,
-    gridTemplateRows: `repeat(${layout.rows}, minmax(${rowTrackMin}, 1fr))`,
+  const tileIds = useMemo(
+    () => visibleSessions.map((session) => session.tileId),
+    [visibleSessions],
+  )
+  const [rootNode, setRootNode] = useAgentsViewLayout(workspaceId, tileIds)
+  const sessionsByTileId = useMemo(
+    () => new Map(visibleSessions.map((session) => [session.tileId, session])),
+    [visibleSessions],
+  )
+
+  const renderTile = (tileId: string, state: GridLayoutTileRenderState): React.ReactNode | null => {
+    const session = sessionsByTileId.get(tileId)
+    if (!session) return null
+    const isMaximized = maximizedSessionId === tileId
+    const isVisible = maximizedSessionId === null || isMaximized
+
+    return (
+      <div
+        className={`${isMaximized ? 'absolute inset-2.5 z-10' : 'h-full min-h-[180px] w-full min-w-[260px]'}${isVisible ? '' : ' invisible'}`}
+      >
+        <AgentSessionCard
+          session={session}
+          workspaceId={workspaceId}
+          workspaceConfig={workspaceConfig}
+          isFocused={session.tileId === focusedSessionId}
+          isMaximized={isMaximized}
+          isVisible={isVisible}
+          isDragged={state.isDragged}
+          onFocus={() => onFocusSession(session.tileId)}
+          onClose={() => onCloseSession(session)}
+          onToggleMaximize={() => onMaximizedSessionChange(isMaximized ? null : session.tileId)}
+          onStartMove={maximizedSessionId === null ? state.startMove : undefined}
+          onPin={onPinSession ? () => onPinSession(session) : undefined}
+          onOpenBrowserTile={onOpenBrowserTile}
+          onOpenFileTile={onOpenFileTile}
+        />
+      </div>
+    )
+  }
+
+  const renderDragGhost = (tileId: string): React.ReactNode | null => {
+    const session = sessionsByTileId.get(tileId)
+    if (!session) return null
+    const liveTitle = useCanvasStore.getState().terminalTitles[tileId]
+    const title = getAgentNamedTitle(liveTitle)
+      || getAgentSessionTitle(session)
+      || t('agentsView.unknownTitle')
+    const providerLabel = session.provider === 'claude' ? 'Claude' : 'Codex'
+
+    return (
+      <>
+        <Bot size={16} className="shrink-0 text-cyan-300" />
+        <div className="min-w-0">
+          <div className="truncate text-sm text-text-display">{title}</div>
+          <div className="mt-1 text-xs text-text-secondary">{providerLabel}</div>
+        </div>
+      </>
+    )
   }
 
   return (
     <section className="flex h-full min-h-0 w-full flex-col bg-bg-primary" aria-label={t('agentsView.title')}>
-      <div className={`min-h-0 flex-1 ${scrolls ? 'overflow-y-auto' : ''}`}>
+      <div className="min-h-0 flex-1">
         {visibleSessions.length === 0 ? (
           <div className="flex h-full min-h-0 flex-col items-center justify-center px-6 text-center">
             <Bot size={28} className="text-text-disabled" aria-hidden="true" />
@@ -239,45 +304,14 @@ export function AgentsView({
             </button>
           </div>
         ) : (
-          <div
-            className={`grid w-full gap-2.5 p-2.5 ${scrolls ? 'min-h-full' : 'h-full min-h-0'}`}
-            style={gridStyle}
-            data-agent-session-grid="true"
-          >
-            {visibleSessions.map((session, index) => {
-              const isMaximized = maximizedSessionId === session.tileId
-              const isVisible = maximizedSessionId === null || isMaximized
-              const placement = layout.placements[index]
-              const placementStyle: React.CSSProperties | undefined = isMaximized
-                ? { gridColumn: '1 / -1', gridRow: '1 / -1' }
-                : placement && {
-                  gridColumn: placement.column,
-                  gridRow: `${placement.rowStart} / span ${placement.rowSpan}`,
-                }
-              return (
-                <div
-                  key={session.tileId}
-                  className={isVisible ? 'min-h-0 min-w-0' : 'hidden'}
-                  style={placementStyle}
-                >
-                  <AgentSessionCard
-                    session={session}
-                    workspaceId={workspaceId}
-                    workspaceConfig={workspaceConfig}
-                    isFocused={session.tileId === focusedSessionId}
-                    isMaximized={isMaximized}
-                    isVisible={isVisible}
-                    onFocus={() => onFocusSession(session.tileId)}
-                    onClose={() => onCloseSession(session)}
-                    onToggleMaximize={() => onMaximizedSessionChange(isMaximized ? null : session.tileId)}
-                    onPin={onPinSession ? () => onPinSession(session) : undefined}
-                    onOpenBrowserTile={onOpenBrowserTile}
-                    onOpenFileTile={onOpenFileTile}
-                  />
-                </div>
-              )
-            })}
-          </div>
+          <GridLayoutSurface
+            rootNode={rootNode}
+            onSetRootNode={setRootNode}
+            onFocusTile={onFocusSession}
+            className="relative flex h-full w-full overflow-auto bg-bg-primary p-2.5"
+            renderTile={renderTile}
+            renderDragGhost={renderDragGhost}
+          />
         )}
       </div>
     </section>

@@ -5,9 +5,12 @@ import {
   createEmptyGridWorkspaceState,
   determineGridDropDirection,
   insertTileIntoGridLayout,
+  isGridLayoutNode,
+  normalizeGridLayoutForTileIds,
   normalizeGridWorkspaceState,
   removeTileFromGridLayout,
   resizeGridChild,
+  sameGridTree,
   swapGridTiles,
 } from './gridWorkspaceState'
 import type { GridLayoutNode, GridWorkspaceState, TileState } from './types'
@@ -375,4 +378,83 @@ try {
   throw new Error('grid normalization must reject tile 25')
 } catch (error) {
   if (!(error instanceof Error) || error.message !== `Grid workspaces can contain at most ${GRID_MAX_TILES} tiles`) throw error
+}
+
+function leafOrder(node: GridLayoutNode | null): string {
+  if (!node) return ''
+  if (node.type === 'leaf') return node.tileId
+  return node.children.map(leafOrder).join(',')
+}
+
+const storedLayout: GridLayoutNode = {
+  id: 'stored-root',
+  type: 'split',
+  direction: 'row',
+  sizes: [12, 18, 24],
+  children: [
+    { id: 'stored-leaf-a', type: 'leaf', tileId: 'a' },
+    { id: 'stored-leaf-b', type: 'leaf', tileId: 'b' },
+    { id: 'stored-leaf-c', type: 'leaf', tileId: 'c' },
+  ],
+}
+
+const prunedLayout = normalizeGridLayoutForTileIds(storedLayout, ['a', 'c', 'd'])
+if (!prunedLayout || prunedLayout.type !== 'split') {
+  throw new Error('tile id normalization must keep the split root')
+}
+if (prunedLayout.id !== 'stored-root') {
+  throw new Error('tile id normalization must preserve the root node id')
+}
+if (leafOrder(prunedLayout) !== 'a,c,d') {
+  throw new Error('tile id normalization must drop missing tiles and append new ones in order')
+}
+if (prunedLayout.children[0].id !== 'stored-leaf-a' || prunedLayout.children[1].id !== 'stored-leaf-c') {
+  throw new Error('tile id normalization must preserve the node ids of tiles that remain')
+}
+if (prunedLayout.sizes.join(',') !== '12,24,10') {
+  throw new Error('tile id normalization must keep surviving sizes and add the default size for new tiles')
+}
+
+if (normalizeGridLayoutForTileIds(storedLayout, []) !== null) {
+  throw new Error('tile id normalization must return null when no tiles remain')
+}
+
+const normalizedFromScratch = normalizeGridLayoutForTileIds(null, ['a', 'b', 'c', 'd'])
+const insertedFromScratch = ['a', 'b', 'c', 'd']
+  .reduce<GridLayoutNode | null>((node, id) => insertTileIntoGridLayout(node, id), null)
+if (leafOrder(normalizedFromScratch) !== leafOrder(insertedFromScratch)) {
+  throw new Error('tile id normalization must place new tiles like insertTileIntoGridLayout')
+}
+if (
+  normalizedFromScratch?.type !== 'split'
+  || insertedFromScratch?.type !== 'split'
+  || normalizedFromScratch.direction !== insertedFromScratch.direction
+) {
+  throw new Error('tile id normalization must build the same split shape as insertTileIntoGridLayout')
+}
+
+if (!isGridLayoutNode(dragRoot)) {
+  throw new Error('layout validation must accept a well-formed tree')
+}
+if (isGridLayoutNode(null)) {
+  throw new Error('layout validation must reject null')
+}
+if (isGridLayoutNode({ id: 'leaf-no-tile', type: 'leaf' })) {
+  throw new Error('layout validation must reject leaves without a tile id')
+}
+if (isGridLayoutNode({ id: 'split-no-children', type: 'split', direction: 'row', sizes: [], children: [] })) {
+  throw new Error('layout validation must reject splits without children')
+}
+if (isGridLayoutNode({ id: 'split-bad-direction', type: 'split', direction: 'diagonal', sizes: [10], children: [dragRoot.children[0]] })) {
+  throw new Error('layout validation must reject unknown split directions')
+}
+if (isGridLayoutNode('grid')) {
+  throw new Error('layout validation must reject non-object values')
+}
+
+if (!sameGridTree(storedLayout, JSON.parse(JSON.stringify(storedLayout)))) {
+  throw new Error('grid tree comparison must accept structurally equal trees')
+}
+if (sameGridTree(storedLayout, prunedLayout)) {
+  throw new Error('grid tree comparison must reject different trees')
 }

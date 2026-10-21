@@ -129,6 +129,7 @@ const translationCopy: Record<string, string> = {
   'agentsView.statusNeedsInput': 'Needs input',
   'agentsView.statusDone': 'Done',
   'agentsView.statusExited': 'Exited',
+  'ui.moveTile': 'Move tile',
 }
 const reactI18nextPath = require.resolve('react-i18next')
 require.cache[reactI18nextPath] = {
@@ -233,6 +234,15 @@ function findButton(container: any, ariaLabel: string): any {
   return null
 }
 
+function countButtons(container: any, ariaLabel: string): number {
+  const buttons = container.getElementsByTagName('button')
+  let count = 0
+  for (let index = 0; index < buttons.length; index += 1) {
+    if (buttons[index].getAttribute('aria-label') === ariaLabel) count += 1
+  }
+  return count
+}
+
 async function settle(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 20))
 }
@@ -324,6 +334,28 @@ test('hides the pin button when the view has no pin callback', async () => {
     await settle()
     assert.equal(findButton(container, 'Keep as agent tile'), null)
     assert.ok(findButton(container, 'Maximize session'))
+  } finally {
+    root.unmount()
+  }
+})
+
+test('shows a move handle per card and hides the handles while a session is maximized', async () => {
+  const { container, root } = createView([
+    session(),
+    session({ tileId: 'agent-b', startedAt: '2026-01-01T00:01:00.000Z' }),
+  ])
+
+  try {
+    await settle()
+    assert.equal(countButtons(container, 'Move tile'), 2)
+
+    findButton(container, 'Maximize session').dispatchEvent(new TestEvent('click', { bubbles: true, cancelable: true }))
+    await settle()
+    assert.equal(countButtons(container, 'Move tile'), 0)
+
+    findButton(container, 'Restore session').dispatchEvent(new TestEvent('click', { bubbles: true, cancelable: true }))
+    await settle()
+    assert.equal(countButtons(container, 'Move tile'), 2)
   } finally {
     root.unmount()
   }

@@ -29,6 +29,7 @@ import { useAgentsView } from './hooks/useAgentsView'
 import { useTheme } from './hooks/useTheme'
 import { useFontSize } from './hooks/useFontSize'
 import { useSidePanelWidth } from './hooks/useSidePanelWidth'
+import { useSidebarWorkspaceOrder } from './hooks/useSidebarWorkspaceOrder'
 import { useWindowWidth } from './hooks/useWindowWidth'
 import { resolveSidebarCollapsedForActivity } from './utils/emptyWorkspaceView'
 import { resolveMainView, resolvePanelLayout } from './utils/layoutState'
@@ -92,6 +93,9 @@ import { mergeWorkspaceSelectionResult } from './utils/workspaceSelectionActions
 import { getWorkspaceSidebarOrder } from './utils/workspaceOrdering'
 import {
   getActiveSidebarWorkspaces,
+  mergeSidebarWorkspaceOrder,
+  moveSidebarWorkspace,
+  type SidebarDropPlacement,
 } from './utils/workspaceSidebarSections'
 import { getInitialWorkspaceDialogCopy, getWorkspaceDialogCopy } from './utils/workspaceDialogCopy'
 import { buildTileConfigurationMenuItems } from './components/tileConfigurationMenu'
@@ -567,7 +571,7 @@ function AppContent(): React.ReactElement {
     }
     setSidebarCollapsed((collapsed) => !collapsed)
   }, [agentSessionMaximized, sidebarHiddenByWidth])
-  const [pendingAgentSession, setPendingAgentSession] = useState<{ workspaceId: string; tileId: string } | null>(null)
+  const [pendingAgentSession, setPendingAgentSession] = useState<{ workspaceId: string; tileId: string; maximize: boolean } | null>(null)
   const pendingAgentSessionSourceRef = useRef('')
   useEffect(() => {
     if (agentsView.sessionDialogOpen) setActivityOpen(false)
@@ -576,7 +580,10 @@ function AppContent(): React.ReactElement {
   useEffect(() => {
     if (!pendingAgentSession) return
     if (activeWorkspaceId === pendingAgentSession.workspaceId) {
-      if (agentsView.effectiveProvider) agentsView.openForSession(pendingAgentSession.tileId)
+      if (agentsView.effectiveProvider) {
+        if (pendingAgentSession.maximize) setAgentsMaximizedSessionId(pendingAgentSession.tileId)
+        agentsView.openForSession(pendingAgentSession.tileId)
+      }
       pendingAgentSessionSourceRef.current = ''
       setPendingAgentSession(null)
       return
@@ -1247,9 +1254,10 @@ function AppContent(): React.ReactElement {
     () => getWorkspaceSidebarOrder(workspaceMetadata),
     [workspaceMetadata],
   )
+  const [sidebarWorkspaceOrder, setSidebarWorkspaceOrder] = useSidebarWorkspaceOrder()
   const activeSidebarWorkspaces = useMemo(
-    () => getActiveSidebarWorkspaces(workspaceMetadata, sessionActiveWorkspaceIds),
-    [sessionActiveWorkspaceIds, workspaceMetadata],
+    () => getActiveSidebarWorkspaces(workspaceMetadata, sessionActiveWorkspaceIds, sidebarWorkspaceOrder),
+    [sessionActiveWorkspaceIds, sidebarWorkspaceOrder, workspaceMetadata],
   )
   const toggleActiveWorkspaceExpanded = useCallback((workspaceId: string) => {
     setExpandedActiveWorkspaceIds((current) => {
@@ -1259,6 +1267,20 @@ function AppContent(): React.ReactElement {
       return next
     })
   }, [])
+
+  const reorderSidebarWorkspace = useCallback((
+    draggedId: string,
+    targetId: string,
+    placement: SidebarDropPlacement,
+  ) => {
+    const visibleOrder = moveSidebarWorkspace(
+      activeSidebarWorkspaces.map(({ id }) => id),
+      draggedId,
+      targetId,
+      placement,
+    )
+    setSidebarWorkspaceOrder(mergeSidebarWorkspaceOrder(visibleOrder, sidebarWorkspaceOrder))
+  }, [activeSidebarWorkspaces, setSidebarWorkspaceOrder, sidebarWorkspaceOrder])
 
   const agentSessionWorkspaces = useMemo(
     () => sidebarWorkspaces.filter((workspace) => (
@@ -1878,12 +1900,13 @@ function AppContent(): React.ReactElement {
     switchWorkspace(workspace)
   }, [agentsView.close, agentsView.closeSessionDialog, switchWorkspace])
 
-  const openAgentsViewSession = useCallback((workspaceId: string, tileId: string) => {
+  const openAgentsViewSession = useCallback((workspaceId: string, tileId: string, options?: { maximize?: boolean }) => {
+    const maximize = options?.maximize === true
     setHomeOpen(false)
     agentsView.closeSessionDialog()
-    // Another maximized session would hide the one being opened, so return to all sessions.
-    setAgentsMaximizedSessionId((current) => current === tileId ? current : null)
     if (workspaceId === activeWorkspaceId) {
+      // Another maximized session would hide the one being opened, so maximize it or return to all sessions.
+      setAgentsMaximizedSessionId((current) => maximize || current === tileId ? tileId : null)
       agentsView.openForSession(tileId)
       return
     }
@@ -1891,8 +1914,9 @@ function AppContent(): React.ReactElement {
     const workspace = sidebarWorkspaces.find((entry) => entry.id === workspaceId)
     if (!workspace) return
 
+    setAgentsMaximizedSessionId(null)
     pendingAgentSessionSourceRef.current = activeWorkspaceId
-    setPendingAgentSession({ workspaceId, tileId })
+    setPendingAgentSession({ workspaceId, tileId, maximize })
     setActivityOpen(false)
     agentsView.close()
     switchWorkspace(workspace)
@@ -1988,7 +2012,7 @@ function AppContent(): React.ReactElement {
     return window.electron.notifications.onAgentAlertClicked(({ workspaceId, tileId, surface }) => {
       if (!workspaceId) return
       if (surface === 'agents-view') {
-        openAgentsViewSession(workspaceId, tileId)
+        openAgentsViewSession(workspaceId, tileId, { maximize: true })
         return
       }
       const workspace = workspaceMetadata.find((entry) => entry.id === workspaceId)
@@ -2837,6 +2861,7 @@ function AppContent(): React.ReactElement {
                         }}
                         onDeactivate={() => void deactivateWorkspace(workspace)}
                         deactivatePending={pendingWorkspaceDeactivationIds.has(workspace.id)}
+                        onReorder={reorderSidebarWorkspace}
                       />
                     ))}
                   </div>
@@ -3128,7 +3153,7 @@ function AppContent(): React.ReactElement {
             useZenStore.getState().dismissSummary()
             if (!alert.workspaceId) return
             if (alert.surface === 'agents-view') {
-              openAgentsViewSession(alert.workspaceId, alert.tileId)
+              openAgentsViewSession(alert.workspaceId, alert.tileId, { maximize: true })
               return
             }
             const workspace = workspaceMetadata.find((entry) => entry.id === alert.workspaceId)
