@@ -327,6 +327,12 @@ type TranslationResources = {
     install: string
     repair: string
     codexHooksHelp: string
+    modPanels: string
+    modPanelsDescription: string
+    modPanelsSteps: string
+    copyModPanelPrompt: string
+    modPanelPromptCopied: string
+    showModPanelPrompt: string
     backToAbout: string
     configure: string
     uninstall: string
@@ -1329,6 +1335,12 @@ const en: TranslationResources = {
     install: 'Install',
     repair: 'Repair',
     codexHooksHelp: 'Codex asks you to approve new hooks with /hooks.',
+    modPanels: 'Claude Code mod panels',
+    modPanelsDescription: 'Mods running in a Claude Code session started from a Yira terminal can show interactive panels in the Mods tab of the right panel.',
+    modPanelsSteps: 'Copy the prompt and paste it into Claude Code to create a mod or adapt an existing one. It explains how the mod connects with Yira, which elements it can draw and includes the client to copy into the mod.',
+    copyModPanelPrompt: 'Copy prompt',
+    modPanelPromptCopied: 'Prompt copied',
+    showModPanelPrompt: 'Show prompt',
     backToAbout: 'Back to About',
     configure: 'Configure',
     uninstall: 'Uninstall',
@@ -2331,6 +2343,12 @@ const es: TranslationResources = {
     install: 'Instalar',
     repair: 'Reparar',
     codexHooksHelp: 'Codex pide aprobar hooks nuevos con /hooks.',
+    modPanels: 'Paneles de mods de Claude Code',
+    modPanelsDescription: 'Los mods que corren en una sesión de Claude Code abierta desde una terminal de Yira pueden mostrar paneles interactivos en la pestaña Mods del panel derecho.',
+    modPanelsSteps: 'Copia el prompt y pégalo en Claude Code para crear un mod o adaptar uno existente. Explica cómo el mod se conecta con Yira, qué elementos puede dibujar e incluye el cliente para copiar en el mod.',
+    copyModPanelPrompt: 'Copiar prompt',
+    modPanelPromptCopied: 'Prompt copiado',
+    showModPanelPrompt: 'Ver prompt',
     backToAbout: 'Volver a Acerca de',
     configure: 'Configurar',
     uninstall: 'Desinstalar',
