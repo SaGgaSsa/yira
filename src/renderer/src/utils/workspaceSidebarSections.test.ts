@@ -7,6 +7,8 @@ import {
   getWorkspaceAgentEntries,
   getWorkspaceLastUsedParts,
   keepAgentSessionOrder,
+  mergeSidebarWorkspaceOrder,
+  moveSidebarWorkspace,
   summarizeWorkspaceAgents,
 } from './workspaceSidebarSections'
 
@@ -46,6 +48,47 @@ test('keeps active workspaces in set order and ignores unknown ids', () => {
     getActiveSidebarWorkspaces(workspaces, new Set(['third', 'missing', 'first'])).map(({ id }) => id),
     ['third', 'first'],
   )
+})
+
+test('lists manually ordered active workspaces first and the rest in set order', () => {
+  const workspaces = [workspace('first'), workspace('second'), workspace('third'), workspace('fourth')]
+
+  assert.deepEqual(
+    getActiveSidebarWorkspaces(
+      workspaces,
+      new Set(['third', 'missing', 'first', 'second']),
+      ['second', 'unknown', 'third'],
+    ).map(({ id }) => id),
+    ['second', 'third', 'first'],
+  )
+  assert.deepEqual(
+    getActiveSidebarWorkspaces(workspaces, new Set(['first', 'second']), ['fourth']).map(({ id }) => id),
+    ['first', 'second'],
+  )
+})
+
+test('moves a workspace before or after another one', () => {
+  const ids = ['a', 'b', 'c', 'd']
+
+  assert.deepEqual(moveSidebarWorkspace(ids, 'd', 'a', 'before'), ['d', 'a', 'b', 'c'])
+  assert.deepEqual(moveSidebarWorkspace(ids, 'a', 'c', 'after'), ['b', 'c', 'a', 'd'])
+  assert.deepEqual(moveSidebarWorkspace(ids, 'a', 'b', 'after'), ['b', 'a', 'c', 'd'])
+  assert.deepEqual(moveSidebarWorkspace(ids, 'd', 'a', 'after'), ['a', 'd', 'b', 'c'])
+  assert.deepEqual(ids, ['a', 'b', 'c', 'd'])
+})
+
+test('returns an unchanged copy when the dragged or target workspace is unknown', () => {
+  const ids = ['a', 'b', 'c']
+
+  assert.deepEqual(moveSidebarWorkspace(ids, 'b', 'b', 'before'), ['a', 'b', 'c'])
+  assert.deepEqual(moveSidebarWorkspace(ids, 'missing', 'c', 'after'), ['a', 'b', 'c'])
+  assert.deepEqual(moveSidebarWorkspace(ids, 'a', 'missing', 'after'), ['a', 'b', 'c'])
+})
+
+test('merges the visible order with stored ids that are not visible anymore', () => {
+  assert.deepEqual(mergeSidebarWorkspaceOrder(['b', 'a'], ['a', 'c', 'b', 'd']), ['b', 'a', 'c', 'd'])
+  assert.deepEqual(mergeSidebarWorkspaceOrder(['a'], []), ['a'])
+  assert.deepEqual(mergeSidebarWorkspaceOrder([], ['a', 'a']), ['a'])
 })
 
 test('filters workspaces by every query word in the name or root folder', () => {

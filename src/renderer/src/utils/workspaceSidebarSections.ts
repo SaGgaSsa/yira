@@ -8,20 +8,72 @@ function compareAgentSessions(left: AgentActiveSession, right: AgentActiveSessio
     || left.tileId.localeCompare(right.tileId)
 }
 
-/** Active workspaces follow the order in which their ids were added to the session set. */
+export type SidebarDropPlacement = 'before' | 'after'
+
+/**
+ * Active workspaces listed in manualOrder go first in that order; the rest follow the order in
+ * which their ids were added to the session set. Unknown ids are ignored.
+ */
 export function getActiveSidebarWorkspaces(
   workspaces: readonly WorkspaceMetadata[],
   sessionActiveIds: ReadonlySet<string>,
+  manualOrder: readonly string[] = [],
 ): WorkspaceMetadata[] {
   const workspacesById = new Map(workspaces.map((workspace) => [workspace.id, workspace]))
   const activeWorkspaces: WorkspaceMetadata[] = []
+  const addedIds = new Set<string>()
+
+  manualOrder.forEach((workspaceId) => {
+    const workspace = workspacesById.get(workspaceId)
+    if (!workspace || !sessionActiveIds.has(workspaceId) || addedIds.has(workspaceId)) return
+    addedIds.add(workspaceId)
+    activeWorkspaces.push(workspace)
+  })
 
   sessionActiveIds.forEach((workspaceId) => {
     const workspace = workspacesById.get(workspaceId)
-    if (workspace) activeWorkspaces.push(workspace)
+    if (!workspace || addedIds.has(workspaceId)) return
+    addedIds.add(workspaceId)
+    activeWorkspaces.push(workspace)
   })
 
   return activeWorkspaces
+}
+
+/** Return a copy of ids with draggedId moved just before or after targetId. */
+export function moveSidebarWorkspace(
+  ids: readonly string[],
+  draggedId: string,
+  targetId: string,
+  placement: SidebarDropPlacement,
+): string[] {
+  const movedIds = [...ids]
+  if (draggedId === targetId) return movedIds
+
+  const draggedIndex = movedIds.indexOf(draggedId)
+  if (draggedIndex === -1 || !movedIds.includes(targetId)) return movedIds
+
+  movedIds.splice(draggedIndex, 1)
+  const targetIndex = movedIds.indexOf(targetId)
+  movedIds.splice(placement === 'after' ? targetIndex + 1 : targetIndex, 0, draggedId)
+  return movedIds
+}
+
+/** Keep the visible order first and append stored ids that are no longer visible, without duplicates. */
+export function mergeSidebarWorkspaceOrder(
+  visibleOrder: readonly string[],
+  storedOrder: readonly string[],
+): string[] {
+  const mergedOrder = [...visibleOrder]
+  const seenIds = new Set(visibleOrder)
+
+  storedOrder.forEach((workspaceId) => {
+    if (seenIds.has(workspaceId)) return
+    seenIds.add(workspaceId)
+    mergedOrder.push(workspaceId)
+  })
+
+  return mergedOrder
 }
 
 /** Keep workspaces whose name or root folder contains every word of the query, ignoring case. */

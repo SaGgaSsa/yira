@@ -29,6 +29,7 @@ import { useAgentsView } from './hooks/useAgentsView'
 import { useTheme } from './hooks/useTheme'
 import { useFontSize } from './hooks/useFontSize'
 import { useSidePanelWidth } from './hooks/useSidePanelWidth'
+import { useSidebarWorkspaceOrder } from './hooks/useSidebarWorkspaceOrder'
 import { useWindowWidth } from './hooks/useWindowWidth'
 import { resolveSidebarCollapsedForActivity } from './utils/emptyWorkspaceView'
 import { resolveMainView, resolvePanelLayout } from './utils/layoutState'
@@ -92,6 +93,9 @@ import { mergeWorkspaceSelectionResult } from './utils/workspaceSelectionActions
 import { getWorkspaceSidebarOrder } from './utils/workspaceOrdering'
 import {
   getActiveSidebarWorkspaces,
+  mergeSidebarWorkspaceOrder,
+  moveSidebarWorkspace,
+  type SidebarDropPlacement,
 } from './utils/workspaceSidebarSections'
 import { getInitialWorkspaceDialogCopy, getWorkspaceDialogCopy } from './utils/workspaceDialogCopy'
 import { buildTileConfigurationMenuItems } from './components/tileConfigurationMenu'
@@ -1247,9 +1251,10 @@ function AppContent(): React.ReactElement {
     () => getWorkspaceSidebarOrder(workspaceMetadata),
     [workspaceMetadata],
   )
+  const [sidebarWorkspaceOrder, setSidebarWorkspaceOrder] = useSidebarWorkspaceOrder()
   const activeSidebarWorkspaces = useMemo(
-    () => getActiveSidebarWorkspaces(workspaceMetadata, sessionActiveWorkspaceIds),
-    [sessionActiveWorkspaceIds, workspaceMetadata],
+    () => getActiveSidebarWorkspaces(workspaceMetadata, sessionActiveWorkspaceIds, sidebarWorkspaceOrder),
+    [sessionActiveWorkspaceIds, sidebarWorkspaceOrder, workspaceMetadata],
   )
   const toggleActiveWorkspaceExpanded = useCallback((workspaceId: string) => {
     setExpandedActiveWorkspaceIds((current) => {
@@ -1259,6 +1264,20 @@ function AppContent(): React.ReactElement {
       return next
     })
   }, [])
+
+  const reorderSidebarWorkspace = useCallback((
+    draggedId: string,
+    targetId: string,
+    placement: SidebarDropPlacement,
+  ) => {
+    const visibleOrder = moveSidebarWorkspace(
+      activeSidebarWorkspaces.map(({ id }) => id),
+      draggedId,
+      targetId,
+      placement,
+    )
+    setSidebarWorkspaceOrder(mergeSidebarWorkspaceOrder(visibleOrder, sidebarWorkspaceOrder))
+  }, [activeSidebarWorkspaces, setSidebarWorkspaceOrder, sidebarWorkspaceOrder])
 
   const agentSessionWorkspaces = useMemo(
     () => sidebarWorkspaces.filter((workspace) => (
@@ -2837,6 +2856,7 @@ function AppContent(): React.ReactElement {
                         }}
                         onDeactivate={() => void deactivateWorkspace(workspace)}
                         deactivatePending={pendingWorkspaceDeactivationIds.has(workspace.id)}
+                        onReorder={reorderSidebarWorkspace}
                       />
                     ))}
                   </div>

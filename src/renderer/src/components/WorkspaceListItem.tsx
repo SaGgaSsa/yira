@@ -19,6 +19,9 @@ export interface WorkspaceListItemProps {
   onFocus: () => void
   onDeactivate?: () => void
   deactivatePending?: boolean
+  draggable?: boolean
+  onDragStart?: (event: React.DragEvent) => void
+  onDragEnd?: (event: React.DragEvent) => void
   className?: string
 }
 
@@ -33,6 +36,9 @@ export function WorkspaceListItem({
   onFocus,
   onDeactivate,
   deactivatePending = false,
+  draggable,
+  onDragStart,
+  onDragEnd,
   className = '',
 }: WorkspaceListItemProps): React.ReactElement {
   const { t } = useTranslation()
@@ -53,6 +59,9 @@ export function WorkspaceListItem({
   return (
     <div
       className={`group relative flex h-7 items-center ${active ? 'bg-bg-tertiary' : 'hover:bg-hover-bg'} ${className}`.trim()}
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
     >
       {leading && <div className="flex shrink-0 items-center pl-3">{leading}</div>}
       <button
