@@ -93,8 +93,25 @@ function collectLeafTileIds(node: GridLayoutNode | null): string[] {
   return node.children.flatMap(collectLeafTileIds)
 }
 
-function sameGridTree(first: GridLayoutNode | null, second: GridLayoutNode | null): boolean {
+export function sameGridTree(first: GridLayoutNode | null, second: GridLayoutNode | null): boolean {
   return JSON.stringify(first) === JSON.stringify(second)
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+export function isGridLayoutNode(value: unknown): value is GridLayoutNode {
+  if (!isRecord(value) || typeof value.id !== 'string') return false
+
+  if (value.type === 'leaf') return typeof value.tileId === 'string'
+  if (value.type !== 'split') return false
+  if (value.direction !== 'row' && value.direction !== 'column') return false
+  if (!Array.isArray(value.children) || value.children.length === 0) return false
+  if (!Array.isArray(value.sizes)) return false
+  if (!value.sizes.every((size) => typeof size === 'number' && Number.isFinite(size))) return false
+
+  return value.children.every(isGridLayoutNode)
 }
 
 interface LocatedLeaf {
@@ -380,19 +397,29 @@ function cleanGridNode(
   }
 }
 
-export function normalizeGridLayout(rootNode: GridLayoutNode | null | undefined, tiles: TileState[]): GridLayoutNode | null {
-  const attachedTiles = tiles.filter((tile) => !isDetachedTile(tile))
-  const validTileIds = new Set(attachedTiles.map((tile) => tile.id))
+export function normalizeGridLayoutForTileIds(
+  rootNode: GridLayoutNode | null | undefined,
+  tileIds: readonly string[],
+): GridLayoutNode | null {
+  const validTileIds = new Set(tileIds)
   const seenTileIds = new Set<string>()
   let nextRoot = cleanGridNode(rootNode, validTileIds, seenTileIds)
 
-  for (const tile of attachedTiles) {
-    if (seenTileIds.has(tile.id)) continue
-    nextRoot = insertTileIntoGridLayout(nextRoot, tile.id)
-    seenTileIds.add(tile.id)
+  for (const tileId of validTileIds) {
+    if (seenTileIds.has(tileId)) continue
+    nextRoot = insertTileIntoGridLayout(nextRoot, tileId)
+    seenTileIds.add(tileId)
   }
 
   return nextRoot
+}
+
+export function normalizeGridLayout(rootNode: GridLayoutNode | null | undefined, tiles: TileState[]): GridLayoutNode | null {
+  const attachedTileIds = tiles
+    .filter((tile) => !isDetachedTile(tile))
+    .map((tile) => tile.id)
+
+  return normalizeGridLayoutForTileIds(rootNode, attachedTileIds)
 }
 
 export function createEmptyGridWorkspaceState(): GridWorkspaceState {
