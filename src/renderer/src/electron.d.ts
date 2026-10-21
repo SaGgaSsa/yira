@@ -83,6 +83,7 @@ import type {
 } from '@shared/types'
 import type { TerminalProcessActivitySnapshot } from '@shared/terminalProcessActivity'
 import type { TerminalSessionIdentity, TerminalSessionTarget } from '@shared/terminalSessionIdentity'
+import type { ModPanel, ModPanelChange, ModPanelPress } from '@shared/modPanels'
 
 type NoteData = {
   title?: string
@@ -253,6 +254,11 @@ interface ElectronWorld {
     clearAttention: () => Promise<NotificationAttentionResult>
     showAgentAlert: (request: AgentAlertNotificationRequest) => Promise<boolean>
     onAgentAlertClicked: (callback: (target: AgentAlertNotificationTarget) => void) => () => void
+  }
+  modPanels: {
+    list: () => Promise<ModPanel[]>
+    press: (press: ModPanelPress) => Promise<boolean>
+    onChange: (callback: (change: ModPanelChange) => void) => () => void
   }
   window: {
     setTitle: (title: string) => Promise<void>

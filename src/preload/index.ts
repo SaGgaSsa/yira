@@ -1,6 +1,7 @@
 import type { AppThemeId } from '@shared/appThemes'
 import type { WindowBackgroundMaterial, WindowBackgroundMaterialState } from '@shared/types'
 import type { TerminalProcessActivitySnapshot } from '@shared/terminalProcessActivity'
+import type { ModPanel, ModPanelChange, ModPanelPress } from '@shared/modPanels'
 import { contextBridge, ipcRenderer } from 'electron'
 import type {
   AgentActiveSessionSnapshot,
@@ -345,6 +346,16 @@ contextBridge.exposeInMainWorld('electron', {
       const handler = (_event: unknown, target: AgentAlertNotificationTarget) => callback(target)
       ipcRenderer.on('notifications:agentAlertClicked', handler)
       return () => ipcRenderer.removeListener('notifications:agentAlertClicked', handler)
+    },
+  },
+
+  modPanels: {
+    list: () => ipcRenderer.invoke('modPanels:list') as Promise<ModPanel[]>,
+    press: (press: ModPanelPress) => ipcRenderer.invoke('modPanels:press', press) as Promise<boolean>,
+    onChange: (callback: (change: ModPanelChange) => void) => {
+      const handler = (_event: unknown, change: ModPanelChange) => callback(change)
+      ipcRenderer.on('modPanels:changed', handler)
+      return () => ipcRenderer.removeListener('modPanels:changed', handler)
     },
   },
 
