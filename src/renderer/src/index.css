@@ -127,8 +127,8 @@
   --text-secondary: #999999;
   --text-primary: #e8e8e8;
   --text-display: #ffffff;
-  --accent: #d71921;
-  --accent-subtle: rgba(215, 25, 33, 0.16);
+  --accent: #22d3ee;
+  --accent-subtle: rgba(34, 211, 238, 0.16);
   --success: #4a9e5c;
   --warning: #d4a843;
   --interactive: #5b9bf6;
@@ -148,13 +148,13 @@
   --text-muted: var(--text-disabled);
   --border-color: var(--border);
   --border-subtle: var(--border-visible);
-  --accent-hover: #ef3f47;
+  --accent-hover: #67e8f9;
   --accent-text: var(--black);
   --statusbar-bg: var(--surface);
   --statusbar-text: var(--text-primary);
   --hover-bg: rgba(255, 255, 255, 0.04);
   --active-bg: rgba(255, 255, 255, 0.08);
-  --danger: var(--accent);
+  --danger: #d71921;
   --danger-hover: #ef3f47;
   --shadow: rgba(0, 0, 0, 0);
   --scrollbar-thumb: #2c2c2c;
@@ -210,6 +210,8 @@
   --text-display: #000000;
   --interactive: #007aff;
   --activity: #0891b2;
+  --accent: #0891b2;
+  --accent-subtle: rgba(8, 145, 178, 0.16);
   --agent-claude: #d97757;
   --agent-codex: #8ea4ff;
   --token-input: #2563eb;
@@ -225,7 +227,7 @@
   --text-muted: var(--text-disabled);
   --border-color: var(--border);
   --border-subtle: var(--border-visible);
-  --accent-hover: #ef3f47;
+  --accent-hover: #0e7490;
   --accent-text: var(--surface);
   --statusbar-bg: var(--surface);
   --statusbar-text: var(--text-primary);

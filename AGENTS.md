@@ -29,7 +29,7 @@ The maintainer uses Yira daily. Its real profile lives in `~/.yira` (config, wor
 
 ## Code style
 
-Use strict TypeScript and ES modules. Follow the existing style: 2-space indentation, semicolon-free statements, single quotes, and trailing commas where TypeScript emits them naturally. Use `PascalCase` for React components. Use `camelCase` for hooks, store actions, and utility functions. Group IPC channels by feature under `src/main/ipc/`. Prefer typed imports from `@shared/*` for contracts reused across processes. Use the CSS variable-based theme tokens in Tailwind classes.
+Use strict TypeScript and ES modules. Follow the existing style: 2-space indentation, semicolon-free statements, single quotes, and trailing commas where TypeScript emits them naturally. Use `PascalCase` for React components. Use `camelCase` for hooks, store actions, and utility functions. Group IPC channels by feature under `src/main/ipc/`. Prefer typed imports from `@shared/*` for contracts reused across processes. Use the CSS variable-based theme tokens in Tailwind classes. `accent` is the cyan highlight for selected items and primary actions. Use `danger` only for errors and destructive actions, never as a highlight.
 
 ## Commits and release notes
 
