@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type {
   AgentProvider,
   AgentProvidersConfig,
@@ -64,6 +65,7 @@ export function WorkspacePanel({
   onOpenWorkspaceSettings,
   requestConfirm,
 }: WorkspacePanelProps): React.ReactElement {
+  const { t } = useTranslation()
   const agents = useSettingsStore((state) => state.agents)
   const effectiveAgentProvider = getEffectiveAgentProvider({ agentProvider }, agents)
   const [width, setWidth] = useSidePanelWidth()
@@ -109,10 +111,10 @@ export function WorkspacePanel({
       </div>
       <div className="flex shrink-0 border-b border-border px-2">
         {([
-          ['explorer', 'Explorer'],
-          ['agents', 'Agents'],
-          ['source-control', 'Source Control'],
-          ['mods', 'Mods'],
+          ['explorer', t('workspacePanel.explorer')],
+          ['agents', t('workspacePanel.agents')],
+          ['source-control', t('workspacePanel.sourceControl')],
+          ['mods', t('workspacePanel.mods')],
         ] as Array<[WorkspacePanelTab, string]>).map(([id, label]) => (
           <button
             key={id}
