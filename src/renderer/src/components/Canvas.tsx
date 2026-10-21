@@ -146,9 +146,8 @@ const CanvasTile = React.memo(function CanvasTile({
     onDetachTile(tile)
   }, [onDetachTile, tile])
 
-  const handleDelete = useCallback(() => {
-    void onDeleteTile(tile.id)
-  }, [onDeleteTile, tile.id])
+  // Return the result: an agent tile kept open after its agent exits relaunches on `false`.
+  const handleDelete = useCallback(() => onDeleteTile(tile.id), [onDeleteTile, tile.id])
 
   return (
     <TileChrome
