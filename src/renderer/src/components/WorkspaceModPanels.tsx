@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { modPanelKey as panelKey } from '@shared/modPanels'
 import type { TileState } from '@shared/types'
 import { useModPanels } from '@/hooks/useModPanels'
@@ -9,11 +10,8 @@ interface WorkspaceModPanelsProps {
   onFocusTile: (tileId: string) => void
 }
 
-function terminalLabel(tile: TileState | undefined): string {
-  return tile?.label?.trim() || 'Terminal'
-}
-
 export function WorkspaceModPanels({ tiles, onFocusTile }: WorkspaceModPanelsProps): React.ReactElement {
+  const { t } = useTranslation()
   const terminalTiles = useMemo(() => tiles.filter((tile) => tile.type === 'terminal'), [tiles])
   const tileIds = useMemo(() => terminalTiles.map((tile) => tile.id), [terminalTiles])
   const panels = useModPanels(tileIds)
@@ -39,10 +37,7 @@ export function WorkspaceModPanels({ tiles, onFocusTile }: WorkspaceModPanelsPro
     <div className="flex h-full min-h-0 flex-col">
       {panels.length === 0 ? (
         <div className="p-3 text-sm text-text-secondary">
-          <p>
-            No mod panels yet. Claude Code mods running in this workspace's terminals can publish
-            panels here with the Yira mod kit.
-          </p>
+          <p>{t('workspacePanel.noModPanels')}</p>
         </div>
       ) : (
         <>
@@ -62,7 +57,7 @@ export function WorkspaceModPanels({ tiles, onFocusTile }: WorkspaceModPanelsPro
                     {panel.title}
                   </span>
                   <span className="truncate text-[10px] text-text-secondary">
-                    {panel.plugin} · {terminalLabel(terminals.get(panel.tileId))}
+                    {panel.plugin} · {terminals.get(panel.tileId)?.label?.trim() || t('workspacePanel.terminalFallback')}
                   </span>
                 </button>
               )
@@ -79,7 +74,7 @@ export function WorkspaceModPanels({ tiles, onFocusTile }: WorkspaceModPanelsPro
                   className="text-xs text-text-secondary transition-colors hover:text-text-display hover:underline"
                   onClick={() => onFocusTile(selectedPanel.tileId)}
                 >
-                  Go to terminal
+                  {t('activity.goToTerminal')}
                 </button>
               </div>
             </>

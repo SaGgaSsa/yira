@@ -557,6 +557,14 @@ type TranslationResources = {
     gitDiffTooltip: string
     gitDiffUnavailable: string
   }
+  workspacePanel: {
+    explorer: string
+    agents: string
+    sourceControl: string
+    mods: string
+    noModPanels: string
+    terminalFallback: string
+  }
   sourceControl: {
     noChanges: string
     noCommits: string
@@ -1565,6 +1573,14 @@ const en: TranslationResources = {
     gitDiffTooltip: 'Includes repositories at the workspace root, in its direct child folders, and those selected in settings. Net diff of pending commits and uncommitted changes since the common ancestor with the known remote reference (+{{additions}} −{{deletions}}). It may not represent the latest push.',
     gitDiffUnavailable: 'Git diff unavailable for this workspace.',
   },
+  workspacePanel: {
+    explorer: 'Explorer',
+    agents: 'Agents',
+    sourceControl: 'Source Control',
+    mods: 'Mods',
+    noModPanels: "No mod panels yet. Claude Code mods running in this workspace's terminals can publish panels here with the Yira mod kit.",
+    terminalFallback: 'Terminal',
+  },
   sourceControl: {
     noChanges: 'No changes',
     noCommits: 'No commits',
@@ -2572,6 +2588,14 @@ const es: TranslationResources = {
     deactivateWarning: 'Se detendrán los procesos que corren en estas terminales.',
     gitDiffTooltip: 'Incluye los repositorios de la raíz, de las carpetas hijas directas y los seleccionados en la configuración. Diff neto de commits pendientes y cambios sin commit desde el ancestro común con la referencia remota conocida (+{{additions}} −{{deletions}}). Puede no representar el último push.',
     gitDiffUnavailable: 'El diff de Git no está disponible para este espacio de trabajo.',
+  },
+  workspacePanel: {
+    explorer: 'Explorador',
+    agents: 'Agentes',
+    sourceControl: 'Source Control',
+    mods: 'Mods',
+    noModPanels: 'Todavía no hay paneles de mods. Los mods de Claude Code que corren en las terminales de este espacio de trabajo pueden publicar paneles aquí con el kit de mods de Yira.',
+    terminalFallback: 'Terminal',
   },
   sourceControl: {
     noChanges: 'Sin cambios',
