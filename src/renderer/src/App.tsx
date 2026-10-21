@@ -1881,6 +1881,8 @@ function AppContent(): React.ReactElement {
   const openAgentsViewSession = useCallback((workspaceId: string, tileId: string) => {
     setHomeOpen(false)
     agentsView.closeSessionDialog()
+    // Another maximized session would hide the one being opened, so return to all sessions.
+    setAgentsMaximizedSessionId((current) => current === tileId ? current : null)
     if (workspaceId === activeWorkspaceId) {
       agentsView.openForSession(tileId)
       return
