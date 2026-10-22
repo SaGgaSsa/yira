@@ -34,3 +34,41 @@ export function resolveTerminalThemeId(terminalThemeId: unknown, appThemeId: unk
   if (appId !== 'default') return appId
   return followLight ? 'light' : terminalId
 }
+
+export interface TerminalSearchDecorations {
+  matchBackground: string
+  matchBorder: string
+  matchOverviewRuler: string
+  activeMatchBackground: string
+  activeMatchBorder: string
+  activeMatchColorOverviewRuler: string
+}
+
+function parseHexColor(value: string): [number, number, number] | null {
+  const match = /^#([\da-f]{6})$/i.exec(value)
+  if (!match) return null
+  const hex = match[1]
+  return [0, 2, 4].map((offset) => Number.parseInt(hex.slice(offset, offset + 2), 16)) as [number, number, number]
+}
+
+/** Blend `color` over `base` as #RRGGBB, which the search addon requires (no alpha). */
+function blendHex(base: string, color: string, amount: number): string {
+  const baseRgb = parseHexColor(base)
+  const colorRgb = parseHexColor(color)
+  if (!baseRgb || !colorRgb) return color
+  const channels = baseRgb.map((channel, index) => Math.round(channel + (colorRgb[index] - channel) * amount))
+  return `#${channels.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`
+}
+
+/** Search highlight colors: the cyan accent for the active match, a dimmer blend for the rest. */
+export function getTerminalSearchDecorations(themeId: unknown): TerminalSearchDecorations {
+  const { background, cyan } = getTerminalTheme(themeId).colors
+  return {
+    matchBackground: blendHex(background, cyan, 0.28),
+    matchBorder: blendHex(background, cyan, 0.5),
+    matchOverviewRuler: blendHex(background, cyan, 0.5),
+    activeMatchBackground: blendHex(background, cyan, 0.6),
+    activeMatchBorder: cyan,
+    activeMatchColorOverviewRuler: cyan,
+  }
+}

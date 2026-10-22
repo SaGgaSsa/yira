@@ -49,7 +49,7 @@ test('exposes ids only on configurable shortcuts', () => {
   const configurable = items.filter((item) => item.id !== undefined)
   const fixed = items.filter((item) => item.id === undefined)
 
-  assert.equal(configurable.length, 6)
+  assert.equal(configurable.length, 7)
   assert.ok(fixed.every((item) => item.keys === 'F11' || item.keys === 'Esc' || item.keys === 'Enter'))
 })
 

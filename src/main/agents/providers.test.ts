@@ -26,14 +26,23 @@ test('builds fixed provider commands from normalized arguments and safe resume i
   }, 'session-123'), {
     provider: 'codex',
     command: 'codex',
-    args: ['--profile', 'work', 'resume', 'session-123'],
+    args: ['--profile', 'work', 'resume', 'session-123', '--no-alt-screen'],
   })
+})
+
+test('keeps Codex out of the alternate screen so its output has scrollback', () => {
+  assert.deepEqual(buildAgentCommand('codex', { enabled: true }).args, ['--no-alt-screen'])
+  assert.deepEqual(
+    buildAgentCommand('codex', { enabled: true, args: ['--no-alt-screen', '--profile', 'work'] }).args,
+    ['--no-alt-screen', '--profile', 'work'],
+  )
+  assert.deepEqual(buildAgentCommand('claude', { enabled: true }).args, [])
 })
 
 test('starts a new Claude conversation under a preset session id', () => {
   const sessionId = '0b9f6c1e-3d2a-4c5b-8e7f-1a2b3c4d5e6f'
   assert.deepEqual(buildAgentCommand('claude', { enabled: true }, sessionId, { newSession: true }).args, ['--session-id', sessionId])
-  assert.deepEqual(buildAgentCommand('codex', { enabled: true }, sessionId, { newSession: true }).args, [])
+  assert.deepEqual(buildAgentCommand('codex', { enabled: true }, sessionId, { newSession: true }).args, ['--no-alt-screen'])
 })
 
 test('finds saved Claude conversations by session id', async () => {

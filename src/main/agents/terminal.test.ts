@@ -39,7 +39,7 @@ test('builds a safe resume launch in the history workspace-relative cwd', () => 
   }), {
     provider: 'codex',
     command: 'codex',
-    args: ['--profile', 'work', 'resume', 'session-123'],
+    args: ['--profile', 'work', 'resume', 'session-123', '--no-alt-screen'],
     cwd: resolve('/workspace/project', 'packages/app'),
     sessionId: 'session-123',
   })

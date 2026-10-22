@@ -5,6 +5,7 @@ export const CONFIGURABLE_SHORTCUT_IDS = [
   'focusRightPanel',
   'previousTab',
   'nextTab',
+  'findInTerminal',
 ] as const
 
 export type ShortcutId = typeof CONFIGURABLE_SHORTCUT_IDS[number]
@@ -17,6 +18,8 @@ export const DEFAULT_SHORTCUTS: ShortcutSettings = {
   focusRightPanel: 'Ctrl+Alt+ArrowRight',
   previousTab: 'Ctrl+Shift+Tab',
   nextTab: 'Ctrl+Tab',
+  // Ctrl+F stays with the shell (forward-char), so the default adds Shift.
+  findInTerminal: 'Ctrl+Shift+F',
 }
 
 const SHORTCUT_MODIFIER_ORDER = ['Ctrl', 'Cmd', 'Alt', 'Shift'] as const

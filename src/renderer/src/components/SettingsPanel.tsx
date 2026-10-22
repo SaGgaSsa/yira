@@ -161,6 +161,7 @@ function getUpdateStatusLabel(t: TFunction, status: UpdateState['status']): stri
 
 function getShortcutGroupLabel(t: TFunction, label: string): string {
   if (label === 'Navigation') return t('settings.shortcutNavigation')
+  if (label === 'Terminal') return t('settings.terminal')
   if (label === 'Window') return t('settings.shortcutWindow')
   if (label === 'Agents') return t('settings.agents')
   return t('settings.shortcutContextual')
@@ -172,6 +173,7 @@ function getShortcutItemLabel(t: TFunction, label: string): string {
     case 'Focus right split panel': return t('settings.shortcutFocusRightSplitPanel')
     case 'Previous tab': return t('settings.shortcutPreviousTab')
     case 'Next tab': return t('settings.shortcutNextTab')
+    case 'Find in terminal': return t('settings.shortcutFindInTerminal')
     case 'Toggle fullscreen': return t('settings.shortcutToggleFullscreen')
     case 'New agent session': return t('settings.shortcutNewAgentSession')
     case 'Open home': return t('settings.shortcutOpenHome')
@@ -188,6 +190,7 @@ function getShortcutName(t: TFunction, id: ShortcutId): string {
     case 'focusRightPanel': return t('settings.shortcutFocusRightSplitPanel')
     case 'previousTab': return t('settings.shortcutPreviousTab')
     case 'nextTab': return t('settings.shortcutNextTab')
+    case 'findInTerminal': return t('settings.shortcutFindInTerminal')
   }
 }
 

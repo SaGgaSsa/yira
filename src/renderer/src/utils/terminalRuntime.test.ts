@@ -670,6 +670,66 @@ test('exposes selection and paste operations on the persistent xterm instance', 
   assert.deepEqual(terminal.pastedData, ['pasted text', 'pasted while parked'])
 })
 
+test('drives the search addon with theme decorations and forwards result changes', async () => {
+  const harness = createRuntimeHarness()
+  const calls: string[] = []
+  let decorations: unknown
+  let emitResults: (results: { resultIndex: number; resultCount: number }) => void = () => {}
+  const searchAddon = {
+    findNext: (term: string, options: { incremental?: boolean; decorations: unknown }) => {
+      calls.push(`next:${term}:${options.incremental === true}`)
+      decorations = options.decorations
+      return term === 'hit'
+    },
+    findPrevious: (term: string) => {
+      calls.push(`previous:${term}`)
+      return true
+    },
+    clearDecorations: () => { calls.push('clear') },
+    onDidChangeResults: (callback: (results: { resultIndex: number; resultCount: number }) => void) => {
+      emitResults = callback
+      return () => { calls.push('unsubscribe') }
+    },
+  }
+  harness.options.dependencies.createSearchAddon = () => searchAddon
+  const runtime = await createReadyRuntime(harness)
+  const received: Array<{ resultIndex: number; resultCount: number }> = []
+  const unsubscribe = runtime.subscribeSearchResults((results) => received.push(results))
+  const flags = { caseSensitive: false, wholeWord: false, regex: false }
+
+  assert.equal(runtime.findNext('hit', { ...flags, incremental: true }), true)
+  assert.equal(runtime.findNext('miss', flags), false)
+  assert.equal(runtime.findPrevious('hit', flags), true)
+  runtime.clearSearch()
+  assert.deepEqual(calls, ['next:hit:true', 'next:miss:false', 'previous:hit', 'clear'])
+  assert.match((decorations as { activeMatchBorder: string }).activeMatchBorder, /^#[\da-f]{6}$/i)
+
+  emitResults({ resultIndex: 2, resultCount: 17 })
+  assert.deepEqual(received, [{ resultIndex: 2, resultCount: 17 }])
+  unsubscribe()
+  emitResults({ resultIndex: 0, resultCount: 1 })
+  assert.equal(received.length, 1)
+
+  let requests = 0
+  runtime.subscribeSearchRequests(() => { requests += 1 })
+  runtime.requestSearch()
+  assert.equal(requests, 1)
+
+  await runtime.dispose(false)
+  assert.equal(runtime.findNext('hit', flags), false)
+  runtime.requestSearch()
+  assert.equal(requests, 1)
+})
+
+test('search calls are inert when the host provides no search addon', async () => {
+  const harness = createRuntimeHarness()
+  const runtime = await createReadyRuntime(harness)
+
+  assert.equal(runtime.findNext('x', { caseSensitive: false, wholeWord: false, regex: false }), false)
+  runtime.clearSearch()
+  await runtime.dispose(false)
+})
+
 test('clears an operation error when dismissed or when the user types', async () => {
   const harness = createRuntimeHarness()
   harness.options.viewOptions = viewOptions({
