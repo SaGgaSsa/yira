@@ -178,6 +178,178 @@ test('renders grouped rows, run states, and an empty menu with an add-command ac
   assert.match(emptyMarkup, /Add command…/)
 })
 
+const NOW = Date.parse('2026-10-20T12:00:00.000Z')
+const DAY_MS = 24 * 60 * 60 * 1000
+
+function usedScript(
+  id: string,
+  name: string,
+  runCount: number,
+  daysAgo: number,
+  extra: Partial<WorkspaceScript> = {},
+): WorkspaceScript {
+  return {
+    ...packageScript(id, name),
+    usage: { runCount, lastRunAt: new Date(NOW - daysAgo * DAY_MS).toISOString() },
+    ...extra,
+  }
+}
+
+function groupNames(scripts: WorkspaceScript[], runs: WorkspaceScriptRun[] = []) {
+  return groupWorkspaceScripts(scripts, 'yira', 'Custom commands', runs, NOW).map((group) => ({
+    label: group.label,
+    names: group.scripts.map((script) => script.name),
+    more: group.moreScripts.map((script) => script.name),
+  }))
+}
+
+test('without history every package script is principal except lifecycle and publish ones', () => {
+  assert.deepEqual(groupNames([
+    packageScript('package:.:dev', 'dev'),
+    { ...packageScript('package:.:prepare', 'prepare'), collapseReason: 'lifecycle' as const },
+    packageScript('package:.:test', 'test'),
+  ]), [
+    { label: 'yira', names: ['dev', 'test'], more: ['prepare'] },
+  ])
+})
+
+test('with history used scripts go first by run count and the rest move to more scripts', () => {
+  assert.deepEqual(groupNames([
+    packageScript('package:.:build', 'build'),
+    usedScript('package:.:dev', 'dev', 3, 1),
+    packageScript('package:.:lint', 'lint'),
+    usedScript('package:.:test', 'test', 9, 5),
+  ]), [
+    { label: 'yira', names: ['test', 'dev'], more: ['build', 'lint'] },
+  ])
+})
+
+test('ties on run count are ordered by last run, then by original order', () => {
+  assert.deepEqual(groupNames([
+    usedScript('package:.:a', 'a', 2, 10),
+    usedScript('package:.:b', 'b', 2, 2),
+    usedScript('package:.:c', 'c', 2, 2),
+  ]), [
+    { label: 'yira', names: ['b', 'c', 'a'], more: [] },
+  ])
+})
+
+test('usage older than 30 days does not count as history', () => {
+  const old = usedScript('package:.:old', 'old', 50, 31)
+  assert.deepEqual(groupNames([old, packageScript('package:.:dev', 'dev')]), [
+    { label: 'yira', names: ['old', 'dev'], more: [] },
+  ])
+
+  assert.deepEqual(groupNames([
+    old,
+    usedScript('package:.:dev', 'dev', 1, 1),
+    packageScript('package:.:test', 'test'),
+  ]), [
+    { label: 'yira', names: ['dev'], more: ['old', 'test'] },
+  ])
+})
+
+test('history is workspace-wide, not per group', () => {
+  const scripts = [
+    usedScript('package:.:dev', 'dev', 4, 1),
+    { ...packageScript('package:apps/web:build', 'build', 'apps/web') },
+  ]
+  assert.deepEqual(groupNames(scripts), [
+    { label: 'yira', names: ['dev'], more: [] },
+    { label: 'apps/web', names: [], more: ['build'] },
+  ])
+})
+
+test('a script with a current run or recent usage stays principal even with a collapse reason', () => {
+  const scripts = [
+    usedScript('package:.:dev', 'dev', 5, 1),
+    packageScript('package:.:build', 'build'),
+    { ...packageScript('package:.:prepare', 'prepare'), collapseReason: 'lifecycle' as const },
+    usedScript('package:.:release', 'release', 1, 2, { collapseReason: 'publish' }),
+    packageScript('package:.:lint', 'lint'),
+  ]
+  const runs = [
+    scriptRun('package:.:build', 'script-build', 'exited', 0),
+    scriptRun('package:.:prepare', 'script-prepare', 'running'),
+  ]
+
+  assert.deepEqual(groupNames(scripts, runs), [
+    { label: 'yira', names: ['dev', 'release', 'build', 'prepare'], more: ['lint'] },
+  ])
+})
+
+test('custom commands are always principal and keep their order', () => {
+  const groups = groupWorkspaceScripts([
+    usedScript('package:.:dev', 'dev', 2, 1),
+    customScript('custom:b', 'B'),
+    customScript('custom:a', 'A'),
+  ], 'yira', 'Custom commands', [], NOW)
+
+  const custom = groups.find((group) => group.key === 'custom')
+  assert.deepEqual(custom?.scripts.map((script) => script.name), ['B', 'A'])
+  assert.deepEqual(custom?.moreScripts, [])
+})
+
+test('the default script is the most used one when nothing is running', () => {
+  const scripts = [
+    packageScript('package:.:dev', 'dev'),
+    usedScript('package:.:test', 'test', 2, 3),
+    usedScript('package:.:build', 'build', 7, 20),
+    usedScript('package:.:old', 'old', 99, 40),
+  ]
+
+  assert.equal(getDefaultWorkspaceScriptId(scripts, [], NOW), 'package:.:build')
+  assert.equal(
+    getDefaultWorkspaceScriptId(scripts, [scriptRun('package:.:dev', 'script-dev', 'running')], NOW),
+    'package:.:dev',
+  )
+  assert.equal(getDefaultWorkspaceScriptId([scripts[0], scripts[3]], [], NOW), 'package:.:dev')
+})
+
+function renderScriptsMenu(scripts: WorkspaceScript[], selectedScriptId: string | null): string {
+  return renderToStaticMarkup(
+    <WorkspaceScriptsMenu
+      groups={groupWorkspaceScripts(scripts, 'yira', 'Custom commands', [], NOW)}
+      runsByScriptId={new Map()}
+      orphanRuns={[]}
+      adhocRuns={[]}
+      selectedScriptId={selectedScriptId}
+      pendingScriptId={null}
+      loading={false}
+      error={null}
+      onSelect={() => undefined}
+      onRunOrStop={() => undefined}
+      onStopOrphan={() => undefined}
+      onRunCommand={() => undefined}
+      onShowOutput={() => undefined}
+      onRunOrStopAdhoc={() => undefined}
+      onDismissAdhoc={() => undefined}
+      onEditCommands={() => undefined}
+    />,
+  )
+}
+
+test('the menu collapses unused scripts under a toggle unless the selected script is inside', () => {
+  const scripts = [
+    usedScript('package:.:dev', 'dev', 3, 1),
+    packageScript('package:.:build', 'build'),
+    packageScript('package:.:lint', 'lint'),
+  ]
+
+  const collapsed = renderScriptsMenu(scripts, 'package:.:dev')
+  assert.match(collapsed, /More scripts \(2\)/)
+  assert.match(collapsed, /aria-expanded="false"/)
+  assert.match(collapsed, /data-script-id="package:\.:dev"/)
+  assert.doesNotMatch(collapsed, /data-script-id="package:\.:build"/)
+  assert.doesNotMatch(collapsed, /data-script-id="package:\.:lint"/)
+
+  const expanded = renderScriptsMenu(scripts, 'package:.:lint')
+  assert.match(expanded, /More scripts \(2\)/)
+  assert.match(expanded, /aria-expanded="true"/)
+  assert.match(expanded, /data-script-id="package:\.:build"/)
+  assert.match(expanded, /data-script-id="package:\.:lint"/)
+})
+
 test('localStorage failures do not break script selection', () => {
   const throwingStorage = {
     getItem: () => { throw new Error('storage blocked') },

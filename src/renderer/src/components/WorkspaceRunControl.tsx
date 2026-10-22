@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { BookmarkPlus, ChevronDown, Play, Square, SquareTerminal, X } from 'lucide-react'
+import { BookmarkPlus, ChevronDown, ChevronRight, Play, Square, SquareTerminal, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { WorkspaceConfig, WorkspaceScript, WorkspaceScriptRun, WorkspaceScriptsSnapshot } from '@shared/types'
 
@@ -19,10 +19,13 @@ export interface WorkspaceScriptGroup {
   key: string
   label: string
   scripts: WorkspaceScript[]
+  moreScripts: WorkspaceScript[]
 }
 
 type WorkspaceScriptRunStatus = 'idle' | 'running' | 'success' | 'error' | 'exited'
 const ADHOC_PENDING_SCRIPT_ID = 'adhoc:pending'
+
+export const RECENT_SCRIPT_USAGE_MS = 30 * 24 * 60 * 60 * 1000
 
 const selectionStorageKey = (workspaceId: string): string => `yira:workspace-script-selection:${workspaceId}`
 
@@ -51,11 +54,65 @@ export function writeWorkspaceScriptSelection(
   }
 }
 
+function isScriptUsageRecent(script: WorkspaceScript, now: number): boolean {
+  if (!script.usage) return false
+  const lastRunAt = Date.parse(script.usage.lastRunAt)
+  if (Number.isNaN(lastRunAt)) return false
+  return now - lastRunAt <= RECENT_SCRIPT_USAGE_MS
+}
+
+/** Any package script in the workspace was run from Yira recently enough to be history. */
+function hasRecentScriptHistory(scripts: WorkspaceScript[], now: number): boolean {
+  return scripts.some((script) => script.source === 'package' && isScriptUsageRecent(script, now))
+}
+
+function isPrincipalPackageScript(
+  script: WorkspaceScript,
+  runs: WorkspaceScriptRun[],
+  hasHistory: boolean,
+  now: number,
+): boolean {
+  const hasRun = runs.some((run) => run.scriptId === script.id)
+  if (hasRun || isScriptUsageRecent(script, now)) return true
+  if (script.collapseReason) return false
+  return !hasHistory
+}
+
+// Run count for ranking; scripts without recent usage count as 0.
+function recentScriptRunCount(script: WorkspaceScript, now: number): number {
+  if (!isScriptUsageRecent(script, now)) return 0
+  return script.usage?.runCount ?? 0
+}
+
+function scriptUsageLastRunAt(script: WorkspaceScript): number {
+  if (!script.usage) return Number.NEGATIVE_INFINITY
+  const lastRunAt = Date.parse(script.usage.lastRunAt)
+  return Number.isNaN(lastRunAt) ? Number.NEGATIVE_INFINITY : lastRunAt
+}
+
+// Ranking shared by group ordering and default selection: run count desc, then last run desc, then original order.
+function compareScriptsByUsage(
+  left: { script: WorkspaceScript, index: number },
+  right: { script: WorkspaceScript, index: number },
+  now: number,
+): number {
+  const leftRunCount = recentScriptRunCount(left.script, now)
+  const rightRunCount = recentScriptRunCount(right.script, now)
+  if (leftRunCount !== rightRunCount) return rightRunCount - leftRunCount
+  const leftLastRunAt = scriptUsageLastRunAt(left.script)
+  const rightLastRunAt = scriptUsageLastRunAt(right.script)
+  if (leftLastRunAt !== rightLastRunAt) return rightLastRunAt - leftLastRunAt
+  return left.index - right.index
+}
+
 export function groupWorkspaceScripts(
   scripts: WorkspaceScript[],
   rootLabel: string,
   customLabel: string,
+  runs: WorkspaceScriptRun[] = [],
+  now: number = Date.now(),
 ): WorkspaceScriptGroup[] {
+  const hasHistory = hasRecentScriptHistory(scripts, now)
   const packageGroups = new Map<string, WorkspaceScript[]>()
   const customScripts: WorkspaceScript[] = []
 
@@ -71,14 +128,32 @@ export function groupWorkspaceScripts(
     packageGroups.set(directory, group)
   }
 
-  const groups = [...packageGroups.entries()].map(([directory, groupedScripts]) => ({
-    key: `package:${directory}`,
-    label: directory === '.' ? rootLabel : directory,
-    scripts: groupedScripts,
-  }))
+  const groups = [...packageGroups.entries()].map(([directory, groupedScripts]) => {
+    const principals: WorkspaceScript[] = []
+    const moreScripts: WorkspaceScript[] = []
+
+    for (const script of groupedScripts) {
+      if (isPrincipalPackageScript(script, runs, hasHistory, now)) principals.push(script)
+      else moreScripts.push(script)
+    }
+
+    const sortedScripts = hasHistory
+      ? principals
+          .map((script, index) => ({ script, index }))
+          .sort((left, right) => compareScriptsByUsage(left, right, now))
+          .map((entry) => entry.script)
+      : principals
+
+    return {
+      key: `package:${directory}`,
+      label: directory === '.' ? rootLabel : directory,
+      scripts: sortedScripts,
+      moreScripts,
+    }
+  })
 
   if (customScripts.length > 0) {
-    groups.push({ key: 'custom', label: customLabel, scripts: customScripts })
+    groups.push({ key: 'custom', label: customLabel, scripts: customScripts, moreScripts: [] })
   }
 
   return groups
@@ -87,10 +162,17 @@ export function groupWorkspaceScripts(
 export function getDefaultWorkspaceScriptId(
   scripts: WorkspaceScript[],
   runs: WorkspaceScriptRun[],
+  now: number = Date.now(),
 ): string | null {
   const scriptIds = new Set(scripts.map((script) => script.id))
   const runningScript = runs.find((run) => run.state === 'running' && scriptIds.has(run.scriptId))
-  return runningScript?.scriptId ?? scripts[0]?.id ?? null
+  if (runningScript) return runningScript.scriptId
+
+  const mostUsedScript = scripts
+    .map((script, index) => ({ script, index }))
+    .filter((entry) => entry.script.source === 'package' && isScriptUsageRecent(entry.script, now))
+    .sort((left, right) => compareScriptsByUsage(left, right, now))[0]
+  return mostUsedScript?.script.id ?? scripts[0]?.id ?? null
 }
 
 export function isSelectableWorkspaceScriptId(
@@ -145,6 +227,64 @@ function getRunStatusLabel(run: WorkspaceScriptRun, t: (key: string, options?: R
   return t('scripts.exitCode', { code: run.exitCode })
 }
 
+interface WorkspaceScriptRowProps {
+  script: WorkspaceScript
+  run: WorkspaceScriptRun | null
+  selected: boolean
+  pending: boolean
+  onSelect: (scriptId: string) => void
+  onRunOrStop: (script: WorkspaceScript, run: WorkspaceScriptRun | null) => void
+}
+
+function WorkspaceScriptRow({
+  script,
+  run,
+  selected,
+  pending,
+  onSelect,
+  onRunOrStop,
+}: WorkspaceScriptRowProps): React.ReactElement {
+  const { t } = useTranslation()
+  const status = getWorkspaceScriptRunStatus(run)
+  const running = run?.state === 'running'
+  return (
+    <div
+      data-script-id={script.id}
+      className={`flex items-center gap-1 rounded-md ${selected ? 'bg-hover-bg' : ''}`}
+    >
+      <button
+        type="button"
+        role="menuitem"
+        className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 py-1.5 text-left hover:bg-hover-bg"
+        onClick={() => onSelect(script.id)}
+      >
+        <span className="min-w-0 flex-1">
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate text-xs text-text-display">{script.name}</span>
+            {run && (
+              <span className={`inline-flex shrink-0 items-center gap-1 text-[10px] ${statusTextClass(status)}`}>
+                <span className={`size-1.5 rounded-full ${statusDotClass(status)}`} />
+                <span>{getRunStatusLabel(run, t)}</span>
+              </span>
+            )}
+          </span>
+          <span className="block truncate font-mono text-[10px] text-text-disabled" title={script.command}>{script.command}</span>
+        </span>
+      </button>
+      <button
+        type="button"
+        className="mr-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-text-secondary transition-colors hover:bg-bg-primary hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
+        onClick={() => onRunOrStop(script, run)}
+        disabled={pending}
+        title={running ? t('scripts.stopScript') : t('scripts.runScript')}
+        aria-label={`${t(running ? 'scripts.stopScript' : 'scripts.runScript')} ${script.name}`}
+      >
+        {running ? <Square size={12} /> : <Play size={12} />}
+      </button>
+    </div>
+  )
+}
+
 interface WorkspaceScriptsMenuProps {
   groups: WorkspaceScriptGroup[]
   runsByScriptId: Map<string, WorkspaceScriptRun>
@@ -187,11 +327,29 @@ export function WorkspaceScriptsMenu({
   onEditCommands,
 }: WorkspaceScriptsMenuProps): React.ReactElement {
   const { t } = useTranslation()
-  const hasScripts = groups.some((group) => group.scripts.length > 0)
+  const hasScripts = groups.some((group) => group.scripts.length > 0 || group.moreScripts.length > 0)
   const isEmpty = !hasScripts && orphanRuns.length === 0
   const [commandInput, setCommandInput] = useState('')
   const [historyIndex, setHistoryIndex] = useState<number | null>(null)
+  const [expandedGroups, setExpandedGroups] = useState(() => {
+    const initial = new Set<string>()
+    for (const group of groups) {
+      if (selectedScriptId && group.moreScripts.some((script) => script.id === selectedScriptId)) {
+        initial.add(group.key)
+      }
+    }
+    return initial
+  })
   const commandDraft = useRef('')
+
+  const toggleGroupExpanded = (groupKey: string) => {
+    setExpandedGroups((current) => {
+      const next = new Set(current)
+      if (next.has(groupKey)) next.delete(groupKey)
+      else next.add(groupKey)
+      return next
+    })
+  }
 
   const handleCommandKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Enter') {
@@ -328,54 +486,47 @@ export function WorkspaceScriptsMenu({
         </div>
       )}
 
-      {groups.map((group) => (
-        <div key={group.key} role="group" aria-label={group.label} className="mb-1 last:mb-0">
-          <div className="px-2.5 pb-1 pt-2 font-mono text-[10px] uppercase tracking-[0.08em] text-text-disabled">{group.label}</div>
-          {group.scripts.map((script) => {
-            const run = runsByScriptId.get(script.id) ?? null
-            const status = getWorkspaceScriptRunStatus(run)
-            const running = run?.state === 'running'
-            const pending = pendingScriptId === script.id
-            return (
-              <div
+      {groups.map((group) => {
+        const groupExpanded = expandedGroups.has(group.key)
+        return (
+          <div key={group.key} role="group" aria-label={group.label} className="mb-1 last:mb-0">
+            <div className="px-2.5 pb-1 pt-2 font-mono text-[10px] uppercase tracking-[0.08em] text-text-disabled">{group.label}</div>
+            {group.scripts.map((script) => (
+              <WorkspaceScriptRow
                 key={script.id}
-                data-script-id={script.id}
-                className={`flex items-center gap-1 rounded-md ${selectedScriptId === script.id ? 'bg-hover-bg' : ''}`}
+                script={script}
+                run={runsByScriptId.get(script.id) ?? null}
+                selected={selectedScriptId === script.id}
+                pending={pendingScriptId === script.id}
+                onSelect={onSelect}
+                onRunOrStop={onRunOrStop}
+              />
+            ))}
+            {group.moreScripts.length > 0 && (
+              <button
+                type="button"
+                className="flex w-full items-center gap-1.5 rounded-md px-2.5 py-1.5 text-left text-[11px] text-text-secondary hover:bg-hover-bg hover:text-text-display"
+                onClick={() => toggleGroupExpanded(group.key)}
+                aria-expanded={groupExpanded}
               >
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 py-1.5 text-left hover:bg-hover-bg"
-                  onClick={() => onSelect(script.id)}
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="flex min-w-0 items-center gap-1.5">
-                      <span className="truncate text-xs text-text-display">{script.name}</span>
-                      {run && (
-                        <span className={`inline-flex shrink-0 items-center gap-1 text-[10px] ${statusTextClass(status)}`}>
-                          <span className={`size-1.5 rounded-full ${statusDotClass(status)}`} />
-                          <span>{getRunStatusLabel(run, t)}</span>
-                        </span>
-                      )}
-                    </span>
-                    <span className="block truncate font-mono text-[10px] text-text-disabled" title={script.command}>{script.command}</span>
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  className="mr-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-text-secondary transition-colors hover:bg-bg-primary hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
-                  onClick={() => onRunOrStop(script, run)}
-                  disabled={pending}
-                  title={running ? t('scripts.stopScript') : t('scripts.runScript')}
-                  aria-label={`${t(running ? 'scripts.stopScript' : 'scripts.runScript')} ${script.name}`}
-                >
-                  {running ? <Square size={12} /> : <Play size={12} />}
-                </button>
-              </div>
-            )
-          })}
-        </div>
-      ))}
+                {groupExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                {t('scripts.moreScripts', { count: group.moreScripts.length })}
+              </button>
+            )}
+            {groupExpanded && group.moreScripts.map((script) => (
+              <WorkspaceScriptRow
+                key={script.id}
+                script={script}
+                run={runsByScriptId.get(script.id) ?? null}
+                selected={selectedScriptId === script.id}
+                pending={pendingScriptId === script.id}
+                onSelect={onSelect}
+                onRunOrStop={onRunOrStop}
+              />
+            ))}
+          </div>
+        )
+      })}
 
       {orphanRuns.length > 0 && (
         <div role="group" aria-label={t('scripts.otherProcesses')} className="mb-1 border-t border-border pt-1">
@@ -548,8 +699,8 @@ export function WorkspaceRunControl({
   ), [runs])
   const rootLabel = getWorkspaceRootLabel(workspaceConfig.rootFolderPath, t('scripts.packageJson'))
   const groups = useMemo(
-    () => groupWorkspaceScripts(scripts, rootLabel, t('scripts.customCommands')),
-    [rootLabel, scripts, t],
+    () => groupWorkspaceScripts(scripts, rootLabel, t('scripts.customCommands'), runs),
+    [rootLabel, scripts, t, runs],
   )
   const error = actionError ?? snapshotError
   const errorTitle = error || undefined

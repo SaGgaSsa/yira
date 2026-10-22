@@ -403,6 +403,16 @@ export interface WorkspaceCustomScript {
 
 export type WorkspaceScriptSource = 'package' | 'custom'
 
+/** Why a package script starts under "More scripts": npm runs it on its own, or it publishes. */
+export type WorkspaceScriptCollapseReason = 'lifecycle' | 'publish'
+
+/** Runs of a script started from Yira in one workspace. */
+export interface WorkspaceScriptUsage {
+  runCount: number
+  /** ISO timestamp of the last run started from Yira. */
+  lastRunAt: string
+}
+
 /** A runnable workspace script, discovered from package.json or saved by the user. */
 export interface WorkspaceScript {
   /** Stable id: `package:<relative dir or .>:<script name>` or `custom:<custom script id>`. */
@@ -415,6 +425,10 @@ export interface WorkspaceScript {
   cwd: string
   /** Directory relative to the workspace root for package scripts; `.` for the root. */
   packageDirectory?: string
+  /** Set on package scripts that stay collapsed unless the user runs them. */
+  collapseReason?: WorkspaceScriptCollapseReason
+  /** Absent when the script was never run from Yira in this workspace. */
+  usage?: WorkspaceScriptUsage
 }
 
 export type WorkspaceScriptRunState = 'running' | 'exited'

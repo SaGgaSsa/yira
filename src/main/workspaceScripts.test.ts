@@ -142,6 +142,79 @@ test('discovers package scripts in workspace order with package manager selectio
   assert.equal(defaultScripts[0]?.command, 'npm run test')
 })
 
+async function collapseReasons(scripts: Record<string, string>): Promise<Record<string, string | undefined>> {
+  const root = await mkdtemp(join(tmpdir(), 'yira-workspace-collapse-'))
+  try {
+    await writePackage(root, { scripts })
+    const discovered = await discoverWorkspaceScripts({ rootFolderPath: root })
+    return Object.fromEntries(discovered.map((script) => [script.name, script.collapseReason]))
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+}
+
+test('collapses npm lifecycle hooks and pre/post hooks of existing scripts', async () => {
+  const reasons = await collapseReasons({
+    prepare: 'husky',
+    postinstall: 'node setup.js',
+    prepublishOnly: 'npm run build',
+    test: 'vitest',
+    pretest: 'echo before',
+    posttest: 'echo after',
+    prebuild: 'echo no build script here',
+    preview: 'vite preview',
+    postcss: 'postcss src',
+    dev: 'vite',
+  })
+
+  assert.equal(reasons.prepare, 'lifecycle')
+  assert.equal(reasons.postinstall, 'lifecycle')
+  assert.equal(reasons.prepublishOnly, 'lifecycle')
+  assert.equal(reasons.pretest, 'lifecycle')
+  assert.equal(reasons.posttest, 'lifecycle')
+  assert.equal(reasons.prebuild, undefined)
+  assert.equal(reasons.preview, undefined)
+  assert.equal(reasons.postcss, undefined)
+  assert.equal(reasons.test, undefined)
+  assert.equal(reasons.dev, undefined)
+})
+
+test('collapses scripts that publish, directly or through another script', async () => {
+  const reasons = await collapseReasons({
+    build: 'vite build',
+    'release:win': 'npm run build && electron-builder --win --publish always',
+    'dist:win': 'npm run build && electron-builder --win --publish never',
+    ship: 'pnpm publish --access public',
+    semantic: 'semantic-release',
+    chained: 'npm run "release:win"',
+    deeper: 'yarn run chained',
+    loopA: 'npm run loopB',
+    loopB: 'npm run loopA',
+    prepublish: 'npm publish',
+  })
+
+  assert.equal(reasons['release:win'], 'publish')
+  assert.equal(reasons.ship, 'publish')
+  assert.equal(reasons.semantic, 'publish')
+  assert.equal(reasons.chained, 'publish')
+  assert.equal(reasons.deeper, 'publish')
+  assert.equal(reasons['dist:win'], undefined)
+  assert.equal(reasons.build, undefined)
+  assert.equal(reasons.loopA, undefined)
+  assert.equal(reasons.loopB, undefined)
+  assert.equal(reasons.prepublish, 'lifecycle')
+})
+
+test('omits collapseReason for scripts that need no collapsing', async (context) => {
+  const root = await mkdtemp(join(tmpdir(), 'yira-workspace-collapse-'))
+  context.after(() => rm(root, { recursive: true, force: true }))
+  await writePackage(root, { scripts: { dev: 'vite' } })
+
+  const [script] = await discoverWorkspaceScripts({ rootFolderPath: root })
+
+  assert.equal('collapseReason' in script, false)
+})
+
 test('returns custom scripts from home without a root and creates stable tile ids', async () => {
   const script = { id: 'standalone', name: 'Standalone', command: 'echo ready' }
   const scripts = await discoverWorkspaceScripts({ customScripts: [script] })

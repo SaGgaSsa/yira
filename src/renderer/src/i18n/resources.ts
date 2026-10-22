@@ -150,6 +150,7 @@ type TranslationResources = {
     title: string
     packageJson: string
     customCommands: string
+    moreScripts: string
     editCommands: string
     addCommand: string
     otherProcesses: string
@@ -1175,6 +1176,7 @@ const en: TranslationResources = {
     title: 'Scripts',
     packageJson: 'package.json',
     customCommands: 'Custom commands',
+    moreScripts: 'More scripts ({{count}})',
     editCommands: 'Edit commands…',
     addCommand: 'Add command…',
     otherProcesses: 'Other processes',
@@ -2200,6 +2202,7 @@ const es: TranslationResources = {
     title: 'Scripts',
     packageJson: 'package.json',
     customCommands: 'Comandos propios',
+    moreScripts: 'Más scripts ({{count}})',
     editCommands: 'Editar comandos…',
     addCommand: 'Agregar comando…',
     otherProcesses: 'Otros procesos',
