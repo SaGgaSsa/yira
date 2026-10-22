@@ -10,12 +10,14 @@ import type {
   WorkspaceScript,
   WorkspaceScriptRun,
   WorkspaceScriptsSnapshot,
+  WorkspaceScriptUsage,
 } from '@shared/types'
 import type { TerminalSessionTarget } from '@shared/terminalSessionIdentity'
 import { normalizeWorkspaceConfig } from '@shared/workspaceConfig'
 import { discoverWorkspaceScripts, workspaceScriptTileId } from '../workspaceScripts'
 import { normalizeAgentOpaqueId } from '../agents/query'
 import { CONFIG_PATH } from '../paths'
+import { createWorkspaceScriptUsageStore, type WorkspaceScriptUsageStore } from '../workspaceScriptUsage'
 import {
   createWorkspaceScriptSession,
   destroyWorkspaceScriptSession,
@@ -39,6 +41,7 @@ export interface ScriptsIPCOptions {
   destroySession?: (target: TerminalSessionTarget) => Promise<void>
   listSessions?: (workspaceId: string) => Promise<TerminalSessionTarget[]>
   subscribeSessionEvents?: (listener: (event: WorkspaceScriptSessionEvent) => void) => () => void
+  usageStore?: WorkspaceScriptUsageStore
 }
 
 interface ScriptsSubscription {
@@ -125,6 +128,7 @@ export function registerScriptsIPC(options: ScriptsIPCOptions = {}): void {
   const destroySession = options.destroySession ?? destroyWorkspaceScriptSession
   const listSessions = options.listSessions ?? listWorkspaceScriptSessions
   const subscribeSessionEvents = options.subscribeSessionEvents ?? subscribeWorkspaceScriptSessionEvents
+  const usageStore = options.usageStore ?? createWorkspaceScriptUsageStore()
 
   const runs = new Map<string, WorkspaceScriptRun>()
   const adhocDefinitions = new Map<string, WorkspaceAdhocScriptDefinition>()
@@ -221,9 +225,13 @@ export function registerScriptsIPC(options: ScriptsIPCOptions = {}): void {
   async function buildSnapshot(workspaceId: string): Promise<WorkspaceScriptsSnapshot> {
     const scripts = await discoverForWorkspace(workspaceId)
     await reconcileRuns(workspaceId, scripts)
+    const usageByScript = await usageStore.read(workspaceId).catch((): Record<string, WorkspaceScriptUsage> => ({}))
     return {
       workspaceId,
-      scripts,
+      scripts: scripts.map((script) => {
+        const usage = usageByScript[script.id]
+        return usage ? { ...script, usage } : script
+      }),
       runs: [...runs.entries()]
         .filter(([key]) => key.startsWith(`[${JSON.stringify(workspaceId)},`))
         .map(([, run]) => run),
@@ -325,6 +333,7 @@ export function registerScriptsIPC(options: ScriptsIPCOptions = {}): void {
         }
         runs.set(key, run)
         if (adhocDefinition) await trimAdhocRuns(workspaceId)
+        else await usageStore.record(workspaceId, scriptId).catch(() => undefined)
         emitWorkspaceSnapshot(workspaceId)
         return run
       } catch (error) {

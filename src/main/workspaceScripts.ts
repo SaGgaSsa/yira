@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { access, readFile, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
-import type { WorkspaceCustomScript, WorkspaceScript } from '@shared/types'
+import type { WorkspaceCustomScript, WorkspaceScript, WorkspaceScriptCollapseReason } from '@shared/types'
 
 export interface DiscoverWorkspaceScriptsInput {
   rootFolderPath?: string
@@ -127,6 +127,57 @@ function relativeDirectory(rootDirectory: string, directory: string): string {
   return relativePath ? relativePath.split(sep).join('/') : '.'
 }
 
+const LIFECYCLE_SCRIPT_NAMES = new Set([
+  'preinstall', 'install', 'postinstall',
+  'preuninstall', 'uninstall', 'postuninstall',
+  'prepublish', 'prepublishOnly', 'publish', 'postpublish',
+  'preprepare', 'prepare', 'postprepare',
+  'prepack', 'pack', 'postpack',
+  'preversion', 'version', 'postversion',
+  'dependencies',
+])
+const PUBLISH_COMMAND_PATTERNS = [
+  /\b(?:npm|pnpm|yarn|bun)\s+publish\b/,
+  /--publish(?:\s+|=)(?:always|onTag|onTagOrDraft)\b/,
+  /\b(?:semantic-release|release-it|changeset\s+publish|lerna\s+publish|vsce\s+publish|ovsx\s+publish|gh\s+release\s+create)\b/,
+]
+const RUN_SCRIPT_PATTERN = /\b(?:npm|pnpm|yarn|bun)\s+run\s+(?:"([^"]+)"|'([^']+)'|([^\s&|;"']+))/g
+
+/** A hook npm runs by itself: a known lifecycle name or `pre`/`post` around another script. */
+function isLifecycleScript(name: string, scriptNames: ReadonlySet<string>): boolean {
+  if (LIFECYCLE_SCRIPT_NAMES.has(name)) return true
+
+  const base = name.startsWith('pre') ? name.slice(3) : name.startsWith('post') ? name.slice(4) : undefined
+  return base !== undefined && (scriptNames.has(base) || LIFECYCLE_SCRIPT_NAMES.has(base))
+}
+
+function runScriptReferences(command: string): string[] {
+  return [...command.matchAll(RUN_SCRIPT_PATTERN)].map((match) => match[1] ?? match[2] ?? match[3])
+}
+
+/** Whether the script publishes something, directly or through another script it runs. */
+function isPublishScript(
+  name: string,
+  commands: ReadonlyMap<string, string>,
+  visited: Set<string> = new Set(),
+): boolean {
+  const command = commands.get(name)
+  if (command === undefined || visited.has(name)) return false
+  visited.add(name)
+
+  return PUBLISH_COMMAND_PATTERNS.some((pattern) => pattern.test(command))
+    || runScriptReferences(command).some((reference) => isPublishScript(reference, commands, visited))
+}
+
+function collapseReasonFor(
+  name: string,
+  commands: ReadonlyMap<string, string>,
+): WorkspaceScriptCollapseReason | undefined {
+  if (isLifecycleScript(name, new Set(commands.keys()))) return 'lifecycle'
+  if (isPublishScript(name, commands)) return 'publish'
+  return undefined
+}
+
 function packageScriptCommand(packageManager: PackageManager, name: string): string | undefined {
   if (!name || name.includes('"') || name.includes('\u0000')) return undefined
 
@@ -143,13 +194,16 @@ async function discoverPackageScripts(rootDirectory: string, directories: string
 
     const packageManager = await resolvePackageManager(manifest, directory, rootDirectory)
     const packageDirectory = relativeDirectory(rootDirectory, directory)
-
+    const commands = new Map<string, string>()
     for (const [name, value] of Object.entries(manifest.scripts)) {
-      if (typeof value !== 'string' || !value.trim()) continue
+      if (typeof value === 'string' && value.trim()) commands.set(name, value)
+    }
 
+    for (const [name] of commands) {
       const command = packageScriptCommand(packageManager, name)
       if (!command) continue
 
+      const collapseReason = collapseReasonFor(name, commands)
       scripts.push({
         id: `package:${packageDirectory}:${name}`,
         name,
@@ -157,6 +211,7 @@ async function discoverPackageScripts(rootDirectory: string, directories: string
         source: 'package',
         cwd: directory,
         packageDirectory,
+        ...(collapseReason ? { collapseReason } : {}),
       })
     }
   }

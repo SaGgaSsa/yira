@@ -9,9 +9,11 @@ import type {
   WorkspaceScript,
   WorkspaceScriptRun,
   WorkspaceScriptsSnapshot,
+  WorkspaceScriptUsage,
 } from '@shared/types'
 import type { TerminalSessionTarget } from '@shared/terminalSessionIdentity'
 import { workspaceScriptTileId } from '../workspaceScripts'
+import type { WorkspaceScriptUsageStore } from '../workspaceScriptUsage'
 import type { WorkspaceScriptSessionEvent } from './terminal'
 
 type IpcHandler = (event: { sender: FakeWebContents }, ...args: unknown[]) => unknown
@@ -52,6 +54,7 @@ interface ScriptsHarness {
   liveSessions: TerminalSessionTarget[]
   created: Array<{ target: TerminalSessionTarget; command: string; cwd: string }>
   destroyed: TerminalSessionTarget[]
+  usage: Map<string, Record<string, WorkspaceScriptUsage>>
   emitSessionEvent: (event: WorkspaceScriptSessionEvent) => void
 }
 
@@ -90,7 +93,23 @@ function loadScriptsIPC(ipcMain: FakeIpcMain, harness: Omit<ScriptsHarness, 'ipc
   }
 }
 
-function createHarness(): ScriptsHarness {
+function createMemoryUsageStore(
+  usage: Map<string, Record<string, WorkspaceScriptUsage>>,
+): WorkspaceScriptUsageStore {
+  return {
+    read: async (workspaceId) => ({ ...usage.get(workspaceId) }),
+    record: async (workspaceId, scriptId, at = new Date()) => {
+      const workspaceUsage = usage.get(workspaceId) ?? {}
+      workspaceUsage[scriptId] = {
+        runCount: (workspaceUsage[scriptId]?.runCount ?? 0) + 1,
+        lastRunAt: at.toISOString(),
+      }
+      usage.set(workspaceId, workspaceUsage)
+    },
+  }
+}
+
+function createHarness(usageStore?: WorkspaceScriptUsageStore): ScriptsHarness {
   const ipcMain = new FakeIpcMain()
   const scripts: WorkspaceScript[] = [
     {
@@ -111,6 +130,7 @@ function createHarness(): ScriptsHarness {
   const liveSessions: TerminalSessionTarget[] = []
   const created: ScriptsHarness['created'] = []
   const destroyed: TerminalSessionTarget[] = []
+  const usage = new Map<string, Record<string, WorkspaceScriptUsage>>()
   let emitSessionEvent = (_event: WorkspaceScriptSessionEvent): void => undefined
   const harness: ScriptsHarness = {
     ipcMain,
@@ -118,6 +138,7 @@ function createHarness(): ScriptsHarness {
     liveSessions,
     created,
     destroyed,
+    usage,
     get emitSessionEvent() { return emitSessionEvent },
     set emitSessionEvent(listener) { emitSessionEvent = listener },
   }
@@ -131,6 +152,7 @@ function createHarness(): ScriptsHarness {
       customScripts: [],
     }),
     discover: async () => scripts,
+    usageStore: usageStore ?? createMemoryUsageStore(usage),
     createSession: async (target, spec) => {
       created.push({ target, command: spec.command, cwd: spec.cwd })
       if (!liveSessions.some((session) => session.tileId === target.tileId)) liveSessions.push(target)
@@ -177,6 +199,48 @@ test('snapshot combines discovered scripts and known executions', async () => {
   const snapshot = await harness.ipcMain.call('scripts:snapshot', sender, 'workspace-a') as WorkspaceScriptsSnapshot
   assert.deepEqual(snapshot.scripts.map((script) => script.id), ['package:.:dev', 'custom:check'])
   assert.deepEqual(snapshot.runs, [run])
+})
+
+test('snapshot attaches the run count of scripts started from Yira and ignores ad-hoc commands', async () => {
+  const harness = createHarness()
+  const sender = new FakeWebContents(17)
+
+  const first = await harness.ipcMain.call('scripts:run', sender, {
+    workspaceId: 'workspace-a',
+    scriptId: 'package:.:dev',
+  }) as WorkspaceScriptRun
+  harness.liveSessions.splice(0)
+  harness.emitSessionEvent({
+    type: 'exit',
+    target: { workspaceId: 'workspace-a', tileId: first.tileId },
+    exitEvent: { exitCode: 0 },
+  })
+  await harness.ipcMain.call('scripts:run', sender, { workspaceId: 'workspace-a', scriptId: 'package:.:dev' })
+  await harness.ipcMain.call('scripts:run', sender, { workspaceId: 'workspace-a', scriptId: 'custom:check' })
+  await harness.ipcMain.call('scripts:runCommand', sender, { workspaceId: 'workspace-a', command: 'git pull' })
+
+  const snapshot = await harness.ipcMain.call('scripts:snapshot', sender, 'workspace-a') as WorkspaceScriptsSnapshot
+  const runCounts = Object.fromEntries(snapshot.scripts.map((script) => [script.id, script.usage?.runCount]))
+  assert.deepEqual(runCounts, { 'package:.:dev': 2, 'custom:check': 1 })
+  assert.deepEqual(Object.keys(harness.usage.get('workspace-a') ?? {}).sort(), ['custom:check', 'package:.:dev'])
+  assert.ok(Date.parse(snapshot.scripts[0].usage?.lastRunAt ?? '') > 0)
+})
+
+test('run still starts the script when recording usage fails', async () => {
+  const harness = createHarness({
+    read: async () => { throw new Error('read failed') },
+    record: async () => { throw new Error('disk full') },
+  })
+  const sender = new FakeWebContents(18)
+
+  const run = await harness.ipcMain.call('scripts:run', sender, {
+    workspaceId: 'workspace-a',
+    scriptId: 'package:.:dev',
+  }) as WorkspaceScriptRun
+  const snapshot = await harness.ipcMain.call('scripts:snapshot', sender, 'workspace-a') as WorkspaceScriptsSnapshot
+
+  assert.equal(run.state, 'running')
+  assert.equal(snapshot.scripts[0].usage, undefined)
 })
 
 test('run rejects unknown script ids and launches only the discovered command and cwd', async () => {
