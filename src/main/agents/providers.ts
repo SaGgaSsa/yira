@@ -120,6 +120,11 @@ function buildFixedProviderCommand(
     else args.push('resume', resumeId)
   }
 
+  // Codex defaults to the alternate screen, which has no scrollback, so
+  // terminal search would only see the visible screen. The flag is accepted
+  // after `resume <id>` too.
+  if (provider === 'codex' && !args.includes('--no-alt-screen')) args.push('--no-alt-screen')
+
   return {
     provider,
     command: AGENT_PROVIDER_COMMANDS[provider],

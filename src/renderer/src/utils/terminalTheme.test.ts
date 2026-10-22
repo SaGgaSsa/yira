@@ -1,4 +1,4 @@
-import { getTerminalContainerBackground, getXtermTheme, resolveTerminalThemeId } from './terminalTheme'
+import { getTerminalContainerBackground, getTerminalSearchDecorations, getXtermTheme, resolveTerminalThemeId } from './terminalTheme'
 
 if (getTerminalContainerBackground('light') !== '#f7f7f2') {
   throw new Error('terminal container background must follow the selected theme')
@@ -29,3 +29,14 @@ if (resolveTerminalThemeId('yira-default', 'default') !== 'yira-default') throw 
 if (resolveTerminalThemeId('yira-default', 'default', true) !== 'light') throw new Error('default terminals must follow light mode')
 if (resolveTerminalThemeId('yira-default', 'nord', true) !== 'nord') throw new Error('presets keep their own palette on a light surface')
 if (resolveTerminalThemeId('high-contrast', 'default', true) !== 'high-contrast') throw new Error('explicit overrides must be preserved on a light surface')
+
+// Search highlights must be #RRGGBB because the search addon rejects alpha.
+for (const id of ['yira-default', 'light', 'dracula'] as const) {
+  const decorations = getTerminalSearchDecorations(id)
+  for (const color of Object.values(decorations)) {
+    if (!/^#[\da-f]{6}$/i.test(color)) throw new Error('search decorations must be #RRGGBB hex colors')
+  }
+}
+if (getTerminalSearchDecorations('yira-default').activeMatchBorder !== '#7ed9d1') {
+  throw new Error('the active search match must use the theme cyan')
+}

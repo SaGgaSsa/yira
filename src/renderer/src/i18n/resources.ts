@@ -403,6 +403,7 @@ type TranslationResources = {
     shortcutFocusLeftSplitPanel: string
     shortcutFocusRightSplitPanel: string
     shortcutNavigation: string
+    shortcutFindInTerminal: string
     shortcutNextTab: string
     shortcutNewAgentSession: string
     shortcutOpenHome: string
@@ -823,6 +824,14 @@ type TranslationResources = {
     wakeOnLanHostOnline: string
     wakeOnLanSshReady: string
     wakeOnLanUnconfirmed: string
+    searchPlaceholder: string
+    searchNoResults: string
+    searchPrevious: string
+    searchNext: string
+    searchCaseSensitive: string
+    searchWholeWord: string
+    searchRegex: string
+    searchClose: string
   }
   canvas: {
     clearSelection: string
@@ -1419,6 +1428,7 @@ const en: TranslationResources = {
     shortcutFocusLeftSplitPanel: 'Focus left split panel',
     shortcutFocusRightSplitPanel: 'Focus right split panel',
     shortcutNavigation: 'Navigation',
+    shortcutFindInTerminal: 'Find in terminal',
     shortcutNextTab: 'Next tab',
     shortcutNewAgentSession: 'New agent session',
     shortcutOpenHome: 'Open home',
@@ -1839,6 +1849,14 @@ const en: TranslationResources = {
     wakeOnLanHostOnline: 'Computer responding; waiting for SSH…',
     wakeOnLanSshReady: 'SSH ready; connecting…',
     wakeOnLanUnconfirmed: 'No response; activation not confirmed',
+    searchPlaceholder: 'Find',
+    searchNoResults: 'No results',
+    searchPrevious: 'Previous match',
+    searchNext: 'Next match',
+    searchCaseSensitive: 'Match case',
+    searchWholeWord: 'Whole word',
+    searchRegex: 'Regular expression',
+    searchClose: 'Close search',
   },
   canvas: {
     clearSelection: 'Clear Selection',
@@ -2435,6 +2453,7 @@ const es: TranslationResources = {
     shortcutFocusLeftSplitPanel: 'Enfocar panel dividido izquierdo',
     shortcutFocusRightSplitPanel: 'Enfocar panel dividido derecho',
     shortcutNavigation: 'Navegación',
+    shortcutFindInTerminal: 'Buscar en la terminal',
     shortcutNextTab: 'Pestaña siguiente',
     shortcutNewAgentSession: 'Nueva sesión de agente',
     shortcutOpenHome: 'Abrir inicio',
@@ -2855,6 +2874,14 @@ const es: TranslationResources = {
     wakeOnLanHostOnline: 'Equipo responde; esperando SSH…',
     wakeOnLanSshReady: 'SSH listo; conectando…',
     wakeOnLanUnconfirmed: 'Sin respuesta; activación no confirmada',
+    searchPlaceholder: 'Buscar',
+    searchNoResults: 'Sin resultados',
+    searchPrevious: 'Coincidencia anterior',
+    searchNext: 'Coincidencia siguiente',
+    searchCaseSensitive: 'Distinguir mayúsculas',
+    searchWholeWord: 'Palabra completa',
+    searchRegex: 'Expresión regular',
+    searchClose: 'Cerrar búsqueda',
   },
   canvas: {
     clearSelection: 'Limpiar selección',

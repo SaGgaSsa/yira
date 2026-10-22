@@ -34,6 +34,12 @@ export function getShortcutCatalog(shortcuts: ShortcutSettings = DEFAULT_SHORTCU
     ],
   },
   {
+    label: 'Terminal',
+    items: [
+      { label: 'Find in terminal', keys: formatAccelerator(shortcuts.findInTerminal), id: 'findInTerminal' },
+    ],
+  },
+  {
     label: 'Window',
     items: [
       { label: 'Toggle fullscreen', keys: 'F11' },

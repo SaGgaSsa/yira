@@ -22,6 +22,7 @@ import {
 import type { TerminalRuntime, TerminalRuntimeSnapshot, TerminalRuntimeViewOptions } from '@/utils/terminalRuntime'
 import type { TerminalRuntimeRegistry } from '@/utils/terminalRuntimeRegistry'
 import { destroyTerminalRuntime } from '@/utils/terminalRuntimeCleanup'
+import { TerminalSearchBar } from './TerminalSearchBar'
 
 interface Props {
   tile: TileState
@@ -354,6 +355,8 @@ export function TerminalTileWrapper({
   const [reconnectPending, setReconnectPending] = useState(false)
   const [acquireGeneration, setAcquireGeneration] = useState(0)
   const [preparationStatus, setPreparationStatus] = useState<RemotePreparationStatus | null>(null)
+  // `searchRequest` counts shortcut presses; 0 means the search bar is closed.
+  const [searchRequest, setSearchRequest] = useState(0)
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number; selectionText: string; linkTarget?: TerminalLinkTarget } | null>(null)
 
   const onFocusRef = useRef(onFocus)
@@ -430,6 +433,11 @@ export function TerminalTileWrapper({
     : null
   const activeRuntimeRef = useRef<TerminalRuntime | null>(null)
   activeRuntimeRef.current = activeRuntime
+
+  useEffect(() => {
+    setSearchRequest(0)
+    return activeRuntime?.subscribeSearchRequests(() => setSearchRequest((current) => current + 1))
+  }, [activeRuntime])
 
   const pendingSnapshot = useMemo<TerminalRuntimeSnapshot>(() => ({
     ...EMPTY_RUNTIME_SNAPSHOT,
@@ -827,6 +835,13 @@ export function TerminalTileWrapper({
           void reconnectRemoteTerminal()
         }}
       />
+      {activeRuntime && searchRequest > 0 && (
+        <TerminalSearchBar
+          runtime={activeRuntime}
+          openRequest={searchRequest}
+          onClose={() => setSearchRequest(0)}
+        />
+      )}
       {menuPosition && (
         <ContextMenu
           x={menuPosition.x}

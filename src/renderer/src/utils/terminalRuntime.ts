@@ -9,7 +9,7 @@ import { DEFAULT_TERMINAL_THEME_ID, type TerminalThemeId } from '@shared/termina
 import { createTerminalFitScheduler, type TerminalFitAddonLike, type TerminalFitResult } from './terminalFitScheduler'
 import { createTerminalReplayController, type TerminalReplayController } from './terminalReplay'
 import { sanitizeTerminalReplayBuffer } from './terminalReplaySanitizer'
-import { getXtermTheme } from './terminalTheme'
+import { getTerminalSearchDecorations, getXtermTheme } from './terminalTheme'
 import type { TerminalRuntimeHandle } from './terminalRuntimeRegistry'
 
 export interface TerminalLike {
@@ -35,6 +35,31 @@ export interface TerminalLike {
 }
 
 export type FitAddonLike = TerminalFitAddonLike
+
+export interface TerminalSearchOptions {
+  caseSensitive: boolean
+  wholeWord: boolean
+  regex: boolean
+  /** Keep the current match while it still matches the growing term. Only affects `findNext`. */
+  incremental?: boolean
+}
+
+export interface TerminalSearchResults {
+  /** Index of the active match, or -1 when there is none or the highlight limit was exceeded. */
+  resultIndex: number
+  resultCount: number
+}
+
+type SearchAddonOptions = TerminalSearchOptions & {
+  decorations: ReturnType<typeof getTerminalSearchDecorations>
+}
+
+export interface SearchAddonLike {
+  findNext: (term: string, options: SearchAddonOptions) => boolean
+  findPrevious: (term: string, options: SearchAddonOptions) => boolean
+  clearDecorations: () => void
+  onDidChangeResults: (callback: (results: TerminalSearchResults) => void) => DisposableLike
+}
 
 export interface ResizeObserverLike {
   observe: (target: HTMLElement) => void
@@ -68,6 +93,8 @@ export interface TerminalRuntimeDependencies {
   createElement: () => HTMLDivElement
   createTerminal: (options: { cols: number; rows: number }) => TerminalLike
   createFitAddon: () => FitAddonLike
+  /** Optional: runtimes without a search addon ignore search calls. */
+  createSearchAddon?: () => SearchAddonLike
   createResizeObserver: (callback: () => void) => ResizeObserverLike
   getParkingRoot: () => HTMLElement | null
   whenFontsReady: () => Promise<void>
@@ -138,6 +165,15 @@ export interface TerminalRuntime extends TerminalRuntimeHandle {
   getSelection: () => string
   selectAll: () => void
   paste: (data: string) => void
+  /** Search the buffer and highlight every match. Returns whether a match was found. */
+  findNext: (term: string, options: TerminalSearchOptions) => boolean
+  findPrevious: (term: string, options: TerminalSearchOptions) => boolean
+  /** Remove the highlights and the match selection. */
+  clearSearch: () => void
+  subscribeSearchResults: (listener: (results: TerminalSearchResults) => void) => () => void
+  /** Ask the host UI to open (or refocus) the search bar for this terminal. */
+  requestSearch: () => void
+  subscribeSearchRequests: (listener: () => void) => () => void
   setReconnecting: (reconnecting: boolean) => void
   acknowledgeAgentAlert: () => Promise<void>
   openBrowserTile: (url: string) => void
@@ -273,6 +309,7 @@ function createRuntime(
   created: TerminalCreateResult,
   terminal: TerminalLike,
   fitAddon: FitAddonLike,
+  searchAddon: SearchAddonLike | null,
   runtimeRoot: HTMLDivElement,
 ): TerminalRuntime {
   let currentIdentity: TerminalSessionIdentity | null = created.identity
@@ -296,6 +333,8 @@ function createRuntime(
   let disposePromise: Promise<void> | null = null
   let fontWaitGeneration = 0
   const listeners = new Set<() => void>()
+  const searchResultListeners = new Set<(results: TerminalSearchResults) => void>()
+  const searchRequestListeners = new Set<() => void>()
   const fitScheduler = dependencies.createFitScheduler?.()
     ?? dependencies.fitScheduler
     ?? createTerminalFitScheduler({
@@ -757,6 +796,35 @@ function createRuntime(
     }
   }
 
+  const runSearch = (
+    direction: 'findNext' | 'findPrevious',
+    term: string,
+    options: TerminalSearchOptions,
+  ): boolean => {
+    if (disposed || !searchAddon) return false
+    try {
+      // Read the theme at call time so highlights follow theme changes.
+      return searchAddon[direction](term, {
+        ...options,
+        decorations: getTerminalSearchDecorations(currentViewOptions.themeId),
+      })
+    } catch (error) {
+      // An incomplete regex while typing is an expected miss. Search never
+      // raises the tile error banner.
+      if (!options.regex) report(dependencies, target, direction, error)
+      return false
+    }
+  }
+
+  const clearSearch = (): void => {
+    if (disposed || !searchAddon) return
+    try {
+      searchAddon.clearDecorations()
+    } catch (error) {
+      report(dependencies, target, 'clearSearch', error)
+    }
+  }
+
   const openBrowserTile = (url: string): void => {
     if (disposed || !currentViewOptions.onOpenBrowserTile) return
     try {
@@ -991,6 +1059,8 @@ function createRuntime(
 
     for (const disposable of dataDisposers.splice(0)) disposeListener(disposable)
     listeners.clear()
+    searchResultListeners.clear()
+    searchRequestListeners.clear()
 
     try {
       terminal.dispose()
@@ -1032,6 +1102,21 @@ function createRuntime(
     getSelection,
     selectAll,
     paste,
+    findNext: (term, options) => runSearch('findNext', term, options),
+    findPrevious: (term, options) => runSearch('findPrevious', term, options),
+    clearSearch,
+    subscribeSearchResults: (listener) => {
+      searchResultListeners.add(listener)
+      return () => searchResultListeners.delete(listener)
+    },
+    requestSearch: () => {
+      if (disposed) return
+      for (const listener of [...searchRequestListeners]) listener()
+    },
+    subscribeSearchRequests: (listener) => {
+      searchRequestListeners.add(listener)
+      return () => searchRequestListeners.delete(listener)
+    },
     setReconnecting,
     acknowledgeAgentAlert,
     openBrowserTile,
@@ -1108,6 +1193,16 @@ function createRuntime(
       dataDisposers.push(() => textarea.removeEventListener('focus', focusListener))
     } catch (error) {
       report(dependencies, target, 'focusListener', error)
+    }
+  }
+
+  if (searchAddon) {
+    try {
+      dataDisposers.push(searchAddon.onDidChangeResults((results) => {
+        for (const listener of [...searchResultListeners]) listener(results)
+      }))
+    } catch (error) {
+      report(dependencies, target, 'onDidChangeResults', error)
     }
   }
 
@@ -1197,6 +1292,8 @@ export async function createTerminalRuntime(
     })
     const fitAddon = dependencies.createFitAddon()
     terminal.loadAddon(fitAddon)
+    const searchAddon = dependencies.createSearchAddon?.() ?? null
+    if (searchAddon) terminal.loadAddon(searchAddon)
     terminal.open(runtimeRoot)
     applyTerminalOptions(runtimeRoot, terminal, initialViewOptions)
 
@@ -1207,6 +1304,7 @@ export async function createTerminalRuntime(
       created,
       terminal,
       fitAddon,
+      searchAddon,
       runtimeRoot,
     )
 

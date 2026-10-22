@@ -207,13 +207,17 @@ class FakeWebLinksAddon {
 
 class FakeUnicode11Addon {}
 
+class FakeSearchAddon {}
+
 const xtermModule = require.resolve('@xterm/xterm')
 const fitModule = require.resolve('@xterm/addon-fit')
 const linksModule = require.resolve('@xterm/addon-web-links')
 const unicode11Module = require.resolve('@xterm/addon-unicode11')
+const searchModule = require.resolve('@xterm/addon-search')
 require.cache[xtermModule] = { exports: { Terminal: FakeTerminal }, filename: xtermModule, id: xtermModule, loaded: true } as NodeModule
 require.cache[fitModule] = { exports: { FitAddon: FakeFitAddon }, filename: fitModule, id: fitModule, loaded: true } as NodeModule
 require.cache[linksModule] = { exports: { WebLinksAddon: FakeWebLinksAddon }, filename: linksModule, id: linksModule, loaded: true } as NodeModule
+require.cache[searchModule] = { exports: { SearchAddon: FakeSearchAddon }, filename: searchModule, id: searchModule, loaded: true } as NodeModule
 require.cache[unicode11Module] = { exports: { Unicode11Addon: FakeUnicode11Addon }, filename: unicode11Module, id: unicode11Module, loaded: true } as NodeModule
 
 const ReactDOM = await import('react-dom/client')

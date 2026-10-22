@@ -2,11 +2,13 @@ import React, { createContext, useCallback, useContext, useEffect, useLayoutEffe
 import { Terminal } from '@xterm/xterm'
 import type { ILinkProvider } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+import { SearchAddon } from '@xterm/addon-search'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
 import type { TerminalCreateOptions } from '@shared/types'
 import type { TerminalSessionTarget } from '@shared/terminalSessionIdentity'
+import { matchesShortcut } from '@shared/shortcuts'
 import { useCanvasStore } from '@/store/canvasStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import {
@@ -347,6 +349,14 @@ export function TerminalRuntimeProvider({
           }
 
           terminal.attachCustomKeyEventHandler((event) => {
+            // Read the binding at event time so settings changes apply to open terminals.
+            if (matchesShortcut(event, useSettingsStore.getState().shortcuts.findInTerminal)) {
+              if (event.type === 'keydown') {
+                event.preventDefault()
+                registry.get(target)?.requestSearch()
+              }
+              return false
+            }
             if (isTerminalPasteShortcut(event)) {
               if (event.type !== 'keydown') return false
               // Replace the browser paste so image-only clipboards reach terminal agents.
@@ -385,6 +395,7 @@ export function TerminalRuntimeProvider({
           return terminal
         },
         createFitAddon: () => new FitAddon(),
+        createSearchAddon: () => new SearchAddon(),
         createResizeObserver: (callback) => {
           if (typeof ResizeObserver === 'undefined') {
             return {
