@@ -9,7 +9,7 @@ import { DEFAULT_TERMINAL_THEME_ID, type TerminalThemeId } from '@shared/termina
 import { createTerminalFitScheduler, type TerminalFitAddonLike, type TerminalFitResult } from './terminalFitScheduler'
 import { createTerminalReplayController, type TerminalReplayController } from './terminalReplay'
 import { sanitizeTerminalReplayBuffer } from './terminalReplaySanitizer'
-import { getTerminalSearchDecorations, getXtermTheme } from './terminalTheme'
+import { getTerminalContainerBackground, getTerminalSearchDecorations, getXtermTheme } from './terminalTheme'
 import type { TerminalRuntimeHandle } from './terminalRuntimeRegistry'
 
 export interface TerminalLike {
@@ -20,6 +20,7 @@ export interface TerminalLike {
     fontSize?: number
     theme?: unknown
   }
+  resize?: (cols: number, rows: number) => void
   loadAddon: (addon: any) => void
   open: (container: HTMLElement) => void
   write: (data: string, callback?: () => void) => void
@@ -77,6 +78,10 @@ export interface TerminalRuntimeSnapshot {
 export interface TerminalRuntimeViewOptions {
   visible: boolean
   edgeToEdge: boolean
+  /** Limits the terminal to this many columns, centered in the host. Unset means the full host width. */
+  maxColumns?: number
+  /** Reports the space left on each side of the column (0 when the terminal fills the host). */
+  onColumnInsetChange?: (insetPx: number) => void
   autoFocus: boolean
   fontSize: number
   themeId: TerminalThemeId
@@ -185,6 +190,9 @@ export interface TerminalRuntime extends TerminalRuntimeHandle {
 
 type DisposableLike = { dispose: () => void } | (() => void) | void
 
+/** Terminal width, in columns, that reading mode limits agent output to. */
+export const READING_MODE_COLUMNS = 110
+
 /** Number of processed output chars before renderer confirms progress to main. */
 export const ACK_CHUNK_CHARS = 32 * 1024
 
@@ -228,6 +236,41 @@ function setRuntimeRootPadding(runtimeRoot: HTMLElement, edgeToEdge: boolean): v
   xtermElement.style.paddingRight = horizontalPadding
   xtermElement.style.paddingTop = verticalPadding
   xtermElement.style.paddingBottom = verticalPadding
+}
+
+/**
+ * Centers the xterm element at `widthPx`, or restores the full host width when
+ * null. The element paints the terminal background itself because the host
+ * shows the application background around the column.
+ */
+function setRuntimeReadingColumn(
+  runtimeRoot: HTMLElement,
+  widthPx: number | null,
+  options: TerminalRuntimeViewOptions,
+): void {
+  const xtermElement = runtimeRoot.querySelector?.('.xterm') as HTMLElement | null | undefined
+  if (!xtermElement) return
+
+  const active = options.maxColumns !== undefined
+  xtermElement.classList?.toggle('xterm-reading-column', active)
+  xtermElement.style.backgroundColor = active
+    ? getTerminalContainerBackground(options.themeId, options.translucent === true)
+    : ''
+  xtermElement.style.width = widthPx === null ? '' : `${widthPx}px`
+  xtermElement.style.height = active ? '100%' : ''
+  xtermElement.style.marginLeft = widthPx === null ? '' : 'auto'
+  xtermElement.style.marginRight = widthPx === null ? '' : 'auto'
+}
+
+/**
+ * Width of one cell in CSS pixels, read from the rendered screen so it follows font size.
+ * Layout width, not the bounding box, so a scaled Canvas ancestor does not skew it.
+ */
+function measureCellWidth(runtimeRoot: HTMLElement, cols: number): number | null {
+  const screen = runtimeRoot.querySelector?.('.xterm-screen') as HTMLElement | null | undefined
+  const width = screen?.offsetWidth
+  if (!width || !Number.isFinite(width) || cols <= 0) return null
+  return width / cols
 }
 
 function applyTerminalOptions(
@@ -308,7 +351,7 @@ function createRuntime(
   initialViewOptions: TerminalRuntimeViewOptions,
   created: TerminalCreateResult,
   terminal: TerminalLike,
-  fitAddon: FitAddonLike,
+  xtermFitAddon: FitAddonLike,
   searchAddon: SearchAddonLike | null,
   runtimeRoot: HTMLDivElement,
 ): TerminalRuntime {
@@ -474,12 +517,68 @@ function createRuntime(
     void acknowledgeAgentAlert()
   }
 
+  // Reading mode: fits the terminal to at most `maxColumns` and centers that
+  // column. xterm's fit addon only measures the host, so the clamp lives here,
+  // between the fit scheduler and the addon.
+  let readingColumnShown = false
+  let readingColumnWidthPx: number | null = null
+  let reportedColumnInsetPx = 0
+
+  const showReadingColumn = (widthPx: number | null): void => {
+    const active = currentViewOptions.maxColumns !== undefined
+    if (!active && !readingColumnShown) return
+    readingColumnShown = active
+    readingColumnWidthPx = active ? widthPx : null
+    setRuntimeReadingColumn(runtimeRoot, readingColumnWidthPx, currentViewOptions)
+
+    const insetPx = readingColumnWidthPx === null ? 0 : Math.max(0, Math.round((runtimeRoot.clientWidth - readingColumnWidthPx) / 2))
+    if (insetPx === reportedColumnInsetPx) return
+    reportedColumnInsetPx = insetPx
+    currentViewOptions.onColumnInsetChange?.(insetPx)
+  }
+
+  const fitAddon: FitAddonLike = {
+    proposeDimensions: () => {
+      const proposed = xtermFitAddon.proposeDimensions()
+      const maxColumns = currentViewOptions.maxColumns
+      if (!proposed || maxColumns === undefined) return proposed
+      return { cols: Math.min(proposed.cols, maxColumns), rows: proposed.rows }
+    },
+    fit: () => {
+      const maxColumns = currentViewOptions.maxColumns
+      const proposed = maxColumns === undefined || !terminal.resize ? undefined : xtermFitAddon.proposeDimensions()
+      if (maxColumns === undefined || !proposed || !terminal.resize) {
+        xtermFitAddon.fit()
+        showReadingColumn(null)
+        return
+      }
+
+      const cols = Math.min(proposed.cols, maxColumns)
+      if (cols !== terminal.cols || proposed.rows !== terminal.rows) terminal.resize(cols, proposed.rows)
+
+      // The column is the host minus the whole columns that do not fit, so
+      // the scrollbar and padding stay inside it at any font size. Measured
+      // after the resize, when the screen matches the current cols.
+      const cellWidth = measureCellWidth(runtimeRoot, terminal.cols)
+      const hostWidth = runtimeRoot.clientWidth
+      const hiddenColumns = proposed.cols - maxColumns
+      const columnWidth = hiddenColumns > 0 && cellWidth !== null && hostWidth > 0
+        ? hostWidth - hiddenColumns * cellWidth
+        : null
+      showReadingColumn(columnWidth)
+    },
+  }
+
   const applyChangedViewOptions = (previous: TerminalRuntimeViewOptions, next: TerminalRuntimeViewOptions): void => {
     if (previous.fontSize !== next.fontSize) terminal.options.fontSize = next.fontSize
     if (previous.themeId !== next.themeId || previous.translucent !== next.translucent) {
       terminal.options.theme = getXtermTheme(next.themeId, next.translucent === true)
     }
     if (previous.edgeToEdge !== next.edgeToEdge) setRuntimeRootPadding(runtimeRoot, next.edgeToEdge)
+    if (previous.maxColumns !== next.maxColumns
+      || (next.maxColumns !== undefined && (previous.themeId !== next.themeId || previous.translucent !== next.translucent))) {
+      showReadingColumn(readingColumnWidthPx)
+    }
   }
 
   const hasVisualChange = (previous: TerminalRuntimeViewOptions, next: TerminalRuntimeViewOptions): boolean => (
@@ -487,6 +586,7 @@ function createRuntime(
     || previous.themeId !== next.themeId
     || previous.translucent !== next.translucent
     || previous.edgeToEdge !== next.edgeToEdge
+    || previous.maxColumns !== next.maxColumns
   )
 
   const markVisualChangeIfHidden = (previous: TerminalRuntimeViewOptions, next: TerminalRuntimeViewOptions): void => {
@@ -954,13 +1054,13 @@ function createRuntime(
     }
 
     const fontChanged = previous.fontSize !== next.fontSize
-    const edgeChanged = previous.edgeToEdge !== next.edgeToEdge
+    const layoutChanged = previous.edgeToEdge !== next.edgeToEdge || previous.maxColumns !== next.maxColumns
     const themeChanged = previous.themeId !== next.themeId || previous.translucent !== next.translucent
     const autoFocusGained = next.autoFocus && !previous.autoFocus
     currentViewOptions = next
     applyChangedViewOptions(previous, next)
 
-    if (fontChanged || edgeChanged) {
+    if (fontChanged || layoutChanged) {
       connectObserver(host)
       if (!next.visible) {
         fitDirty = true

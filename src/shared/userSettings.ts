@@ -78,6 +78,9 @@ export function normalizeUserSettings(raw: RawUserSettings = {}): UserSettings {
     terminal: {
       ...DEFAULT_USER_SETTINGS.terminal,
       ...(raw.terminal ?? {}),
+      readingMode: typeof raw.terminal?.readingMode === 'boolean'
+        ? raw.terminal.readingMode
+        : DEFAULT_USER_SETTINGS.terminal.readingMode,
       themeId: normalizeTerminalThemeId(raw.terminal?.themeId),
     },
     notifications: {

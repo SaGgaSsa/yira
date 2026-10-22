@@ -331,8 +331,9 @@
   overflow-x: hidden !important;
 }
 
-/* xterm's stylesheet paints the viewport black; the terminal container owns the background. */
-.xterm,
+/* xterm's stylesheet paints the viewport black; the terminal container owns the background.
+   The reading column is the exception: it paints itself because the container shows the app background around it. */
+.xterm:not(.xterm-reading-column),
 .xterm .xterm-viewport,
 .xterm .xterm-screen {
   background-color: transparent !important;

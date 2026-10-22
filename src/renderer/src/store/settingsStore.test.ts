@@ -85,6 +85,7 @@ test('applySettings persists the complete draft before replacing the active sett
       terminal: {
         attentionEnabled: false,
         agentAlertsEnabled: false,
+        readingMode: true,
         themeId: 'high-contrast',
       },
       notifications: {

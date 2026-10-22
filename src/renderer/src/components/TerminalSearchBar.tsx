@@ -107,7 +107,7 @@ export function TerminalSearchBar({ runtime, openRequest, onClose }: Props): Rea
     <div
       role="search"
       data-agent-shortcut-capture="terminal-search"
-      className="absolute right-3 top-2 z-20 flex items-center gap-1 rounded-md border border-border-visible bg-bg-tertiary/95 p-1 shadow-lg"
+      className="pointer-events-auto absolute right-3 top-2 z-20 flex items-center gap-1 rounded-md border border-border-visible bg-bg-tertiary/95 p-1 shadow-lg"
       // Keep keys and clicks inside the bar away from the terminal, tile focus and global shortcuts.
       onKeyDown={(event) => event.stopPropagation()}
       onKeyUp={(event) => event.stopPropagation()}

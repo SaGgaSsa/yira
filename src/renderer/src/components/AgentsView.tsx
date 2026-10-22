@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo } from 'react'
-import { Bot, GripVertical, Maximize2, Minimize2, Pin, Plus, X } from 'lucide-react'
+import { Bot, GripVertical, Maximize2, Pin, Plus, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type {
   AgentActiveSession,
@@ -8,6 +8,7 @@ import type {
 } from '@shared/types'
 import { selectAgentsViewSessions } from '@/utils/agentsViewSessions'
 import { useCanvasStore } from '@/store/canvasStore'
+import { useSettingsStore } from '@/store/settingsStore'
 import { getAgentSessionTitle } from '@/utils/terminalDisplayTitle'
 import { getAgentNamedTitle } from '@shared/agentTerminalTitle'
 import { useAgentsViewLayout } from '@/hooks/useAgentsViewLayout'
@@ -102,7 +103,7 @@ function AgentSessionCard({
   const providerLabel = session.provider === 'claude' ? 'Claude' : 'Codex'
   const providerColor = 'text-activity'
   const statusLabel = getStatusLabel(session.status, t)
-  const maximizeLabel = isMaximized ? t('agentsView.restoreSession') : t('agentsView.maximizeSession')
+  const readingMode = useSettingsStore((state) => state.terminal.readingMode)
   const pinDisabled = session.status === 'exited' || Boolean(session.worktreeRoot)
   const pinLabel = session.worktreeRoot
     ? t('agentsView.pinSessionWorktreeDisabled')
@@ -157,18 +158,20 @@ function AgentSessionCard({
             <Pin size={13} aria-hidden="true" />
           </button>
         )}
-        <button
-          type="button"
-          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
-          aria-label={maximizeLabel}
-          title={maximizeLabel}
-          onClick={(event) => {
-            event.stopPropagation()
-            onToggleMaximize()
-          }}
-        >
-          {isMaximized ? <Minimize2 size={13} aria-hidden="true" /> : <Maximize2 size={13} aria-hidden="true" />}
-        </button>
+        {!isMaximized && (
+          <button
+            type="button"
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
+            aria-label={t('agentsView.maximizeSession')}
+            title={t('agentsView.maximizeSession')}
+            onClick={(event) => {
+              event.stopPropagation()
+              onToggleMaximize()
+            }}
+          >
+            <Maximize2 size={13} aria-hidden="true" />
+          </button>
+        )}
         <button
           type="button"
           className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
@@ -189,6 +192,7 @@ function AgentSessionCard({
           workspaceConfig={workspaceConfig}
           isFocused={isFocused}
           isVisible={isVisible}
+          readingColumn={isMaximized && readingMode}
           onFocus={onFocus}
           onOpenBrowserTile={onOpenBrowserTile}
           onOpenFileTile={onOpenFileTile}

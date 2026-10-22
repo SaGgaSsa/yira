@@ -72,6 +72,10 @@ _Avoid_: Hotkey, keybinding
 The single-panel tile view currently labeled `Focus`.
 _Avoid_: Fullview, single view
 
+**Reading Mode**:
+A Focus View variant that limits Terminal Tiles and the maximized Agent Session to a centered 110-column reading width. Pressing Focus again toggles it. It is a global setting.
+_Avoid_: Zen mode, narrow mode
+
 **Split View**:
 The two-panel tile view.
 _Avoid_: Splitview, split mode

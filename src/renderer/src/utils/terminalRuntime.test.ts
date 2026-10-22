@@ -110,6 +110,11 @@ class FakeTerminal implements TerminalLike {
     }
   }
 
+  resize(cols: number, rows: number): void {
+    this.cols = cols
+    this.rows = rows
+  }
+
   loadAddon(addon: unknown): void {
     this.loadedAddons.push(addon)
     this.events.push('terminal:loadAddon')
@@ -1189,6 +1194,55 @@ test('geometric fontSize and edgeToEdge changes request fit', async () => {
   await settleFit()
   assert.equal(harness.bridge.resizeCalls.length, resizeBefore + 2)
   assert.equal(harness.terminals[0].refreshCalls.length, refreshMid + 1)
+  await runtime.dispose(false)
+})
+
+test('limits the fitted columns to maxColumns and restores the full width when it is cleared', async () => {
+  const harness = createRuntimeHarness()
+  const runtime = await createReadyRuntime(harness)
+  const host = harness.host()
+  harness.fitAddons[0].dimensions = { cols: 250, rows: 30 }
+
+  runtime.attachHost(host, viewOptions({ visible: true, maxColumns: 110 }))
+  harness.flushFit()
+  await settleFit()
+  assert.equal(harness.terminals[0].cols, 110)
+  assert.deepEqual(harness.bridge.resizeCalls.map(({ cols, rows }) => ({ cols, rows })), [{ cols: 110, rows: 30 }])
+
+  // A narrower host than the column keeps the regular fit.
+  harness.fitAddons[0].dimensions = { cols: 90, rows: 30 }
+  harness.notifyResize()
+  harness.flushFit()
+  await settleFit()
+  assert.equal(harness.terminals[0].cols, 90)
+
+  harness.fitAddons[0].dimensions = { cols: 250, rows: 30 }
+  runtime.updateView(viewOptions({ visible: true, maxColumns: undefined }))
+  assert.equal(harness.schedulers[0].requests.length, 1)
+  harness.flushFit()
+  await settleFit()
+  assert.equal(harness.terminals[0].cols, 250)
+  assert.equal(harness.bridge.resizeCalls.at(-1)?.cols, 250)
+  await runtime.dispose(false)
+})
+
+test('turning maxColumns on refits a terminal that was filling the host', async () => {
+  const harness = createRuntimeHarness()
+  const runtime = await createReadyRuntime(harness)
+  const host = harness.host()
+  harness.fitAddons[0].dimensions = { cols: 250, rows: 30 }
+
+  runtime.attachHost(host, viewOptions({ visible: true }))
+  harness.flushFit()
+  await settleFit()
+  assert.equal(harness.terminals[0].cols, 250)
+
+  runtime.updateView(viewOptions({ visible: true, maxColumns: 110 }))
+  assert.equal(harness.schedulers[0].requests.length, 1)
+  harness.flushFit()
+  await settleFit()
+  assert.equal(harness.terminals[0].cols, 110)
+  assert.equal(harness.bridge.resizeCalls.at(-1)?.cols, 110)
   await runtime.dispose(false)
 })
 

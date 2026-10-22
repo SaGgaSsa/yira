@@ -28,6 +28,8 @@ interface TileContentProps {
   workspaceConfig: WorkspaceConfig
   isFocused: boolean
   edgeToEdge?: boolean
+  /** Limits terminal tiles to the reading column width. Other tile types ignore it. */
+  readingColumn?: boolean
   isVisible?: boolean
   autoFocus?: boolean
   onFocus: () => void
@@ -39,7 +41,7 @@ interface TileContentProps {
   workspaceRootPath?: string
 }
 
-export function TileContent({ tile, workspaceId, workspaceConfig, isFocused, edgeToEdge = false, isVisible = true, autoFocus = false, onFocus, onUpdate, onDelete, onOpenBrowserTile, onOpenFileTile, workspaceRootPath = '' }: TileContentProps): React.ReactElement {
+export function TileContent({ tile, workspaceId, workspaceConfig, isFocused, edgeToEdge = false, readingColumn = false, isVisible = true, autoFocus = false, onFocus, onUpdate, onDelete, onOpenBrowserTile, onOpenFileTile, workspaceRootPath = '' }: TileContentProps): React.ReactElement {
   const { t } = useTranslation()
   if (tile.type === 'terminal') {
     return (
@@ -49,6 +51,7 @@ export function TileContent({ tile, workspaceId, workspaceConfig, isFocused, edg
         workspaceConfig={workspaceConfig}
         isFocused={isFocused}
         edgeToEdge={edgeToEdge}
+        readingColumn={readingColumn}
         isVisible={isVisible}
         autoFocus={autoFocus}
         onFocus={onFocus}
