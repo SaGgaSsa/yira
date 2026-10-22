@@ -1,4 +1,4 @@
-import { resolveViewModeTransition } from './viewModeTransition'
+import { resolveAgentsViewSwitch, resolveViewModeTransition } from './viewModeTransition'
 import type { SplitViewState, TileState } from '@shared/types'
 
 function tile(id: string, zIndex: number): TileState {
@@ -80,4 +80,59 @@ const gridToCanvasSwitch = resolveViewModeTransition({
 
 if (gridToCanvasSwitch?.workspaceTypeSwitch !== 'canvas' || gridToCanvasSwitch.viewMode !== 'canvas') {
   throw new Error('Grid must transition to Canvas through the workspace type switch path')
+}
+
+const agentsSwitchBase = {
+  workspaceType: 'canvas' as const,
+  requestedMode: 'fullview' as const,
+  visibleSessionIds: ['a', 'b'],
+  focusedSessionId: 'b',
+  maximizedSessionId: null,
+}
+
+const agentsFocusMaximizesFocused = resolveAgentsViewSwitch(agentsSwitchBase)
+if (agentsFocusMaximizesFocused?.type !== 'maximize' || agentsFocusMaximizesFocused.sessionId !== 'b') {
+  throw new Error('Focus in Agents View must maximize the focused session')
+}
+
+const agentsFocusFallsBackToFirst = resolveAgentsViewSwitch({ ...agentsSwitchBase, focusedSessionId: 'gone' })
+if (agentsFocusFallsBackToFirst?.type !== 'maximize' || agentsFocusFallsBackToFirst.sessionId !== 'a') {
+  throw new Error('Focus in Agents View must fall back to the first visible session')
+}
+
+const agentsFocusWhenMaximized = resolveAgentsViewSwitch({ ...agentsSwitchBase, maximizedSessionId: 'a' })
+if (agentsFocusWhenMaximized?.type !== 'toggle-reading-mode') {
+  throw new Error('Focus with a maximized session must toggle reading mode')
+}
+
+const agentsCanvasShowsAll = resolveAgentsViewSwitch({ ...agentsSwitchBase, requestedMode: 'canvas', maximizedSessionId: 'a' })
+if (agentsCanvasShowsAll?.type !== 'show-all') {
+  throw new Error('Canvas with a maximized session must show every session')
+}
+
+const agentsGridShowsAll = resolveAgentsViewSwitch({
+  ...agentsSwitchBase,
+  workspaceType: 'grid',
+  requestedMode: 'gridview',
+  maximizedSessionId: 'a',
+})
+if (agentsGridShowsAll?.type !== 'show-all') {
+  throw new Error('Grid in a grid workspace must show every session')
+}
+
+const agentsCanvasWhenAllShown = resolveAgentsViewSwitch({ ...agentsSwitchBase, requestedMode: 'canvas' })
+if (agentsCanvasWhenAllShown?.type !== 'none') {
+  throw new Error('Canvas while every session is shown must do nothing')
+}
+
+if (resolveAgentsViewSwitch({ ...agentsSwitchBase, requestedMode: 'splitview' }) !== null) {
+  throw new Error('Split must leave Agents View for the workspace tiles')
+}
+
+if (resolveAgentsViewSwitch({ ...agentsSwitchBase, requestedMode: 'board' }) !== null) {
+  throw new Error('Board must leave Agents View for the workspace tiles')
+}
+
+if (resolveAgentsViewSwitch({ ...agentsSwitchBase, visibleSessionIds: [] }) !== null) {
+  throw new Error('Agents View without sessions must keep the workspace behavior')
 }

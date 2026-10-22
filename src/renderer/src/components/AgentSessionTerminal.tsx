@@ -9,6 +9,8 @@ interface AgentSessionTerminalProps {
   workspaceConfig: WorkspaceConfig
   isFocused: boolean
   isVisible: boolean
+  /** Limits the terminal to the reading column width. */
+  readingColumn?: boolean
   onFocus: () => void
   onOpenBrowserTile?: (url: string) => void
   onOpenFileTile?: (relativePath: string, options?: FileTileOpenOptions) => void | Promise<void>
@@ -21,6 +23,7 @@ export function AgentSessionTerminal({
   workspaceConfig,
   isFocused,
   isVisible,
+  readingColumn = false,
   onFocus,
   onOpenBrowserTile,
   onOpenFileTile,
@@ -50,17 +53,19 @@ export function AgentSessionTerminal({
         isFocused={isFocused}
         isVisible={isVisible}
         edgeToEdge
+        readingColumn={readingColumn}
         onFocus={onFocus}
         onUpdate={() => undefined}
         onDelete={() => undefined}
         onOpenBrowserTile={onOpenBrowserTile}
         onOpenFileTile={onOpenFileTile}
-      />
-      {session.status === 'exited' && (
-        <div className="pointer-events-none absolute bottom-2 left-2 rounded-md border border-border-visible bg-bg-primary/95 px-2.5 py-1.5 text-xs text-text-secondary">
-          {t('agentsView.exitedMessage')}
-        </div>
-      )}
+      >
+        {session.status === 'exited' && (
+          <div className="absolute bottom-2 left-2 rounded-md border border-border-visible bg-bg-primary/95 px-2.5 py-1.5 text-xs text-text-secondary">
+            {t('agentsView.exitedMessage')}
+          </div>
+        )}
+      </TerminalTileWrapper>
     </div>
   )
 }

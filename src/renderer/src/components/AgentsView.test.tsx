@@ -124,7 +124,6 @@ const translationCopy: Record<string, string> = {
   'agentsView.maximizeSession': 'Maximize session',
   'agentsView.pinSession': 'Keep as agent tile',
   'agentsView.pinSessionWorktreeDisabled': 'Sessions in a worktree cannot be moved to a tile',
-  'agentsView.restoreSession': 'Restore session',
   'agentsView.statusWorking': 'Working',
   'agentsView.statusNeedsInput': 'Needs input',
   'agentsView.statusDone': 'Done',
@@ -290,6 +289,23 @@ test('renders badges for different session states and closes through the callbac
   }
 })
 
+test('does not render a maximize or restore button on the maximized session', async () => {
+  const { container, root } = createView([session(), session({ tileId: 'agent-b' })])
+
+  try {
+    await settle()
+    assert.equal(countButtons(container, 'Maximize session'), 2)
+
+    findButton(container, 'Maximize session').dispatchEvent(new TestEvent('click', { bubbles: true, cancelable: true }))
+    await settle()
+    // Only the hidden session keeps its maximize button; the maximized one has none.
+    assert.equal(countButtons(container, 'Maximize session'), 1)
+    assert.equal(findButton(container, 'Restore session'), null)
+  } finally {
+    root.unmount()
+  }
+})
+
 test('reports the maximized session so the app can hide the sidebar', async () => {
   const changes: Array<string | null> = []
   const { container, root } = createView([session(), session({ tileId: 'agent-b' })], {
@@ -301,10 +317,6 @@ test('reports the maximized session so the app can hide the sidebar', async () =
     findButton(container, 'Maximize session').dispatchEvent(new TestEvent('click', { bubbles: true, cancelable: true }))
     await settle()
     assert.deepEqual(changes, ['agent-a'])
-
-    findButton(container, 'Restore session').dispatchEvent(new TestEvent('click', { bubbles: true, cancelable: true }))
-    await settle()
-    assert.deepEqual(changes, ['agent-a', null])
   } finally {
     root.unmount()
   }
@@ -352,10 +364,6 @@ test('shows a move handle per card and hides the handles while a session is maxi
     findButton(container, 'Maximize session').dispatchEvent(new TestEvent('click', { bubbles: true, cancelable: true }))
     await settle()
     assert.equal(countButtons(container, 'Move tile'), 0)
-
-    findButton(container, 'Restore session').dispatchEvent(new TestEvent('click', { bubbles: true, cancelable: true }))
-    await settle()
-    assert.equal(countButtons(container, 'Move tile'), 2)
   } finally {
     root.unmount()
   }

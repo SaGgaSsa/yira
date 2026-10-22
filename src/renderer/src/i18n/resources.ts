@@ -251,7 +251,6 @@ type TranslationResources = {
     pinSessionMessage: string
     pinSessionConfirm: string
     pinSessionErrorTitle: string
-    restoreSession: string
     statusWorking: string
     statusNeedsInput: string
     statusDone: string
@@ -1023,6 +1022,7 @@ type TranslationResources = {
     command: string
     optionalStartupCommand: string
     toggleZoom: string
+    focusReading: string
   }
 }
 
@@ -1277,7 +1277,6 @@ const en: TranslationResources = {
     pinSessionMessage: 'The session moves to the canvas as an agent tile and leaves the Agents View. The agent keeps running and is not restarted. Closing the tile ends the agent.',
     pinSessionConfirm: 'Move to tile',
     pinSessionErrorTitle: 'Could not move agent session',
-    restoreSession: 'Restore session',
     statusWorking: 'Working',
     statusNeedsInput: 'Needs input',
     statusDone: 'Done',
@@ -2049,6 +2048,7 @@ const en: TranslationResources = {
     command: 'Command',
     optionalStartupCommand: 'Optional startup command',
     toggleZoom: 'Toggle zoom 100%',
+    focusReading: 'Focus · reading',
   },
 }
 
@@ -2262,7 +2262,6 @@ const es: TranslationResources = {
     pinSessionMessage: 'La sesión pasa al canvas como tile de agente y deja la vista de agentes. El agente sigue corriendo y no se reinicia. Al cerrar el tile se termina el agente.',
     pinSessionConfirm: 'Mover a tile',
     pinSessionErrorTitle: 'No se pudo mover la sesión del agente',
-    restoreSession: 'Restaurar sesión',
     statusWorking: 'Trabajando',
     statusNeedsInput: 'Requiere intervención',
     statusDone: 'Terminada',
@@ -3075,6 +3074,7 @@ const es: TranslationResources = {
     command: 'Comando',
     optionalStartupCommand: 'Comando de inicio opcional',
     toggleZoom: 'Alternar zoom al 100%',
+    focusReading: 'Enfocar · lectura',
   },
 }
 

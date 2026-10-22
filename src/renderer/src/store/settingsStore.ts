@@ -24,6 +24,7 @@ export interface SettingsState extends UserSettings {
   setUpdateDiagnosticsEnabled: (enabled: boolean) => void
   setBrowserHomeUrl: (url: string) => void
   setTerminalAttentionEnabled: (enabled: boolean) => void
+  setTerminalReadingMode: (enabled: boolean) => void
   setAgentAlertsEnabled: (enabled: boolean) => void
   setAgentEnabled: (provider: AgentProvider, enabled: boolean) => void
   setTerminalThemeId: (themeId: TerminalThemeId) => void
@@ -83,6 +84,7 @@ function scheduleSave() {
       terminal: {
         attentionEnabled: state.terminal.attentionEnabled,
         agentAlertsEnabled: state.terminal.agentAlertsEnabled,
+        readingMode: state.terminal.readingMode,
         themeId: state.terminal.themeId,
       },
       notifications: {
@@ -155,6 +157,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   setTerminalAttentionEnabled: (enabled) => {
     set((state) => ({ terminal: { ...state.terminal, attentionEnabled: enabled } }))
+    scheduleSave()
+  },
+
+  setTerminalReadingMode: (enabled) => {
+    set((state) => ({ terminal: { ...state.terminal, readingMode: enabled } }))
     scheduleSave()
   },
 
@@ -263,6 +270,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           terminal: {
             attentionEnabled: normalized.terminal.attentionEnabled,
             agentAlertsEnabled: normalized.terminal.agentAlertsEnabled,
+            readingMode: normalized.terminal.readingMode,
             themeId: normalized.terminal.themeId,
           },
           notifications: {
@@ -312,6 +320,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       terminal: {
         attentionEnabled: state.terminal.attentionEnabled,
         agentAlertsEnabled: state.terminal.agentAlertsEnabled,
+        readingMode: state.terminal.readingMode,
         themeId: state.terminal.themeId,
       },
       notifications: {

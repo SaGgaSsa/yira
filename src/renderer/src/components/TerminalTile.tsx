@@ -19,7 +19,7 @@ import {
   useTerminalRuntimeApi,
   type TerminalRuntimeCreateRequest,
 } from './TerminalRuntimeProvider'
-import type { TerminalRuntime, TerminalRuntimeSnapshot, TerminalRuntimeViewOptions } from '@/utils/terminalRuntime'
+import { READING_MODE_COLUMNS, type TerminalRuntime, type TerminalRuntimeSnapshot, type TerminalRuntimeViewOptions } from '@/utils/terminalRuntime'
 import type { TerminalRuntimeRegistry } from '@/utils/terminalRuntimeRegistry'
 import { destroyTerminalRuntime } from '@/utils/terminalRuntimeCleanup'
 import { TerminalSearchBar } from './TerminalSearchBar'
@@ -30,6 +30,10 @@ interface Props {
   workspaceConfig: WorkspaceConfig
   isFocused: boolean
   edgeToEdge?: boolean
+  /** Limits the terminal to the reading column width and centers it. */
+  readingColumn?: boolean
+  /** Overlay content aligned with the terminal column, positioned over the tile. */
+  children?: React.ReactNode
   /** Connect an existing daemon-backed script session without creating a shell. */
   connectOnly?: boolean
   /** Copy the selection to the clipboard as soon as a mouse selection ends. */
@@ -319,6 +323,8 @@ export function TerminalTileWrapper({
   workspaceConfig,
   isFocused,
   edgeToEdge = false,
+  readingColumn = false,
+  children,
   connectOnly = false,
   copyOnSelect = false,
   isVisible = true,
@@ -357,6 +363,8 @@ export function TerminalTileWrapper({
   const [preparationStatus, setPreparationStatus] = useState<RemotePreparationStatus | null>(null)
   // `searchRequest` counts shortcut presses; 0 means the search bar is closed.
   const [searchRequest, setSearchRequest] = useState(0)
+  // Space on each side of the reading column, so overlays can line up with it.
+  const [columnInsetPx, setColumnInsetPx] = useState(0)
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number; selectionText: string; linkTarget?: TerminalLinkTarget } | null>(null)
 
   const onFocusRef = useRef(onFocus)
@@ -404,6 +412,8 @@ export function TerminalTileWrapper({
   const viewOptions = useMemo<TerminalRuntimeViewOptions>(() => ({
     visible: isVisible,
     edgeToEdge,
+    maxColumns: readingColumn ? READING_MODE_COLUMNS : undefined,
+    onColumnInsetChange: setColumnInsetPx,
     autoFocus,
     fontSize: tileFontSizePx,
     themeId: terminalThemeId,
@@ -416,6 +426,7 @@ export function TerminalTileWrapper({
   }), [
     autoFocus,
     edgeToEdge,
+    readingColumn,
     isVisible,
     runtimeOnFocus,
     runtimeOpenBrowserTile,
@@ -803,7 +814,12 @@ export function TerminalTileWrapper({
         ref={containerRef}
         className="h-full w-full"
         data-terminal-title={snapshot.title ?? undefined}
-        style={{ background: getTerminalContainerBackground(terminalThemeId, activeWindowBackgroundMaterial !== 'none'), overflow: 'hidden' }}
+        style={{
+          background: readingColumn
+            ? 'var(--bg-primary)'
+            : getTerminalContainerBackground(terminalThemeId, activeWindowBackgroundMaterial !== 'none'),
+          overflow: 'hidden',
+        }}
         onMouseDown={(event) => {
           focusTerminal()
           if (copyOnSelect && event.button === 0) copySelectionOnMouseUp()
@@ -835,13 +851,19 @@ export function TerminalTileWrapper({
           void reconnectRemoteTerminal()
         }}
       />
-      {activeRuntime && searchRequest > 0 && (
-        <TerminalSearchBar
-          runtime={activeRuntime}
-          openRequest={searchRequest}
-          onClose={() => setSearchRequest(0)}
-        />
-      )}
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={readingColumn ? { left: columnInsetPx, right: columnInsetPx } : undefined}
+      >
+        {activeRuntime && searchRequest > 0 && (
+          <TerminalSearchBar
+            runtime={activeRuntime}
+            openRequest={searchRequest}
+            onClose={() => setSearchRequest(0)}
+          />
+        )}
+        {children}
+      </div>
       {menuPosition && (
         <ContextMenu
           x={menuPosition.x}

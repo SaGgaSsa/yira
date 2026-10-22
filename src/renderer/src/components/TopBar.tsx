@@ -1,5 +1,5 @@
 import React from 'react'
-import { Settings, Grid3x3, LayoutGrid, Columns2, PanelLeft, PanelRight, SquareSplitHorizontal, SquareSplitVertical, ClipboardList, Activity, Bot } from 'lucide-react'
+import { Settings, Grid3x3, LayoutGrid, Columns2, PanelLeft, PanelRight, SquareSplitHorizontal, SquareSplitVertical, ClipboardList, Activity, Bot, RectangleVertical } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { AgentProvider, AgentUsageSnapshot, SplitOrientation, ViewMode, WorkspaceConfig, WorkspaceType } from '@shared/types'
 import type { MainView } from '../utils/layoutState'
@@ -31,6 +31,12 @@ interface TopBarProps {
   agentsViewAvailable: boolean
   agentSessionCount: number
   agentAttentionCount: number
+  /** An Agent Session fills Agents View. */
+  agentsSessionMaximized: boolean
+  /** Agents View has sessions, so the view buttons arrange them instead of leaving the view. */
+  agentsHasSessions: boolean
+  /** Focus view limits terminals to the reading column. */
+  readingMode: boolean
   onToggleAgentsView: () => void
   agentProvider?: AgentProvider
   agentUsage: AgentUsageSnapshot | null
@@ -111,6 +117,9 @@ export function TopBar({
   agentsViewAvailable,
   agentSessionCount,
   agentAttentionCount,
+  agentsSessionMaximized,
+  agentsHasSessions,
+  readingMode,
   onToggleAgentsView,
   agentProvider,
   agentUsage,
@@ -134,6 +143,10 @@ export function TopBar({
   const homeOpen = mainView === 'home'
   // With Agents, Activity or Home on top, no view button is selected and the tile controls are hidden.
   const overlayOpen = mainView !== 'workspace'
+  // With sessions to arrange, Agents View answers the Focus and Grid/Canvas buttons itself.
+  const agentsViewArranging = agentsViewOpen && agentsHasSessions
+  const focusActive = agentsViewArranging ? agentsSessionMaximized : !overlayOpen && viewMode === 'fullview'
+  const FocusIcon = readingMode ? RectangleVertical : Columns2
   const tileViewOpen = !overlayOpen && viewMode !== 'board'
 
   return (
@@ -167,9 +180,10 @@ export function TopBar({
 
           <div className="absolute left-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1 rounded-md border border-border-visible bg-bg-secondary px-0.5 top-1/2">
             <SegmentedButton
-              active={!overlayOpen && viewMode === 'fullview'}
+              active={focusActive}
               label={t('shortcuts.focus')}
-              icon={Columns2}
+              title={readingMode ? t('ui.focusReading') : undefined}
+              icon={FocusIcon}
               onClick={() => onSetViewMode('fullview')}
             />
             <SegmentedButton
@@ -182,7 +196,7 @@ export function TopBar({
             />
             {isGridWorkspace ? (
               <SegmentedButton
-                active={!overlayOpen && viewMode === 'gridview'}
+                active={agentsViewArranging ? !agentsSessionMaximized : !overlayOpen && viewMode === 'gridview'}
                 label={t('shortcuts.grid')}
                 title={viewMode === 'gridview' ? t('workspace.canvas') : t('shortcuts.grid')}
                 icon={Grid3x3}
@@ -190,7 +204,7 @@ export function TopBar({
               />
             ) : (
               <SegmentedButton
-                active={!overlayOpen && viewMode === 'canvas'}
+                active={agentsViewArranging ? !agentsSessionMaximized : !overlayOpen && viewMode === 'canvas'}
                 label={t('shortcuts.canvas')}
                 title={viewMode === 'canvas' ? t('shortcuts.grid') : t('shortcuts.canvas')}
                 icon={LayoutGrid}

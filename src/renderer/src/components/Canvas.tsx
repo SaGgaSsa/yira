@@ -124,6 +124,7 @@ const CanvasTile = React.memo(function CanvasTile({
   onOpenFileTile,
 }: CanvasTileProps): React.ReactElement {
   const isFixedView = viewMode === 'fullview' || viewMode === 'splitview'
+  const readingMode = useSettingsStore((s) => s.terminal.readingMode)
 
   const handleFocus = useCallback(() => {
     onFocusTile(tile.id, splitPanel)
@@ -173,6 +174,7 @@ const CanvasTile = React.memo(function CanvasTile({
         workspaceConfig={workspaceConfig}
         isFocused={isFocused}
         edgeToEdge={isFixedView}
+        readingColumn={readingMode && viewMode === 'fullview'}
         isVisible={!(isFixedView && isHiddenInFullview)}
         autoFocus={autoFocus}
         onFocus={handleFocus}

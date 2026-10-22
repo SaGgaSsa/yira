@@ -77,7 +77,7 @@ import {
   decideAgentAlertNotification,
 } from './utils/agentAlertNotifications'
 import { playAgentAlertSound } from './utils/agentAlertSound'
-import { resolveViewModeTransition } from './utils/viewModeTransition'
+import { resolveAgentsViewSwitch, resolveViewModeTransition } from './utils/viewModeTransition'
 import {
   resolveSidebarCollapsedAfterWorkspaceViewChange,
   shouldKeepSidebarOpenForWorkspace,
@@ -348,6 +348,8 @@ function AppContent(): React.ReactElement {
   const newAgentSessionShortcut = useSettingsStore((s) => s.shortcuts.newAgentSession)
   const openHomeShortcut = useSettingsStore((s) => s.shortcuts.openHome)
   const terminalAttentionEnabled = useSettingsStore((s) => s.terminal.attentionEnabled)
+  const terminalReadingMode = useSettingsStore((s) => s.terminal.readingMode)
+  const setTerminalReadingMode = useSettingsStore((s) => s.setTerminalReadingMode)
   const tileCreationAvailability = useSettingsStore((s) => s.tiles.creationAvailability)
 
   // Canvas state
@@ -2659,6 +2661,9 @@ function AppContent(): React.ReactElement {
         agentsViewAvailable={Boolean(activeWorkspaceId && agentsView.effectiveProvider)}
         agentSessionCount={agentsView.sessions.length}
         agentAttentionCount={countAgentsViewAttention(agentsView.sessions)}
+        agentsSessionMaximized={agentSessionMaximized}
+        agentsHasSessions={agentsView.sessions.length > 0}
+        readingMode={terminalReadingMode}
         onToggleAgentsView={() => {
           setHomeOpen(false)
           setActivityOpen(false)
@@ -2686,12 +2691,39 @@ function AppContent(): React.ReactElement {
         }}
         onSetViewMode={(mode) => {
           const overlayOpen = mainView !== 'workspace'
+          // With sessions to arrange, Agents View keeps the Focus and Grid/Canvas buttons for itself.
+          const agentsAction = mainView === 'agents'
+            ? resolveAgentsViewSwitch({
+                workspaceType: activeWorkspaceType,
+                requestedMode: mode,
+                visibleSessionIds: agentsView.sessions.map((session) => session.tileId),
+                focusedSessionId: agentsView.focusedSessionId,
+                maximizedSessionId: agentsMaximizedSessionId,
+              })
+            : null
+          if (agentsAction) {
+            if (agentsAction.type === 'maximize') {
+              setAgentsMaximizedSessionId(agentsAction.sessionId)
+              agentsView.openForSession(agentsAction.sessionId)
+            } else if (agentsAction.type === 'show-all') {
+              setAgentsMaximizedSessionId(null)
+            } else if (agentsAction.type === 'toggle-reading-mode') {
+              setTerminalReadingMode(!terminalReadingMode)
+            }
+            return
+          }
+
           agentsView.close()
           setHomeOpen(false)
           setActivityOpen(false)
           // Leaving Agents, Activity or Home for the view underneath restores it as it was,
           // instead of toggling it (split orientation, canvas/grid swap).
           if (overlayOpen && mode === viewMode) return
+          // Pressing Focus again in the workspace switches the Focus variant, like Split flips its orientation.
+          if (mode === 'fullview' && viewMode === 'fullview') {
+            setTerminalReadingMode(!terminalReadingMode)
+            return
+          }
           handleSetViewMode(mode)
         }}
         onFitToContent={() => getCanvasMethods()?.fitViewToContent()}

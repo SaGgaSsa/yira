@@ -75,6 +75,14 @@ if (legacy.notifications.desktopAlertsEnabled !== true) throw new Error('legacy 
 const disabled = normalizeUserSettings({ terminal: { attentionEnabled: false } })
 if (disabled.terminal.attentionEnabled !== false) throw new Error('disabled terminal attention setting must be preserved')
 
+if (defaults.terminal.readingMode !== false) throw new Error('reading mode must default off')
+
+const readingMode = normalizeUserSettings({ terminal: { readingMode: true } })
+if (readingMode.terminal.readingMode !== true) throw new Error('enabled reading mode setting must be preserved')
+
+const invalidReadingMode = normalizeUserSettings({ terminal: { readingMode: 'yes' as never } })
+if (invalidReadingMode.terminal.readingMode !== false) throw new Error('invalid reading mode must normalize to default')
+
 const disabledAgentAlerts = normalizeUserSettings({ terminal: { agentAlertsEnabled: false } })
 if (disabledAgentAlerts.terminal.agentAlertsEnabled !== false) {
   throw new Error('disabled agent alerts setting must be preserved')
