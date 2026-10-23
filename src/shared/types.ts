@@ -148,6 +148,8 @@ export interface AgentSessionHistoryQuery {
   workspaceId?: string
   provider?: AgentProvider
   search?: string
+  /** Number of matching sessions to skip, newest first. */
+  offset?: number
   limit?: number
 }
 

@@ -214,6 +214,33 @@ test('rejects malformed transcript queries and passes normalized IDs to the read
   assert.deepEqual(received, [{ provider: 'claude', identifier: 'valid-session' }])
 })
 
+test('passes pagination offsets to the history reader and rejects malformed ones', async () => {
+  const ipcMain = new FakeIpcMain()
+  const { registerAgentsIPC } = loadAgentsIPC(ipcMain)
+  const historyCalls: Array<{ offset?: number; limit?: number }> = []
+  registerAgentsIPC({
+    history: async (options) => {
+      historyCalls.push({ offset: options.offset, limit: options.limit })
+      return { items: [], hasMore: false }
+    },
+  })
+  const sender = new FakeWebContents(70)
+
+  for (const offset of [-1, 1.5, '0', null]) {
+    assert.deepEqual(
+      await ipcMain.call('agents:history', sender, { offset }),
+      { items: [], hasMore: false },
+    )
+  }
+  assert.equal(historyCalls.length, 0)
+
+  assert.deepEqual(
+    await ipcMain.call('agents:history', sender, { offset: 20, limit: 2 }),
+    { items: [], hasMore: false },
+  )
+  assert.deepEqual(historyCalls, [{ offset: 20, limit: 2 }])
+})
+
 test('keeps the replacement session subscription after a late stale unsubscribe', async () => {
   const ipcMain = new FakeIpcMain()
   const { registerAgentsIPC } = loadAgentsIPC(ipcMain)

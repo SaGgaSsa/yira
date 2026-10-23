@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
+  AGENT_HISTORY_PAGE_SIZE,
   buildAgentHistoryQuery,
   canLaunchAgent,
   canResumeAgent,
@@ -10,7 +11,7 @@ import {
   formatAgentAge,
   getAgentHistoryRefreshDelay,
   sanitizeAgentCwd,
-  shouldShowAgentHistoryMore,
+  shouldShowAgentHistoryPager,
   shouldRequestAgentData,
 } from './agentPanel'
 import type { AgentActiveSessionSnapshot, AgentProviderAvailabilitySnapshot, AgentProvidersConfig } from '@shared/types'
@@ -30,10 +31,43 @@ test('buildAgentHistoryQuery includes the workspace provider and omits blank sea
     workspaceId: 'workspace-1',
     provider: 'claude',
     search: 'release notes',
+    offset: 0,
+    limit: AGENT_HISTORY_PAGE_SIZE,
   })
   assert.deepEqual(buildAgentHistoryQuery('workspace-1', 'claude', '   '), {
     workspaceId: 'workspace-1',
     provider: 'claude',
+    offset: 0,
+    limit: AGENT_HISTORY_PAGE_SIZE,
+  })
+})
+
+test('buildAgentHistoryQuery requests one fixed page of newest-first sessions', () => {
+  assert.equal(AGENT_HISTORY_PAGE_SIZE, 10)
+  assert.deepEqual(buildAgentHistoryQuery('workspace-1', 'claude', '', 3), {
+    workspaceId: 'workspace-1',
+    provider: 'claude',
+    offset: 30,
+    limit: 10,
+  })
+  assert.deepEqual(buildAgentHistoryQuery('workspace-1', 'codex', ' release notes ', 2), {
+    workspaceId: 'workspace-1',
+    provider: 'codex',
+    search: 'release notes',
+    offset: 20,
+    limit: 10,
+  })
+  assert.deepEqual(buildAgentHistoryQuery('workspace-1', 'claude', '', -2), {
+    workspaceId: 'workspace-1',
+    provider: 'claude',
+    offset: 0,
+    limit: 10,
+  })
+  assert.deepEqual(buildAgentHistoryQuery('workspace-1', 'claude', '', 1.5), {
+    workspaceId: 'workspace-1',
+    provider: 'claude',
+    offset: 10,
+    limit: 10,
   })
 })
 
@@ -159,11 +193,14 @@ test('agent history refresh runNow cancels pending scheduled callbacks', () => {
   }
 })
 
-test('agent history more indicator stays visible while retained history is loading', () => {
-  assert.equal(shouldShowAgentHistoryMore('idle', true), false)
-  assert.equal(shouldShowAgentHistoryMore('loading', true), true)
-  assert.equal(shouldShowAgentHistoryMore('ready', true), true)
-  assert.equal(shouldShowAgentHistoryMore('error', true), false)
-  assert.equal(shouldShowAgentHistoryMore('loading', false), false)
-  assert.equal(shouldShowAgentHistoryMore('ready', false), false)
+test('agent history pager shows while paging results load or a neighboring page exists', () => {
+  assert.equal(shouldShowAgentHistoryPager('idle', 0, true), false)
+  assert.equal(shouldShowAgentHistoryPager('idle', 2, true), false)
+  assert.equal(shouldShowAgentHistoryPager('loading', 0, true), true)
+  assert.equal(shouldShowAgentHistoryPager('loading', 0, false), false)
+  assert.equal(shouldShowAgentHistoryPager('loading', 2, false), true)
+  assert.equal(shouldShowAgentHistoryPager('ready', 0, true), true)
+  assert.equal(shouldShowAgentHistoryPager('ready', 0, false), false)
+  assert.equal(shouldShowAgentHistoryPager('ready', 2, false), true)
+  assert.equal(shouldShowAgentHistoryPager('error', 2, true), false)
 })

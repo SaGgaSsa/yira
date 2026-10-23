@@ -57,11 +57,16 @@ export function getAgentHistoryRefreshDelay(search: string): number {
   return search.trim() ? HISTORY_SEARCH_DEBOUNCE_MS : 0
 }
 
-export function shouldShowAgentHistoryMore(
+/** Sessions requested per History page, newest first. */
+export const AGENT_HISTORY_PAGE_SIZE = 10
+
+/** Show the History pager while page results load or a neighboring page exists. */
+export function shouldShowAgentHistoryPager(
   status: 'idle' | 'loading' | 'ready' | 'error',
+  page: number,
   hasMore: boolean,
 ): boolean {
-  return hasMore && (status === 'loading' || status === 'ready')
+  return (status === 'loading' || status === 'ready') && (page > 0 || hasMore)
 }
 
 export function createAgentHistoryRefreshScheduler(
@@ -104,16 +109,20 @@ export function filterAgentSessions(
   return snapshot.sessions.filter((session) => session.workspaceId === workspaceId && session.provider === selectedProvider)
 }
 
-/** Build the restricted bridge query used by the Agents panel. */
+/** Build the restricted, single-page bridge query used by the Agents panel. */
 export function buildAgentHistoryQuery(
   workspaceId: string,
   provider: AgentProvider,
   search: string,
+  page = 0,
 ): AgentSessionHistoryQuery {
   const normalizedSearch = search.trim().replace(/\s+/g, ' ')
+  const normalizedPage = Math.max(0, Math.floor(page))
   return {
     workspaceId,
     provider,
+    offset: normalizedPage * AGENT_HISTORY_PAGE_SIZE,
+    limit: AGENT_HISTORY_PAGE_SIZE,
     ...(normalizedSearch ? { search: normalizedSearch } : {}),
   }
 }

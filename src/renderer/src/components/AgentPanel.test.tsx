@@ -89,5 +89,6 @@ if (!source.includes('resumeCwd: sanitizeAgentCwd(item.cwd) ?? undefined')) thro
 if (!source.includes('onOpenAgentsSession(result.tileId)')) throw new Error('resumed sessions must open and focus Agents View')
 if (source.includes('addTerminal(availableProfile.id')) throw new Error('history resume must not create a terminal tile')
 if (!source.includes('resumeDisabled={!canResume(item.provider)}')) throw new Error('unavailable providers must disable resume actions')
-if (!source.includes('}, [historySearch, workspaceId, selectedProvider])')) throw new Error('search changes must invalidate in-flight history requests')
+if (!source.includes('}, [historySearch, historyPage, workspaceId, selectedProvider])')) throw new Error('search changes must invalidate in-flight history requests')
+if (!source.includes('buildAgentHistoryQuery(workspaceId, selectedProvider, historySearch, historyPage)')) throw new Error('history refresh must request only the currently visible page from the bridge')
 if (!workspacePanelSource.includes('key={`${workspaceId}:${effectiveAgentProvider ?? \'none\'}`}')) throw new Error('Agents panel must remount when its workspace provider scope changes')
