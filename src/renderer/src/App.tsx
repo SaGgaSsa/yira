@@ -534,7 +534,7 @@ function AppContent(): React.ReactElement {
     sidebarCollapsed,
     workspacePanelOpen: activeWorkspaceConfig.workspacePanelOpen,
     workspacePanelHiddenByFocus,
-    focusViewActive: shouldHideWorkspacePanelForView(viewMode, shouldKeepSidebarOpen),
+    focusViewActive: shouldHideWorkspacePanelForView(viewMode, shouldKeepSidebarOpen, terminalReadingMode),
     maximizedSessionId: agentsMaximizedSessionId,
     workspacePanelRevealedForSessionId,
     windowWidth,
@@ -670,12 +670,13 @@ function AppContent(): React.ReactElement {
       activeWorkspaceId,
       viewMode,
       shouldKeepSidebarOpen,
+      terminalReadingMode,
     ))
-  }, [activeWorkspaceId, shouldKeepSidebarOpen, viewMode])
+  }, [activeWorkspaceId, shouldKeepSidebarOpen, terminalReadingMode, viewMode])
 
   useEffect(() => {
-    setWorkspacePanelHiddenByFocus(shouldHideWorkspacePanelForView(viewMode, shouldKeepSidebarOpen))
-  }, [activeWorkspaceId, shouldKeepSidebarOpen, viewMode])
+    setWorkspacePanelHiddenByFocus(shouldHideWorkspacePanelForView(viewMode, shouldKeepSidebarOpen, terminalReadingMode))
+  }, [activeWorkspaceId, shouldKeepSidebarOpen, terminalReadingMode, viewMode])
 
   useEffect(() => {
     void initializeUpdates()

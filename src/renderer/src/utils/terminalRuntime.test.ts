@@ -10,6 +10,7 @@ import type { TerminalSessionIdentity, TerminalSessionTarget } from '@shared/ter
 import {
   ACK_CHUNK_CHARS,
   createTerminalRuntime,
+  resolveReadingColumnLeft,
   type FitAddonLike,
   type ResizeObserverLike,
   type TerminalLike,
@@ -1224,6 +1225,26 @@ test('limits the fitted columns to maxColumns and restores the full width when i
   assert.equal(harness.terminals[0].cols, 250)
   assert.equal(harness.bridge.resizeCalls.at(-1)?.cols, 250)
   await runtime.dispose(false)
+})
+
+test('centers the reading column text on the window and keeps it there when a side panel opens', () => {
+  const placement = { viewportWidth: 2000, columnWidth: 900, screenWidth: 880, paddingLeft: 0 }
+
+  // Full-width host: the text sits in the middle of the window.
+  assert.equal(resolveReadingColumnLeft({ ...placement, hostLeft: 0, hostWidth: 2000 }), 560)
+  // A 300px sidebar narrows the host from the left; the text stays at window x = 560.
+  assert.equal(resolveReadingColumnLeft({ ...placement, hostLeft: 300, hostWidth: 1700 }), 260)
+  // A right panel narrows it from the right without moving the text either.
+  assert.equal(resolveReadingColumnLeft({ ...placement, hostLeft: 300, hostWidth: 1400 }), 260)
+})
+
+test('shifts the reading column only as far as a side panel pushes it', () => {
+  const placement = { viewportWidth: 2000, columnWidth: 900, screenWidth: 880, paddingLeft: 0 }
+
+  // Not enough room on the right: the column touches the host's right edge.
+  assert.equal(resolveReadingColumnLeft({ ...placement, hostLeft: 0, hostWidth: 1300 }), 400)
+  // Not enough room on the left: the column touches the host's left edge.
+  assert.equal(resolveReadingColumnLeft({ ...placement, hostLeft: 700, hostWidth: 1300 }), 0)
 })
 
 test('turning maxColumns on refits a terminal that was filling the host', async () => {

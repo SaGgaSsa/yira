@@ -64,3 +64,11 @@ if (shouldHideWorkspacePanelForView('fullview', true)) {
 if (shouldHideWorkspacePanelForView('gridview', false) || shouldHideWorkspacePanelForView('splitview', false)) {
   throw new Error('only focus view hides the workspace panel')
 }
+
+if (resolveSidebarCollapsedAfterWorkspaceViewChange(true, 'workspace-a', 'workspace-a', 'fullview', false, true)) {
+  throw new Error('reading mode must show the sidebar in focus view')
+}
+
+if (shouldHideWorkspacePanelForView('fullview', false, true)) {
+  throw new Error('reading mode must keep the workspace panel in focus view')
+}
