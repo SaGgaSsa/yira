@@ -25,6 +25,7 @@ import { clearWindowAttention, registerNotificationIPC } from './ipc/notificatio
 import { registerWindowIPC, type WindowClosePreparationBridge } from './ipc/window'
 import { registerFloatingTilesIPC } from './ipc/floatingTiles'
 import { registerAgentsIPC } from './ipc/agents'
+import { configureAgentHistoryIndex, flushAgentHistoryIndex } from './agents/historyIndex'
 import { registerScriptsIPC } from './ipc/scripts'
 import { AgentUsageService } from './agentUsage'
 import { AgentUsageDetailsService } from './agentUsageDetails'
@@ -173,6 +174,7 @@ app.on('before-quit', (event) => {
   if (closePreparationApproved) {
     stopTerminalProcessActivityMonitor()
     void modPanelBridge.close()
+    void flushAgentHistoryIndex().catch(() => undefined)
     return
   }
   event.preventDefault()
@@ -301,6 +303,7 @@ app.whenReady().then(async () => {
 
   // Register all IPC handlers
   registerWorkspaceIPC({ beforeDelete: destroyWorkspaceTerminalSessions })
+  configureAgentHistoryIndex(join(YIRA_HOME, 'history-index.json'))
   registerAgentsIPC({
     usageService: agentUsageService,
     usageDetailsService: agentUsageDetailsService,

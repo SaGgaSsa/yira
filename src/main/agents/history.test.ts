@@ -3,9 +3,11 @@ import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import test from 'node:test'
 
+import { configureAgentHistoryIndex, flushAgentHistoryIndex } from './historyIndex'
 import {
   clearAgentHistoryCache,
   getAgentHistoryCacheStats,
+  getAgentHistoryReadStats,
   readAgentSessionHistory,
   readClaudeSessionHistory,
   readCodexSessionHistory,
@@ -587,5 +589,69 @@ test('excludes subagent directories from history listings', async () => {
     assert.deepEqual(result.items.map((item) => item.identifier), ['main-session'])
   } finally {
     await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
+test('reads appended transcript lines incrementally from the stored offset', async () => {
+  const root = await makeFixtureRoot()
+  clearAgentHistoryCache()
+  try {
+    const transcriptPath = join(root, 'claude', 'incremental.jsonl')
+    await writeJsonLines(transcriptPath, [
+      { type: 'system', sessionId: 'incremental-session', timestamp: '2026-08-10T19:00:00.000Z' },
+      { type: 'user', sessionId: 'incremental-session', timestamp: '2026-08-10T19:00:01.000Z', content: 'First prompt' },
+      { type: 'assistant', sessionId: 'incremental-session', timestamp: '2026-08-10T19:00:02.000Z', message: { content: [{ type: 'text', text: 'First reply' }] } },
+    ])
+    const first = await readClaudeSessionHistory({ rootPath: join(root, 'claude') })
+    assert.equal(first.items[0].messageCount, 2)
+    assert.equal(first.items[0].preview, 'First reply')
+    assert.equal(first.items[0].lastActivityAt, '2026-08-10T19:00:02.000Z')
+
+    const before = getAgentHistoryReadStats().bytesRead
+    await fs.appendFile(transcriptPath, [
+      { type: 'user', sessionId: 'incremental-session', timestamp: '2026-08-10T19:00:03.000Z', content: 'Second prompt' },
+      { type: 'assistant', sessionId: 'incremental-session', timestamp: '2026-08-10T19:00:04.000Z', message: { content: [{ type: 'text', text: 'Second reply' }] } },
+    ].map((row) => JSON.stringify(row) + '\n').join(''), 'utf8')
+
+    const second = await readClaudeSessionHistory({ rootPath: join(root, 'claude') })
+    assert.equal(second.items[0].messageCount, 4)
+    assert.equal(second.items[0].preview, 'Second reply')
+    assert.equal(second.items[0].lastActivityAt, '2026-08-10T19:00:04.000Z')
+
+    const totalSize = (await fs.stat(transcriptPath)).size
+    assert.ok(getAgentHistoryReadStats().bytesRead - before < totalSize)
+  } finally {
+    clearAgentHistoryCache()
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
+test('reuses the persisted index without rereading transcripts after a restart', async () => {
+  const root = await makeFixtureRoot()
+  const indexRoot = await fs.mkdtemp(join(process.cwd(), '.tmp-agent-history-index-'))
+  try {
+    configureAgentHistoryIndex(join(indexRoot, 'history-index.json'))
+    const transcriptPath = join(root, 'claude', 'persisted.jsonl')
+    await writeJsonLines(transcriptPath, [
+      { type: 'system', sessionId: 'persisted-session' },
+      { type: 'user', sessionId: 'persisted-session', content: 'Persisted prompt' },
+      { type: 'assistant', sessionId: 'persisted-session', message: { content: [{ type: 'text', text: 'Persisted reply' }] } },
+    ])
+
+    const options = { rootPath: join(root, 'claude') }
+    const first = await readClaudeSessionHistory(options)
+    assert.equal(first.items[0].title, 'Persisted prompt')
+    assert.equal(first.items[0].preview, 'Persisted reply')
+
+    await flushAgentHistoryIndex()
+    clearAgentHistoryCache()
+    const second = await readClaudeSessionHistory(options)
+    assert.deepEqual(second.items, first.items)
+    assert.equal(getAgentHistoryReadStats().bytesRead, 0)
+  } finally {
+    configureAgentHistoryIndex(null)
+    clearAgentHistoryCache()
+    await fs.rm(root, { recursive: true, force: true })
+    await fs.rm(indexRoot, { recursive: true, force: true })
   }
 })

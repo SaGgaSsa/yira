@@ -8,6 +8,15 @@ import type {
   AgentSessionHistoryItem,
   AgentSessionHistoryResult,
 } from '@shared/types'
+import {
+  clearAgentHistoryIndex,
+  ensureAgentHistoryIndexLoaded,
+  forEachStoredTranscript,
+  getStoredTranscript,
+  pruneStoredTranscripts,
+  setStoredTranscript,
+  type StoredTranscriptSession,
+} from './historyIndex'
 import { getAgentProviderTranscriptRoot, normalizeResumeId } from './providers'
 import {
   DEFAULT_HISTORY_RESULT_LIMIT,
@@ -30,6 +39,8 @@ const MAX_LISTED_TRANSCRIPT_FILES = 20_000
 const MAX_HEAD_LINES = 50
 const MAX_TRANSCRIPT_DEPTH = 8
 const TRANSCRIPT_PARSE_CONCURRENCY = 8
+const INCREMENTAL_READ_BYTES = 1024 * 1024
+const TAIL_FOOTPRINT_BYTES = 64
 const MAX_TITLE_LENGTH = 120
 const MAX_PREVIEW_LENGTH = 280
 
@@ -53,31 +64,14 @@ export interface AgentSessionHistoryOptions extends AgentHistoryReadOptions {
   provider?: AgentProvider
 }
 
-interface ParsedSession {
-  identifier: string
-  cwd?: string
-  model?: string
-  customTitle?: string
-  aiTitle?: string
-  summaryTitle?: string
-  firstPrompt?: string
-  firstCommand?: string
-  preview?: string
-  messageCount: number
-  messageTimes: string[]
-  replyIds: Set<string>
-}
+// The parsed state doubles as the persisted index payload, so it must stay
+// JSON-serializable and bounded instead of growing with the transcript.
+type ParsedSession = StoredTranscriptSession
 
 interface TranscriptFile {
   path: string
   size: number
   mtimeMs: number
-}
-
-interface TranscriptCacheEntry {
-  size: number
-  mtimeMs: number
-  parsed: ParsedSession | null
 }
 
 /** Cheap cwd/exclusion probe taken from the first transcript lines. */
@@ -86,22 +80,26 @@ interface TranscriptHead {
   excluded: boolean
 }
 
-interface HeadCacheEntry {
-  size: number
-  mtimeMs: number
-  head: TranscriptHead
-}
-
-const transcriptCache = new Map<string, TranscriptCacheEntry>()
-const headCache = new Map<string, HeadCacheEntry>()
+const readStats = { bytesRead: 0 }
 
 export function clearAgentHistoryCache(): void {
-  transcriptCache.clear()
-  headCache.clear()
+  clearAgentHistoryIndex()
+  readStats.bytesRead = 0
 }
 
 export function getAgentHistoryCacheStats(): { transcripts: number; heads: number } {
-  return { transcripts: transcriptCache.size, heads: headCache.size }
+  let transcripts = 0
+  let heads = 0
+  forEachStoredTranscript((entry) => {
+    if (entry.session !== undefined) transcripts += 1
+    if (entry.head) heads += 1
+  })
+  return { transcripts, heads }
+}
+
+/** Bytes read from transcript files since the last cache clear. */
+export function getAgentHistoryReadStats(): { bytesRead: number } {
+  return { bytesRead: readStats.bytesRead }
 }
 
 function stringValue(value: unknown, maxLength = 1_024): string | undefined {
@@ -129,7 +127,7 @@ function sessionId(value: unknown): string | undefined {
 }
 
 function createParsedSession(identifier: string): ParsedSession {
-  return { identifier, messageCount: 0, messageTimes: [], replyIds: new Set() }
+  return { identifier, messageCount: 0 }
 }
 
 function commandTitle(event: Extract<TranscriptEvent, { kind: 'command' }>): string {
@@ -157,13 +155,19 @@ function addEvents(parsed: ParsedSession, events: TranscriptEvent[], provider: A
     if (!text) continue
     let shouldCount = true
     if (event.kind === 'reply' && provider === 'claude' && event.messageId) {
-      if (parsed.replyIds.has(event.messageId)) shouldCount = false
-      else parsed.replyIds.add(event.messageId)
+      // Claude writes the blocks of one assistant message in consecutive
+      // records sharing the same message.id, so comparing against the last
+      // reply id is enough to keep duplicate blocks from counting twice.
+      if (parsed.lastReplyId === event.messageId) shouldCount = false
+      else parsed.lastReplyId = event.messageId
     }
     if (event.kind === 'prompt') parsed.firstPrompt ??= text
     if (shouldCount) parsed.messageCount += 1
     parsed.preview = text
-    if (event.timestamp) parsed.messageTimes.push(event.timestamp)
+    if (event.timestamp) {
+      parsed.firstTime ??= event.timestamp
+      parsed.lastTime = event.timestamp
+    }
   }
 }
 
@@ -225,23 +229,96 @@ async function listTranscriptFiles(rootPath: string): Promise<TranscriptFile[]> 
   return files
 }
 
-function cacheTranscript(path: string, size: number, mtimeMs: number, parsed: ParsedSession | null): void {
-  transcriptCache.delete(path)
-  transcriptCache.set(path, { size, mtimeMs, parsed })
-  while (transcriptCache.size > MAX_TRANSCRIPT_FILES) {
-    const oldestPath = transcriptCache.keys().next().value
-    if (!oldestPath) break
-    transcriptCache.delete(oldestPath)
+/** Reads up to 64 base64-encoded bytes of the file ending at `offset`. */
+async function readTailFootprint(path: string, offset: number): Promise<string> {
+  if (offset <= 0) return ''
+  const length = Math.min(TAIL_FOOTPRINT_BYTES, offset)
+  const buffer = Buffer.alloc(length)
+  const handle = await fs.open(path, 'r')
+  try {
+    const { bytesRead } = await handle.read(buffer, 0, length, offset - length)
+    if (bytesRead <= 0) return ''
+    readStats.bytesRead += bytesRead
+    return buffer.subarray(0, bytesRead).toString('base64')
+  } finally {
+    await handle.close()
   }
 }
 
-function cacheHead(path: string, size: number, mtimeMs: number, head: TranscriptHead): void {
-  headCache.delete(path)
-  headCache.set(path, { size, mtimeMs, head })
-  while (headCache.size > MAX_TRANSCRIPT_FILES) {
-    const oldestPath = headCache.keys().next().value
-    if (!oldestPath) break
-    headCache.delete(oldestPath)
+/**
+ * Reads complete lines from [startOffset, endOffset) and hands each one to
+ * `onLine`, returning true from the callback to stop early. The partial line
+ * at the end is left unconsumed: the returned offset lands after the last
+ * line break, so a provider finishing that line is picked up on the next
+ * read instead of being counted twice. Lines longer than
+ * MAX_TRANSCRIPT_LINE_LENGTH are skipped whole without buffering them.
+ */
+async function readTranscriptLines(
+  path: string,
+  startOffset: number,
+  endOffset: number,
+  onLine: (line: string) => boolean,
+): Promise<number> {
+  if (endOffset <= startOffset) return startOffset
+  const handle = await fs.open(path, 'r')
+  try {
+    const chunk = Buffer.alloc(Math.min(INCREMENTAL_READ_BYTES, endOffset - startOffset))
+    const partial: Buffer[] = []
+    let partialLength = 0
+    let skipping = false
+    let position = startOffset
+    let consumed = startOffset
+    while (position < endOffset) {
+      const { bytesRead } = await handle.read(chunk, 0, chunk.length, position)
+      if (bytesRead <= 0) break
+      readStats.bytesRead += bytesRead
+      const slice = chunk.subarray(0, bytesRead)
+      let lineStart = 0
+      let stopped = false
+      for (let index = 0; index < slice.length && !stopped; index += 1) {
+        if (slice[index] !== 0x0a) continue
+        const segment = slice.subarray(lineStart, index)
+        lineStart = index + 1
+        consumed = position + lineStart
+        if (skipping) {
+          skipping = false
+          continue
+        }
+        if (partialLength + segment.length > MAX_TRANSCRIPT_LINE_LENGTH) {
+          skipping = true
+          partial.length = 0
+          partialLength = 0
+          continue
+        }
+        if (segment.length > 0 || partial.length > 0) {
+          partial.push(segment)
+          partialLength += segment.length
+        }
+        if (partialLength === 0) continue
+        stopped = onLine(Buffer.concat(partial).toString('utf8'))
+        partial.length = 0
+        partialLength = 0
+      }
+      if (stopped) return consumed
+      // Bytes after the final line break start the next line unless the
+      // oversized line they belong to is being skipped.
+      if (!skipping) {
+        const trailing = slice.subarray(lineStart)
+        if (trailing.length > 0) {
+          partial.push(trailing)
+          partialLength += trailing.length
+          if (partialLength > MAX_TRANSCRIPT_LINE_LENGTH) {
+            skipping = true
+            partial.length = 0
+            partialLength = 0
+          }
+        }
+      }
+      position += bytesRead
+    }
+    return consumed
+  } finally {
+    await handle.close()
   }
 }
 
@@ -254,27 +331,40 @@ async function parseTranscriptFile(
   if (file.size > MAX_TRANSCRIPT_BYTES) return null
   const modifiedAt = new Date(file.mtimeMs).toISOString()
 
-  const cached = transcriptCache.get(file.path)
-  if (cached && cached.size === file.size && cached.mtimeMs === file.mtimeMs) {
-    transcriptCache.delete(file.path)
-    transcriptCache.set(file.path, cached)
-    return { parsed: cached.parsed, modifiedAt }
+  const stored = getStoredTranscript(file.path)
+  const storedSession = stored && stored.provider === provider ? stored.session : undefined
+  const storedHead = stored && stored.provider === provider ? stored.head : undefined
+
+  // The size and mtime snapshot check comes before the footprint probe so an
+  // untouched file is answered without touching disk. A missing session marks
+  // a head-only entry that still awaits its first full parse.
+  if (stored && storedSession !== undefined && file.size === stored.size && file.mtimeMs === stored.mtimeMs) {
+    return { parsed: storedSession ? { ...storedSession } : null, modifiedAt }
   }
 
-  const input = createReadStream(file.path, { encoding: 'utf8' })
-  const lines = createInterface({ input, crlfDelay: Infinity })
+  // Resume from the stored offset only when full session state survived:
+  // rewritten, truncated, excluded, or never-parsed files start from zero.
+  let startOffset = 0
   let parsed: ParsedSession | null = null
-  let excluded = false
+  if (
+    stored && storedSession && !stored.excluded &&
+    file.size > stored.size && file.size >= stored.offset && stored.offset > 0 &&
+    await readTailFootprint(file.path, stored.offset) === stored.tail
+  ) {
+    startOffset = stored.offset
+    parsed = { ...storedSession }
+  }
 
+  let excluded = false
+  let consumed: number
   try {
-    for await (const line of lines) {
-      if (!line || line.length > MAX_TRANSCRIPT_LINE_LENGTH) continue
+    consumed = await readTranscriptLines(file.path, startOffset, file.size, (line) => {
       let row: unknown
       try {
         row = JSON.parse(line)
       } catch {
         // Providers may leave a partial final line while writing. Ignore it.
-        continue
+        return false
       }
 
       const classification = provider === 'claude'
@@ -283,43 +373,66 @@ async function parseTranscriptFile(
       if (provider === 'codex' && classification.sessionMeta) {
         if (isCodexExecSession(classification.sessionMeta) || isCodexWorkerSession(classification.sessionMeta)) {
           excluded = true
-          input.destroy()
-          lines.close()
-          break
+          return true
         }
       }
       parsed = addClassification(provider, parsed, classification)
-    }
-  } finally {
-    lines.close()
-    input.destroy()
+      return false
+    })
+  } catch {
+    // A read failure is reported like any other malformed transcript.
+    return null
   }
 
   if (excluded || !parsed || parsed.messageCount === 0) parsed = null
-  // Providers append while we read; only cache when the file did not change.
-  const finalStats = await fs.stat(file.path)
-  if (finalStats.size === file.size && finalStats.mtimeMs === file.mtimeMs) {
-    cacheTranscript(file.path, file.size, file.mtimeMs, parsed)
-  }
+
+  // A final stat keeps the old mid-read existence check: the entry below
+  // stores the listing snapshot, and progress through `consumed` stays valid
+  // even when the provider appended while we read, because new data can only
+  // land after the consumed offset.
+  const finalStats = await fs.stat(file.path).catch(() => null)
+  if (!finalStats) return null
+  setStoredTranscript(file.path, {
+    provider,
+    size: file.size,
+    mtimeMs: file.mtimeMs,
+    offset: consumed,
+    tail: await readTailFootprint(file.path, consumed),
+    excluded,
+    head: storedHead,
+    session: parsed ? { ...parsed } : null,
+  })
   return { parsed, modifiedAt }
+}
+
+/** A saved head stays valid while its prefix bytes are still in place. */
+async function headEntryMatches(stored: { size: number; mtimeMs: number; offset: number; tail: string }, file: TranscriptFile): Promise<boolean> {
+  if (file.size < stored.offset) return false
+  if (file.size === stored.size && file.mtimeMs === stored.mtimeMs) return true
+  // A zero offset carries no footprint, so head-only entries only trust
+  // their own size and mtime snapshot.
+  if (stored.offset === 0) return false
+  return await readTailFootprint(file.path, stored.offset) === stored.tail
 }
 
 async function readTranscriptHead(
   provider: AgentProvider,
   file: TranscriptFile,
 ): Promise<TranscriptHead> {
-  // A fully parsed copy already carries the session cwd; skip the extra stream.
-  const cachedTranscript = transcriptCache.get(file.path)
-  if (cachedTranscript && cachedTranscript.size === file.size && cachedTranscript.mtimeMs === file.mtimeMs) {
-    return cachedTranscript.parsed?.cwd
-      ? { cwd: cachedTranscript.parsed.cwd, excluded: false }
-      : { excluded: false }
-  }
-  const cachedHead = headCache.get(file.path)
-  if (cachedHead && cachedHead.size === file.size && cachedHead.mtimeMs === file.mtimeMs) {
-    headCache.delete(file.path)
-    headCache.set(file.path, cachedHead)
-    return cachedHead.head
+  const stored = getStoredTranscript(file.path)
+  if (stored && stored.provider === provider) {
+    // A fully parsed copy already carries the session cwd; transcripts only
+    // grow, so that prefix stays valid across later appends.
+    if (stored.session) {
+      return stored.session.cwd
+        ? { cwd: stored.session.cwd, excluded: false }
+        : { excluded: false }
+    }
+    if (await headEntryMatches(stored, file)) {
+      return stored.head?.cwd
+        ? { cwd: stored.head.cwd, excluded: stored.excluded }
+        : { excluded: stored.excluded }
+    }
   }
 
   const input = createReadStream(file.path, { encoding: 'utf8' })
@@ -362,11 +475,18 @@ async function readTranscriptHead(
     input.destroy()
   }
 
-  // Providers append while we read; only cache when the file did not change.
-  const finalStats = await fs.stat(file.path)
-  if (finalStats.size === file.size && finalStats.mtimeMs === file.mtimeMs) {
-    cacheHead(file.path, file.size, file.mtimeMs, head)
-  }
+  await fs.stat(file.path)
+  // The probe only claims the prefix, so the entry restarts from a clean
+  // offset and lets the next full parse fill in session state.
+  setStoredTranscript(file.path, {
+    provider,
+    size: file.size,
+    mtimeMs: file.mtimeMs,
+    offset: 0,
+    tail: '',
+    excluded: head.excluded,
+    head: head.cwd ? { cwd: head.cwd } : {},
+  })
   return head
 }
 
@@ -469,9 +589,8 @@ function resultItem(
   modifiedAt: string,
   presentationCwd: string | undefined,
 ): AgentSessionHistoryItem {
-  const timestamps = parsed.messageTimes
-  const startedAt = timestamps[0] ?? modifiedAt
-  const lastActivityAt = timestamps.at(-1) ?? startedAt
+  const startedAt = parsed.firstTime ?? modifiedAt
+  const lastActivityAt = parsed.lastTime ?? startedAt
   const title = parsed.customTitle ?? parsed.aiTitle ?? parsed.summaryTitle ?? parsed.firstPrompt ?? parsed.firstCommand
   return {
     identifier: parsed.identifier,
@@ -490,6 +609,7 @@ async function readProviderSessionHistory(
   provider: AgentProvider,
   options: AgentHistoryReadOptions,
 ): Promise<AgentSessionHistoryResult> {
+  await ensureAgentHistoryIndexLoaded()
   const rootPath = options.rootPath ?? options.roots?.[provider] ?? getAgentProviderTranscriptRoot(provider, options.homeDirectory)
   const canonicalRoot = await canonicalDirectory(rootPath)
   if (!canonicalRoot) return { items: [], hasMore: false }
@@ -505,6 +625,7 @@ async function readProviderSessionHistory(
   // second pass over the provider roots.
   const target = offset + limit + 1
   const files = await listTranscriptFiles(canonicalRoot)
+  pruneStoredTranscripts(canonicalRoot, new Set(files.map((file) => file.path)))
   const resolveCwd = createCanonicalCwdResolver()
   const seen = new Set<string>()
   const collected: AgentSessionHistoryItem[] = []
@@ -562,6 +683,7 @@ export async function findAgentTranscriptFile(
   identifier: string,
   options: AgentHistoryReadOptions = {},
 ): Promise<string | null> {
+  await ensureAgentHistoryIndexLoaded()
   const normalizedIdentifier = normalizeResumeId(identifier)
   if (!normalizedIdentifier) return null
 
@@ -575,6 +697,7 @@ export async function findAgentTranscriptFile(
   if (options.workspaceRoot !== undefined && !workspaceRoot) return null
 
   const files = await listTranscriptFiles(canonicalRoot)
+  pruneStoredTranscripts(canonicalRoot, new Set(files.map((file) => file.path)))
   const likelyFiles = files.filter((file) => basename(file.path).includes(normalizedIdentifier))
   const remainingFiles = files.filter((file) => !basename(file.path).includes(normalizedIdentifier))
   const resolveCwd = createCanonicalCwdResolver()
