@@ -26,6 +26,25 @@ export function isActivityPaletteSession(session: AgentActiveSession): boolean {
   return session.status !== 'exited'
 }
 
+/**
+ * Open agents that were already running before this window loaded, such as
+ * agents the terminal daemon kept alive across an app update. Their
+ * workspaces start active so the sidebar matches the Activity palette.
+ */
+export function selectRestoredAgentSessions(
+  sessions: readonly AgentActiveSession[],
+  loadedAt: number,
+  workspaceIds: ReadonlySet<string>,
+  handledSessionIds: ReadonlySet<string>,
+): AgentActiveSession[] {
+  return sessions.filter((session) => (
+    isActivityPaletteSession(session)
+    && workspaceIds.has(session.workspaceId)
+    && !handledSessionIds.has(session.sessionId)
+    && Date.parse(session.startedAt) < loadedAt
+  ))
+}
+
 export function getAgentSessionSurface(session: AgentActiveSession): AgentSessionSurface {
   return session.surface ?? 'tile'
 }
