@@ -8,6 +8,7 @@ import {
   getActivityPaletteRowSizes,
   getAgentSessionSurface,
   moveActivityPaletteSelection,
+  selectRestoredAgentSessions,
   summarizeActivityPalette,
 } from './activityPalette'
 
@@ -140,4 +141,19 @@ test('moves selection through agents and jumps between cards', () => {
   assert.equal(moveActivityPaletteSelection(groups, 'a1', 'ArrowLeft'), 'a1')
   assert.equal(moveActivityPaletteSelection(groups, 'missing', 'ArrowDown'), 'a1')
   assert.equal(moveActivityPaletteSelection([], null, 'ArrowDown'), null)
+})
+
+test('selects open agents that started before the window loaded in known workspaces', () => {
+  const loadedAt = Date.parse('2026-01-01T01:00:00.000Z')
+  const sessions = [
+    session({ sessionId: 'restored', workspaceId: 'a', status: 'done' }),
+    session({ sessionId: 'handled', workspaceId: 'a' }),
+    session({ sessionId: 'exited', workspaceId: 'a', status: 'exited' }),
+    session({ sessionId: 'unknown-workspace', workspaceId: 'gone' }),
+    session({ sessionId: 'started-now', workspaceId: 'b', startedAt: '2026-01-01T01:00:00.000Z' }),
+  ]
+
+  const selected = selectRestoredAgentSessions(sessions, loadedAt, new Set(['a', 'b']), new Set(['handled']))
+
+  assert.deepEqual(selected.map((entry) => entry.sessionId), ['restored'])
 })

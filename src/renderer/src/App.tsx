@@ -26,6 +26,7 @@ import { useSettingsStore } from './store/settingsStore'
 import { useCanvasActions } from './hooks/useCanvasActions'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useAgentsView } from './hooks/useAgentsView'
+import { useAgentSessionSnapshot } from './hooks/useAgentSessionSnapshot'
 import { useTheme } from './hooks/useTheme'
 import { useFontSize } from './hooks/useFontSize'
 import { useSidePanelWidth } from './hooks/useSidePanelWidth'
@@ -65,7 +66,7 @@ import {
 } from '@shared/workspaceTypeSwitch'
 import { getBoardReviewCount } from '@shared/board'
 import { countAgentsViewAttention } from './utils/agentsViewSessions'
-import { getAgentSessionSurface } from './utils/activityPalette'
+import { getAgentSessionSurface, selectRestoredAgentSessions } from './utils/activityPalette'
 import { sanitizeAgentCwd } from './utils/agentPanel'
 import { getAttachedTiles, isTileDetached, selectFloatingTileWindowOpenRequests } from '@shared/floatingTiles'
 import { refreshGridTileContent } from './utils/gridTileRefresh'
@@ -845,6 +846,24 @@ function AppContent(): React.ReactElement {
       return next
     })
   }, [])
+
+  const liveAgentSessions = useAgentSessionSnapshot().sessions
+  const appLoadedAtRef = useRef(Date.now())
+  const restoredAgentSessionIdsRef = useRef(new Set<string>())
+  useEffect(() => {
+    // The daemon hydrates sessions gradually, so keep checking each snapshot.
+    const workspaceIds = new Set(workspaceMetadata.map((workspace) => workspace.id))
+    const restored = selectRestoredAgentSessions(
+      liveAgentSessions,
+      appLoadedAtRef.current,
+      workspaceIds,
+      restoredAgentSessionIdsRef.current,
+    )
+    for (const session of restored) {
+      restoredAgentSessionIdsRef.current.add(session.sessionId)
+      markWorkspaceSessionActive(session.workspaceId)
+    }
+  }, [liveAgentSessions, markWorkspaceSessionActive, workspaceMetadata])
 
   const unmarkWorkspaceSessionActive = useCallback((workspaceId: string) => {
     setSessionActiveWorkspaceIds((current) => {
