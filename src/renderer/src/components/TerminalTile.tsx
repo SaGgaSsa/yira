@@ -19,7 +19,7 @@ import {
   useTerminalRuntimeApi,
   type TerminalRuntimeCreateRequest,
 } from './TerminalRuntimeProvider'
-import { READING_MODE_COLUMNS, type TerminalRuntime, type TerminalRuntimeSnapshot, type TerminalRuntimeViewOptions } from '@/utils/terminalRuntime'
+import { READING_MODE_COLUMNS, type ReadingColumnInset, type TerminalRuntime, type TerminalRuntimeSnapshot, type TerminalRuntimeViewOptions } from '@/utils/terminalRuntime'
 import type { TerminalRuntimeRegistry } from '@/utils/terminalRuntimeRegistry'
 import { destroyTerminalRuntime } from '@/utils/terminalRuntimeCleanup'
 import { TerminalSearchBar } from './TerminalSearchBar'
@@ -364,7 +364,7 @@ export function TerminalTileWrapper({
   // `searchRequest` counts shortcut presses; 0 means the search bar is closed.
   const [searchRequest, setSearchRequest] = useState(0)
   // Space on each side of the reading column, so overlays can line up with it.
-  const [columnInsetPx, setColumnInsetPx] = useState(0)
+  const [columnInset, setColumnInset] = useState<ReadingColumnInset>({ left: 0, right: 0 })
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number; selectionText: string; linkTarget?: TerminalLinkTarget } | null>(null)
 
   const onFocusRef = useRef(onFocus)
@@ -413,7 +413,7 @@ export function TerminalTileWrapper({
     visible: isVisible,
     edgeToEdge,
     maxColumns: readingColumn ? READING_MODE_COLUMNS : undefined,
-    onColumnInsetChange: setColumnInsetPx,
+    onColumnInsetChange: setColumnInset,
     autoFocus,
     fontSize: tileFontSizePx,
     themeId: terminalThemeId,
@@ -853,7 +853,7 @@ export function TerminalTileWrapper({
       />
       <div
         className="pointer-events-none absolute inset-0"
-        style={readingColumn ? { left: columnInsetPx, right: columnInsetPx } : undefined}
+        style={readingColumn ? { left: columnInset.left, right: columnInset.right } : undefined}
       >
         {activeRuntime && searchRequest > 0 && (
           <TerminalSearchBar

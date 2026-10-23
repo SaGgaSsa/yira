@@ -11,9 +11,11 @@ export function resolveSidebarCollapsedAfterWorkspaceViewChange(
   activeWorkspaceId: string,
   viewMode: ViewMode,
   shouldKeepSidebarOpen: boolean,
+  readingMode = false,
 ): boolean {
   if (previousWorkspaceId !== activeWorkspaceId) return shouldKeepSidebarOpen ? false : currentCollapsed
-  if (viewMode === 'fullview') return !shouldKeepSidebarOpen
+  // Reading mode leaves room beside its column, so Focus shows the sidebar there.
+  if (viewMode === 'fullview') return !shouldKeepSidebarOpen && !readingMode
   return currentCollapsed
 }
 
@@ -28,7 +30,7 @@ export function resolveSidebarCollapsedForActivity(
   return { collapsed: currentCollapsed, previousCollapsed }
 }
 
-/** Focus view hides the workspace panel while the workspace has tiles to focus on. */
-export function shouldHideWorkspacePanelForView(viewMode: ViewMode, shouldKeepSidebarOpen: boolean): boolean {
-  return viewMode === 'fullview' && !shouldKeepSidebarOpen
+/** Focus view hides the workspace panel while the workspace has tiles to focus on, except in reading mode. */
+export function shouldHideWorkspacePanelForView(viewMode: ViewMode, shouldKeepSidebarOpen: boolean, readingMode = false): boolean {
+  return viewMode === 'fullview' && !shouldKeepSidebarOpen && !readingMode
 }

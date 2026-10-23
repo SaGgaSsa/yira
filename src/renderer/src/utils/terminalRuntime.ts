@@ -81,7 +81,7 @@ export interface TerminalRuntimeViewOptions {
   /** Limits the terminal to this many columns, centered in the host. Unset means the full host width. */
   maxColumns?: number
   /** Reports the space left on each side of the column (0 when the terminal fills the host). */
-  onColumnInsetChange?: (insetPx: number) => void
+  onColumnInsetChange?: (inset: ReadingColumnInset) => void
   autoFocus: boolean
   fontSize: number
   themeId: TerminalThemeId
@@ -193,6 +193,40 @@ type DisposableLike = { dispose: () => void } | (() => void) | void
 /** Terminal width, in columns, that reading mode limits agent output to. */
 export const READING_MODE_COLUMNS = 110
 
+export interface ReadingColumnInset {
+  left: number
+  right: number
+}
+
+interface ReadingColumnPlacementInput {
+  /** Host position and width in the window, in CSS pixels. */
+  hostLeft: number
+  hostWidth: number
+  viewportWidth: number
+  columnWidth: number
+  /** Width of the text cells and the padding before them, so the text itself is centered. */
+  screenWidth: number
+  paddingLeft: number
+}
+
+/**
+ * Left offset of the reading column inside its host. The text is centered on
+ * the window, so opening or closing the side panels does not move it, and it
+ * only shifts when a panel leaves no room for it on that side.
+ */
+export function resolveReadingColumnLeft({
+  hostLeft,
+  hostWidth,
+  viewportWidth,
+  columnWidth,
+  screenWidth,
+  paddingLeft,
+}: ReadingColumnPlacementInput): number {
+  const maxLeft = Math.max(0, hostWidth - columnWidth)
+  const centeredLeft = (viewportWidth - screenWidth) / 2 - paddingLeft - hostLeft
+  return Math.round(Math.min(maxLeft, Math.max(0, centeredLeft)))
+}
+
 /** Number of processed output chars before renderer confirms progress to main. */
 export const ACK_CHUNK_CHARS = 32 * 1024
 
@@ -239,17 +273,18 @@ function setRuntimeRootPadding(runtimeRoot: HTMLElement, edgeToEdge: boolean): v
 }
 
 /**
- * Centers the xterm element at `widthPx`, or restores the full host width when
- * null. The element paints the terminal background itself because the host
- * shows the application background around the column.
+ * Places the xterm element at `widthPx`, centered on the window, or restores
+ * the full host width when null. The element paints the terminal background
+ * itself because the host shows the application background around the column.
+ * Returns the space left on each side of the column.
  */
 function setRuntimeReadingColumn(
   runtimeRoot: HTMLElement,
   widthPx: number | null,
   options: TerminalRuntimeViewOptions,
-): void {
+): ReadingColumnInset {
   const xtermElement = runtimeRoot.querySelector?.('.xterm') as HTMLElement | null | undefined
-  if (!xtermElement) return
+  if (!xtermElement) return { left: 0, right: 0 }
 
   const active = options.maxColumns !== undefined
   xtermElement.classList?.toggle('xterm-reading-column', active)
@@ -258,8 +293,24 @@ function setRuntimeReadingColumn(
     : ''
   xtermElement.style.width = widthPx === null ? '' : `${widthPx}px`
   xtermElement.style.height = active ? '100%' : ''
-  xtermElement.style.marginLeft = widthPx === null ? '' : 'auto'
-  xtermElement.style.marginRight = widthPx === null ? '' : 'auto'
+  xtermElement.style.marginRight = ''
+  if (widthPx === null) {
+    xtermElement.style.marginLeft = ''
+    return { left: 0, right: 0 }
+  }
+
+  const hostWidth = runtimeRoot.clientWidth
+  const screen = runtimeRoot.querySelector?.('.xterm-screen') as HTMLElement | null | undefined
+  const left = resolveReadingColumnLeft({
+    hostLeft: runtimeRoot.getBoundingClientRect?.().left ?? 0,
+    hostWidth,
+    viewportWidth: runtimeRoot.ownerDocument?.defaultView?.innerWidth ?? hostWidth,
+    columnWidth: widthPx,
+    screenWidth: screen?.offsetWidth ?? widthPx,
+    paddingLeft: Number.parseFloat(xtermElement.style.paddingLeft) || 0,
+  })
+  xtermElement.style.marginLeft = `${left}px`
+  return { left, right: Math.max(0, Math.round(hostWidth - widthPx - left)) }
 }
 
 /**
@@ -522,19 +573,18 @@ function createRuntime(
   // between the fit scheduler and the addon.
   let readingColumnShown = false
   let readingColumnWidthPx: number | null = null
-  let reportedColumnInsetPx = 0
+  let reportedColumnInset: ReadingColumnInset = { left: 0, right: 0 }
 
   const showReadingColumn = (widthPx: number | null): void => {
     const active = currentViewOptions.maxColumns !== undefined
     if (!active && !readingColumnShown) return
     readingColumnShown = active
     readingColumnWidthPx = active ? widthPx : null
-    setRuntimeReadingColumn(runtimeRoot, readingColumnWidthPx, currentViewOptions)
+    const inset = setRuntimeReadingColumn(runtimeRoot, readingColumnWidthPx, currentViewOptions)
 
-    const insetPx = readingColumnWidthPx === null ? 0 : Math.max(0, Math.round((runtimeRoot.clientWidth - readingColumnWidthPx) / 2))
-    if (insetPx === reportedColumnInsetPx) return
-    reportedColumnInsetPx = insetPx
-    currentViewOptions.onColumnInsetChange?.(insetPx)
+    if (inset.left === reportedColumnInset.left && inset.right === reportedColumnInset.right) return
+    reportedColumnInset = inset
+    currentViewOptions.onColumnInsetChange?.(inset)
   }
 
   const fitAddon: FitAddonLike = {
