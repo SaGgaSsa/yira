@@ -201,7 +201,9 @@ type TranslationResources = {
     historyError: string
     noHistory: string
     noSearchResults: string
-    historyMore: string
+    previousPage: string
+    nextPage: string
+    historyPage: string
     resumeInTile: string
     resumeInAgentsView: string
     viewConversation: string
@@ -1227,7 +1229,9 @@ const en: TranslationResources = {
     historyError: 'Unable to load local history.',
     noHistory: 'No agent history found.',
     noSearchResults: 'No history matches this search.',
-    historyMore: 'More local sessions are available.',
+    previousPage: 'Previous',
+    nextPage: 'Next',
+    historyPage: 'Page {{page}}',
     resumeInTile: 'Resume in an agent tile',
     resumeInAgentsView: 'Resume in Agents View',
     viewConversation: 'View conversation',
@@ -2334,7 +2338,9 @@ const es: TranslationResources = {
     historyError: 'No se pudo cargar el historial local.',
     noHistory: 'No se encontró historial de agentes.',
     noSearchResults: 'Ningún historial coincide con esta búsqueda.',
-    historyMore: 'Hay más sesiones locales disponibles.',
+    previousPage: 'Anterior',
+    nextPage: 'Siguiente',
+    historyPage: 'Página {{page}}',
     resumeInTile: 'Reanudar en un tile de agente',
     resumeInAgentsView: 'Reanudar en la vista de agentes',
     viewConversation: 'Ver conversación',

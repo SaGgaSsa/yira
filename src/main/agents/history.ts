@@ -11,6 +11,7 @@ import type {
 import { getAgentProviderTranscriptRoot, normalizeResumeId } from './providers'
 import {
   DEFAULT_HISTORY_RESULT_LIMIT,
+  MAX_HISTORY_OFFSET,
   MAX_HISTORY_RESULT_LIMIT,
 } from './query'
 import {
@@ -25,6 +26,8 @@ import {
 export const MAX_TRANSCRIPT_BYTES = 64 * 1024 * 1024
 const MAX_TRANSCRIPT_LINE_LENGTH = 256 * 1024
 const MAX_TRANSCRIPT_FILES = 1_000
+const MAX_LISTED_TRANSCRIPT_FILES = 20_000
+const MAX_HEAD_LINES = 50
 const MAX_TRANSCRIPT_DEPTH = 8
 const TRANSCRIPT_PARSE_CONCURRENCY = 8
 const MAX_TITLE_LENGTH = 120
@@ -42,6 +45,7 @@ export interface AgentHistoryReadOptions {
   homeDirectory?: string
   workspaceRoot?: string
   search?: string
+  offset?: number
   limit?: number
 }
 
@@ -76,10 +80,28 @@ interface TranscriptCacheEntry {
   parsed: ParsedSession | null
 }
 
+/** Cheap cwd/exclusion probe taken from the first transcript lines. */
+interface TranscriptHead {
+  cwd?: string
+  excluded: boolean
+}
+
+interface HeadCacheEntry {
+  size: number
+  mtimeMs: number
+  head: TranscriptHead
+}
+
 const transcriptCache = new Map<string, TranscriptCacheEntry>()
+const headCache = new Map<string, HeadCacheEntry>()
 
 export function clearAgentHistoryCache(): void {
   transcriptCache.clear()
+  headCache.clear()
+}
+
+export function getAgentHistoryCacheStats(): { transcripts: number; heads: number } {
+  return { transcripts: transcriptCache.size, heads: headCache.size }
 }
 
 function stringValue(value: unknown, maxLength = 1_024): string | undefined {
@@ -165,7 +187,7 @@ function addClassification(
 async function listTranscriptFiles(rootPath: string): Promise<TranscriptFile[]> {
   const files: TranscriptFile[] = []
   const visit = async (directory: string, depth: number): Promise<void> => {
-    if (depth > MAX_TRANSCRIPT_DEPTH || files.length >= MAX_TRANSCRIPT_FILES) return
+    if (depth > MAX_TRANSCRIPT_DEPTH || files.length >= MAX_LISTED_TRANSCRIPT_FILES) return
     let entries: import('node:fs').Dirent[]
     try {
       entries = await fs.readdir(directory, { withFileTypes: true })
@@ -175,10 +197,13 @@ async function listTranscriptFiles(rootPath: string): Promise<TranscriptFile[]> 
 
     entries.sort((left, right) => left.name.localeCompare(right.name))
     for (const entry of entries) {
-      if (files.length >= MAX_TRANSCRIPT_FILES) return
+      if (files.length >= MAX_LISTED_TRANSCRIPT_FILES) return
       if (entry.name.startsWith('.')) continue
       const candidate = join(directory, entry.name)
       if (entry.isDirectory()) {
+        // Claude sidechain transcripts share the parent session id and parse
+        // to zero visible messages, so listing them only wastes reads.
+        if (entry.name.toLowerCase() === 'subagents') continue
         await visit(candidate, depth + 1)
         continue
       }
@@ -194,6 +219,9 @@ async function listTranscriptFiles(rootPath: string): Promise<TranscriptFile[]> 
   }
 
   await visit(rootPath, 0)
+  // Paginated reads walk sessions newest first; the path tie-break keeps that
+  // order stable across runs for equally timestamped files.
+  files.sort((left, right) => right.mtimeMs - left.mtimeMs || left.path.localeCompare(right.path))
   return files
 }
 
@@ -204,6 +232,16 @@ function cacheTranscript(path: string, size: number, mtimeMs: number, parsed: Pa
     const oldestPath = transcriptCache.keys().next().value
     if (!oldestPath) break
     transcriptCache.delete(oldestPath)
+  }
+}
+
+function cacheHead(path: string, size: number, mtimeMs: number, head: TranscriptHead): void {
+  headCache.delete(path)
+  headCache.set(path, { size, mtimeMs, head })
+  while (headCache.size > MAX_TRANSCRIPT_FILES) {
+    const oldestPath = headCache.keys().next().value
+    if (!oldestPath) break
+    headCache.delete(oldestPath)
   }
 }
 
@@ -264,6 +302,72 @@ async function parseTranscriptFile(
     cacheTranscript(file.path, file.size, file.mtimeMs, parsed)
   }
   return { parsed, modifiedAt }
+}
+
+async function readTranscriptHead(
+  provider: AgentProvider,
+  file: TranscriptFile,
+): Promise<TranscriptHead> {
+  // A fully parsed copy already carries the session cwd; skip the extra stream.
+  const cachedTranscript = transcriptCache.get(file.path)
+  if (cachedTranscript && cachedTranscript.size === file.size && cachedTranscript.mtimeMs === file.mtimeMs) {
+    return cachedTranscript.parsed?.cwd
+      ? { cwd: cachedTranscript.parsed.cwd, excluded: false }
+      : { excluded: false }
+  }
+  const cachedHead = headCache.get(file.path)
+  if (cachedHead && cachedHead.size === file.size && cachedHead.mtimeMs === file.mtimeMs) {
+    headCache.delete(file.path)
+    headCache.set(file.path, cachedHead)
+    return cachedHead.head
+  }
+
+  const input = createReadStream(file.path, { encoding: 'utf8' })
+  const lines = createInterface({ input, crlfDelay: Infinity })
+  let head: TranscriptHead = { excluded: false }
+  let inspected = 0
+  try {
+    for await (const line of lines) {
+      inspected += 1
+      if (line && line.length <= MAX_TRANSCRIPT_LINE_LENGTH) {
+        let row: unknown
+        try {
+          row = JSON.parse(line)
+        } catch {
+          // Providers may leave a partial final line while writing. Ignore it.
+          row = undefined
+        }
+        if (row !== undefined) {
+          const classification = provider === 'claude'
+            ? classifyClaudeRecord(row)
+            : classifyCodexRecord(row)
+          if (provider === 'codex' && classification.sessionMeta) {
+            if (isCodexExecSession(classification.sessionMeta) || isCodexWorkerSession(classification.sessionMeta)) {
+              input.destroy()
+              head = { excluded: true }
+              break
+            }
+          }
+          const cwd = normalizedCwd(classification.context.cwd)
+          if (cwd) {
+            head = { cwd, excluded: false }
+            break
+          }
+        }
+      }
+      if (inspected >= MAX_HEAD_LINES) break
+    }
+  } finally {
+    lines.close()
+    input.destroy()
+  }
+
+  // Providers append while we read; only cache when the file did not change.
+  const finalStats = await fs.stat(file.path)
+  if (finalStats.size === file.size && finalStats.mtimeMs === file.mtimeMs) {
+    cacheHead(file.path, file.size, file.mtimeMs, head)
+  }
+  return head
 }
 
 async function canonicalDirectory(value: string | undefined): Promise<string | null> {
@@ -348,6 +452,11 @@ function normalizeLimit(value: unknown): number {
   return Math.min(value, MAX_HISTORY_RESULT_LIMIT)
 }
 
+function normalizeOffset(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) return 0
+  return Math.min(value, MAX_HISTORY_OFFSET)
+}
+
 function matchesSearch(item: AgentSessionHistoryItem, search: string | undefined): boolean {
   if (!search) return true
   const haystack = [item.identifier, item.title, item.preview, item.model].filter(Boolean).join(' ').toLowerCase()
@@ -391,41 +500,59 @@ async function readProviderSessionHistory(
 
   const search = normalizeSearch(options.search)
   const limit = normalizeLimit(options.limit)
+  const offset = normalizeOffset(options.offset)
+  // One extra item beyond the requested window settles hasMore without a
+  // second pass over the provider roots.
+  const target = offset + limit + 1
   const files = await listTranscriptFiles(canonicalRoot)
   const resolveCwd = createCanonicalCwdResolver()
-  const sessions = new Map<string, AgentSessionHistoryItem>()
+  const seen = new Set<string>()
+  const collected: AgentSessionHistoryItem[] = []
 
-  const fileItems = await mapWithConcurrency(files, TRANSCRIPT_PARSE_CONCURRENCY, async (file) => {
-    try {
-      const transcript = await parseTranscriptFile(provider, file)
-      if (!transcript) return null
-      const { parsed } = transcript
-      if (!parsed) return null
-      const cwd = await resolveCwd(parsed.cwd)
-      if (workspaceRoot && (!cwd || !pathWithinRoot(cwd, workspaceRoot))) return null
-      const item = resultItem(parsed, provider, transcript.modifiedAt, relativeCwdWithinRoot(cwd, workspaceRoot ?? undefined))
-      return matchesSearch(item, search) ? item : null
-    } catch {
-      // A malformed or pathological individual transcript must not abort the
-      // rest of the provider history query.
-      return null
+  // Files arrive newest first, so stop as soon as the page plus the hasMore
+  // sentinel is complete instead of parsing the remaining transcripts.
+  for (
+    let start = 0;
+    start < files.length && collected.length < target;
+    start += TRANSCRIPT_PARSE_CONCURRENCY
+  ) {
+    const batch = files.slice(start, start + TRANSCRIPT_PARSE_CONCURRENCY)
+    const batchItems = await mapWithConcurrency(batch, TRANSCRIPT_PARSE_CONCURRENCY, async (file): Promise<AgentSessionHistoryItem | null> => {
+      try {
+        if (workspaceRoot) {
+          const head = await readTranscriptHead(provider, file)
+          if (head.excluded) return null
+          const headCwd = head.cwd ? await resolveCwd(head.cwd) : undefined
+          if (headCwd && !pathWithinRoot(headCwd, workspaceRoot)) return null
+          // A head without a cwd still gets the full parse and filter below.
+        }
+        const transcript = await parseTranscriptFile(provider, file)
+        if (!transcript) return null
+        const { parsed } = transcript
+        if (!parsed) return null
+        const cwd = await resolveCwd(parsed.cwd)
+        if (workspaceRoot && (!cwd || !pathWithinRoot(cwd, workspaceRoot))) return null
+        const item = resultItem(parsed, provider, transcript.modifiedAt, relativeCwdWithinRoot(cwd, workspaceRoot ?? undefined))
+        return matchesSearch(item, search) ? item : null
+      } catch {
+        // A malformed or pathological individual transcript must not abort the
+        // rest of the provider history query.
+        return null
+      }
+    })
+
+    // Batch results keep file order, so the first sighting of an identifier is
+    // the one from the newest file.
+    for (const item of batchItems) {
+      if (!item || seen.has(item.identifier)) continue
+      seen.add(item.identifier)
+      collected.push(item)
     }
-  })
-
-  // Merge in listing order so duplicate identifiers keep the same winning item.
-  for (const item of fileItems) {
-    if (!item) continue
-    const current = sessions.get(item.identifier)
-    if (!current || current.lastActivityAt < item.lastActivityAt) sessions.set(item.identifier, item)
   }
 
-  const sorted = [...sessions.values()].sort((left, right) => {
-    const activity = right.lastActivityAt.localeCompare(left.lastActivityAt)
-    return activity || left.identifier.localeCompare(right.identifier)
-  })
   return {
-    items: sorted.slice(0, limit),
-    hasMore: sorted.length > limit,
+    items: collected.slice(offset, offset + limit),
+    hasMore: collected.length > offset + limit,
   }
 }
 
@@ -481,16 +608,23 @@ export async function readAgentSessionHistory(
   options: AgentSessionHistoryOptions = {},
 ): Promise<AgentSessionHistoryResult> {
   if (options.provider) return readProviderSessionHistory(options.provider, options)
+  const offset = normalizeOffset(options.offset)
   const limit = normalizeLimit(options.limit)
+  // Each provider only supplies the merged window's share; the sort below
+  // slices the page without parsing more provider transcripts.
+  const perProviderLimit = Math.min(offset + limit, MAX_HISTORY_OFFSET + MAX_HISTORY_RESULT_LIMIT)
   const [claude, codex] = await Promise.all([
-    readProviderSessionHistory('claude', options),
-    readProviderSessionHistory('codex', options),
+    readProviderSessionHistory('claude', { ...options, offset: 0, limit: perProviderLimit }),
+    readProviderSessionHistory('codex', { ...options, offset: 0, limit: perProviderLimit }),
   ])
   const items = [...claude.items, ...codex.items].sort((left, right) => {
     const activity = right.lastActivityAt.localeCompare(left.lastActivityAt)
     return activity || left.identifier.localeCompare(right.identifier)
   })
-  return { items: items.slice(0, limit), hasMore: items.length > limit || claude.hasMore || codex.hasMore }
+  return {
+    items: items.slice(offset, offset + limit),
+    hasMore: items.length > offset + limit || claude.hasMore || codex.hasMore,
+  }
 }
 
 // Short names are convenient for service and test callers while preserving a

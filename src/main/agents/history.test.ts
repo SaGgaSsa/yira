@@ -5,6 +5,7 @@ import test from 'node:test'
 
 import {
   clearAgentHistoryCache,
+  getAgentHistoryCacheStats,
   readAgentSessionHistory,
   readClaudeSessionHistory,
   readCodexSessionHistory,
@@ -66,6 +67,12 @@ test('reads Codex rollout metadata and tolerates malformed or unknown files', as
       { timestamp: '2026-08-10T13:00:00.000Z', type: 'session_meta', payload: { id: 'session-no-cwd' } },
       { timestamp: '2026-08-10T13:00:01.000Z', type: 'event_msg', payload: { type: 'user_message', message: 'No cwd is okay' } },
     ])
+    // The listing is ordered newest first by file mtime, so pin the mtimes to
+    // keep the expected item order deterministic.
+    const rolloutMtime = new Date('2026-08-10T13:10:00.000Z')
+    const missingCwdMtime = new Date('2026-08-10T13:05:00.000Z')
+    await fs.utimes(join(root, 'codex', 'rollout-session-codex.jsonl'), rolloutMtime, rolloutMtime)
+    await fs.utimes(join(root, 'codex', 'missing-cwd.jsonl'), missingCwdMtime, missingCwdMtime)
 
     const result = await readCodexSessionHistory({ rootPath: join(root, 'codex') })
     assert.equal(result.hasMore, false)
@@ -158,6 +165,12 @@ test('filters history to a canonical workspace root and enforces result limits',
         { type: 'user', sessionId: id, cwd, timestamp: time, message: { role: 'user', content: id } },
       ])
     }
+    // The newest-first listing follows file mtimes, so pin them to the session
+    // order the assertions describe.
+    const inside1Mtime = new Date('2026-08-10T14:00:00.000Z')
+    const inside2Mtime = new Date('2026-08-10T13:00:00.000Z')
+    await fs.utimes(join(root, 'claude', 'inside-1.jsonl'), inside1Mtime, inside1Mtime)
+    await fs.utimes(join(root, 'claude', 'inside-2.jsonl'), inside2Mtime, inside2Mtime)
 
     const result = await readAgentSessionHistory({
       provider: 'claude',
@@ -467,6 +480,111 @@ test('deduplicates Claude assistant blocks that share a message id', async () =>
     const result = await readClaudeSessionHistory({ rootPath: join(root, 'claude') })
     assert.equal(result.items[0].messageCount, 2)
     assert.equal(result.items[0].preview, 'Second block')
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
+test('pages history by file mtime offsets and reports hasMore across pages', async () => {
+  const root = await makeFixtureRoot()
+  clearAgentHistoryCache()
+  try {
+    const mtimes = [
+      '2026-08-10T17:00:00.000Z',
+      '2026-08-10T16:00:00.000Z',
+      '2026-08-10T15:00:00.000Z',
+      '2026-08-10T14:00:00.000Z',
+      '2026-08-10T13:00:00.000Z',
+    ]
+    for (const [index, time] of mtimes.entries()) {
+      const sessionPath = join(root, 'claude', `paged-${index}.jsonl`)
+      await writeJsonLines(sessionPath, [
+        { type: 'system', sessionId: `paged-${index}` },
+        { type: 'user', sessionId: `paged-${index}`, content: `Paged prompt ${index}` },
+      ])
+      const mtime = new Date(time)
+      await fs.utimes(sessionPath, mtime, mtime)
+    }
+
+    const rootPath = join(root, 'claude')
+    const firstPage = await readClaudeSessionHistory({ rootPath, offset: 0, limit: 2 })
+    assert.deepEqual(firstPage.items.map((item) => item.identifier), ['paged-0', 'paged-1'])
+    assert.equal(firstPage.hasMore, true)
+
+    const middlePage = await readClaudeSessionHistory({ rootPath, offset: 2, limit: 2 })
+    assert.deepEqual(middlePage.items.map((item) => item.identifier), ['paged-2', 'paged-3'])
+    assert.equal(middlePage.hasMore, true)
+
+    const lastPage = await readClaudeSessionHistory({ rootPath, offset: 4, limit: 2 })
+    assert.deepEqual(lastPage.items.map((item) => item.identifier), ['paged-4'])
+    assert.equal(lastPage.hasMore, false)
+  } finally {
+    clearAgentHistoryCache()
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
+test('skips the full parse of a large foreign-workspace transcript behind its head', async () => {
+  const root = await makeFixtureRoot()
+  clearAgentHistoryCache()
+  try {
+    const inside = join(root, 'workspace')
+    const outside = join(root, 'elsewhere')
+    await fs.mkdir(inside, { recursive: true })
+    await fs.mkdir(outside, { recursive: true })
+    for (const index of [0, 1]) {
+      const insidePath = join(root, 'claude', `inside-${index}.jsonl`)
+      await writeJsonLines(insidePath, [
+        { type: 'system', sessionId: `inside-${index}`, cwd: inside },
+        { type: 'user', sessionId: `inside-${index}`, cwd: inside, content: `Inside prompt ${index}` },
+      ])
+      const mtime = new Date(index === 0 ? '2026-08-10T18:00:00.000Z' : '2026-08-10T17:00:00.000Z')
+      await fs.utimes(insidePath, mtime, mtime)
+    }
+
+    // The carry line is larger than 2 MiB and sits after the head window: it
+    // is never read unless the file is fully parsed.
+    const outsidePath = join(root, 'claude', 'outside-large.jsonl')
+    await writeJsonLines(outsidePath, [
+      { type: 'system', sessionId: 'outside-large', cwd: outside },
+    ])
+    const carryPrefix = '{"type":"user","sessionId":"outside-large","message":{"role":"user","content":"'
+    await fs.appendFile(outsidePath, carryPrefix + 'x'.repeat(2 * 1024 * 1024) + '"}}\n', 'utf8')
+
+    const result = await readClaudeSessionHistory({
+      rootPath: join(root, 'claude'),
+      workspaceRoot: inside,
+      limit: 1,
+    })
+    assert.deepEqual(result.items.map((item) => item.identifier), ['inside-0'])
+    assert.equal(result.hasMore, true)
+    // Only the two workspace transcripts reach the full-parse cache; the
+    // foreign file stops at its head entry.
+    const stats = getAgentHistoryCacheStats()
+    assert.equal(stats.transcripts, 2)
+    assert.equal(stats.heads, 3)
+  } finally {
+    clearAgentHistoryCache()
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
+test('excludes subagent directories from history listings', async () => {
+  const root = await makeFixtureRoot()
+  try {
+    const claudeRoot = join(root, 'claude')
+    await writeJsonLines(join(claudeRoot, 'main.jsonl'), [
+      { type: 'system', sessionId: 'main-session' },
+      { type: 'user', sessionId: 'main-session', content: 'Parent task' },
+    ])
+    // A valid session inside `subagents` would be listed without the skip.
+    await writeJsonLines(join(claudeRoot, 'subagents', 'side.jsonl'), [
+      { type: 'system', sessionId: 'side-session' },
+      { type: 'user', sessionId: 'side-session', content: 'Sidechain task' },
+    ])
+
+    const result = await readClaudeSessionHistory({ rootPath: claudeRoot })
+    assert.deepEqual(result.items.map((item) => item.identifier), ['main-session'])
   } finally {
     await fs.rm(root, { recursive: true, force: true })
   }

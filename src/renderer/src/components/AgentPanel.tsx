@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAgentSessionSnapshot } from '@/hooks/useAgentSessionSnapshot'
-import { Bot, Clock3, RotateCcwClock, MessageSquareText, Pin, RefreshCw, Search, Settings, Zap } from 'lucide-react'
+import { Bot, ChevronLeft, ChevronRight, Clock3, RotateCcwClock, MessageSquareText, Pin, RefreshCw, Search, Settings, Zap } from 'lucide-react'
 import type {
   AgentActiveSession,
   AgentProvider,
@@ -19,7 +19,7 @@ import {
   formatAgentAge,
   getAgentHistoryRefreshDelay,
   sanitizeAgentCwd,
-  shouldShowAgentHistoryMore,
+  shouldShowAgentHistoryPager,
   shouldRequestAgentData,
 } from '@/utils/agentPanel'
 import { useCanvasStore } from '@/store/canvasStore'
@@ -134,6 +134,8 @@ function RunningSessionCard({
 
 const iconButtonClassName = 'inline-flex h-7 w-7 items-center justify-center rounded-full border border-border-visible text-text-display transition-colors hover:border-text-secondary disabled:cursor-not-allowed disabled:opacity-50'
 
+const pillButtonClassName = 'inline-flex h-7 items-center gap-1.5 rounded-full border border-border-visible px-2.5 text-xs text-text-secondary transition-colors hover:border-text-secondary hover:text-text-display disabled:cursor-not-allowed disabled:opacity-50'
+
 function HistoryCard({
   item,
   onViewConversation,
@@ -239,11 +241,15 @@ export function AgentPanel({
   const sessionSnapshot = useAgentSessionSnapshot(shouldRequestAgentData(selectedProvider))
   const sessions = useMemo(() => filterAgentSessions(sessionSnapshot, workspaceId, selectedProvider), [sessionSnapshot, workspaceId, selectedProvider])
   const [historySearch, setHistorySearch] = useState('')
+  const [historyPage, setHistoryPage] = useState(0)
   const [historyState, setHistoryState] = useState<HistoryState>({ status: 'idle', items: [], hasMore: false })
   const [resumeError, setResumeError] = useState<string | null>(null)
   const [transcriptItem, setTranscriptItem] = useState<AgentSessionHistoryItem | null>(null)
   const historyRequestRef = useRef(0)
   const historyRefreshSchedulerRef = useRef(createAgentHistoryRefreshScheduler())
+  const historySectionRef = useRef<HTMLElement | null>(null)
+  const historyScrollPendingRef = useRef(false)
+  const lastScheduledHistoryRef = useRef({ search: '', page: 0 })
   const availabilityRequestRef = useRef(0)
 
   useEffect(() => {
@@ -271,7 +277,7 @@ export function AgentPanel({
     if (!shouldRequestAgentData(selectedProvider)) return
     const requestId = ++historyRequestRef.current
     const query = {
-      ...buildAgentHistoryQuery(workspaceId, selectedProvider, historySearch),
+      ...buildAgentHistoryQuery(workspaceId, selectedProvider, historySearch, historyPage),
       provider: selectedProvider,
     }
     setHistoryState((current) => ({ ...current, status: 'loading' }))
@@ -279,25 +285,43 @@ export function AgentPanel({
     try {
       const result = await window.electron.agents.history(query)
       if (requestId !== historyRequestRef.current) return
+      if (result.items.length === 0 && historyPage > 0) {
+        // The requested page no longer exists (sessions were deleted); step back one page.
+        setHistoryPage(historyPage - 1)
+        return
+      }
+      if (historyScrollPendingRef.current) {
+        historyScrollPendingRef.current = false
+        historySectionRef.current?.scrollIntoView({ block: 'start' })
+      }
       setHistoryState({ status: 'ready', items: result.items, hasMore: result.hasMore })
     } catch {
       if (requestId !== historyRequestRef.current) return
+      historyScrollPendingRef.current = false
       setHistoryState({ status: 'error', items: [], hasMore: false })
     }
-  }, [historySearch, workspaceId, selectedProvider])
+  }, [historySearch, historyPage, workspaceId, selectedProvider])
 
   useEffect(() => {
     if (!shouldRequestAgentData(selectedProvider)) return
-    const delay = getAgentHistoryRefreshDelay(historySearch)
+    const lastScheduled = lastScheduledHistoryRef.current
+    // Pager navigation loads the requested page right away; typing stays debounced.
+    const isPageNavigation = lastScheduled.search === historySearch && lastScheduled.page !== historyPage
+    lastScheduledHistoryRef.current = { search: historySearch, page: historyPage }
     const scheduler = historyRefreshSchedulerRef.current
-    scheduler.schedule(delay, () => {
+    scheduler.schedule(isPageNavigation ? 0 : getAgentHistoryRefreshDelay(historySearch), () => {
       void loadHistory()
     })
     return () => {
       scheduler.cancel()
       historyRequestRef.current += 1
     }
-  }, [historySearch, loadHistory, selectedProvider, workspaceId])
+  }, [historySearch, historyPage, loadHistory, selectedProvider, workspaceId])
+
+  // Return to the first page whenever the history scope changes.
+  useEffect(() => {
+    setHistoryPage(0)
+  }, [historySearch, workspaceId, selectedProvider])
 
   const resumeAgent = useCallback(async (item: AgentSessionHistoryItem) => {
     if (!canResume(item.provider)) return
@@ -333,7 +357,9 @@ export function AgentPanel({
     resumeError: t('agents.resumeError', 'Unable to resume this agent session.'),
     noHistory: t('agents.noHistory', 'No agent history found.'),
     noSearchResults: t('agents.noSearchResults', 'No history matches this search.'),
-    historyMore: t('agents.historyMore', 'More local sessions are available.'),
+    previousPage: t('agents.previousPage', 'Previous'),
+    nextPage: t('agents.nextPage', 'Next'),
+    historyPageLabel: t('agents.historyPage', { page: historyPage + 1 }),
     resumeInTile: t('agents.resumeInTile', 'Resume in an agent tile'),
     resumeInAgentsView: t('agents.resumeInAgentsView', 'Resume in Agents View'),
     unknownTitle: t('agents.unknownTitle', 'Untitled session'),
@@ -388,7 +414,7 @@ export function AgentPanel({
           </div>
         </section>
 
-        <section className="px-4 py-3">
+        <section ref={historySectionRef} className="px-4 py-3">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <RotateCcwClock size={14} className="text-text-secondary" />
@@ -396,7 +422,7 @@ export function AgentPanel({
             </div>
             <button
               type="button"
-              className="inline-flex h-7 items-center gap-1.5 rounded-full border border-border-visible px-2.5 text-xs text-text-secondary transition-colors hover:border-text-secondary hover:text-text-display disabled:cursor-not-allowed disabled:opacity-50"
+              className={pillButtonClassName}
               onClick={() => historyRefreshSchedulerRef.current.runNow(() => void loadHistory())}
               disabled={historyState.status === 'loading'}
               title={historyState.status === 'idle' ? copy.loadHistory : copy.refreshHistory}
@@ -412,7 +438,10 @@ export function AgentPanel({
               <input
                 type="search"
                 value={historySearch}
-                onChange={(event) => setHistorySearch(event.target.value)}
+                onChange={(event) => {
+                  setHistorySearch(event.target.value)
+                  setHistoryPage(0)
+                }}
                 onKeyDown={(event) => {
                   if (event.key !== 'Enter' || event.nativeEvent.isComposing) return
                   event.preventDefault()
@@ -458,8 +487,38 @@ export function AgentPanel({
                 activeLabel={copy.lastActivity}
               />
             ))}
-            {shouldShowAgentHistoryMore(historyState.status, historyState.hasMore) && (
-              <p className="pt-1 text-center text-[11px] text-text-disabled">{copy.historyMore}</p>
+            {shouldShowAgentHistoryPager(historyState.status, historyPage, historyState.hasMore) && (
+              <div className="flex items-center justify-between gap-2 pt-1">
+                <button
+                  type="button"
+                  className={pillButtonClassName}
+                  onClick={() => {
+                    historyScrollPendingRef.current = true
+                    setHistoryPage(historyPage - 1)
+                  }}
+                  disabled={historyPage === 0 || historyState.status === 'loading'}
+                  title={copy.previousPage}
+                  aria-label={copy.previousPage}
+                >
+                  <ChevronLeft size={13} />
+                  <span>{copy.previousPage}</span>
+                </button>
+                <span className="font-mono text-[11px] text-text-disabled">{copy.historyPageLabel}</span>
+                <button
+                  type="button"
+                  className={pillButtonClassName}
+                  onClick={() => {
+                    historyScrollPendingRef.current = true
+                    setHistoryPage(historyPage + 1)
+                  }}
+                  disabled={!historyState.hasMore || historyState.status === 'loading'}
+                  title={copy.nextPage}
+                  aria-label={copy.nextPage}
+                >
+                  <span>{copy.nextPage}</span>
+                  <ChevronRight size={13} />
+                </button>
+              </div>
             )}
           </div>
         </section>

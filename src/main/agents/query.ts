@@ -3,11 +3,13 @@ import type { AgentProvider, AgentSessionHistoryQuery } from '@shared/types'
 export const DEFAULT_HISTORY_RESULT_LIMIT = 50
 export const MAX_HISTORY_RESULT_LIMIT = 100
 export const MAX_AGENT_QUERY_TEXT_LENGTH = 200
+export const MAX_HISTORY_OFFSET = 10_000
 
 export interface NormalizedAgentHistoryQuery {
   workspaceId?: string
   provider?: AgentProvider
   search?: string
+  offset: number
   limit: number
 }
 
@@ -39,11 +41,16 @@ function normalizeLimit(value: unknown): number {
   return Math.min(value, MAX_HISTORY_RESULT_LIMIT)
 }
 
+function normalizeOffset(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) return 0
+  return Math.min(value, MAX_HISTORY_OFFSET)
+}
+
 /** Normalize untrusted renderer history input to a small, data-only query. */
 export function normalizeAgentHistoryQuery(input: unknown): NormalizedAgentHistoryQuery | null {
   if (input !== undefined && !isRecord(input)) return null
   const value = input === undefined ? {} : input
-  const query: NormalizedAgentHistoryQuery = { limit: normalizeLimit(value.limit) }
+  const query: NormalizedAgentHistoryQuery = { limit: normalizeLimit(value.limit), offset: normalizeOffset(value.offset) }
   const workspaceId = normalizeAgentOpaqueId(value.workspaceId)
   if (workspaceId) query.workspaceId = workspaceId
   if (isAgentProvider(value.provider)) query.provider = value.provider
@@ -60,6 +67,10 @@ export function isSafeAgentHistoryQueryInput(input: unknown): boolean {
   if (input.provider !== undefined && !isAgentProvider(input.provider)) return false
   if (input.search !== undefined && typeof input.search !== 'string') return false
   if (typeof input.search === 'string' && /[\u0000-\u001f\u007f]/.test(input.search)) return false
+  if (input.offset !== undefined) {
+    const offset = input.offset
+    if (typeof offset !== 'number' || !Number.isInteger(offset) || offset < 0) return false
+  }
   return true
 }
 

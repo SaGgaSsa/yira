@@ -81,6 +81,7 @@ export interface AgentIPCOptions {
     provider?: 'claude' | 'codex'
     workspaceRoot?: string
     search?: string
+    offset?: number
     limit?: number
   }) => Promise<AgentSessionHistoryResult>
   transcript?: (
@@ -199,6 +200,7 @@ async function historyForQuery(input: unknown, readHistory: AgentIPCOptions['his
     provider: query.provider,
     workspaceRoot,
     search: query.search,
+    offset: query.offset,
     limit: query.limit,
   })
 }
