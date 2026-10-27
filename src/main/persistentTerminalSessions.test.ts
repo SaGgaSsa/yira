@@ -327,6 +327,19 @@ test('rejects moving an agent session that is no longer running', async () => {
   assert.equal(transport.requestCount('setAgentSurface'), 0)
 })
 
+test('explains that a daemon from an older Yira cannot move agent sessions', async () => {
+  const transport = new FakeTransport()
+  const registry = new AgentSessionRegistry({ now: () => 1_700_000_000_000 })
+  const agent = { provider: 'claude' as const, sessionId: 'session-old-daemon', startedAt: '2024-01-01T00:00:00.000Z', surface: 'agents-view' as const }
+  transport.setHandler('attach', () => snapshot({ agent }))
+  transport.setHandler('setAgentSurface', () => Promise.reject(new Error('Unknown terminal daemon method')))
+  const sessions = createSessions(transport, { registry })
+  await sessions.attach(target)
+
+  await assert.rejects(sessions.setAgentSurface(target, 'tile'), /previous version of Yira/)
+  assert.equal(registry.get(identity.workspaceId, identity.tileId)?.surface, 'agents-view')
+})
+
 test('working state updates the registry without reaching the agent-alert callback', async () => {
   const transport = new FakeTransport()
   const registry = new AgentSessionRegistry({ now: () => 1_700_000_000_000 })
