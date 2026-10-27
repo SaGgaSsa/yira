@@ -11,6 +11,7 @@ type MainTextKey =
   | 'downloadingLatestUpdate' | 'updateReady' | 'checkingUpdatesBackground' | 'checkingUpdates'
   | 'startupUpdateTimeout' | 'manualUpdateTimeout'
   | 'updateNetworkError' | 'updateMissingMetadata' | 'updateUnauthorized' | 'updateInvalidMetadata' | 'updateGenericError'
+  | 'outdatedTerminalService'
 
 const texts: Record<SupportedLanguage, Record<MainTextKey, string>> = {
   en: {
@@ -48,6 +49,7 @@ const texts: Record<SupportedLanguage, Record<MainTextKey, string>> = {
     updateUnauthorized: 'GitHub could not authorize the update check. Try again later.',
     updateInvalidMetadata: 'GitHub returned invalid update information. Try again later.',
     updateGenericError: 'Unable to check for updates right now. Try again later.',
+    outdatedTerminalService: 'The terminal service is still running a previous version of Yira. Close every terminal and agent, quit Yira, wait 30 seconds, and open it again.',
   },
   es: {
     installUpdateTitle: 'Instalar actualización',
@@ -84,6 +86,7 @@ const texts: Record<SupportedLanguage, Record<MainTextKey, string>> = {
     updateUnauthorized: 'GitHub no pudo autorizar la búsqueda de actualizaciones. Inténtalo más tarde.',
     updateInvalidMetadata: 'GitHub devolvió información de actualización no válida. Inténtalo más tarde.',
     updateGenericError: 'No se pudieron buscar actualizaciones ahora. Inténtalo más tarde.',
+    outdatedTerminalService: 'El servicio de terminales sigue ejecutando una versión anterior de Yira. Cierra todas las terminales y agentes, sal de Yira, espera 30 segundos y vuelve a abrirla.',
   },
 }
 

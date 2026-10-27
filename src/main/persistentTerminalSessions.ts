@@ -16,6 +16,7 @@ import {
 } from '@shared/terminalSessionIdentity'
 import type { AgentSessionSurface, TerminalCreateResult } from '@shared/types'
 import { agentSessionRegistry, type AgentSessionRegistry } from './agents/registry'
+import { mainText } from './i18n'
 import { AgentTerminalTitleTracker } from './agents/terminalTitle'
 import { classifyAgentInput } from './agents/terminal'
 import type { TerminalProcessRoot } from './terminalProcessActivity'
@@ -292,6 +293,14 @@ export class PersistentTerminalSessions {
       const snapshot = await client.request('attach', target)
       if (!snapshot) throw new Error('Agent session is no longer running')
       const updated = await client.request('setAgentSurface', { identity: snapshot.identity, surface })
+        .catch((error: unknown) => {
+          // A daemon started by an older Yira keeps running across updates
+          // while it owns sessions, and it predates this method.
+          if (error instanceof Error && error.message === 'Unknown terminal daemon method') {
+            throw new Error(mainText('outdatedTerminalService'))
+          }
+          throw error
+        })
       const record = this.sessions.get(identityKey(snapshot.identity))
       if (record) record.snapshot = cloneSnapshot(updated)
       this.registry.updateSurface(snapshot.identity.workspaceId, snapshot.identity.tileId, surface)

@@ -25,6 +25,9 @@ let startupCheckScheduled = false
 let checkInFlight = false
 let updateDiagnosticsInitialization: Promise<void> | null = null
 let downloadedUpdateFile: string | null = null
+// A .deb update installs through a launcher after the app quits instead of
+// autoInstallOnAppQuit, so the install request itself marks it pending.
+let debInstallRequested = false
 
 const updateDiagnostics = new UpdateDiagnostics({
   homeDir: YIRA_HOME,
@@ -78,7 +81,7 @@ function getUpdater(): AppUpdater {
  * must stop too, or it keeps running the previous version's code.
  */
 export function isUpdateInstallPending(): boolean {
-  return updateState.status === 'downloaded' && getUpdater().autoInstallOnAppQuit
+  return updateState.status === 'downloaded' && (getUpdater().autoInstallOnAppQuit || debInstallRequested)
 }
 
 export function shouldUseLinuxDebUpdateLauncher(
@@ -251,9 +254,14 @@ async function installDownloadedUpdate({ confirmInstall, prepareToClose }: Updat
     void recordUpdateDiagnostic('install-cancelled')
     return
   }
-  if (prepareToClose && !await prepareToClose()) return
+  const debUpdate = shouldUseLinuxDebUpdateLauncher(process.platform, downloadedUpdateFile)
+  debInstallRequested = debUpdate
+  if (prepareToClose && !await prepareToClose()) {
+    debInstallRequested = false
+    return
+  }
 
-  if (shouldUseLinuxDebUpdateLauncher(process.platform, downloadedUpdateFile) && downloadedUpdateFile) {
+  if (debUpdate && downloadedUpdateFile) {
     try {
       await startLinuxDebUpdateLauncher({
         launcherPath: join(process.resourcesPath, 'linux-deb-update-launcher.sh'),
@@ -263,6 +271,7 @@ async function installDownloadedUpdate({ confirmInstall, prepareToClose }: Updat
         version: app.getVersion(),
       })
     } catch (error) {
+      debInstallRequested = false
       handleUpdateError(error)
       return
     }
