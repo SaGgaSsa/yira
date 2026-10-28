@@ -278,32 +278,56 @@ type TranslationResources = {
     creatingSession: string
     shortcutLabel: string
   }
-  activityPalette: {
+  commandPalette: {
     title: string
-    backToActivity: string
+    placeholder: string
+    actionsPlaceholder: string
     newSession: string
-    agentCount_one: string
-    agentCount_other: string
-    workspaceCount_one: string
-    workspaceCount_other: string
-    needsInputCount_one: string
-    needsInputCount_other: string
-    workingCount_one: string
-    workingCount_other: string
-    doneCount_one: string
-    doneCount_other: string
-    statusNeedsInput: string
-    statusWorking: string
-    statusDone: string
-    sourceTile: string
-    sourceAgentsView: string
-    empty: string
-    agentList: string
+    newSessionWithPrompt: string
+    lastUsed: string
+    current: string
+    sectionAttention: string
+    sectionRecent: string
+    sectionActive: string
+    sectionSessions: string
+    sectionWorkspaces: string
+    sectionActions: string
+    sectionFiles: string
+    showMore: string
+    noResults: string
     footerMove: string
     footerOpen: string
-    footerNewSession: string
-    newSessionInWorkspace: string
+    footerSplit: string
+    footerActions: string
     footerClose: string
+    footerRun: string
+    footerBack: string
+    prefixActions: string
+    prefixSessions: string
+    prefixWorkspaces: string
+    prefixFiles: string
+    providerClaude: string
+    providerCodex: string
+    dialogLabel: string
+    back: string
+    sessionOpen: string
+    sessionOpenSplit: string
+    sessionPin: string
+    sessionCopyBranch: string
+    sessionClose: string
+    actionViewFocus: string
+    actionViewSplit: string
+    actionViewGrid: string
+    actionViewCanvas: string
+    actionOpenHome: string
+    actionNewTerminal: string
+    actionNewAgentTile: string
+    actionNewNote: string
+    actionNewBrowser: string
+    actionToggleSidebar: string
+    actionToggleWorkspacePanel: string
+    actionOpenSettings: string
+    actionRunScript: string
   }
   agentAlert: {
     completed: string
@@ -1325,32 +1349,56 @@ const en: TranslationResources = {
     input: 'Needs your reply',
     permission: 'Asking for permission',
   },
-  activityPalette: {
-    title: 'Activity',
-    backToActivity: 'Back to Activity',
-    newSession: 'New session',
-    agentCount_one: '{{count}} agent',
-    agentCount_other: '{{count}} agents',
-    workspaceCount_one: '{{count}} workspace',
-    workspaceCount_other: '{{count}} workspaces',
-    needsInputCount_one: '{{count}} waiting for input',
-    needsInputCount_other: '{{count}} waiting for input',
-    workingCount_one: '{{count}} working',
-    workingCount_other: '{{count}} working',
-    doneCount_one: '{{count}} done',
-    doneCount_other: '{{count}} done',
-    statusNeedsInput: 'Waiting for input',
-    statusWorking: 'Working',
-    statusDone: 'Done',
-    sourceTile: 'Tile',
-    sourceAgentsView: '{{shortcut}} session',
-    empty: 'No workspace has open agents.',
-    agentList: 'Active agents',
-    footerMove: 'move between agents',
-    footerOpen: 'go to the terminal',
-    footerNewSession: 'new session',
-    newSessionInWorkspace: 'New session in {{workspace}}',
+  commandPalette: {
+    title: 'Palette',
+    placeholder: 'Search sessions, workspaces, actions, or files…',
+    actionsPlaceholder: 'Filter actions…',
+    newSession: 'New agent session',
+    newSessionWithPrompt: 'New session with “{{prompt}}” as prompt',
+    lastUsed: 'last',
+    current: 'current',
+    sectionAttention: 'Needs attention',
+    sectionRecent: 'Recent',
+    sectionActive: 'Active',
+    sectionSessions: 'Sessions',
+    sectionWorkspaces: 'Workspaces',
+    sectionActions: 'Actions',
+    sectionFiles: 'Files',
+    showMore: 'Show {{count}} more',
+    noResults: 'No results for “{{query}}”',
+    footerMove: 'move',
+    footerOpen: 'open',
+    footerSplit: 'open in split',
+    footerActions: 'session actions',
     footerClose: 'close',
+    footerRun: 'run',
+    footerBack: 'back',
+    prefixActions: 'actions',
+    prefixSessions: 'sessions',
+    prefixWorkspaces: 'workspaces',
+    prefixFiles: 'files',
+    providerClaude: 'Claude',
+    providerCodex: 'Codex',
+    dialogLabel: 'Command palette',
+    back: 'Back to the palette',
+    sessionOpen: 'Open',
+    sessionOpenSplit: 'Open in Split',
+    sessionPin: 'Pin as tile',
+    sessionCopyBranch: 'Copy branch name',
+    sessionClose: 'Close session',
+    actionViewFocus: 'Focus view',
+    actionViewSplit: 'Split view',
+    actionViewGrid: 'Grid view',
+    actionViewCanvas: 'Canvas view',
+    actionOpenHome: 'Open home',
+    actionNewTerminal: 'New terminal',
+    actionNewAgentTile: 'New agent tile',
+    actionNewNote: 'New note',
+    actionNewBrowser: 'New browser',
+    actionToggleSidebar: 'Show or hide the sidebar',
+    actionToggleWorkspacePanel: 'Show or hide the workspace panel',
+    actionOpenSettings: 'Open settings',
+    actionRunScript: 'Run {{name}}',
   },
   settings: {
     agentAlerts: 'Agent alerts',
@@ -2324,32 +2372,56 @@ const es: TranslationResources = {
     input: 'Necesita tu respuesta',
     permission: 'Pide permiso',
   },
-  activityPalette: {
-    title: 'Actividad',
-    backToActivity: 'Volver a Actividad',
-    newSession: 'Nueva sesión',
-    agentCount_one: '{{count}} agente',
-    agentCount_other: '{{count}} agentes',
-    workspaceCount_one: '{{count}} workspace',
-    workspaceCount_other: '{{count}} workspaces',
-    needsInputCount_one: '{{count}} espera input',
-    needsInputCount_other: '{{count}} esperan input',
-    workingCount_one: '{{count}} trabajando',
-    workingCount_other: '{{count}} trabajando',
-    doneCount_one: '{{count}} terminada',
-    doneCount_other: '{{count}} terminadas',
-    statusNeedsInput: 'Espera input',
-    statusWorking: 'Trabajando',
-    statusDone: 'Terminada',
-    sourceTile: 'Tile',
-    sourceAgentsView: 'Sesión {{shortcut}}',
-    empty: 'Ningún workspace tiene agentes abiertos.',
-    agentList: 'Agentes activos',
-    footerMove: 'moverse entre agentes',
-    footerOpen: 'ir a la terminal',
-    footerNewSession: 'nueva sesión',
-    newSessionInWorkspace: 'Nueva sesión en {{workspace}}',
+  commandPalette: {
+    title: 'Paleta',
+    placeholder: 'Buscar sesiones, workspaces, acciones o archivos…',
+    actionsPlaceholder: 'Filtrar acciones…',
+    newSession: 'Nueva sesión de agente',
+    newSessionWithPrompt: 'Nueva sesión con «{{prompt}}» como prompt',
+    lastUsed: 'última',
+    current: 'actual',
+    sectionAttention: 'Necesitan atención',
+    sectionRecent: 'Recientes',
+    sectionActive: 'Activos',
+    sectionSessions: 'Sesiones',
+    sectionWorkspaces: 'Workspaces',
+    sectionActions: 'Acciones',
+    sectionFiles: 'Archivos',
+    showMore: 'Ver {{count}} más',
+    noResults: 'Sin resultados para «{{query}}»',
+    footerMove: 'mover',
+    footerOpen: 'abrir',
+    footerSplit: 'abrir en split',
+    footerActions: 'acciones de la sesión',
     footerClose: 'cerrar',
+    footerRun: 'ejecutar',
+    footerBack: 'volver',
+    prefixActions: 'acciones',
+    prefixSessions: 'sesiones',
+    prefixWorkspaces: 'workspaces',
+    prefixFiles: 'archivos',
+    providerClaude: 'Claude',
+    providerCodex: 'Codex',
+    dialogLabel: 'Paleta de comandos',
+    back: 'Volver a la paleta',
+    sessionOpen: 'Abrir',
+    sessionOpenSplit: 'Abrir en Split',
+    sessionPin: 'Fijar como tile',
+    sessionCopyBranch: 'Copiar nombre de la rama',
+    sessionClose: 'Cerrar sesión',
+    actionViewFocus: 'Vista Focus',
+    actionViewSplit: 'Vista Split',
+    actionViewGrid: 'Vista Grid',
+    actionViewCanvas: 'Vista Canvas',
+    actionOpenHome: 'Abrir inicio',
+    actionNewTerminal: 'Nueva terminal',
+    actionNewAgentTile: 'Nuevo agente en tile',
+    actionNewNote: 'Nueva nota',
+    actionNewBrowser: 'Nuevo navegador',
+    actionToggleSidebar: 'Mostrar u ocultar la barra lateral',
+    actionToggleWorkspacePanel: 'Mostrar u ocultar el panel del workspace',
+    actionOpenSettings: 'Abrir configuración',
+    actionRunScript: 'Ejecutar {{name}}',
   },
   agents: {
     title: 'Agentes',

@@ -19,11 +19,11 @@ export interface AgentsViewState {
   snapshot: AgentActiveSessionSnapshot
   /** Temporary sessions of the active workspace, shown as session tiles in the workspace views. */
   sessions: ReturnType<typeof selectAgentsViewSessions>
-  /** True while the Activity palette is open, on either step. */
+  /** True while the command palette is open, on either step. */
   sessionDialogOpen: boolean
-  activityPaletteStep: ActivityPaletteStep | null
-  /** True when the new-session step was reached from the Activity step. */
-  sessionDialogFromActivity: boolean
+  commandPaletteStep: CommandPaletteStep | null
+  /** True when the new-session step was reached from the palette step. */
+  sessionDialogFromPalette: boolean
   sessionDialogInitialWorkspaceId: string | null
   /** Prompt text prefilled when the new-session step opens. */
   sessionDialogInitialPrompt: string
@@ -32,16 +32,16 @@ export interface AgentsViewState {
   /** Opens the new-session step directly with `prompt` already written. */
   openNewSessionDialogWithPrompt: (prompt: string) => void
   /** Opens the new-session step, preselecting `workspaceId` when given. */
-  showNewSessionStep: (workspaceId?: string) => void
-  backToActivity: () => void
+  showNewSessionStep: (workspaceId?: string, prompt?: string) => void
+  backToPalette: () => void
   closeSessionDialog: () => void
 }
 
-export type ActivityPaletteStep = 'activity' | 'new-session'
+export type CommandPaletteStep = 'palette' | 'new-session'
 
 interface SessionDialogRequest {
-  step: ActivityPaletteStep
-  fromActivity: boolean
+  step: CommandPaletteStep
+  fromPalette: boolean
   initialWorkspaceId: string | null
   initialPrompt?: string
   requestId: number
@@ -68,7 +68,7 @@ export function useAgentsView({
   const openNewSessionDialog = useCallback(() => {
     setSessionDialogRequest((current) => ({
       step: 'new-session',
-      fromActivity: current?.step === 'new-session' ? current.fromActivity : false,
+      fromPalette: current?.step === 'new-session' ? current.fromPalette : false,
       initialWorkspaceId: workspaceId || null,
       requestId: (current?.requestId ?? 0) + 1,
     }))
@@ -77,40 +77,41 @@ export function useAgentsView({
   const openNewSessionDialogWithPrompt = useCallback((prompt: string) => {
     setSessionDialogRequest((current) => ({
       step: 'new-session',
-      fromActivity: false,
+      fromPalette: false,
       initialWorkspaceId: workspaceId || null,
       initialPrompt: prompt,
       requestId: (current?.requestId ?? 0) + 1,
     }))
   }, [workspaceId])
 
-  const showNewSessionStep = useCallback((targetWorkspaceId?: string) => {
+  const showNewSessionStep = useCallback((targetWorkspaceId?: string, prompt?: string) => {
     setSessionDialogRequest((current) => ({
       step: 'new-session',
-      fromActivity: current ? current.step === 'activity' || current.fromActivity : false,
+      fromPalette: current ? current.step === 'palette' || current.fromPalette : false,
       initialWorkspaceId: targetWorkspaceId || workspaceId || null,
+      ...(prompt === undefined ? {} : { initialPrompt: prompt }),
       requestId: (current?.requestId ?? 0) + 1,
     }))
   }, [workspaceId])
 
-  const backToActivity = useCallback(() => {
+  const backToPalette = useCallback(() => {
     setSessionDialogRequest((current) => ({
-      step: 'activity',
-      fromActivity: false,
+      step: 'palette',
+      fromPalette: false,
       initialWorkspaceId: workspaceId || null,
       requestId: (current?.requestId ?? 0) + 1,
     }))
   }, [workspaceId])
 
-  // The shortcut opens the Activity step first; pressed again it moves on to the new-session step.
+  // The shortcut opens the palette first; pressed again it moves on to the new-session step.
   const handleNewSessionShortcut = useCallback(() => {
     setSessionDialogRequest((current) => {
       if (!current) {
-        return { step: 'activity', fromActivity: false, initialWorkspaceId: workspaceId || null, requestId: 1 }
+        return { step: 'palette', fromPalette: false, initialWorkspaceId: workspaceId || null, requestId: 1 }
       }
       return {
         step: 'new-session',
-        fromActivity: current.step === 'activity' || current.fromActivity,
+        fromPalette: current.step === 'palette' || current.fromPalette,
         initialWorkspaceId: current.step === 'new-session' ? current.initialWorkspaceId : workspaceId || null,
         requestId: current.requestId + 1,
       }
@@ -137,15 +138,15 @@ export function useAgentsView({
     snapshot: sessionSnapshot,
     sessions,
     sessionDialogOpen: sessionDialogRequest !== null,
-    activityPaletteStep: sessionDialogRequest?.step ?? null,
-    sessionDialogFromActivity: sessionDialogRequest?.fromActivity ?? false,
+    commandPaletteStep: sessionDialogRequest?.step ?? null,
+    sessionDialogFromPalette: sessionDialogRequest?.fromPalette ?? false,
     sessionDialogInitialWorkspaceId: sessionDialogRequest?.initialWorkspaceId ?? null,
     sessionDialogInitialPrompt: sessionDialogRequest?.initialPrompt ?? '',
     sessionDialogFocusRequestId: sessionDialogRequest?.requestId ?? 0,
     openNewSessionDialog,
     openNewSessionDialogWithPrompt,
     showNewSessionStep,
-    backToActivity,
+    backToPalette,
     closeSessionDialog,
   }
 }

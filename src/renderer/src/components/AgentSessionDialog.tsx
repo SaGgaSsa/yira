@@ -40,7 +40,7 @@ export interface AgentSessionDialogProps {
   focusRequestId: number
   onClose: () => void
   onCreated: (result: AgentSessionCreateResult) => void
-  /** Shown as a step of the Activity palette: Escape and Cancel go back instead of closing. */
+  /** Shown as a step of the command palette: Escape and Cancel go back instead of closing. */
   onBack?: () => void
 }
 
@@ -386,13 +386,13 @@ export function AgentSessionDialog({
             <button
               type="button"
               className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-border-visible px-3 text-sm text-text-secondary transition-colors hover:text-text-display disabled:opacity-50"
-              aria-label={t('activityPalette.backToActivity')}
-              title={t('activityPalette.backToActivity')}
+              aria-label={t('commandPalette.back')}
+              title={t('commandPalette.back')}
               disabled={isSubmitting}
               onClick={onBack}
             >
               <ArrowLeft size={14} aria-hidden="true" />
-              {t('activityPalette.title')}
+              {t('commandPalette.title')}
             </button>
           )}
           <div className="min-w-0 flex-1">

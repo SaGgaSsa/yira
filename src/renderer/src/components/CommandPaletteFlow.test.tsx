@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import test from 'node:test'
-import { fileURLToPath } from 'node:url'
 import { DOMImplementation } from '@xmldom/xmldom'
 import React from 'react'
 import type {
@@ -149,7 +148,7 @@ const ReactDOM = await import('react-dom/client')
 
 type TranslationTree = { [key: string]: string | TranslationTree }
 
-// Spanish copy from the real resources, with the plural and interpolation rules the palette relies on.
+// Spanish copy from the real resources, with the interpolation rules the palette relies on.
 function translate(key: string, options: Record<string, unknown> = {}): string {
   const lookup = (path: string): string | undefined => {
     let node: string | TranslationTree | undefined = resources.es.translation as unknown as TranslationTree
@@ -171,8 +170,12 @@ require.cache[reactI18nextPath] = {
   id: reactI18nextPath,
   loaded: true,
 } as NodeModule
-const { ActivityPalette } = loadModule<typeof import('./ActivityPalette')>('./ActivityPalette.tsx')
+const { CommandPalette } = loadModule<typeof import('./CommandPalette')>('./CommandPalette.tsx')
+const { AgentSessionDialog } = loadModule<typeof import('./AgentSessionDialog')>('./AgentSessionDialog.tsx')
 const { useAgentsView } = loadModule<typeof import('../hooks/useAgentsView')>('../hooks/useAgentsView.ts')
+const { useCommandPaletteStore } = loadModule<typeof import('../store/commandPaletteStore')>(
+  '../store/commandPaletteStore.ts',
+)
 
 const enabledAgents = { claude: { enabled: true }, codex: { enabled: true } }
 
@@ -223,7 +226,6 @@ const workspaces = [workspace('alpha', 'Alpha'), workspace('beta', 'Beta'), work
 const activeSessions = [
   session({ sessionId: 'alpha-working', tileId: 'tile-alpha', workspaceId: 'alpha', title: 'Refactor' }),
   session({ sessionId: 'alpha-done', tileId: 'tile-alpha-done', workspaceId: 'alpha', status: 'done', title: 'Finished task' }),
-  session({ sessionId: 'beta-exited', tileId: 'tile-beta', workspaceId: 'beta', status: 'exited' }),
   session({
     sessionId: 'gamma-input',
     tileId: 'tile-gamma',
@@ -233,49 +235,14 @@ const activeSessions = [
     provider: 'codex',
     worktreeBranch: 'feat/x',
   }),
-  session({ sessionId: 'gamma-working', tileId: 'tile-gamma-2', workspaceId: 'gamma', provider: 'codex' }),
 ]
-
-interface Calls {
-  closed: number
-  newSession: number
-  opened: Array<{ workspaceId: string; tileId: string }>
-}
-
-function renderActivityStep(sessions: AgentActiveSession[] = activeSessions): {
-  container: any
-  root: { unmount: () => void }
-  calls: Calls
-} {
-  const calls: Calls = { closed: 0, newSession: 0, opened: [] }
-  const container = document.createElement('div')
-  const root = ReactDOM.createRoot(container)
-  root.render(
-    <ActivityPalette
-      step="activity"
-      fromActivity={false}
-      workspaces={workspaces}
-      sessionWorkspaces={workspaces}
-      sessions={sessions}
-      agents={enabledAgents}
-      initialWorkspaceId="alpha"
-      focusRequestId={1}
-      shortcutLabel="Ctrl+N"
-      onClose={() => { calls.closed += 1 }}
-      onNewSession={() => { calls.newSession += 1 }}
-      onBack={() => undefined}
-      onCreated={() => undefined}
-      onOpenAgent={(target, agent) => { calls.opened.push({ workspaceId: target.id, tileId: agent.tileId }) }}
-    />,
-  )
-  return { container, root, calls }
-}
 
 interface HarnessHandle {
   view: ReturnType<typeof useAgentsView> | null
 }
 
 function renderWithHook(): { container: any; root: { unmount: () => void }; handle: HarnessHandle } {
+  useCommandPaletteStore.getState().reset()
   const handle: HarnessHandle = { view: null }
   function Harness(): React.ReactElement {
     const view = useAgentsView({
@@ -286,22 +253,38 @@ function renderWithHook(): { container: any; root: { unmount: () => void }; hand
     })
     handle.view = view
     return (
-      <ActivityPalette
-        step={view.activityPaletteStep}
-        fromActivity={view.sessionDialogFromActivity}
-        workspaces={workspaces}
-        sessionWorkspaces={workspaces}
-        sessions={activeSessions}
-        agents={enabledAgents}
-        initialWorkspaceId={view.sessionDialogInitialWorkspaceId}
-        focusRequestId={view.sessionDialogFocusRequestId}
-        shortcutLabel="Ctrl+N"
-        onClose={view.closeSessionDialog}
-        onNewSession={view.showNewSessionStep}
-        onBack={view.backToActivity}
-        onCreated={() => undefined}
-        onOpenAgent={() => undefined}
-      />
+      <>
+        <CommandPalette
+          open={view.commandPaletteStep === 'palette'}
+          focusRequestId={view.sessionDialogFocusRequestId}
+          workspaces={workspaces}
+          activeWorkspaceId="alpha"
+          sessions={activeSessions}
+          actions={[]}
+          newSessionDetail="Alpha · Claude"
+          newSessionShortcut="Ctrl+N"
+          searchFiles={null}
+          canOpenSessionInSplit={() => false}
+          getSessionActions={() => []}
+          onClose={view.closeSessionDialog}
+          onNewSession={(prompt) => view.showNewSessionStep(undefined, prompt)}
+          onOpenSession={() => undefined}
+          onOpenWorkspace={() => undefined}
+          onOpenFile={() => undefined}
+          onRunAction={() => undefined}
+        />
+        <AgentSessionDialog
+          open={view.commandPaletteStep === 'new-session'}
+          workspaces={workspaces}
+          initialWorkspaceId={view.sessionDialogInitialWorkspaceId}
+          initialPrompt={view.sessionDialogInitialPrompt}
+          agents={enabledAgents}
+          focusRequestId={view.sessionDialogFocusRequestId}
+          onClose={view.closeSessionDialog}
+          onCreated={() => undefined}
+          onBack={view.sessionDialogFromPalette ? view.backToPalette : undefined}
+        />
+      </>
     )
   }
   const container = document.createElement('div')
@@ -315,18 +298,22 @@ function findByAttribute(container: any, tagName: string, attribute: string): an
     .filter((element) => element.hasAttribute(attribute))
 }
 
-function findCardIds(container: any): string[] {
-  return findByAttribute(container, 'section', 'data-activity-palette-card')
-    .map((element) => element.getAttribute('data-activity-palette-card'))
-}
-
 function findButton(container: any, label: string): any {
   const buttons = Array.from(container.getElementsByTagName('button')) as any[]
   return buttons.find((button) => button.getAttribute('aria-label') === label || button.textContent?.startsWith(label)) ?? null
 }
 
-function isActivityStepOpen(container: any): boolean {
-  return findByAttribute(container, 'div', 'data-activity-palette').length > 0
+function findOption(container: any, key: string): any {
+  return findByAttribute(container, 'div', 'data-command-palette-item')
+    .find((element) => element.getAttribute('data-command-palette-item') === key) ?? null
+}
+
+function findInput(container: any): any {
+  return (Array.from(container.getElementsByTagName('input')) as any[])[0] ?? null
+}
+
+function isPaletteOpen(container: any): boolean {
+  return findByAttribute(container, 'div', 'data-command-palette-section').length > 0
 }
 
 function isNewSessionStepOpen(container: any): boolean {
@@ -347,6 +334,11 @@ function pressKey(key: string, modifiers: { ctrlKey?: boolean } = {}): void {
   }))
 }
 
+function typeInto(input: any, value: string): void {
+  input.value = value
+  input.dispatchEvent(new TestEvent('input', { bubbles: true, cancelable: true }))
+}
+
 function click(element: any): void {
   element.dispatchEvent(new TestEvent('click', { bubbles: true, cancelable: true }))
 }
@@ -355,164 +347,75 @@ async function settle(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 50))
 }
 
-test('shows every open agent, with waiting workspaces first and done agents last', async () => {
-  const { container, root } = renderActivityStep()
-
-  try {
-    await settle()
-    assert.deepEqual(findCardIds(container), ['gamma', 'alpha'])
-    const agentIds = findByAttribute(container, 'div', 'data-activity-palette-agent')
-      .map((element) => element.getAttribute('data-activity-palette-agent'))
-    assert.deepEqual(agentIds, ['gamma-input', 'gamma-working', 'alpha-working', 'alpha-done'])
-    const [summary] = findByAttribute(container, 'p', 'data-activity-palette-summary')
-    assert.equal(summary?.textContent, '4 agentes · 2 workspaces · 1 espera input')
-    assert.match(container.textContent, /Espera input/)
-    assert.match(container.textContent, /Sesión Ctrl\+N/)
-    assert.match(container.textContent, /Tile/)
-    assert.match(container.textContent, /⎇ feat\/x/)
-    assert.match(container.textContent, /4 min/)
-    assert.match(container.textContent, /Finished task/)
-    assert.match(container.textContent, /Terminada/)
-    assert.match(container.textContent, /1 trabajando · 1 terminada/)
-    assert.doesNotMatch(container.textContent, /Beta/)
-  } finally {
-    root.unmount()
-  }
-})
-
-test('names each agent by its terminal title, then its prompt title, then its provider', async () => {
-  const { container, root } = renderActivityStep([
-    session({ sessionId: 'prompted', tileId: 'tile-1', title: 'Refactor', liveTitle: '✳ Claude Code' }),
-    session({ sessionId: 'renamed', tileId: 'tile-2', title: 'Prompt text', liveTitle: '✳ Fix the login flow' }),
-    session({ sessionId: 'unnamed', tileId: 'tile-3' }),
-  ])
-
-  try {
-    await settle()
-    const rows = findByAttribute(container, 'div', 'data-activity-palette-agent')
-      .map((element) => element.textContent as string)
-    assert.equal(rows.length, 3)
-    assert.ok(rows[0].startsWith('Refactor'), rows[0])
-    assert.ok(rows[1].startsWith('Fix the login flow'), rows[1])
-    assert.ok(rows[2].startsWith('Claude'), rows[2])
-    assert.doesNotMatch(container.textContent, /Prompt text/)
-  } finally {
-    root.unmount()
-  }
-})
-
-test('Enter opens the selected agent and arrows move between agents and cards', async () => {
-  const { root, calls } = renderActivityStep()
-
-  try {
-    await settle()
-    pressKey('Enter')
-    await settle()
-    assert.deepEqual(calls.opened, [{ workspaceId: 'gamma', tileId: 'tile-gamma' }])
-    assert.equal(calls.closed, 1)
-
-    pressKey('ArrowRight')
-    await settle()
-    pressKey('Enter')
-    await settle()
-    assert.deepEqual(calls.opened[1], { workspaceId: 'alpha', tileId: 'tile-alpha' })
-
-    pressKey('ArrowLeft')
-    await settle()
-    pressKey('ArrowDown')
-    await settle()
-    pressKey('Enter')
-    await settle()
-    assert.deepEqual(calls.opened[2], { workspaceId: 'gamma', tileId: 'tile-gamma-2' })
-  } finally {
-    root.unmount()
-  }
-})
-
-test('shows the empty state and Enter moves on to a new session', async () => {
-  const { container, root, calls } = renderActivityStep([session({ status: 'exited' })])
-
-  try {
-    await settle()
-    assert.deepEqual(findCardIds(container), [])
-    assert.match(container.textContent, /Ningún workspace tiene agentes abiertos\./)
-    assert.ok(findButton(container, 'Nueva sesión'))
-    pressKey('Enter')
-    await settle()
-    assert.equal(calls.newSession, 1)
-    pressKey('Escape')
-    await settle()
-    assert.equal(calls.closed, 1)
-  } finally {
-    root.unmount()
-  }
-})
-
-test('the shortcut opens Activity, then the new session step, and Escape goes back', async () => {
+test('the shortcut opens the palette, then the new session step, and Escape goes back', async () => {
   const { container, root } = renderWithHook()
 
   try {
     await settle()
-    assert.equal(isActivityStepOpen(container), false)
+    assert.equal(isPaletteOpen(container), false)
 
     pressKey('n', { ctrlKey: true })
     await settle()
-    assert.equal(isActivityStepOpen(container), true)
+    assert.equal(isPaletteOpen(container), true)
     assert.equal(isNewSessionStepOpen(container), false)
 
     pressKey('n', { ctrlKey: true })
     await settle()
-    assert.equal(isActivityStepOpen(container), false)
+    assert.equal(isPaletteOpen(container), false)
     assert.equal(isNewSessionStepOpen(container), true)
-    assert.ok(findButton(container, 'Volver a Actividad'))
+    assert.ok(findButton(container, 'Volver a la paleta'))
 
     pressKey('Escape')
     await settle()
-    assert.equal(isActivityStepOpen(container), true)
+    assert.equal(isPaletteOpen(container), true)
     assert.equal(isNewSessionStepOpen(container), false)
 
     pressKey('Escape')
     await settle()
-    assert.equal(isActivityStepOpen(container), false)
+    assert.equal(isPaletteOpen(container), false)
   } finally {
     root.unmount()
   }
 })
 
-test('the header button moves to the new session step with a way back', async () => {
+test('Enter on the empty palette opens the new session step with a way back', async () => {
   const { container, root } = renderWithHook()
 
   try {
     await settle()
     pressKey('n', { ctrlKey: true })
     await settle()
-    click(findButton(container, 'Nueva sesión'))
+    assert.ok(findOption(container, 'new-session'))
+
+    pressKey('Enter')
     await settle()
+    assert.equal(isPaletteOpen(container), false)
     assert.equal(isNewSessionStepOpen(container), true)
-    click(findButton(container, 'Volver a Actividad'))
-    await settle()
-    assert.equal(isActivityStepOpen(container), true)
+    assert.ok(findButton(container, 'Volver a la paleta'))
   } finally {
     root.unmount()
   }
 })
 
-test('clicking a workspace title opens the new session step for that workspace', async () => {
+test('a typed prompt opens the new session step with that prompt written', async () => {
   const { container, root, handle } = renderWithHook()
 
   try {
     await settle()
     pressKey('n', { ctrlKey: true })
     await settle()
-    const [titleButton] = findByAttribute(container, 'button', 'data-activity-palette-new-session')
-    assert.ok(titleButton)
-    const targetId = titleButton.getAttribute('data-activity-palette-new-session')
-    assert.notEqual(targetId, 'alpha')
-    click(titleButton)
+
+    typeInto(findInput(container), 'texto')
+    await settle()
+    const promptRow = findOption(container, 'new-session-prompt')
+    assert.ok(promptRow)
+    assert.match(promptRow.textContent, /Nueva sesión con «texto» como prompt/)
+
+    click(promptRow)
     await settle()
     assert.equal(isNewSessionStepOpen(container), true)
-    assert.equal(handle.view?.sessionDialogInitialWorkspaceId, targetId)
-    assert.ok(findButton(container, 'Volver a Actividad'))
+    assert.equal(handle.view?.sessionDialogInitialPrompt, 'texto')
+    assert.ok(findButton(container, 'Volver a la paleta'))
   } finally {
     root.unmount()
   }
@@ -526,12 +429,12 @@ test('opening the new session step directly has no way back and Escape closes it
     handle.view?.openNewSessionDialog()
     await settle()
     assert.equal(isNewSessionStepOpen(container), true)
-    assert.equal(findButton(container, 'Volver a Actividad'), null)
+    assert.equal(findButton(container, 'Volver a la paleta'), null)
 
     pressKey('Escape')
     await settle()
     assert.equal(isNewSessionStepOpen(container), false)
-    assert.equal(isActivityStepOpen(container), false)
+    assert.equal(isPaletteOpen(container), false)
   } finally {
     root.unmount()
   }
