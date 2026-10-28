@@ -118,6 +118,9 @@ export function buildAgentShellCommand(input: AgentShellCommandInput): {
       : input.shellProfileId === 'powershell'
         ? `"$env:${PROMPT_ENVIRONMENT_VARIABLE}"`
         : `"$${PROMPT_ENVIRONMENT_VARIABLE}"`
+    // A prompt that starts with a dash, such as a pasted list item, would be
+    // parsed as an option, so `--` ends the agent's option parsing first.
+    if (input.prompt.startsWith('-')) commandParts.push(quote('--'))
     commandParts.push(promptReference)
   }
 

@@ -161,6 +161,27 @@ test('PowerShell exits with the agent status only when requested, including prom
   assert.deepEqual(withExit.env, { YIRA_AGENT_PROMPT: 'Continue this task' })
 })
 
+test('ends option parsing before prompts that start with a dash', () => {
+  const powerShell = buildAgentShellCommand({
+    shellProfileId: 'powershell',
+    command: 'codex',
+    args: [],
+    prompt: '- 🟪 G17: fuente configurable.',
+    platform: 'win32',
+  })
+  assert.equal(powerShell.initialCommand, `& 'codex' '--' ${codexPromptReference}`)
+  assert.deepEqual(powerShell.env, { YIRA_AGENT_PROMPT: '- 🟪 G17: fuente configurable.' })
+
+  const posix = buildAgentShellCommand({
+    shellProfileId: 'bash',
+    command: 'claude',
+    args: [],
+    prompt: '--help',
+    platform: 'linux',
+  })
+  assert.equal(posix.initialCommand, "'claude' '--' \"$YIRA_AGENT_PROMPT\"")
+})
+
 test('rejects PowerShell arguments with quote, percent, or line break characters', () => {
   for (const arg of ['has"quote', 'has%percent', 'has\nline', 'has\rline']) {
     assert.throws(() => buildAgentShellCommand({
