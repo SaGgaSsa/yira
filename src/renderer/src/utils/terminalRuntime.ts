@@ -6,6 +6,7 @@ import type {
 } from '@shared/types'
 import { sameTerminalSessionIdentity, type TerminalSessionIdentity, type TerminalSessionTarget } from '@shared/terminalSessionIdentity'
 import { DEFAULT_TERMINAL_THEME_ID, type TerminalThemeId } from '@shared/terminalThemes'
+import { DEFAULT_MONO_FONT_STACK } from '@shared/userSettings'
 import { createTerminalFitScheduler, type TerminalFitAddonLike, type TerminalFitResult } from './terminalFitScheduler'
 import { createTerminalReplayController, type TerminalReplayController } from './terminalReplay'
 import { sanitizeTerminalReplayBuffer } from './terminalReplaySanitizer'
@@ -18,6 +19,7 @@ export interface TerminalLike {
   readonly textarea?: Element | null
   readonly options: {
     fontSize?: number
+    fontFamily?: string
     theme?: unknown
   }
   resize?: (cols: number, rows: number) => void
@@ -84,6 +86,8 @@ export interface TerminalRuntimeViewOptions {
   onColumnInsetChange?: (inset: ReadingColumnInset) => void
   autoFocus: boolean
   fontSize: number
+  /** CSS font stack, including the configured family and the bundled fallback. */
+  fontFamily: string
   themeId: TerminalThemeId
   translucent?: boolean
   notificationsMuted: boolean
@@ -238,6 +242,7 @@ const DEFAULT_VIEW_OPTIONS: TerminalRuntimeViewOptions = {
   edgeToEdge: false,
   autoFocus: false,
   fontSize: 14,
+  fontFamily: DEFAULT_MONO_FONT_STACK,
   themeId: DEFAULT_TERMINAL_THEME_ID,
   notificationsMuted: false,
   workspaceRootPath: '',
@@ -330,6 +335,7 @@ function applyTerminalOptions(
   options: TerminalRuntimeViewOptions,
 ): void {
   terminal.options.fontSize = options.fontSize
+  terminal.options.fontFamily = options.fontFamily
   terminal.options.theme = getXtermTheme(options.themeId, options.translucent === true)
   setRuntimeRootPadding(runtimeRoot, options.edgeToEdge)
 }
@@ -621,6 +627,7 @@ function createRuntime(
 
   const applyChangedViewOptions = (previous: TerminalRuntimeViewOptions, next: TerminalRuntimeViewOptions): void => {
     if (previous.fontSize !== next.fontSize) terminal.options.fontSize = next.fontSize
+    if (previous.fontFamily !== next.fontFamily) terminal.options.fontFamily = next.fontFamily
     if (previous.themeId !== next.themeId || previous.translucent !== next.translucent) {
       terminal.options.theme = getXtermTheme(next.themeId, next.translucent === true)
     }
@@ -633,6 +640,7 @@ function createRuntime(
 
   const hasVisualChange = (previous: TerminalRuntimeViewOptions, next: TerminalRuntimeViewOptions): boolean => (
     previous.fontSize !== next.fontSize
+    || previous.fontFamily !== next.fontFamily
     || previous.themeId !== next.themeId
     || previous.translucent !== next.translucent
     || previous.edgeToEdge !== next.edgeToEdge
@@ -1103,7 +1111,7 @@ function createRuntime(
       return
     }
 
-    const fontChanged = previous.fontSize !== next.fontSize
+    const fontChanged = previous.fontSize !== next.fontSize || previous.fontFamily !== next.fontFamily
     const layoutChanged = previous.edgeToEdge !== next.edgeToEdge || previous.maxColumns !== next.maxColumns
     const themeChanged = previous.themeId !== next.themeId || previous.translucent !== next.translucent
     const autoFocusGained = next.autoFocus && !previous.autoFocus

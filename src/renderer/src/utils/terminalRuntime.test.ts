@@ -7,6 +7,7 @@ import type {
   TerminalExitEvent,
 } from '@shared/types'
 import type { TerminalSessionIdentity, TerminalSessionTarget } from '@shared/terminalSessionIdentity'
+import { DEFAULT_MONO_FONT_STACK } from '@shared/userSettings'
 import {
   ACK_CHUNK_CHARS,
   createTerminalRuntime,
@@ -79,7 +80,7 @@ interface FakeTerminalEvents {
 }
 
 class FakeTerminal implements TerminalLike {
-  readonly options: { fontSize?: number; theme?: unknown } = {}
+  readonly options: { fontSize?: number; fontFamily?: string; theme?: unknown } = {}
   readonly textarea = new FakeElement() as unknown as Element
   readonly writes: string[] = []
   readonly refreshCalls: Array<{ start: number; end: number }> = []
@@ -397,6 +398,7 @@ function viewOptions(overrides: Partial<TerminalRuntimeViewOptions> = {}): Termi
     edgeToEdge: false,
     autoFocus: false,
     fontSize: 14,
+    fontFamily: DEFAULT_MONO_FONT_STACK,
     themeId: 'yira-default',
     notificationsMuted: false,
     workspaceRootPath: '',
@@ -1195,6 +1197,29 @@ test('geometric fontSize and edgeToEdge changes request fit', async () => {
   await settleFit()
   assert.equal(harness.bridge.resizeCalls.length, resizeBefore + 2)
   assert.equal(harness.terminals[0].refreshCalls.length, refreshMid + 1)
+  await runtime.dispose(false)
+})
+
+test('fontFamily changes apply the stack and request fit', async () => {
+  const harness = createRuntimeHarness()
+  const runtime = await createReadyRuntime(harness)
+  const host = harness.host()
+
+  runtime.attachHost(host, viewOptions({ visible: true, fontFamily: DEFAULT_MONO_FONT_STACK }))
+  harness.flushFit()
+  await settleFit()
+  const resizeBefore = harness.bridge.resizeCalls.length
+  const refreshBefore = harness.terminals[0].refreshCalls.length
+
+  const customStack = `'Fira Code', ${DEFAULT_MONO_FONT_STACK}`
+  harness.fitAddons[0].dimensions = { cols: 120, rows: 40 }
+  runtime.updateView(viewOptions({ visible: true, fontFamily: customStack }))
+  assert.equal(harness.terminals[0].options.fontFamily, customStack)
+  assert.equal(harness.schedulers[0].requests.length, 1)
+  harness.flushFit()
+  await settleFit()
+  assert.equal(harness.bridge.resizeCalls.length, resizeBefore + 1)
+  assert.equal(harness.terminals[0].refreshCalls.length, refreshBefore + 1)
   await runtime.dispose(false)
 })
 

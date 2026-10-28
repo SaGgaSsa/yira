@@ -90,6 +90,7 @@ test('attaches a runtime host and parks it once during cleanup', () => {
     edgeToEdge: false,
     autoFocus: false,
     fontSize: 14,
+    fontFamily: "'IBM Plex Mono', 'JetBrains Mono', 'Consolas', monospace",
     themeId: 'yira-default' as const,
     notificationsMuted: false,
     workspaceRootPath: '',
