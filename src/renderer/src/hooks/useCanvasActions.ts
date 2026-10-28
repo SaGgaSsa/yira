@@ -4,8 +4,10 @@ import { useCanvasStore } from '@/store/canvasStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { buildDuplicateTerminalTile, insertDuplicateIntoSplitPanel } from '@/utils/duplicateTerminalTile'
 import { getBrowserTileUrl } from '@/utils/browserUrl'
+import { findFreeCanvasPosition } from '@/utils/canvasPlacement'
 import type { ConfirmDialogOptions } from '@/components/AppDialog'
 import { GRID_MAX_TILES, getDefaultTileSize } from '@shared/types'
+import { getAttachedTiles } from '@shared/floatingTiles'
 import type { TileState, ShellProfileId, NoteColor, NoteKind, SplitPanelId, TerminalAgentMetadata } from '@shared/types'
 import type { TerminalSessionTarget } from '@shared/terminalSessionIdentity'
 
@@ -75,42 +77,67 @@ export function useCanvasActions({ requestConfirm, destroyTerminalRuntime }: Use
     [gridSize, snapToGrid],
   )
 
-  // Compute spawn position: near the focused tile, or cascade from the last tile, or viewport center
+  // Compute spawn position: near the focused tile, or cascade from the last tile, or viewport center,
+  // then move it to the closest free spot so a new tile never lands on an existing one
   const getSpawnPos = useCallback(
     (w: number, h: number, offset: number) => {
       const state = useCanvasStore.getState()
       const focusedTile = state.tiles.find((t) => t.id === state.focusedTileId)
+      let preferred: { x: number; y: number }
+
       if (focusedTile) {
         // Spawn to the right of the focused tile
-        return {
+        preferred = {
           x: snapCoordinate(focusedTile.x + focusedTile.width + offset),
           y: snapCoordinate(focusedTile.y),
         }
-      }
+      } else {
+        // Find the rightmost / bottommost tile and cascade
+        let maxX = 0, maxY = 0
+        for (const t of state.tiles) {
+          maxX = Math.max(maxX, t.x + t.width)
+          maxY = Math.max(maxY, t.y + t.height)
+        }
 
-      // Find the rightmost / bottommost tile and cascade
-      let maxX = 0, maxY = 0
-      for (const t of state.tiles) {
-        maxX = Math.max(maxX, t.x + t.width)
-        maxY = Math.max(maxY, t.y + t.height)
-      }
-
-      if (state.tiles.length > 0) {
-        return {
-          x: snapCoordinate(maxX + offset),
-          y: snapCoordinate(maxY),
+        if (state.tiles.length > 0) {
+          preferred = {
+            x: snapCoordinate(maxX + offset),
+            y: snapCoordinate(maxY),
+          }
+        } else {
+          // No tiles — use viewport center
+          const cx = (-state.viewport.tx + 200) / state.viewport.zoom
+          const cy = (-state.viewport.ty + 150) / state.viewport.zoom
+          preferred = {
+            x: snapCoordinate(cx),
+            y: snapCoordinate(cy),
+          }
         }
       }
 
-      // No tiles — use viewport center
-      const cx = (-state.viewport.tx + 200) / state.viewport.zoom
-      const cy = (-state.viewport.ty + 150) / state.viewport.zoom
+      // Floating tiles live in their own windows, so they do not block the canvas
+      const attachedTiles = getAttachedTiles(state.tiles)
+      if (attachedTiles.length === 0) return preferred
+
+      const freePosition = findFreeCanvasPosition({
+        occupied: attachedTiles,
+        width: w,
+        height: h,
+        preferred,
+        gap: offset,
+      })
+
       return {
-        x: snapCoordinate(cx),
-        y: snapCoordinate(cy),
+        x: snapCoordinate(freePosition.x),
+        y: snapCoordinate(freePosition.y),
       }
     },
     [snapCoordinate],
+  )
+
+  const getSpawnPosition = useCallback(
+    (width: number, height: number) => getSpawnPos(width, height, 40),
+    [getSpawnPos],
   )
 
   const finalizeAddedTile = useCallback(
@@ -296,6 +323,7 @@ export function useCanvasActions({ requestConfirm, destroyTerminalRuntime }: Use
     addNote,
     deleteTile,
     resetZoom,
+    getSpawnPosition,
     focusTile,
     bringToFront,
     updateTile,
