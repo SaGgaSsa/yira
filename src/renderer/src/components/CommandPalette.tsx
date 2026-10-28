@@ -503,9 +503,18 @@ export function CommandPalette({
     rowRefs.current.get(selectedRowKey)?.scrollIntoView?.({ block: 'nearest' })
   }, [open, selectedRowKey])
 
-  useEffect(() => {
+  const handleKeyDownRef = useRef<(event: KeyboardEvent) => void>(() => undefined)
+
+  // Attached during commit so a key pressed right after opening already reaches the palette.
+  useLayoutEffect(() => {
     if (!open) return
-    const handleKeyDown = (event: KeyboardEvent): void => {
+    const listener = (event: KeyboardEvent): void => handleKeyDownRef.current(event)
+    window.addEventListener('keydown', listener)
+    return () => window.removeEventListener('keydown', listener)
+  }, [open])
+
+  useLayoutEffect(() => {
+    handleKeyDownRef.current = (event: KeyboardEvent): void => {
       if (event.defaultPrevented) return
 
       if (event.key === 'Tab') {
@@ -544,19 +553,7 @@ export function CommandPalette({
         executeRow(selectedRow, event.shiftKey)
       }
     }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [
-    actionFilter.length,
-    executeRow,
-    leaveSubPage,
-    moveSelection,
-    onClose,
-    open,
-    openSessionActions,
-    selectedRow,
-    subPageSession,
-  ])
+  })
 
   if (!open) return null
 

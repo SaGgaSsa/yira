@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import test from 'node:test'
-import { DOMImplementation } from '@xmldom/xmldom'
+import { DOMImplementation, XMLSerializer } from '@xmldom/xmldom'
 import React from 'react'
 import type {
   AgentActiveSession,
@@ -288,6 +288,7 @@ function renderWithHook(): { container: any; root: { unmount: () => void }; hand
     )
   }
   const container = document.createElement('div')
+  renderedContainer = container
   const root = ReactDOM.createRoot(container)
   root.render(<Harness />)
   return { container, root, handle }
@@ -343,8 +344,19 @@ function click(element: any): void {
   element.dispatchEvent(new TestEvent('click', { bubbles: true, cancelable: true }))
 }
 
+let renderedContainer: any = null
+
+/** Waits until the rendered markup stops changing, so slow machines get the time they need. */
 async function settle(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 50))
+  const serializer = new XMLSerializer()
+  let previous = renderedContainer ? serializer.serializeToString(renderedContainer) : ''
+  for (let elapsed = 0; elapsed < 2000; elapsed += 20) {
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    const current = renderedContainer ? serializer.serializeToString(renderedContainer) : ''
+    if (current === previous) return
+    previous = current
+  }
 }
 
 test('the shortcut opens the palette, then the new session step, and Escape goes back', async () => {

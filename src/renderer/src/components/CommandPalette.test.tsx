@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import test from 'node:test'
-import { DOMImplementation } from '@xmldom/xmldom'
+import { DOMImplementation, XMLSerializer } from '@xmldom/xmldom'
 import React from 'react'
 import type { AgentActiveSession, FileSearchEntry, WorkspaceMetadata } from '@shared/types'
 import { resources } from '@/i18n/resources'
@@ -312,6 +312,7 @@ function renderPalette(options: RenderOptions = {}): {
     sessionActions: [],
   }
   const container = document.createElement('div')
+  renderedContainer = container
   const root = ReactDOM.createRoot(container)
   root.render(
     <CommandPalette
@@ -437,8 +438,19 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+let renderedContainer: any = null
+
+/** Waits until the rendered markup stops changing, so slow machines get the time they need. */
 async function settle(): Promise<void> {
-  await sleep(50)
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  const serializer = new XMLSerializer()
+  let previous = renderedContainer ? serializer.serializeToString(renderedContainer) : ''
+  for (let elapsed = 0; elapsed < 2000; elapsed += 20) {
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    const current = renderedContainer ? serializer.serializeToString(renderedContainer) : ''
+    if (current === previous) return
+    previous = current
+  }
 }
 
 test('opens on the new session row and Enter starts a session', async () => {
