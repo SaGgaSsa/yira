@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import {
   X, Monitor, Moon, Sun, Type, Grid3x3, Globe, CodeXml, Info, RefreshCw, Download,
-  LayoutGrid, Keyboard, Terminal, ExternalLink, FileText, Bot, Check, RotateCcw,
+  LayoutGrid, Keyboard, Terminal, ExternalLink, FileText, Bot, Check,
 } from 'lucide-react'
 import { createUserSettingsDraft, useSettingsStore } from '@/store/settingsStore'
 import { useUpdateStore } from '@/store/updateStore'
@@ -20,16 +20,13 @@ import { DEFAULT_USER_SETTINGS } from '@shared/types'
 import type { TerminalThemeId } from '@shared/terminalThemes'
 import { TERMINAL_THEMES } from '@shared/terminalThemes'
 import {
-  buildFontStack,
   DEFAULT_INTERFACE_FONT_STACK,
   DEFAULT_MONO_FONT_STACK,
-  MAX_FONT_FAMILY_LENGTH,
   MAX_FONT_SIZE_PX,
   MIN_FONT_SIZE_PX,
 } from '@shared/userSettings'
-import { loadInstalledFontFamilies } from '@/utils/localFonts'
-import type { InstalledFontFamilies } from '@/utils/localFonts'
 import type { LegalDocumentId } from './LegalDocuments'
+import { FontFamilyPicker } from './FontFamilyPicker'
 import { ShortcutInput } from './ShortcutInput'
 import { agentProviderDetails } from './AgentUsageIndicator'
 
@@ -177,7 +174,7 @@ function getShortcutName(t: TFunction, id: ShortcutId): string {
 function getSectionLabel(t: TFunction, id: SettingsSectionId): string {
   switch (id) {
     case 'appearance': return t('settings.appearance')
-    case 'density': return t('settings.fontSize')
+    case 'density': return t('settings.fonts')
     case 'canvas': return t('settings.canvas')
     case 'tiles': return t('settings.tiles')
     case 'terminal': return t('settings.terminal')
@@ -201,7 +198,6 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
   const [supportLinkFailed, setSupportLinkFailed] = useState(false)
   const [backgroundMaterialSupported, setBackgroundMaterialSupported] = useState<WindowBackgroundMaterial[]>(['none'])
   const [legalDocument, setLegalDocument] = useState<LegalDocumentId | null>(null)
-  const [installedFontFamilies, setInstalledFontFamilies] = useState<InstalledFontFamilies>({ all: [], monospace: [] })
   const privacyDocumentButtonRef = useRef<HTMLButtonElement | null>(null)
   const termsDocumentButtonRef = useRef<HTMLButtonElement | null>(null)
   const restoreLegalDocumentFocusRef = useRef<LegalDocumentId | null>(null)
@@ -242,8 +238,6 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
   const appearance = draft.appearance
   const interfaceFontSizePx = draft.interfaceFontSizePx
   const tileFontSizePx = draft.tileFontSizePx
-  const interfaceFontFamily = draft.interfaceFontFamily
-  const monoFontFamily = draft.monoFontFamily
   const showGrid = draft.showGrid
   const snapToGrid = draft.snapToGrid
   const gridSize = draft.gridSize
@@ -317,10 +311,6 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
     ...current,
     shortcuts: { ...current.shortcuts, [id]: accelerator },
   }))
-  const requestInstalledFontFamilies = () => {
-    if (installedFontFamilies.all.length > 0) return
-    void loadInstalledFontFamilies().then(setInstalledFontFamilies)
-  }
   const currentVersion = useUpdateStore((s) => s.currentVersion)
   const availableVersion = useUpdateStore((s) => s.availableVersion)
   const updateStatus = useUpdateStore((s) => s.status)
@@ -567,57 +557,25 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
         </label>
       )
 
-      const renderFontFamilyRow = (
-        inputId: string,
+      const renderFontFamilyPicker = (
         label: string,
         value: string,
-        placeholder: string,
+        bundledName: string,
         fallbackStack: string,
-        suggestions: string[],
+        monospaceOnly: boolean,
         onChange: (family: string) => void,
-      ) => {
-        const fontFamily = buildFontStack(value, fallbackStack)
-        const resetLabel = t('settings.resetFontFamily')
-        return (
-          <div className="rounded-[20px] border border-border-visible bg-bg-secondary px-4 py-4">
-            <div className="flex items-center justify-between gap-4">
-              <label className="nd-label text-text-display" htmlFor={inputId}>{label}</label>
-              {value !== '' && (
-                <button
-                  type="button"
-                  className="inline-flex size-7 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-bg-tertiary hover:text-text-display"
-                  aria-label={resetLabel}
-                  title={resetLabel}
-                  onClick={() => onChange('')}
-                >
-                  <RotateCcw size={14} aria-hidden="true" />
-                </button>
-              )}
-            </div>
-            <input
-              id={inputId}
-              className="mt-3 w-full rounded-full border border-border-visible bg-bg-primary px-4 py-3 text-sm text-text-display outline-hidden"
-              type="text"
-              list={`${inputId}-suggestions`}
-              value={value}
-              placeholder={placeholder}
-              maxLength={MAX_FONT_FAMILY_LENGTH}
-              spellCheck={false}
-              onChange={(event) => onChange(event.target.value)}
-              onPointerDown={requestInstalledFontFamilies}
-              onFocus={requestInstalledFontFamilies}
-            />
-            <datalist id={`${inputId}-suggestions`}>
-              {suggestions.map((family) => (
-                <option key={family} value={family} />
-              ))}
-            </datalist>
-            <p className="mt-3 text-sm text-text-secondary" style={{ fontFamily }}>
-              {'Aa Bb 0123456789 {}[]() => !='}
-            </p>
-          </div>
-        )
-      }
+      ) => (
+        <CompactSettingRow title={label}>
+          <FontFamilyPicker
+            value={value}
+            bundledName={bundledName}
+            fallbackStack={fallbackStack}
+            monospaceOnly={monospaceOnly}
+            ariaLabel={label}
+            onChange={onChange}
+          />
+        </CompactSettingRow>
+      )
 
       return (
         <section>
@@ -625,7 +583,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
             <ActiveSectionIcon size={16} className="text-text-secondary" />
             <div>
               <div className="nd-label text-text-secondary">{t('settings.fonts')}</div>
-              <h3 className="mt-1 text-xl text-text-display">{t('settings.textScale')}</h3>
+              <h3 className="mt-1 text-xl text-text-display">{t('settings.fontsSectionTitle')}</h3>
             </div>
           </div>
 
@@ -635,25 +593,23 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
           </div>
 
           <div className="mt-6">
-            <div className="nd-label text-text-display">{t('settings.fontFamily')}</div>
+            <div className="nd-label text-text-secondary">{t('settings.fontFamily')}</div>
             <p className="mt-1 text-sm text-text-secondary">{t('settings.fontFamilyDescription')}</p>
             <div className="mt-3 space-y-3">
-              {renderFontFamilyRow(
-                'settings-interface-font-family',
+              {renderFontFamilyPicker(
                 t('settings.interfaceFontFamily'),
-                interfaceFontFamily,
-                t('settings.bundledFont', { name: 'Saira' }),
+                draft.interfaceFontFamily,
+                'Saira',
                 DEFAULT_INTERFACE_FONT_STACK,
-                installedFontFamilies.all,
+                false,
                 setInterfaceFontFamily,
               )}
-              {renderFontFamilyRow(
-                'settings-mono-font-family',
+              {renderFontFamilyPicker(
                 t('settings.monoFontFamily'),
-                monoFontFamily,
-                t('settings.bundledFont', { name: 'IBM Plex Mono' }),
+                draft.monoFontFamily,
+                'IBM Plex Mono',
                 DEFAULT_MONO_FONT_STACK,
-                installedFontFamilies.monospace,
+                true,
                 setMonoFontFamily,
               )}
             </div>
