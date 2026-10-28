@@ -245,7 +245,6 @@ type TranslationResources = {
     unknownTitle: string
     closeSession: string
     maximizeSession: string
-    temporaryBadge: string
     temporaryBadgeTitle: string
     pinSession: string
     pinSessionWorktreeDisabled: string
@@ -1311,7 +1310,6 @@ const en: TranslationResources = {
     unknownTitle: 'Untitled session',
     closeSession: 'Close session',
     maximizeSession: 'Maximize session',
-    temporaryBadge: 'Temporary',
     temporaryBadgeTitle: 'Temporary agent session. It closes with the agent and is not saved with the workspace.',
     pinSession: 'Keep as agent tile',
     pinSessionWorktreeDisabled: 'Sessions in a worktree cannot be kept as a tile',
@@ -2334,7 +2332,6 @@ const es: TranslationResources = {
     unknownTitle: 'Sesión sin título',
     closeSession: 'Cerrar sesión',
     maximizeSession: 'Maximizar sesión',
-    temporaryBadge: 'Temporal',
     temporaryBadgeTitle: 'Sesión temporal de agente. Se cierra con el agente y no se guarda con el workspace.',
     pinSession: 'Fijar como tile de agente',
     pinSessionWorktreeDisabled: 'Las sesiones en un worktree no se pueden fijar como tile',
