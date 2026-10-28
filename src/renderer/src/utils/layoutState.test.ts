@@ -17,8 +17,6 @@ function panelInput(overrides: Partial<PanelLayoutInput> = {}): PanelLayoutInput
     workspacePanelOpen: true,
     workspacePanelHiddenByFocus: false,
     focusViewActive: false,
-    maximizedSessionId: null,
-    workspacePanelRevealedForSessionId: null,
     windowWidth: 1920,
     sidePanelWidth: 344,
     ...otherOverrides,
@@ -31,7 +29,6 @@ function panelInput(overrides: Partial<PanelLayoutInput> = {}): PanelLayoutInput
 
 function expectedLayout(overrides: Partial<PanelLayout> = {}): PanelLayout {
   return {
-    agentSessionMaximized: false,
     sidebarHidden: false,
     sidebarHiddenByWidth: false,
     tilesHidden: false,
@@ -41,7 +38,6 @@ function expectedLayout(overrides: Partial<PanelLayout> = {}): PanelLayout {
     workspacePanelHiddenByWidth: false,
     narrowWindow: false,
     workspacePanelRevealedInFocus: false,
-    workspacePanelRevealedForMaximizedSession: false,
     workspacePanelRevealedInNarrowWindow: false,
     ...overrides,
   }
@@ -55,7 +51,6 @@ function assertPanelLayout(
   const actual = resolvePanelLayout(panelInput(input))
   const resolvedExpected = expectedLayout(expected)
   const keys: (keyof PanelLayout)[] = [
-    'agentSessionMaximized',
     'sidebarHidden',
     'sidebarHiddenByWidth',
     'tilesHidden',
@@ -65,7 +60,6 @@ function assertPanelLayout(
     'workspacePanelHiddenByWidth',
     'narrowWindow',
     'workspacePanelRevealedInFocus',
-    'workspacePanelRevealedForMaximizedSession',
     'workspacePanelRevealedInNarrowWindow',
   ]
 
@@ -79,31 +73,21 @@ function assertPanelLayout(
 assertMainView('Activity has highest priority', {
   hasWorkspace: true,
   activityOpen: true,
-  agentsViewOpen: true,
   homeOpen: true,
 }, 'activity')
-assertMainView('Agents takes priority over Home', {
-  hasWorkspace: true,
-  activityOpen: false,
-  agentsViewOpen: true,
-  homeOpen: true,
-}, 'agents')
 assertMainView('Home is selected when open', {
   hasWorkspace: true,
   activityOpen: false,
-  agentsViewOpen: false,
   homeOpen: true,
 }, 'home')
 assertMainView('Workspace is selected when no overlay is open', {
   hasWorkspace: true,
   activityOpen: false,
-  agentsViewOpen: false,
   homeOpen: false,
 }, 'workspace')
 assertMainView('Home is selected without a workspace', {
   hasWorkspace: false,
   activityOpen: false,
-  agentsViewOpen: false,
   homeOpen: false,
 }, 'home')
 
@@ -204,63 +188,9 @@ assertPanelLayout('Revealing the Focus panel clears its suppression', {
   workspacePanelRevealedInFocus: true,
 })
 
-assertPanelLayout('A Focus reveal does not count in Agents', {
-  mainView: 'agents',
-  focusViewActive: true,
-}, {
-  tilesHidden: true,
-})
-
 assertPanelLayout('A narrow-window override does not count as a reveal on a wide window', {
   narrowOverride: { sidebar: false, workspacePanel: true },
 }, {})
-
-assertPanelLayout('Focus does not hide the panel in Agents', {
-  mainView: 'agents',
-  workspacePanelHiddenByFocus: true,
-}, {
-  tilesHidden: true,
-  workspacePanelSuppressed: false,
-})
-
-assertPanelLayout('A maximized session hides the panel and sidebar', {
-  mainView: 'agents',
-  maximizedSessionId: 'session-a',
-}, {
-  agentSessionMaximized: true,
-  sidebarHidden: true,
-  tilesHidden: true,
-  workspacePanelSuppressed: true,
-  workspacePanelVisible: false,
-  workspacePanelShown: false,
-})
-
-assertPanelLayout('A reveal for the maximized session shows the panel', {
-  mainView: 'agents',
-  maximizedSessionId: 'session-a',
-  workspacePanelRevealedForSessionId: 'session-a',
-}, {
-  agentSessionMaximized: true,
-  sidebarHidden: true,
-  tilesHidden: true,
-  workspacePanelSuppressed: false,
-  workspacePanelVisible: true,
-  workspacePanelShown: true,
-  workspacePanelRevealedForMaximizedSession: true,
-})
-
-assertPanelLayout('A reveal for another session keeps the panel hidden', {
-  mainView: 'agents',
-  maximizedSessionId: 'session-b',
-  workspacePanelRevealedForSessionId: 'session-a',
-}, {
-  agentSessionMaximized: true,
-  sidebarHidden: true,
-  tilesHidden: true,
-  workspacePanelSuppressed: true,
-  workspacePanelVisible: false,
-  workspacePanelShown: false,
-})
 
 assertPanelLayout('Home hides tiles and the workspace panel on screen', {
   mainView: 'home',

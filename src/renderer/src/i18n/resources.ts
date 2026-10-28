@@ -247,6 +247,8 @@ type TranslationResources = {
     unknownTitle: string
     closeSession: string
     maximizeSession: string
+    temporaryBadge: string
+    temporaryBadgeTitle: string
     pinSession: string
     pinSessionWorktreeDisabled: string
     pinSessionTitle: string
@@ -1273,7 +1275,7 @@ const en: TranslationResources = {
   },
   agentsView: {
     title: 'Agents',
-    openAgentsView: 'Open Agents View ({{count}} sessions)',
+    openAgentsView: 'Temporary agent sessions: {{count}}. Click to show the next one waiting',
     needsAttention: '{{count}} sessions need attention',
     worktreeKeptTitle: 'Worktree kept',
     worktreeKeptMessage: 'The worktree has changes and was kept at {{path}}.',
@@ -1289,11 +1291,13 @@ const en: TranslationResources = {
     unknownTitle: 'Untitled session',
     closeSession: 'Close session',
     maximizeSession: 'Maximize session',
+    temporaryBadge: 'Temporary',
+    temporaryBadgeTitle: 'Temporary agent session. It closes with the agent and is not saved with the workspace.',
     pinSession: 'Keep as agent tile',
-    pinSessionWorktreeDisabled: 'Sessions in a worktree cannot be moved to a tile',
-    pinSessionTitle: 'Move session to an agent tile?',
-    pinSessionMessage: 'The session moves to the canvas as an agent tile and leaves the Agents View. The agent keeps running and is not restarted. Closing the tile ends the agent.',
-    pinSessionConfirm: 'Move to tile',
+    pinSessionWorktreeDisabled: 'Sessions in a worktree cannot be kept as a tile',
+    pinSessionTitle: 'Keep this session as an agent tile?',
+    pinSessionMessage: 'The session stays where it is and becomes an agent tile saved with the workspace. The agent keeps running and is not restarted. Closing the tile ends the agent.',
+    pinSessionConfirm: 'Keep as tile',
     pinSessionErrorTitle: 'Could not move agent session',
     statusWorking: 'Working',
     statusNeedsInput: 'Needs input',
@@ -2272,7 +2276,7 @@ const es: TranslationResources = {
   },
   agentsView: {
     title: 'Agentes',
-    openAgentsView: 'Abrir vista de agentes ({{count}} sesiones)',
+    openAgentsView: 'Sesiones temporales de agente: {{count}}. Clic para mostrar la siguiente que espera',
     needsAttention: '{{count}} sesiones requieren atención',
     worktreeKeptTitle: 'Worktree conservado',
     worktreeKeptMessage: 'El worktree tiene cambios y se conservó en {{path}}.',
@@ -2288,11 +2292,13 @@ const es: TranslationResources = {
     unknownTitle: 'Sesión sin título',
     closeSession: 'Cerrar sesión',
     maximizeSession: 'Maximizar sesión',
+    temporaryBadge: 'Temporal',
+    temporaryBadgeTitle: 'Sesión temporal de agente. Se cierra con el agente y no se guarda con el workspace.',
     pinSession: 'Fijar como tile de agente',
-    pinSessionWorktreeDisabled: 'Las sesiones en un worktree no se pueden mover a un tile',
-    pinSessionTitle: '¿Mover la sesión a un tile de agente?',
-    pinSessionMessage: 'La sesión pasa al canvas como tile de agente y deja la vista de agentes. El agente sigue corriendo y no se reinicia. Al cerrar el tile se termina el agente.',
-    pinSessionConfirm: 'Mover a tile',
+    pinSessionWorktreeDisabled: 'Las sesiones en un worktree no se pueden fijar como tile',
+    pinSessionTitle: '¿Fijar la sesión como tile de agente?',
+    pinSessionMessage: 'La sesión queda donde está y pasa a ser un tile de agente guardado con el workspace. El agente sigue corriendo y no se reinicia. Al cerrar el tile se termina el agente.',
+    pinSessionConfirm: 'Fijar',
     pinSessionErrorTitle: 'No se pudo mover la sesión del agente',
     statusWorking: 'Trabajando',
     statusNeedsInput: 'Requiere intervención',

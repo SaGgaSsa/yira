@@ -67,21 +67,6 @@ test('clears stale titles when showing the board, removing a tile, or changing w
   assert.equal(getActiveWindowTitle({ ...state, tiles: [], activeWorkspaceName: '' }), 'Yira')
 })
 
-test('follows the agent session shown in the agents view instead of the hidden tiles', () => {
-  const agentsViewSession = { tileId: 'agent-1', title: 'Fix login' }
-  assert.equal(getActiveWindowTitle({
-    ...state, agentsViewSession, terminalTitles: { ...state.terminalTitles, 'agent-1': '✳ Fixing login' },
-  }), 'Fixing login - Yira')
-  assert.equal(getActiveWindowTitle({
-    ...state, agentsViewSession, terminalTitles: { ...state.terminalTitles, 'agent-1': '✳ Claude Code' },
-  }), 'Fix login - Yira')
-  assert.equal(getActiveWindowTitle({ ...state, agentsViewSession }), 'Fix login - Yira')
-  assert.equal(getActiveWindowTitle({
-    ...state, agentsViewSession: { tileId: 'agent-1' }, terminalTitles: { 'agent-1': '⠋' },
-  }), 'Project - Yira')
-  assert.equal(getActiveWindowTitle({ ...state, agentsViewSession: null }), 'Project - Yira')
-})
-
 test('reports the visible active tile per view mode', () => {
   assert.equal(getVisibleActiveTileId({ ...state, viewMode: 'canvas' }), terminal.id)
   assert.equal(getVisibleActiveTileId({ ...state, viewMode: 'board' }), null)

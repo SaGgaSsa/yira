@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { AgentActiveSessionSnapshot, AgentProvider, UserSettings, WorkspaceConfig } from '@shared/types'
 import { useAgentSessionSnapshot } from '@/hooks/useAgentSessionSnapshot'
 import { getEffectiveAgentProvider } from '@/utils/effectiveAgent'
@@ -17,8 +17,8 @@ interface UseAgentsViewOptions {
 export interface AgentsViewState {
   effectiveProvider: AgentProvider | undefined
   snapshot: AgentActiveSessionSnapshot
+  /** Temporary sessions of the active workspace, shown as session tiles in the workspace views. */
   sessions: ReturnType<typeof selectAgentsViewSessions>
-  isOpen: boolean
   /** True while the Activity palette is open, on either step. */
   sessionDialogOpen: boolean
   activityPaletteStep: ActivityPaletteStep | null
@@ -28,10 +28,6 @@ export interface AgentsViewState {
   /** Prompt text prefilled when the new-session step opens. */
   sessionDialogInitialPrompt: string
   sessionDialogFocusRequestId: number
-  focusedSessionId: string | null
-  toggle: () => void
-  close: () => void
-  openForSession: (tileId: string) => void
   openNewSessionDialog: () => void
   /** Opens the new-session step directly with `prompt` already written. */
   openNewSessionDialogWithPrompt: (prompt: string) => void
@@ -67,18 +63,7 @@ export function useAgentsView({
     () => selectAgentsViewSessions(sessionSnapshot, workspaceId),
     [sessionSnapshot, workspaceId],
   )
-  const scopeKey = `${workspaceId}:${effectiveProvider ?? 'none'}`
-  const [openViewScope, setOpenViewScope] = useState<string | null>(null)
   const [sessionDialogRequest, setSessionDialogRequest] = useState<SessionDialogRequest | null>(null)
-  const [focusedSession, setFocusedSession] = useState<{ scope: string; tileId: string } | null>(null)
-  const previousScopeRef = useRef(scopeKey)
-
-  useEffect(() => {
-    if (previousScopeRef.current === scopeKey) return
-    previousScopeRef.current = scopeKey
-    setOpenViewScope(null)
-    setFocusedSession(null)
-  }, [scopeKey])
 
   const openNewSessionDialog = useCallback(() => {
     setSessionDialogRequest((current) => ({
@@ -145,36 +130,18 @@ export function useAgentsView({
     return () => window.removeEventListener('keydown', handleKeyDown, true)
   }, [handleNewSessionShortcut, newSessionShortcut, newSessionShortcutEnabled])
 
-  const toggle = useCallback(() => {
-    if (!effectiveProvider) return
-    setOpenViewScope((current) => current === scopeKey ? null : scopeKey)
-  }, [effectiveProvider, scopeKey])
-
-  const close = useCallback(() => setOpenViewScope(null), [])
-
-  const openForSession = useCallback((tileId: string) => {
-    if (!effectiveProvider) return
-    setOpenViewScope(scopeKey)
-    setFocusedSession({ scope: scopeKey, tileId })
-  }, [effectiveProvider, scopeKey])
-
   const closeSessionDialog = useCallback(() => setSessionDialogRequest(null), [])
 
   return {
     effectiveProvider,
     snapshot: sessionSnapshot,
     sessions,
-    isOpen: Boolean(effectiveProvider) && openViewScope === scopeKey,
     sessionDialogOpen: sessionDialogRequest !== null,
     activityPaletteStep: sessionDialogRequest?.step ?? null,
     sessionDialogFromActivity: sessionDialogRequest?.fromActivity ?? false,
     sessionDialogInitialWorkspaceId: sessionDialogRequest?.initialWorkspaceId ?? null,
     sessionDialogInitialPrompt: sessionDialogRequest?.initialPrompt ?? '',
     sessionDialogFocusRequestId: sessionDialogRequest?.requestId ?? 0,
-    focusedSessionId: focusedSession?.scope === scopeKey ? focusedSession.tileId : null,
-    toggle,
-    close,
-    openForSession,
     openNewSessionDialog,
     openNewSessionDialogWithPrompt,
     showNewSessionStep,

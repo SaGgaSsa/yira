@@ -5,6 +5,7 @@ import type { GridLayoutNode, TileState, WorkspaceConfig } from '@shared/types'
 import type { FileTileOpenOptions } from '@shared/types'
 import { getTileTypeLabel, TileContent, TILE_META } from './TileContent'
 import { TileActionButtons } from './TileActionButtons'
+import { useAgentSessionTileButtons } from './AgentSessionTileContext'
 import { TerminalTileActivityIcon } from './TerminalActivityIcon'
 import { TileCreationSelector, type TileCreationSelectorProps } from './TileCreationSelector'
 import { GridLayoutSurface, type GridLayoutTileRenderState } from './GridLayoutSurface'
@@ -42,6 +43,34 @@ function getTileTitle(
   if (tile.label?.trim()) return tile.label.trim()
   if (tile.type === 'terminal') return getTerminalDisplayTitle(tile, terminalTitles, agentTitles)
   return getTileTypeLabel(tile.type, translate)
+}
+
+interface GridTileActionButtonsProps {
+  tile: TileState
+  onConfigure: (event: React.MouseEvent<HTMLButtonElement>) => void
+  onFocus: () => void
+  onDetach: () => void
+  onClose: () => void
+}
+
+// GridView renders tiles from a plain function, so the hook lives in this small component.
+function GridTileActionButtons({
+  tile,
+  onConfigure,
+  onFocus,
+  onDetach,
+  onClose,
+}: GridTileActionButtonsProps): React.ReactElement {
+  const sessionButtons = useAgentSessionTileButtons(tile)
+  return (
+    <TileActionButtons
+      {...sessionButtons}
+      onConfigure={onConfigure}
+      onFocus={onFocus}
+      onDetach={onDetach}
+      onClose={onClose}
+    />
+  )
 }
 
 export function GridView({
@@ -93,7 +122,8 @@ export function GridView({
           </button>
           {tile.type === 'terminal' ? <TerminalTileActivityIcon tileId={tile.id} size={15} /> : <Icon size={15} className="shrink-0 text-text-secondary" />}
           <div className="min-w-0 flex-1 truncate text-sm text-text-display">{title}</div>
-          <TileActionButtons
+          <GridTileActionButtons
+            tile={tile}
             onConfigure={(event) => onConfigureTile(tile, event.currentTarget)}
             onFocus={() => onFocusTileInView(tile)}
             onDetach={() => onDetachTile(tile)}

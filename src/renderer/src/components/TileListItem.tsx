@@ -4,6 +4,7 @@ import type { LucideIcon } from 'lucide-react'
 import { Maximize2, PanelBottomClose, PanelTopOpen, Settings, X } from 'lucide-react'
 import type { TileState } from '@shared/types'
 import { formatTerminalAttentionCount } from '@/utils/terminalAttention'
+import { isAgentSessionTile } from '@/utils/agentSessionTiles'
 import { getTileTypeLabel, TILE_META } from './TileContent'
 import { TerminalTileActivityIcon } from './TerminalActivityIcon'
 
@@ -20,6 +21,7 @@ export interface ListRowProps {
   onFocus?: () => void
   onDetach?: () => void
   detached?: boolean
+  temporary?: boolean
   onClose?: () => void
   configureTitle?: string
   focusTitle?: string
@@ -27,6 +29,7 @@ export interface ListRowProps {
   attachTitle?: string
   closeTitle?: string
   detachedLabel?: string
+  temporaryLabel?: string
   draggable?: boolean
   onDragStart?: (event: React.DragEvent) => void
   onDragOver?: (event: React.DragEvent) => void
@@ -73,6 +76,7 @@ export function ListRow({
   onFocus,
   onDetach,
   detached = false,
+  temporary = false,
   onClose,
   configureTitle = 'Configure',
   focusTitle = 'Focus',
@@ -80,6 +84,7 @@ export function ListRow({
   attachTitle = 'Attach',
   closeTitle = 'Close',
   detachedLabel = 'Detached',
+  temporaryLabel = 'Temporary',
   draggable = false,
   onDragStart,
   onDragOver,
@@ -131,6 +136,11 @@ export function ListRow({
           {detached && (
             <span className="nd-caption shrink-0 rounded-full border border-border-visible px-2 py-1 text-text-secondary">
               {detachedLabel}
+            </span>
+          )}
+          {temporary && (
+            <span className="nd-caption shrink-0 rounded-full border border-border-visible px-2 py-1 text-text-secondary">
+              {temporaryLabel}
             </span>
           )}
         </div>
@@ -210,6 +220,7 @@ export function TileListItem({
   const fallbackLabel = tile.type === 'note' ? tileTypeLabel : `${tileTypeLabel} ${tile.id.slice(-4)}`
   const label = (displayLabel ?? tile.label)?.trim() || fallbackLabel
   const hasActions = Boolean(onConfigure && onFocusTile && onClose)
+  const agentSessionTile = isAgentSessionTile(tile)
 
   return (
     <ListRow
@@ -222,14 +233,16 @@ export function TileListItem({
       onDoubleClick={onDoubleClick}
       onConfigure={hasActions ? onConfigure : undefined}
       onFocus={hasActions ? onFocusTile : undefined}
-      onDetach={hasActions ? onDetachTile : undefined}
+      onDetach={hasActions && !agentSessionTile ? onDetachTile : undefined}
       detached={detached}
+      temporary={agentSessionTile}
       onClose={hasActions ? onClose : undefined}
       configureTitle={t('ui.configureTile')}
       focusTitle={t('ui.focusTile')}
       detachTitle={t('ui.detachTile')}
       attachTitle={t('ui.attachTile')}
       closeTitle={t('ui.closeTile')}
+      temporaryLabel={t('agentsView.temporaryBadge')}
       draggable={draggable}
       onDragStart={onDragStart}
       onDragOver={onDragOver}
