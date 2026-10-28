@@ -1,5 +1,5 @@
 import React from 'react'
-import { Settings, Grid3x3, LayoutGrid, Columns2, PanelLeft, PanelRight, SquareSplitHorizontal, SquareSplitVertical, ClipboardList, Activity, Bot, RectangleVertical } from 'lucide-react'
+import { Settings, Grid3x3, LayoutGrid, Columns2, PanelLeft, PanelRight, SquareSplitHorizontal, SquareSplitVertical, ClipboardList, Activity, RectangleVertical } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { AgentProvider, AgentUsageSnapshot, SplitOrientation, ViewMode, WorkspaceConfig, WorkspaceType } from '@shared/types'
 import type { MainView } from '../utils/layoutState'
@@ -28,13 +28,8 @@ interface TopBarProps {
   onToggleSidebar: () => void
   mainView: MainView
   onToggleActivity: () => void
-  agentsViewAvailable: boolean
-  agentSessionCount: number
-  agentAttentionCount: number
   /** Focus view limits terminals to the reading column. */
   readingMode: boolean
-  /** Shows the next temporary session that waits, or starts one when there are none. */
-  onToggleAgentsView: () => void
   agentProvider?: AgentProvider
   agentUsage: AgentUsageSnapshot | null
   hasWorkspacePanel: boolean
@@ -111,11 +106,7 @@ export function TopBar({
   onToggleSidebar,
   mainView,
   onToggleActivity,
-  agentsViewAvailable,
-  agentSessionCount,
-  agentAttentionCount,
   readingMode,
-  onToggleAgentsView,
   agentProvider,
   agentUsage,
   hasWorkspacePanel,
@@ -211,26 +202,6 @@ export function TopBar({
                 badgeCount={boardReviewCount}
                 onClick={() => onSetViewMode('board')}
               />
-            )}
-            {agentsViewAvailable && (
-              <button
-                className="relative inline-flex h-7 items-center gap-1.5 rounded-md px-1.5 text-xs text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-primary"
-                onClick={onToggleAgentsView}
-                title={agentAttentionCount > 0
-                  ? `${t('agentsView.openAgentsView', { count: agentSessionCount })} · ${t('agentsView.needsAttention', { count: agentAttentionCount })}`
-                  : t('agentsView.openAgentsView', { count: agentSessionCount })}
-                aria-label={t('agentsView.openAgentsView', { count: agentSessionCount })}
-              >
-                <Bot size={14} aria-hidden="true" />
-                <span className="font-mono text-[10px]">{agentSessionCount}</span>
-                {agentAttentionCount > 0 && (
-                  <span
-                    className="absolute -right-1 -top-1 size-2.5 rounded-full border-2 border-bg-secondary bg-warning"
-                    title={t('agentsView.needsAttention', { count: agentAttentionCount })}
-                    aria-hidden="true"
-                  />
-                )}
-              </button>
             )}
             {/* Anchored past the switcher so expanding it never shifts the centered buttons. */}
             {tileViewOpen && (

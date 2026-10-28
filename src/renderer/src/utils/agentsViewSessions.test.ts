@@ -4,7 +4,6 @@ import type { AgentActiveSession } from '@shared/types'
 import {
   agentSessionNeedsAttention,
   countAgentsViewAttention,
-  pickNextAgentSession,
   selectAgentsViewSessions,
 } from './agentsViewSessions'
 
@@ -52,40 +51,4 @@ test('counts needs-input and done sessions as requiring attention', () => {
   assert.equal(agentSessionNeedsAttention(sessions[2]), true)
   assert.equal(agentSessionNeedsAttention(sessions[3]), false)
   assert.equal(countAgentsViewAttention(sessions), 2)
-})
-
-test('picks no session when there are none', () => {
-  assert.equal(pickNextAgentSession([], null), null)
-  assert.equal(pickNextAgentSession([], 'agent-a'), null)
-})
-
-test('picks a session waiting for input before a finished one', () => {
-  const sessions = [
-    session({ tileId: 'agent-done', status: 'done' }),
-    session({ tileId: 'agent-input', status: 'needs-input' }),
-  ]
-
-  assert.equal(pickNextAgentSession(sessions, null)?.tileId, 'agent-input')
-  assert.equal(pickNextAgentSession(sessions, 'agent-unknown')?.tileId, 'agent-input')
-})
-
-test('cycles through the sessions waiting for input', () => {
-  const sessions = [
-    session({ tileId: 'agent-input-a', status: 'needs-input' }),
-    session({ tileId: 'agent-input-b', status: 'needs-input' }),
-  ]
-
-  assert.equal(pickNextAgentSession(sessions, 'agent-input-a')?.tileId, 'agent-input-b')
-  assert.equal(pickNextAgentSession(sessions, 'agent-input-b')?.tileId, 'agent-input-a')
-})
-
-test('cycles through every session when none waits for input', () => {
-  const sessions = [
-    session({ tileId: 'agent-a', status: 'working' }),
-    session({ tileId: 'agent-b', status: 'working' }),
-  ]
-
-  assert.equal(pickNextAgentSession(sessions, null)?.tileId, 'agent-a')
-  assert.equal(pickNextAgentSession(sessions, 'agent-a')?.tileId, 'agent-b')
-  assert.equal(pickNextAgentSession(sessions, 'agent-b')?.tileId, 'agent-a')
 })

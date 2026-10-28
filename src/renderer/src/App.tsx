@@ -66,7 +66,6 @@ import {
   reconcileGridStateWithSharedTiles,
 } from '@shared/workspaceTypeSwitch'
 import { getBoardReviewCount } from '@shared/board'
-import { countAgentsViewAttention, pickNextAgentSession } from './utils/agentsViewSessions'
 import {
   isAgentSessionTile,
   stripAgentSessionTilesFromCanvasState,
@@ -2692,19 +2691,7 @@ function AppContent(): React.ReactElement {
           setHomeOpen(false)
           setActivityOpen((value) => !value)
         }}
-        agentsViewAvailable={Boolean(activeWorkspaceId && agentsView.effectiveProvider)}
-        agentSessionCount={agentsView.sessions.length}
-        agentAttentionCount={countAgentsViewAttention(agentsView.sessions)}
         readingMode={terminalReadingMode}
-        onToggleAgentsView={() => {
-          // Without sessions the button starts one; otherwise it moves to the next session that waits.
-          const nextSession = pickNextAgentSession(agentsView.sessions, focusedTileId)
-          if (!nextSession) {
-            agentsView.openNewSessionDialog()
-            return
-          }
-          openAgentsViewSession(nextSession.workspaceId, nextSession.tileId, 'current-view')
-        }}
         agentProvider={activeWorkspaceConfig.agentProvider}
         agentUsage={agentUsage}
         hasWorkspacePanel={hasWorkspacePanel}
