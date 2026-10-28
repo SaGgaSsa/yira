@@ -2,14 +2,24 @@ import type { ShortcutId, ShortcutSettings } from '@shared/shortcuts'
 import { DEFAULT_SHORTCUTS } from '@shared/shortcuts'
 
 export interface ShortcutCatalogItem {
-  label: string
+  labelKey: string
   keys: string
   id?: ShortcutId
 }
 
 export interface ShortcutCatalogGroup {
-  label: string
+  labelKey: string
   items: ShortcutCatalogItem[]
+}
+
+export const SHORTCUT_LABEL_KEYS: Record<ShortcutId, string> = {
+  openHome: 'settings.shortcutOpenHome',
+  newAgentSession: 'settings.shortcutNewAgentSession',
+  focusLeftPanel: 'settings.shortcutFocusLeftSplitPanel',
+  focusRightPanel: 'settings.shortcutFocusRightSplitPanel',
+  previousTab: 'settings.shortcutPreviousTab',
+  nextTab: 'settings.shortcutNextTab',
+  findInTerminal: 'settings.shortcutFindInTerminal',
 }
 
 /** Render named arrow keys as compact glyphs for the settings catalog. */
@@ -24,38 +34,55 @@ export function formatAccelerator(accelerator: string): string {
 export function getShortcutCatalog(shortcuts: ShortcutSettings = DEFAULT_SHORTCUTS): ShortcutCatalogGroup[] {
   return [
   {
-    label: 'Navigation',
+    labelKey: 'settings.shortcutNavigation',
     items: [
-      { label: 'Open home', keys: formatAccelerator(shortcuts.openHome), id: 'openHome' },
-      { label: 'Focus left split panel', keys: formatAccelerator(shortcuts.focusLeftPanel), id: 'focusLeftPanel' },
-      { label: 'Focus right split panel', keys: formatAccelerator(shortcuts.focusRightPanel), id: 'focusRightPanel' },
-      { label: 'Previous tab', keys: formatAccelerator(shortcuts.previousTab), id: 'previousTab' },
-      { label: 'Next tab', keys: formatAccelerator(shortcuts.nextTab), id: 'nextTab' },
+      { labelKey: SHORTCUT_LABEL_KEYS.openHome, keys: formatAccelerator(shortcuts.openHome), id: 'openHome' },
+      { labelKey: SHORTCUT_LABEL_KEYS.focusLeftPanel, keys: formatAccelerator(shortcuts.focusLeftPanel), id: 'focusLeftPanel' },
+      { labelKey: SHORTCUT_LABEL_KEYS.focusRightPanel, keys: formatAccelerator(shortcuts.focusRightPanel), id: 'focusRightPanel' },
+      { labelKey: SHORTCUT_LABEL_KEYS.previousTab, keys: formatAccelerator(shortcuts.previousTab), id: 'previousTab' },
+      { labelKey: SHORTCUT_LABEL_KEYS.nextTab, keys: formatAccelerator(shortcuts.nextTab), id: 'nextTab' },
     ],
   },
   {
-    label: 'Terminal',
+    labelKey: 'settings.agents',
     items: [
-      { label: 'Find in terminal', keys: formatAccelerator(shortcuts.findInTerminal), id: 'findInTerminal' },
+      { labelKey: SHORTCUT_LABEL_KEYS.newAgentSession, keys: formatAccelerator(shortcuts.newAgentSession), id: 'newAgentSession' },
+      { labelKey: 'settings.shortcutNewlineInPrompt', keys: 'Shift+Enter / Alt+Enter' },
     ],
   },
   {
-    label: 'Window',
+    labelKey: 'settings.terminal',
     items: [
-      { label: 'Toggle fullscreen', keys: 'F11' },
+      { labelKey: SHORTCUT_LABEL_KEYS.findInTerminal, keys: formatAccelerator(shortcuts.findInTerminal), id: 'findInTerminal' },
+      { labelKey: 'settings.shortcutCopySelection', keys: 'Ctrl+Shift+C' },
+      { labelKey: 'settings.shortcutPaste', keys: 'Ctrl+V / Ctrl+Shift+V' },
+      { labelKey: 'settings.shortcutOpenLink', keys: 'Ctrl+Click' },
     ],
   },
   {
-    label: 'Agents',
+    labelKey: 'settings.shortcutEditor',
     items: [
-      { label: 'New agent session', keys: formatAccelerator(shortcuts.newAgentSession), id: 'newAgentSession' },
+      { labelKey: 'settings.shortcutSaveFile', keys: 'Ctrl+S' },
     ],
   },
   {
-    label: 'Contextual',
+    labelKey: 'settings.shortcutExplorer',
     items: [
-      { label: 'Close panels or clear selection', keys: 'Esc' },
-      { label: 'Confirm dialog action', keys: 'Enter' },
+      { labelKey: 'settings.shortcutRename', keys: 'F2' },
+      { labelKey: 'settings.shortcutMoveToTrash', keys: 'Delete' },
+    ],
+  },
+  {
+    labelKey: 'settings.shortcutWindow',
+    items: [
+      { labelKey: 'settings.shortcutToggleFullscreen', keys: 'F11' },
+    ],
+  },
+  {
+    labelKey: 'settings.shortcutContextual',
+    items: [
+      { labelKey: 'settings.shortcutClosePanelsOrClearSelection', keys: 'Esc' },
+      { labelKey: 'settings.shortcutConfirmDialogAction', keys: 'Enter' },
     ],
   },
   ]

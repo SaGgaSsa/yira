@@ -1,4 +1,6 @@
 import { APP_THEMES, isLightColorPreset } from '@shared/appThemes'
+import { CONFIGURABLE_SHORTCUT_IDS, DEFAULT_SHORTCUTS } from '@shared/shortcuts'
+import type { ShortcutId } from '@shared/shortcuts'
 import { getXtermTheme, resolveTerminalThemeId } from '@/utils/terminalTheme'
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
@@ -10,9 +12,9 @@ import {
 } from 'lucide-react'
 import { createUserSettingsDraft, useSettingsStore } from '@/store/settingsStore'
 import { useUpdateStore } from '@/store/updateStore'
-import { getShortcutCatalog } from '@/utils/shortcutCatalog'
+import { getShortcutCatalog, SHORTCUT_LABEL_KEYS } from '@/utils/shortcutCatalog'
+import { normalizeAccelerator } from '@/utils/shortcutResolver'
 import { MOD_PANEL_PROMPT } from '@/utils/modPanelPrompt'
-import type { ShortcutId } from '@shared/shortcuts'
 import type { AgentDetectionSnapshot, AgentProvider, UpdateState, UserSettings, WindowBackgroundMaterial } from '@shared/types'
 import { DEFAULT_USER_SETTINGS } from '@shared/types'
 import type { TerminalThemeId } from '@shared/terminalThemes'
@@ -159,39 +161,8 @@ function getUpdateStatusLabel(t: TFunction, status: UpdateState['status']): stri
   }
 }
 
-function getShortcutGroupLabel(t: TFunction, label: string): string {
-  if (label === 'Navigation') return t('settings.shortcutNavigation')
-  if (label === 'Terminal') return t('settings.terminal')
-  if (label === 'Window') return t('settings.shortcutWindow')
-  if (label === 'Agents') return t('settings.agents')
-  return t('settings.shortcutContextual')
-}
-
-function getShortcutItemLabel(t: TFunction, label: string): string {
-  switch (label) {
-    case 'Focus left split panel': return t('settings.shortcutFocusLeftSplitPanel')
-    case 'Focus right split panel': return t('settings.shortcutFocusRightSplitPanel')
-    case 'Previous tab': return t('settings.shortcutPreviousTab')
-    case 'Next tab': return t('settings.shortcutNextTab')
-    case 'Find in terminal': return t('settings.shortcutFindInTerminal')
-    case 'Toggle fullscreen': return t('settings.shortcutToggleFullscreen')
-    case 'New agent session': return t('settings.shortcutNewAgentSession')
-    case 'Open home': return t('settings.shortcutOpenHome')
-    case 'Close panels or clear selection': return t('settings.shortcutClosePanelsOrClearSelection')
-    default: return t('settings.shortcutConfirmDialogAction')
-  }
-}
-
 function getShortcutName(t: TFunction, id: ShortcutId): string {
-  switch (id) {
-    case 'openHome': return t('settings.shortcutOpenHome')
-    case 'newAgentSession': return t('settings.shortcutNewAgentSession')
-    case 'focusLeftPanel': return t('settings.shortcutFocusLeftSplitPanel')
-    case 'focusRightPanel': return t('settings.shortcutFocusRightSplitPanel')
-    case 'previousTab': return t('settings.shortcutPreviousTab')
-    case 'nextTab': return t('settings.shortcutNextTab')
-    case 'findInTerminal': return t('settings.shortcutFindInTerminal')
-  }
+  return t(SHORTCUT_LABEL_KEYS[id])
 }
 
 function getSectionLabel(t: TFunction, id: SettingsSectionId): string {
@@ -788,15 +759,6 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
               </details>
             </article>
           </div>
-          <ShortcutInput
-            shortcutId="newAgentSession"
-            inputId="new-agent-session-shortcut"
-            label={t('settings.newAgentSessionShortcut')}
-            description={t('settings.newAgentSessionShortcutDescription')}
-            shortcuts={draft.shortcuts}
-            onChange={(accelerator) => updateDraftShortcut('newAgentSession', accelerator)}
-            getShortcutName={(id) => getShortcutName(t, id)}
-          />
         </section>
       )
     }
@@ -981,6 +943,10 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
     }
 
     if (activeSection === 'shortcuts') {
+      const shortcutsAreDefault = CONFIGURABLE_SHORTCUT_IDS.every(
+        (id) => normalizeAccelerator(draft.shortcuts[id]) === normalizeAccelerator(DEFAULT_SHORTCUTS[id]),
+      )
+
       return (
         <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
           <div className="mb-5 flex items-center gap-3">
@@ -989,25 +955,32 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
               <div className="nd-label text-text-secondary">{t('settings.shortcuts')}</div>
               <h3 className="mt-1 text-xl text-text-display">{t('settings.keyboardShortcutCatalog')}</h3>
             </div>
+            <button
+              type="button"
+              className="ml-auto shrink-0 whitespace-nowrap rounded-full border border-border-visible px-2.5 py-1 text-xs text-text-secondary transition-colors hover:text-text-display disabled:opacity-40"
+              disabled={shortcutsAreDefault}
+              onClick={() => setDraft((current) => ({ ...current, shortcuts: { ...DEFAULT_SHORTCUTS } }))}
+            >
+              {t('settings.resetAllShortcuts')}
+            </button>
           </div>
 
           <p className="mb-4 text-sm text-text-secondary">{t('settings.shortcutsHelp')}</p>
 
           <div className="space-y-4">
             {getShortcutCatalog(draft.shortcuts).map((group) => (
-              <div key={group.label} className="rounded-[20px] border border-border-visible bg-bg-primary px-4 py-4">
-                <div className="nd-label text-text-display">{getShortcutGroupLabel(t, group.label)}</div>
+              <div key={group.labelKey} className="rounded-[20px] border border-border-visible bg-bg-primary px-4 py-4">
+                <div className="nd-label text-text-display">{t(group.labelKey)}</div>
                 <div className="mt-3 divide-y divide-border">
                   {group.items.map((item) => {
                     const shortcutId = item.id
                     if (shortcutId) {
                       return (
                         <ShortcutInput
-                          key={`${group.label}-${shortcutId}`}
-                          variant="row"
+                          key={`${group.labelKey}-${shortcutId}`}
                           shortcutId={shortcutId}
                           inputId={`shortcut-${shortcutId}`}
-                          label={getShortcutItemLabel(t, item.label)}
+                          label={t(item.labelKey)}
                           shortcuts={draft.shortcuts}
                           onChange={(accelerator) => updateDraftShortcut(shortcutId, accelerator)}
                           getShortcutName={(id) => getShortcutName(t, id)}
@@ -1015,8 +988,8 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
                       )
                     }
                     return (
-                      <div key={`${group.label}-${item.keys}`} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
-                        <span className="text-sm leading-6 text-text-secondary">{getShortcutItemLabel(t, item.label)}</span>
+                      <div key={`${group.labelKey}-${item.keys}`} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                        <span className="text-sm leading-6 text-text-secondary">{t(item.labelKey)}</span>
                         <kbd className="shrink-0 rounded-full border border-border-visible bg-bg-secondary px-3 py-1 font-mono text-xs text-text-display">
                           {item.keys}
                         </kbd>

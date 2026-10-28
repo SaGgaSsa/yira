@@ -1,13 +1,17 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { DEFAULT_SHORTCUTS } from '@shared/shortcuts'
-import { formatAccelerator, getShortcutCatalog, SHORTCUT_CATALOG } from './shortcutCatalog'
+import { CONFIGURABLE_SHORTCUT_IDS, DEFAULT_SHORTCUTS } from '@shared/shortcuts'
+import type { ShortcutId } from '@shared/shortcuts'
+import { formatAccelerator, getShortcutCatalog, SHORTCUT_CATALOG, SHORTCUT_LABEL_KEYS } from './shortcutCatalog'
 
-function navigationShortcut(label: string): string {
-  const navigation = SHORTCUT_CATALOG.find((group) => group.label === 'Navigation')
-  const item = navigation?.items.find((shortcut) => shortcut.label === label)
-  assert.ok(item, `missing navigation shortcut: ${label}`)
+function catalogItem(id: ShortcutId) {
+  return SHORTCUT_CATALOG.flatMap((group) => group.items).find((item) => item.id === id)
+}
+
+function shortcutKeys(id: ShortcutId): string {
+  const item = catalogItem(id)
+  assert.ok(item, `missing shortcut: ${id}`)
   return item.keys
 }
 
@@ -21,27 +25,39 @@ test('formats named arrow keys as compact glyphs', () => {
 })
 
 test('catalogs Ctrl+Alt+ArrowLeft as left-panel focus', () => {
-  assert.equal(navigationShortcut('Focus left split panel'), 'Ctrl+Alt+←')
+  assert.equal(shortcutKeys('focusLeftPanel'), 'Ctrl+Alt+←')
 })
 
 test('catalogs Ctrl+Alt+ArrowRight as right-panel focus', () => {
-  assert.equal(navigationShortcut('Focus right split panel'), 'Ctrl+Alt+→')
+  assert.equal(shortcutKeys('focusRightPanel'), 'Ctrl+Alt+→')
 })
 
 test('catalogs Ctrl+Shift+Tab as previous-tab navigation', () => {
-  assert.equal(navigationShortcut('Previous tab'), 'Ctrl+Shift+Tab')
+  assert.equal(shortcutKeys('previousTab'), 'Ctrl+Shift+Tab')
 })
 
 test('catalogs Ctrl+Tab as next-tab navigation', () => {
-  assert.equal(navigationShortcut('Next tab'), 'Ctrl+Tab')
+  assert.equal(shortcutKeys('nextTab'), 'Ctrl+Tab')
 })
 
-test('retains fullscreen and contextual shortcuts', () => {
+test('retains fixed shortcuts', () => {
   const items = SHORTCUT_CATALOG.flatMap((group) => group.items)
+  const fixedKeys = [
+    'Shift+Enter / Alt+Enter',
+    'Ctrl+Shift+C',
+    'Ctrl+V / Ctrl+Shift+V',
+    'Ctrl+Click',
+    'Ctrl+S',
+    'F2',
+    'Delete',
+    'F11',
+    'Esc',
+    'Enter',
+  ]
 
-  assert.ok(items.some((item) => item.keys === 'F11'))
-  assert.ok(items.some((item) => item.keys === 'Esc'))
-  assert.ok(items.some((item) => item.keys === 'Enter'))
+  for (const keys of fixedKeys) {
+    assert.ok(items.some((item) => item.keys === keys), `missing fixed shortcut: ${keys}`)
+  }
 })
 
 test('exposes ids only on configurable shortcuts', () => {
@@ -50,26 +66,35 @@ test('exposes ids only on configurable shortcuts', () => {
   const fixed = items.filter((item) => item.id === undefined)
 
   assert.equal(configurable.length, 7)
-  assert.ok(fixed.every((item) => item.keys === 'F11' || item.keys === 'Esc' || item.keys === 'Enter'))
+  assert.equal(fixed.length, 10)
+  assert.ok(fixed.every((item) => item.labelKey.startsWith('settings.shortcut')))
+})
+
+test('catalogs every configurable shortcut exactly once with a label key', () => {
+  const items = SHORTCUT_CATALOG.flatMap((group) => group.items)
+
+  for (const id of CONFIGURABLE_SHORTCUT_IDS) {
+    assert.equal(items.filter((item) => item.id === id).length, 1, `shortcut should appear exactly once: ${id}`)
+    assert.ok(SHORTCUT_LABEL_KEYS[id], `missing label key: ${id}`)
+  }
+  assert.deepEqual(Object.keys(SHORTCUT_LABEL_KEYS).sort(), [...CONFIGURABLE_SHORTCUT_IDS].sort())
 })
 
 test('shows the configured new-agent shortcut and defaults to Ctrl+N', () => {
-  const defaultItem = SHORTCUT_CATALOG.flatMap((group) => group.items)
-    .find((item) => item.label === 'New agent session')
+  const defaultItem = catalogItem('newAgentSession')
   const configuredItem = getShortcutCatalog({ ...DEFAULT_SHORTCUTS, newAgentSession: 'Alt+K' })
     .flatMap((group) => group.items)
-    .find((item) => item.label === 'New agent session')
+    .find((item) => item.id === 'newAgentSession')
 
   assert.equal(defaultItem?.keys, 'Ctrl+N')
   assert.equal(configuredItem?.keys, 'Alt+K')
 })
 
 test('shows the configured open-home shortcut and defaults to Ctrl+I', () => {
-  const defaultItem = SHORTCUT_CATALOG.flatMap((group) => group.items)
-    .find((item) => item.label === 'Open home')
+  const defaultItem = catalogItem('openHome')
   const configuredItem = getShortcutCatalog({ ...DEFAULT_SHORTCUTS, openHome: 'Alt+H' })
     .flatMap((group) => group.items)
-    .find((item) => item.label === 'Open home')
+    .find((item) => item.id === 'openHome')
 
   assert.equal(defaultItem?.keys, 'Ctrl+I')
   assert.equal(configuredItem?.keys, 'Alt+H')
@@ -78,8 +103,8 @@ test('shows the configured open-home shortcut and defaults to Ctrl+I', () => {
 test('shows a remapped navigation shortcut with arrow glyphs', () => {
   const item = getShortcutCatalog({ ...DEFAULT_SHORTCUTS, focusLeftPanel: 'Ctrl+Alt+ArrowUp' })
     .flatMap((group) => group.items)
-    .find((shortcut) => shortcut.label === 'Focus left split panel')
+    .find((shortcut) => shortcut.id === 'focusLeftPanel')
 
   assert.equal(item?.keys, 'Ctrl+Alt+↑')
-  assert.equal(item?.id, 'focusLeftPanel')
+  assert.equal(item?.labelKey, 'settings.shortcutFocusLeftSplitPanel')
 })
