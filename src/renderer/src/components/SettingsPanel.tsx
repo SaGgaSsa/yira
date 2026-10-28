@@ -990,7 +990,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
                     return (
                       <div key={`${group.labelKey}-${item.keys}`} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
                         <span className="text-sm leading-6 text-text-secondary">{t(item.labelKey)}</span>
-                        <kbd className="shrink-0 rounded-full border border-border-visible bg-bg-secondary px-3 py-1 font-mono text-xs text-text-display">
+                        <kbd className="shrink-0 px-3 py-1 font-mono text-xs text-text-secondary">
                           {item.keys}
                         </kbd>
                       </div>

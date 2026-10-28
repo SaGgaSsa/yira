@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { RotateCcw } from 'lucide-react'
 import type { TFunction } from 'i18next'
 import type { ShortcutId, ShortcutIssue, ShortcutSettings } from '@shared/shortcuts'
 import { DEFAULT_SHORTCUTS, isBlockingShortcutIssue, validateShortcut } from '@shared/shortcuts'
@@ -100,10 +101,21 @@ export function ShortcutInput({
         {label}
       </label>
       <div className="flex shrink-0 items-center gap-2">
+        {!isDefault && (
+          <button
+            type="button"
+            className="flex h-6 w-6 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-bg-secondary hover:text-text-display"
+            title={t('settings.resetToDefault')}
+            aria-label={t('settings.resetToDefault')}
+            onClick={handleReset}
+          >
+            <RotateCcw size={13} />
+          </button>
+        )}
         <input
           id={inputId}
           data-agent-shortcut-capture={shortcutId}
-          className="w-36 rounded-full border border-border-visible bg-bg-secondary px-3 py-1 text-center font-mono text-xs text-text-display outline-hidden focus:border-text-secondary"
+          className="w-40 cursor-pointer rounded-full border border-border-visible bg-bg-secondary px-3 py-1 text-center font-mono text-xs text-text-display outline-hidden transition-colors hover:border-text-secondary focus:cursor-default focus:border-accent"
           aria-label={label}
           aria-live="polite"
           readOnly
@@ -112,17 +124,6 @@ export function ShortcutInput({
           onBlur={() => setCapturing(false)}
           onKeyDown={handleKeyDown}
         />
-        <button
-          type="button"
-          className={`shrink-0 whitespace-nowrap rounded-full border border-border-visible px-2.5 py-1 text-xs text-text-secondary transition-colors hover:text-text-display ${
-            isDefault ? 'invisible' : ''
-          }`}
-          aria-hidden={isDefault || undefined}
-          tabIndex={isDefault ? -1 : undefined}
-          onClick={handleReset}
-        >
-          {t('settings.resetToDefault')}
-        </button>
       </div>
       {noticeText && (
         <span role={noticeRole} className={`basis-full text-xs leading-5 ${noticeColor}`}>
