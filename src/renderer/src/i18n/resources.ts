@@ -231,8 +231,6 @@ type TranslationResources = {
   }
   agentsView: {
     title: string
-    openAgentsView: string
-    needsAttention: string
     worktreeKeptTitle: string
     worktreeKeptMessage: string
     worktreePathUnavailable: string
@@ -1275,8 +1273,6 @@ const en: TranslationResources = {
   },
   agentsView: {
     title: 'Agents',
-    openAgentsView: 'Temporary agent sessions: {{count}}. Click to show the next one waiting',
-    needsAttention: '{{count}} sessions need attention',
     worktreeKeptTitle: 'Worktree kept',
     worktreeKeptMessage: 'The worktree has changes and was kept at {{path}}.',
     worktreePathUnavailable: 'an unknown path',
@@ -2276,8 +2272,6 @@ const es: TranslationResources = {
   },
   agentsView: {
     title: 'Agentes',
-    openAgentsView: 'Sesiones temporales de agente: {{count}}. Clic para mostrar la siguiente que espera',
-    needsAttention: '{{count}} sesiones requieren atención',
     worktreeKeptTitle: 'Worktree conservado',
     worktreeKeptMessage: 'El worktree tiene cambios y se conservó en {{path}}.',
     worktreePathUnavailable: 'una ruta desconocida',
