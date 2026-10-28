@@ -380,6 +380,12 @@ type TranslationResources = {
     english: string
     spanish: string
     fonts: string
+    fontFamily: string
+    fontFamilyDescription: string
+    interfaceFontFamily: string
+    monoFontFamily: string
+    bundledFont: string
+    resetFontFamily: string
     gridAndSnapping: string
     gridSize: string
     gridVisible: string
@@ -1415,6 +1421,12 @@ const en: TranslationResources = {
     english: 'English',
     spanish: 'Español',
     fonts: 'Fonts',
+    fontFamily: 'Font family',
+    fontFamilyDescription: 'Pick a font installed on this computer. Leave it empty to use the bundled font.',
+    interfaceFontFamily: 'Interface font',
+    monoFontFamily: 'Terminal and code font',
+    bundledFont: '{{name}} (bundled)',
+    resetFontFamily: 'Use bundled font',
     gridAndSnapping: 'Grid and snapping',
     gridSize: 'Grid size',
     gridVisible: 'Grid visible',
@@ -2450,6 +2462,12 @@ const es: TranslationResources = {
     english: 'English',
     spanish: 'Español',
     fonts: 'Fuentes',
+    fontFamily: 'Familia de fuente',
+    fontFamilyDescription: 'Elige una fuente instalada en esta computadora. Déjala vacía para usar la fuente incluida.',
+    interfaceFontFamily: 'Fuente de la interfaz',
+    monoFontFamily: 'Fuente de terminal y código',
+    bundledFont: '{{name}} (incluida)',
+    resetFontFamily: 'Usar fuente incluida',
     gridAndSnapping: 'Cuadrícula y ajuste',
     gridSize: 'Tamaño de cuadrícula',
     gridVisible: 'Cuadrícula visible',

@@ -5,6 +5,7 @@ import { RefreshCw, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { FileTileOpenOptions, RemotePreparationResult, RemotePreparationStatus, TerminalCreateOptions, TerminalExitEvent, TileState, WorkspaceConfig } from '@shared/types'
 import type { TerminalSessionTarget } from '@shared/terminalSessionIdentity'
+import { DEFAULT_MONO_FONT_STACK, buildFontStack } from '@shared/userSettings'
 import { useCanvasStore } from '@/store/canvasStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { isTerminalInputAttended } from '@/utils/terminalAttention'
@@ -351,6 +352,7 @@ export function TerminalTileWrapper({
   const attentionEnabled = useSettingsStore((s) => s.terminal.attentionEnabled)
   const attentionEnabledRef = useRef(attentionEnabled)
   const tileFontSizePx = useSettingsStore((s) => s.tileFontSizePx)
+  const monoFontFamily = useSettingsStore((s) => s.monoFontFamily)
   const activeWindowBackgroundMaterial = useSettingsStore((s) => s.activeWindowBackgroundMaterial)
   const lightAppearance = useLightAppearance()
   const terminalThemeId = useSettingsStore((s) => resolveTerminalThemeId(s.terminal.themeId, s.themeId, lightAppearance))
@@ -416,6 +418,7 @@ export function TerminalTileWrapper({
     onColumnInsetChange: setColumnInset,
     autoFocus,
     fontSize: tileFontSizePx,
+    fontFamily: buildFontStack(monoFontFamily, DEFAULT_MONO_FONT_STACK),
     themeId: terminalThemeId,
     translucent: activeWindowBackgroundMaterial !== 'none',
     notificationsMuted: tile.notificationsMuted === true,
@@ -436,6 +439,7 @@ export function TerminalTileWrapper({
     tile.notificationsMuted,
     activeWindowBackgroundMaterial,
     tileFontSizePx,
+    monoFontFamily,
     workspaceRootPath,
   ])
 

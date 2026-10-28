@@ -1,4 +1,4 @@
-import { normalizeUserSettings } from './userSettings'
+import { DEFAULT_MONO_FONT_STACK, MAX_FONT_FAMILY_LENGTH, buildFontStack, normalizeUserSettings } from './userSettings'
 import { DEFAULT_TERMINAL_THEME_ID, TERMINAL_THEME_IDS, getTerminalTheme } from './terminalThemes'
 import { DEFAULT_USER_SETTINGS } from './types'
 import type { UserSettings } from './types'
@@ -157,3 +157,28 @@ if (spanishLanguage.language !== 'es') throw new Error('Spanish language setting
 
 const invalidLanguage = normalizeUserSettings({ language: 'fr' as never })
 if (invalidLanguage.language !== 'en') throw new Error('invalid language setting must normalize to English')
+
+const defaultFonts = normalizeUserSettings({})
+if (defaultFonts.interfaceFontFamily !== '' || defaultFonts.monoFontFamily !== '') {
+  throw new Error('font families must default to the bundled fonts')
+}
+
+const customFonts = normalizeUserSettings({
+  interfaceFontFamily: '  Segoe   UI ',
+  monoFontFamily: '"JetBrainsMono Nerd Font";} body{color:red',
+})
+if (customFonts.interfaceFontFamily !== 'Segoe UI') throw new Error('font family whitespace must be collapsed')
+if (customFonts.monoFontFamily !== 'JetBrainsMono Nerd Font bodycolor:red') {
+  throw new Error('font family must drop quotes and CSS delimiters')
+}
+
+const invalidFonts = normalizeUserSettings({ interfaceFontFamily: 12 as never, monoFontFamily: 'x'.repeat(200) })
+if (invalidFonts.interfaceFontFamily !== '') throw new Error('non-string font family must normalize to empty')
+if (invalidFonts.monoFontFamily.length !== MAX_FONT_FAMILY_LENGTH) throw new Error('font family must be truncated')
+
+if (buildFontStack('', DEFAULT_MONO_FONT_STACK) !== DEFAULT_MONO_FONT_STACK) {
+  throw new Error('empty font family must use the bundled stack')
+}
+if (buildFontStack('Cascadia Code', DEFAULT_MONO_FONT_STACK) !== `'Cascadia Code', ${DEFAULT_MONO_FONT_STACK}`) {
+  throw new Error('chosen font family must lead the bundled stack')
+}

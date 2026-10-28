@@ -236,6 +236,7 @@ const viewOptions = {
   edgeToEdge: false,
   autoFocus: false,
   fontSize: 14,
+  fontFamily: "'IBM Plex Mono', 'JetBrains Mono', 'Consolas', monospace",
   themeId: 'yira-default' as const,
   notificationsMuted: false,
   workspaceRootPath: '',

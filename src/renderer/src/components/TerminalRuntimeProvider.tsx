@@ -227,7 +227,7 @@ export function TerminalRuntimeProvider({
             cols,
             rows,
             theme: getXtermTheme(viewOptions.themeId, viewOptions.translucent === true),
-            fontFamily: '"IBM Plex Mono", "JetBrains Mono", "Consolas", monospace',
+            fontFamily: viewOptions.fontFamily,
             fontSize: viewOptions.fontSize,
             lineHeight: 1.15,
             cursorBlink: true,

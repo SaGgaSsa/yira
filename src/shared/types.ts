@@ -638,6 +638,10 @@ export interface UserSettings {
   windowBackgroundMaterial: WindowBackgroundMaterial
   interfaceFontSizePx: number
   tileFontSizePx: number
+  /** Installed font family for the interface. Empty uses the bundled font. */
+  interfaceFontFamily: string
+  /** Installed monospace font family for terminals and code. Empty uses the bundled font. */
+  monoFontFamily: string
   showGrid: boolean
   snapToGrid: boolean
   gridSize: number
@@ -670,6 +674,8 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   windowBackgroundMaterial: 'none',
   interfaceFontSizePx: 16,
   tileFontSizePx: 16,
+  interfaceFontFamily: '',
+  monoFontFamily: '',
   showGrid: true,
   snapToGrid: true,
   gridSize: 20,

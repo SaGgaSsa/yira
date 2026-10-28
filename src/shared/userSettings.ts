@@ -5,6 +5,11 @@ import { normalizeTerminalThemeId } from './terminalThemes'
 
 export const MIN_FONT_SIZE_PX = 10
 export const MAX_FONT_SIZE_PX = 36
+export const MAX_FONT_FAMILY_LENGTH = 100
+
+/** Bundled stacks, used when no family is chosen and as the fallback behind a chosen one. */
+export const DEFAULT_INTERFACE_FONT_STACK = "'Saira', 'Segoe UI', sans-serif"
+export const DEFAULT_MONO_FONT_STACK = "'IBM Plex Mono', 'JetBrains Mono', 'Consolas', monospace"
 
 export type LegacyFontSize = 'small' | 'medium' | 'large'
 
@@ -38,6 +43,17 @@ export function clampFontSizePx(value: unknown, fallback = DEFAULT_USER_SETTINGS
   return Math.max(MIN_FONT_SIZE_PX, Math.min(MAX_FONT_SIZE_PX, Math.round(numeric)))
 }
 
+/** Keeps a single family name that is safe to quote inside a CSS font stack. */
+export function normalizeFontFamily(value: unknown): string {
+  if (typeof value !== 'string') return ''
+  return value.replace(/["'`;{}\\]/g, '').replace(/\s+/g, ' ').trim().slice(0, MAX_FONT_FAMILY_LENGTH).trim()
+}
+
+export function buildFontStack(family: string, fallbackStack: string): string {
+  const normalized = normalizeFontFamily(family)
+  return normalized ? `'${normalized}', ${fallbackStack}` : fallbackStack
+}
+
 export function normalizeUserSettings(raw: RawUserSettings = {}): UserSettings {
   const legacyFontSize = isLegacyFontSize(raw.fontSize) ? LEGACY_FONT_SIZE_PX[raw.fontSize] : undefined
   const fontFallback = legacyFontSize ?? DEFAULT_USER_SETTINGS.interfaceFontSizePx
@@ -69,6 +85,8 @@ export function normalizeUserSettings(raw: RawUserSettings = {}): UserSettings {
       : 'none',
     interfaceFontSizePx: clampFontSizePx(raw.interfaceFontSizePx, fontFallback),
     tileFontSizePx: clampFontSizePx(raw.tileFontSizePx, fontFallback),
+    interfaceFontFamily: normalizeFontFamily(raw.interfaceFontFamily),
+    monoFontFamily: normalizeFontFamily(raw.monoFontFamily),
     updateDiagnosticsEnabled: diagnosticsMigrationComplete ? updateDiagnosticsEnabled === true : true,
     updateDiagnosticsMigrationComplete: true,
     browser: {

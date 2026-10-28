@@ -1,5 +1,6 @@
 import '../monaco'
 import { COLOR_PRESETS } from '@shared/appThemes'
+import { DEFAULT_MONO_FONT_STACK, buildFontStack } from '@shared/userSettings'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import Editor, { type Monaco } from '@monaco-editor/react'
 import type { editor as MonacoEditor } from 'monaco-editor'
@@ -113,6 +114,7 @@ function TextFileTile({ tile, rootPath, isFocused, isVisible, onUpdate, onOpenFi
   const appearance = useSettingsStore((state) => state.appearance)
   const activeWindowBackgroundMaterial = useSettingsStore((state) => state.activeWindowBackgroundMaterial)
   const tileFontSizePx = useSettingsStore((state) => state.tileFontSizePx)
+  const monoFontFamily = useSettingsStore((state) => state.monoFontFamily)
   const filePath = tile.filePath?.trim() ?? ''
   const [state, setState] = useState<FileEditorState>(() => createFileEditorState(tile))
   const [operationError, setOperationError] = useState<string | null>(null)
@@ -436,7 +438,7 @@ function TextFileTile({ tile, rootPath, isFocused, isVisible, onUpdate, onOpenFi
               }}
               options={{
                 automaticLayout: true,
-                fontFamily: "'IBM Plex Mono', 'Consolas', monospace",
+                fontFamily: buildFontStack(monoFontFamily, DEFAULT_MONO_FONT_STACK),
                 fontSize: tileFontSizePx,
                 minimap: { enabled: false },
                 overviewRulerBorder: false,
