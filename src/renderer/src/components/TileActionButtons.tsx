@@ -1,7 +1,14 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { Maximize2, PanelBottomClose, PanelTopOpen, Pin, Settings, X } from 'lucide-react'
+import type { TFunction } from 'i18next'
 import type { AgentSessionTileButtonProps } from './AgentSessionTileContext'
+
+export function getTemporaryTileTitle(t: TFunction, pinTitle?: string): string {
+  return pinTitle
+    ? `${t('agentsView.temporaryBadgeTitle')}\n${pinTitle}`
+    : t('agentsView.temporaryBadgeTitle')
+}
 
 interface TileActionButtonsProps extends AgentSessionTileButtonProps {
   onConfigure: (event: React.MouseEvent<HTMLButtonElement>) => void
@@ -55,19 +62,12 @@ export function TileActionButtons({
   const { t } = useTranslation()
   return (
     <div className={`flex shrink-0 items-center gap-1 ${className}`.trim()}>
+      {/* The pin button doubles as the temporary marker, so it shows even when pinning is unavailable. */}
       {temporary && (
-        <span
-          className="nd-caption shrink-0 rounded-full border border-border-visible px-2 py-0.5 text-text-secondary"
-          title={t('agentsView.temporaryBadgeTitle')}
-        >
-          {t('agentsView.temporaryBadge')}
-        </span>
-      )}
-      {onPin && (
         <TileActionButton
-          title={pinTitle ?? t('agentsView.pinSession')}
-          onClick={() => onPin()}
-          disabled={pinDisabled}
+          title={getTemporaryTileTitle(t, pinTitle)}
+          onClick={() => onPin?.()}
+          disabled={!onPin || pinDisabled}
         >
           <Pin size={13} />
         </TileActionButton>

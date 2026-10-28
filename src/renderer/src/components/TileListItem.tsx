@@ -1,10 +1,11 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import type { LucideIcon } from 'lucide-react'
-import { Maximize2, PanelBottomClose, PanelTopOpen, Settings, X } from 'lucide-react'
+import { Maximize2, PanelBottomClose, PanelTopOpen, Pin, Settings, X } from 'lucide-react'
 import type { TileState } from '@shared/types'
 import { formatTerminalAttentionCount } from '@/utils/terminalAttention'
-import { isAgentSessionTile } from '@/utils/agentSessionTiles'
+import { useAgentSessionTileButtons } from './AgentSessionTileContext'
+import { getTemporaryTileTitle } from './TileActionButtons'
 import { getTileTypeLabel, TILE_META } from './TileContent'
 import { TerminalTileActivityIcon } from './TerminalActivityIcon'
 
@@ -22,6 +23,9 @@ export interface ListRowProps {
   onDetach?: () => void
   detached?: boolean
   temporary?: boolean
+  temporaryTitle?: string
+  onPin?: () => void
+  pinDisabled?: boolean
   onClose?: () => void
   configureTitle?: string
   focusTitle?: string
@@ -29,7 +33,6 @@ export interface ListRowProps {
   attachTitle?: string
   closeTitle?: string
   detachedLabel?: string
-  temporaryLabel?: string
   draggable?: boolean
   onDragStart?: (event: React.DragEvent) => void
   onDragOver?: (event: React.DragEvent) => void
@@ -42,12 +45,14 @@ interface ListRowActionButtonProps {
   onClick: (event: React.MouseEvent<HTMLButtonElement>) => void
   children: React.ReactNode
   pressed?: boolean
+  disabled?: boolean
 }
 
-function ListRowActionButton({ title, onClick, children, pressed }: ListRowActionButtonProps): React.ReactElement {
+function ListRowActionButton({ title, onClick, children, pressed, disabled = false }: ListRowActionButtonProps): React.ReactElement {
   return (
     <button
-      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
+      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
+      disabled={disabled}
       onMouseDown={(event) => event.stopPropagation()}
       onClick={(event) => {
         event.stopPropagation()
@@ -77,6 +82,9 @@ export function ListRow({
   onDetach,
   detached = false,
   temporary = false,
+  temporaryTitle = 'Temporary',
+  onPin,
+  pinDisabled = false,
   onClose,
   configureTitle = 'Configure',
   focusTitle = 'Focus',
@@ -84,7 +92,6 @@ export function ListRow({
   attachTitle = 'Attach',
   closeTitle = 'Close',
   detachedLabel = 'Detached',
-  temporaryLabel = 'Temporary',
   draggable = false,
   onDragStart,
   onDragOver,
@@ -92,7 +99,9 @@ export function ListRow({
   className = '',
 }: ListRowProps): React.ReactElement {
   const attentionLabel = formatTerminalAttentionCount(attentionCount)
-  const actionCount = [onConfigure, onFocus, onDetach, onClose].filter(Boolean).length
+  // Rows with actions show the pin button for temporary tiles, even when pinning is unavailable.
+  const showPin = temporary && Boolean(onClose)
+  const actionCount = [onConfigure, onFocus, onDetach, onClose].filter(Boolean).length + (showPin ? 1 : 0)
   const actionPaddingClass = actionCount >= 4
     ? 'pr-31'
     : actionCount > 0
@@ -101,7 +110,7 @@ export function ListRow({
 
   return (
     <div
-      className={`relative rounded-2xl border ${className}`.trim()}
+      className={`relative rounded-2xl border ${temporary ? 'border-dashed' : ''} ${className}`.trim()}
       draggable={draggable}
       onDragStart={onDragStart}
       onDragOver={onDragOver}
@@ -115,7 +124,7 @@ export function ListRow({
         className={`flex h-full w-full items-center gap-2 px-3 py-2.5 ${actionPaddingClass}`}
         onClick={onClick}
         onDoubleClick={onDoubleClick}
-        title={label}
+        title={temporary ? `${label}\n${temporaryTitle}` : label}
         type="button"
       >
         <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-border-visible text-text-secondary">
@@ -138,16 +147,16 @@ export function ListRow({
               {detachedLabel}
             </span>
           )}
-          {temporary && (
-            <span className="nd-caption shrink-0 rounded-full border border-border-visible px-2 py-1 text-text-secondary">
-              {temporaryLabel}
-            </span>
-          )}
         </div>
       </button>
 
       {actionCount > 0 && (
         <div className="absolute right-2 top-1/2 flex shrink-0 -translate-y-1/2 items-center gap-1">
+          {showPin && (
+            <ListRowActionButton title={temporaryTitle} onClick={() => onPin?.()} disabled={!onPin || pinDisabled}>
+              <Pin size={13} />
+            </ListRowActionButton>
+          )}
           {onConfigure && (
             <ListRowActionButton title={configureTitle} onClick={onConfigure}>
               <Settings size={13} />
@@ -220,7 +229,8 @@ export function TileListItem({
   const fallbackLabel = tile.type === 'note' ? tileTypeLabel : `${tileTypeLabel} ${tile.id.slice(-4)}`
   const label = (displayLabel ?? tile.label)?.trim() || fallbackLabel
   const hasActions = Boolean(onConfigure && onFocusTile && onClose)
-  const agentSessionTile = isAgentSessionTile(tile)
+  const sessionButtons = useAgentSessionTileButtons(tile)
+  const agentSessionTile = Boolean(sessionButtons.temporary)
 
   return (
     <ListRow
@@ -236,13 +246,15 @@ export function TileListItem({
       onDetach={hasActions && !agentSessionTile ? onDetachTile : undefined}
       detached={detached}
       temporary={agentSessionTile}
+      temporaryTitle={getTemporaryTileTitle(t, sessionButtons.pinTitle)}
+      onPin={sessionButtons.onPin}
+      pinDisabled={sessionButtons.pinDisabled}
       onClose={hasActions ? onClose : undefined}
       configureTitle={t('ui.configureTile')}
       focusTitle={t('ui.focusTile')}
       detachTitle={t('ui.detachTile')}
       attachTitle={t('ui.attachTile')}
       closeTitle={t('ui.closeTile')}
-      temporaryLabel={t('agentsView.temporaryBadge')}
       draggable={draggable}
       onDragStart={onDragStart}
       onDragOver={onDragOver}

@@ -1,9 +1,10 @@
-import React, { useMemo, useState } from 'react'
+import React, { useContext, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { SplitPanelId, SplitViewState, TileState } from '@shared/types'
 import { useCanvasStore } from '@/store/canvasStore'
 import { getTerminalDisplayTitle } from '@/utils/terminalDisplayTitle'
 import { SPLIT_TAB_STRIP_HEIGHT_PX } from '@/utils/splitViewLayout'
+import { AgentSessionTileContext } from './AgentSessionTileContext'
 import { ContextMenu } from './ContextMenu'
 import { TileListItem } from './TileListItem'
 import { buildTileConfigurationMenuItems } from './tileConfigurationMenu'
@@ -160,6 +161,7 @@ export function SplitviewPanel({
     const tile = tilesById.get(tileId)
     return tile ? [tile] : []
   })
+  const sessionTileActions = useContext(AgentSessionTileContext)
   const [tabMenu, setTabMenu] = useState<{ tileId: string; x: number; y: number } | null>(null)
   const activeMenuTile = tabMenu ? tilesById.get(tabMenu.tileId) ?? null : null
   const activeMenuPanel: SplitPanelId | null = activeMenuTile
@@ -174,6 +176,9 @@ export function SplitviewPanel({
         tile: activeMenuTile,
         onEdit: onEditTile,
         onDuplicate: activeMenuPanel ? (tile) => onDuplicateTile(activeMenuPanel, tile) : undefined,
+        onPinSession: sessionTileActions?.getPinState(activeMenuTile.id)?.disabled === false
+          ? (tile) => sessionTileActions.pinSessionTile(tile.id)
+          : undefined,
         onRefresh: onRefreshTile,
         onToggleNotificationsMuted,
         onToggleLock: (tile) => onToggleLock(tile.id),
