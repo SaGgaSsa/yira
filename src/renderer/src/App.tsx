@@ -47,12 +47,14 @@ import {
   type AgentUsageSnapshot,
   type BoardState,
   type BoardTask,
+  type FileSearchEntry,
   type FileTileOpenOptions,
   type TileState,
   type CanvasState,
   type GridWorkspaceState,
   type Workspace,
   type WorkspaceMetadata,
+  type WorkspaceScript,
   type ViewMode,
   type SplitPanelId,
   type SplitViewState,
@@ -73,6 +75,9 @@ import {
 } from './utils/agentSessionTiles'
 import { AgentSessionTileContext, type AgentSessionTileActions } from './components/AgentSessionTileContext'
 import { getAgentSessionSurface, selectRestoredAgentSessions } from './utils/activityPalette'
+import { formatAccelerator } from '@/utils/shortcutCatalog'
+import type { CommandPaletteAction } from './utils/commandPalette'
+import type { CommandPaletteSessionAction } from './components/CommandPalette'
 import { sanitizeAgentCwd } from './utils/agentPanel'
 import { getAttachedTiles, isTileDetached, selectFloatingTileWindowOpenRequests } from '@shared/floatingTiles'
 import { refreshGridTileContent } from './utils/gridTileRefresh'
@@ -122,7 +127,8 @@ const BoardView = React.lazy(() => import('./components/BoardView').then((module
 const GridView = React.lazy(() => import('./components/GridView').then((module) => ({ default: module.GridView })))
 const SplitviewPanel = React.lazy(() => import('./components/SplitviewPanel').then((module) => ({ default: module.SplitviewPanel })))
 const WorkspaceActivityView = React.lazy(() => import('./components/WorkspaceActivityView').then((module) => ({ default: module.WorkspaceActivityView })))
-const ActivityPalette = React.lazy(() => import('./components/ActivityPalette').then((module) => ({ default: module.ActivityPalette })))
+const CommandPalette = React.lazy(() => import('./components/CommandPalette').then((module) => ({ default: module.CommandPalette })))
+const AgentSessionDialog = React.lazy(() => import('./components/AgentSessionDialog').then((module) => ({ default: module.AgentSessionDialog })))
 const SettingsPanel = React.lazy(() => import('./components/SettingsPanel').then((module) => ({ default: module.SettingsPanel })))
 const RawJsonEditor = React.lazy(() => import('./components/RawJsonEditor').then((module) => ({ default: module.RawJsonEditor })))
 const WorkspaceManagementDialog = React.lazy(() => import('./components/WorkspaceManagementDialog').then((module) => ({ default: module.WorkspaceManagementDialog })))
@@ -524,7 +530,9 @@ function AppContent(): React.ReactElement {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [narrowOverride, setNarrowOverride] = useState({ sidebar: false, workspacePanel: false })
   const [activityOpen, setActivityOpen] = useState(false)
-  const hasOpenedActivityPalette = useHasBeenOpen(agentsView.activityPaletteStep !== null)
+  const hasOpenedCommandPalette = useHasBeenOpen(agentsView.commandPaletteStep === 'palette')
+  const hasOpenedAgentSessionDialog = useHasBeenOpen(agentsView.commandPaletteStep === 'new-session')
+  const [paletteScripts, setPaletteScripts] = useState<WorkspaceScript[]>([])
   const [homeOpen, setHomeOpen] = useState(true)
   const [expandedActiveWorkspaceIds, setExpandedActiveWorkspaceIds] = useState<Set<string>>(new Set())
   // Focus view also hides the workspace panel without changing its saved state.
@@ -577,6 +585,24 @@ function AppContent(): React.ReactElement {
     if (agentsView.sessionDialogOpen) setActivityOpen(false)
     if (activityOpen || agentsView.sessionDialogOpen) setHomeOpen(false)
   }, [activityOpen, agentsView.sessionDialogOpen])
+  // Scripts are only listed while the palette is open; a late response for another workspace is dropped.
+  useEffect(() => {
+    if (agentsView.commandPaletteStep !== 'palette' || !activeWorkspaceId) {
+      setPaletteScripts([])
+      return
+    }
+    let active = true
+    setPaletteScripts([])
+    void window.electron.scripts.snapshot(activeWorkspaceId).then((snapshot) => {
+      if (!active || snapshot.workspaceId !== activeWorkspaceId) return
+      setPaletteScripts(snapshot.scripts)
+    }).catch((error: unknown) => {
+      if (active) console.error('[App] Failed to load workspace scripts for the command palette:', error)
+    })
+    return () => {
+      active = false
+    }
+  }, [activeWorkspaceId, agentsView.commandPaletteStep])
   const sidebarBeforeActivityRef = useRef(false)
   const previousActivityOpenRef = useRef(false)
   const [workspaceEditor, setWorkspaceEditor] = useState<WorkspaceEditorState>(null)
@@ -1829,6 +1855,22 @@ function AppContent(): React.ReactElement {
     setViewMode(transition.viewMode)
   }, [activeWorkspaceType, attachedTiles, boardState.enabled, focusTile, focusedTileId, fullviewActiveTileId, openBoard, selectTiles, setFullviewActiveTileId, setSplitViewState, setViewMode, splitViewState, switchWorkspaceType, viewMode])
 
+  // Shared by the top bar and the command palette so both leave an overlay the same way.
+  const selectViewMode = useCallback((mode: ViewMode) => {
+    const overlayOpen = mainView !== 'workspace'
+    setHomeOpen(false)
+    setActivityOpen(false)
+    // Leaving Activity or Home for the view underneath restores it as it was,
+    // instead of toggling it (split orientation, canvas/grid swap).
+    if (overlayOpen && mode === viewMode) return
+    // Pressing Focus again in the workspace switches the Focus variant, like Split flips its orientation.
+    if (mode === 'fullview' && viewMode === 'fullview') {
+      setTerminalReadingMode(!terminalReadingMode)
+      return
+    }
+    handleSetViewMode(mode)
+  }, [handleSetViewMode, mainView, setTerminalReadingMode, terminalReadingMode, viewMode])
+
   const openTileEditor = useCallback((tile: TileState) => {
     setTileMenu(null)
     setTileEditor({
@@ -2036,13 +2078,46 @@ function AppContent(): React.ReactElement {
     })
   }, [goToWorkspaceTerminal, openAgentsViewSession, workspaceMetadata])
 
-  const openActivityPaletteAgent = useCallback((workspace: WorkspaceMetadata, session: AgentActiveSession) => {
+  const openAgentSession = useCallback((workspace: WorkspaceMetadata, session: AgentActiveSession) => {
     if (getAgentSessionSurface(session) === 'agents-view') {
       openAgentsViewSession(workspace.id, session.tileId)
       return
     }
     goToWorkspaceTerminal(workspace, session.tileId)
   }, [goToWorkspaceTerminal, openAgentsViewSession])
+
+  const canOpenSessionInSplit = useCallback((session: AgentActiveSession): boolean => {
+    if (session.workspaceId !== activeWorkspaceId) return false
+    if (!attachedTiles.some((tile) => tile.id === session.tileId)) return false
+    const currentTileId = viewMode === 'fullview' ? fullviewActiveTileId : focusedTileId
+    return Boolean(currentTileId && currentTileId !== session.tileId)
+  }, [activeWorkspaceId, attachedTiles, focusedTileId, fullviewActiveTileId, viewMode])
+
+  const openCommandPaletteSession = useCallback((
+    session: AgentActiveSession,
+    options: { split: boolean },
+  ) => {
+    const workspace = workspaceMetadata.find((entry) => entry.id === session.workspaceId)
+    if (!workspace) return
+
+    if (options.split && canOpenSessionInSplit(session)) {
+      const currentTileId = viewMode === 'fullview' ? fullviewActiveTileId : focusedTileId
+      if (!currentTileId) return
+      agentsView.closeSessionDialog()
+      setHomeOpen(false)
+      setActivityOpen(false)
+      setSplitViewState(placeTilesSideBySide(
+        useCanvasStore.getState().splitViewState,
+        currentTileId,
+        session.tileId,
+      ))
+      setFullviewActiveTileId(session.tileId)
+      setViewMode('splitview')
+      return
+    }
+
+    openAgentSession(workspace, session)
+  }, [agentsView.closeSessionDialog, canOpenSessionInSplit, focusedTileId, fullviewActiveTileId, openAgentSession, setFullviewActiveTileId, setSplitViewState, setViewMode, viewMode, workspaceMetadata])
 
   const detachTile = useCallback((tile: TileState) => {
     if (!activeWorkspaceId || isTileDetached(tile)) return
@@ -2417,6 +2492,89 @@ function AppContent(): React.ReactElement {
     }
   }, [defaultProfile, requestConfirm, t, updateTile])
   const canPinAgentsSession = Boolean(tileCreationAvailability.agent && defaultProfile)
+  const getSessionActions = useCallback((session: AgentActiveSession): CommandPaletteSessionAction[] => {
+    const actions: CommandPaletteSessionAction[] = [
+      {
+        id: 'open',
+        label: t('commandPalette.sessionOpen'),
+        icon: 'open',
+        shortcut: '↵',
+        run: () => {
+          agentsView.closeSessionDialog()
+          openCommandPaletteSession(session, { split: false })
+        },
+      },
+    ]
+
+    if (canOpenSessionInSplit(session)) {
+      actions.push({
+        id: 'split',
+        label: t('commandPalette.sessionOpenSplit'),
+        icon: 'split',
+        shortcut: 'Shift+↵',
+        run: () => {
+          agentsView.closeSessionDialog()
+          openCommandPaletteSession(session, { split: true })
+        },
+      })
+    }
+
+    if (
+      getAgentSessionSurface(session) === 'agents-view'
+      && canPinAgentsSession
+      && session.workspaceId === activeWorkspaceId
+      && session.status !== 'exited'
+    ) {
+      actions.push({
+        id: 'pin',
+        label: t('commandPalette.sessionPin'),
+        icon: 'pin',
+        disabled: Boolean(session.worktreeRoot),
+        run: () => {
+          agentsView.closeSessionDialog()
+          void pinAgentsSession(session)
+        },
+      })
+    }
+
+    const branch = session.worktreeBranch
+    if (branch) {
+      actions.push({
+        id: 'copy',
+        label: t('commandPalette.sessionCopyBranch'),
+        icon: 'copy',
+        detail: branch,
+        run: () => {
+          agentsView.closeSessionDialog()
+          void navigator.clipboard.writeText(branch)
+        },
+      })
+    }
+
+    if (getAgentSessionSurface(session) === 'agents-view') {
+      actions.push({
+        id: 'close',
+        label: t('commandPalette.sessionClose'),
+        icon: 'close',
+        danger: true,
+        run: () => {
+          agentsView.closeSessionDialog()
+          void closeAgentsSession(session)
+        },
+      })
+    }
+
+    return actions
+  }, [
+    activeWorkspaceId,
+    agentsView.closeSessionDialog,
+    canOpenSessionInSplit,
+    canPinAgentsSession,
+    closeAgentsSession,
+    openCommandPaletteSession,
+    pinAgentsSession,
+    t,
+  ])
   const pinSessionTileById = useCallback((tileId: string) => {
     const session = agentsView.sessions.find((entry) => entry.tileId === tileId)
     if (session) void pinAgentsSession(session)
@@ -2661,6 +2819,206 @@ function AppContent(): React.ReactElement {
       ? `${boardReviewCount} board ${boardReviewCount === 1 ? 'task' : 'tasks'} waiting for review`
       : undefined,
   }
+  const openNewSessionFromPalette = useCallback((prompt?: string) => {
+    agentsView.showNewSessionStep(undefined, prompt)
+  }, [agentsView.showNewSessionStep])
+  const openFileFromCommandPalette = useCallback((entry: FileSearchEntry) => {
+    agentsView.closeSessionDialog()
+    setHomeOpen(false)
+    setActivityOpen(false)
+    void openFileTile(entry.relativePath).catch((error: unknown) => {
+      console.error('[App] Failed to open file from the command palette:', error)
+    })
+  }, [agentsView.closeSessionDialog, openFileTile])
+  const commandPaletteNewSessionDetail = useMemo(() => {
+    const provider = agentsView.effectiveProvider
+      ? t(agentsView.effectiveProvider === 'claude' ? 'commandPalette.providerClaude' : 'commandPalette.providerCodex')
+      : ''
+    return provider ? `${activeWorkspaceName} · ${provider}` : activeWorkspaceName
+  }, [activeWorkspaceName, agentsView.effectiveProvider, t])
+  const commandPaletteSearchFiles = useMemo<((query: string) => Promise<FileSearchEntry[]>) | null>(() => (
+    workspaceRootPath
+      ? (query) => window.electron.files.search(workspaceRootPath, query).then((result) => result.entries)
+      : null
+  ), [workspaceRootPath])
+  const commandPaletteActions = useMemo<CommandPaletteAction[]>(() => {
+    const actions: CommandPaletteAction[] = [
+      {
+        id: 'view-focus',
+        label: t('commandPalette.actionViewFocus'),
+        icon: 'focus',
+        keywords: ['vista', 'view', 'focus', 'enfoque'],
+      },
+    ]
+    if (attachedTiles.length >= 2) {
+      actions.push({
+        id: 'view-split',
+        label: t('commandPalette.actionViewSplit'),
+        icon: 'split',
+        keywords: ['vista', 'view', 'split', 'dividir'],
+      })
+    }
+    actions.push(
+      {
+        id: 'view-grid',
+        label: t('commandPalette.actionViewGrid'),
+        icon: 'grid',
+        keywords: ['vista', 'view', 'grid', 'grilla', 'cuadrícula'],
+      },
+      {
+        id: 'view-canvas',
+        label: t('commandPalette.actionViewCanvas'),
+        icon: 'canvas',
+        keywords: ['vista', 'view', 'canvas', 'lienzo'],
+      },
+      {
+        id: 'open-home',
+        label: t('commandPalette.actionOpenHome'),
+        icon: 'home',
+        shortcut: formatAccelerator(openHomeShortcut),
+      },
+    )
+    if (defaultProfile) {
+      actions.push({
+        id: 'new-terminal',
+        label: t('commandPalette.actionNewTerminal'),
+        icon: 'terminal',
+      })
+    }
+    if (tileCreationSelectorProps.canCreateAgent) {
+      actions.push({
+        id: 'new-agent-tile',
+        label: t('commandPalette.actionNewAgentTile'),
+        icon: 'agent',
+      })
+    }
+    if (canCreateNote) {
+      actions.push({
+        id: 'new-note',
+        label: t('commandPalette.actionNewNote'),
+        icon: 'note',
+      })
+    }
+    if (canCreateBrowser) {
+      actions.push({
+        id: 'new-browser',
+        label: t('commandPalette.actionNewBrowser'),
+        icon: 'browser',
+      })
+    }
+    actions.push({
+      id: 'toggle-sidebar',
+      label: t('commandPalette.actionToggleSidebar'),
+      icon: 'sidebar',
+    })
+    if (hasWorkspacePanel) {
+      actions.push({
+        id: 'toggle-workspace-panel',
+        label: t('commandPalette.actionToggleWorkspacePanel'),
+        icon: 'panel',
+      })
+    }
+    actions.push({
+      id: 'open-settings',
+      label: t('commandPalette.actionOpenSettings'),
+      icon: 'settings',
+      keywords: ['ajustes', 'configuración', 'settings', 'config'],
+    })
+    for (const script of paletteScripts) {
+      actions.push({
+        id: `script:${script.id}`,
+        label: t('commandPalette.actionRunScript', { name: script.name }),
+        detail: script.command,
+        icon: 'script',
+      })
+    }
+    return actions
+  }, [
+    attachedTiles.length,
+    canCreateBrowser,
+    canCreateNote,
+    defaultProfile,
+    hasWorkspacePanel,
+    openHomeShortcut,
+    paletteScripts,
+    t,
+    tileCreationSelectorProps.canCreateAgent,
+  ])
+  const runCommandPaletteAction = useCallback((actionId: string) => {
+    agentsView.closeSessionDialog()
+
+    if (actionId.startsWith('script:')) {
+      if (!activeWorkspaceId) return
+      const scriptId = actionId.slice('script:'.length)
+      void window.electron.scripts.run({ workspaceId: activeWorkspaceId, scriptId }).catch((error: unknown) => {
+        void requestConfirm({
+          title: t('scripts.runFailed'),
+          message: error instanceof Error ? error.message : String(error),
+          confirmLabel: t('common.close'),
+          hideCancel: true,
+        })
+      })
+      return
+    }
+
+    switch (actionId) {
+      case 'view-focus':
+        // Unlike the top bar button, the palette never flips the Focus variant.
+        if (viewMode !== 'fullview' || mainView !== 'workspace') selectViewMode('fullview')
+        break
+      case 'view-split':
+        selectViewMode('splitview')
+        break
+      case 'view-grid':
+        selectViewMode('gridview')
+        break
+      case 'view-canvas':
+        selectViewMode('canvas')
+        break
+      case 'open-home':
+        openHome()
+        break
+      case 'new-terminal':
+        if (defaultProfile) revealCreatedTile(addTerminal(defaultProfile.id))
+        break
+      case 'new-agent-tile':
+        tileCreationSelectorProps.onCreateAgent?.()
+        break
+      case 'new-note':
+        revealCreatedTile(addNote('rich'))
+        break
+      case 'new-browser':
+        revealCreatedTile(addBrowser())
+        break
+      case 'toggle-sidebar':
+        toggleSidebar()
+        break
+      case 'toggle-workspace-panel':
+        toggleWorkspacePanel()
+        break
+      case 'open-settings':
+        openSettings()
+        break
+    }
+  }, [
+    activeWorkspaceId,
+    addBrowser,
+    addNote,
+    addTerminal,
+    agentsView.closeSessionDialog,
+    defaultProfile,
+    mainView,
+    openHome,
+    openSettings,
+    requestConfirm,
+    revealCreatedTile,
+    selectViewMode,
+    t,
+    tileCreationSelectorProps.onCreateAgent,
+    toggleSidebar,
+    toggleWorkspacePanel,
+    viewMode,
+  ])
   const workspaceHomeNow = Date.now()
   const agentTextSendContext = useMemo(() => ({
     sendText: agentsView.openNewSessionDialogWithPrompt,
@@ -2709,20 +3067,7 @@ function AppContent(): React.ReactElement {
           onCreateNote: () => revealCreatedTile(addNote('rich')),
           onCreateBrowser: () => revealCreatedTile(addBrowser()),
         }}
-        onSetViewMode={(mode) => {
-          const overlayOpen = mainView !== 'workspace'
-          setHomeOpen(false)
-          setActivityOpen(false)
-          // Leaving Activity or Home for the view underneath restores it as it was,
-          // instead of toggling it (split orientation, canvas/grid swap).
-          if (overlayOpen && mode === viewMode) return
-          // Pressing Focus again in the workspace switches the Focus variant, like Split flips its orientation.
-          if (mode === 'fullview' && viewMode === 'fullview') {
-            setTerminalReadingMode(!terminalReadingMode)
-            return
-          }
-          handleSetViewMode(mode)
-        }}
+        onSetViewMode={selectViewMode}
         onFitToContent={() => getCanvasMethods()?.fitViewToContent()}
         onZoomToggle={handleZoomToggle}
         onOpenSettings={() => openSettings()}
@@ -2870,7 +3215,7 @@ function AppContent(): React.ReactElement {
                         sessions={agentsView.snapshot.sessions}
                         expanded={expandedActiveWorkspaceIds.has(workspace.id)}
                         onToggleExpanded={() => toggleActiveWorkspaceExpanded(workspace.id)}
-                        onOpenAgent={openActivityPaletteAgent}
+                        onOpenAgent={openAgentSession}
                         focusedAgentTileId={workspace.id === activeWorkspaceId ? focusedAgentTileId : null}
                         active={workspace.id === activeWorkspaceId}
                         sessionActive={sessionActiveWorkspaceIds.has(workspace.id)}
@@ -3103,24 +3448,41 @@ function AppContent(): React.ReactElement {
           />
         </Suspense>
       )}
-      {workspaceMetadata.length > 0 && hasOpenedActivityPalette && (
+      {workspaceMetadata.length > 0 && hasOpenedCommandPalette && (
         <Suspense fallback={null}>
-          <ActivityPalette
-            step={agentsView.activityPaletteStep}
-            fromActivity={agentsView.sessionDialogFromActivity}
+          <CommandPalette
+            open={agentsView.commandPaletteStep === 'palette'}
             workspaces={sidebarWorkspaces}
-            sessionWorkspaces={agentSessionWorkspaces}
+            activeWorkspaceId={activeWorkspaceId}
             sessions={agentsView.snapshot.sessions}
-            agents={agentSettings}
+            actions={commandPaletteActions}
+            newSessionDetail={commandPaletteNewSessionDetail}
+            newSessionShortcut={newAgentSessionShortcut}
+            searchFiles={commandPaletteSearchFiles}
+            canOpenSessionInSplit={canOpenSessionInSplit}
+            getSessionActions={getSessionActions}
+            focusRequestId={agentsView.sessionDialogFocusRequestId}
+            onClose={agentsView.closeSessionDialog}
+            onNewSession={openNewSessionFromPalette}
+            onOpenSession={openCommandPaletteSession}
+            onOpenWorkspace={selectWorkspaceFromHome}
+            onOpenFile={openFileFromCommandPalette}
+            onRunAction={runCommandPaletteAction}
+          />
+        </Suspense>
+      )}
+      {workspaceMetadata.length > 0 && hasOpenedAgentSessionDialog && (
+        <Suspense fallback={null}>
+          <AgentSessionDialog
+            open={agentsView.commandPaletteStep === 'new-session'}
+            workspaces={agentSessionWorkspaces}
             initialWorkspaceId={agentsView.sessionDialogInitialWorkspaceId}
             initialPrompt={agentsView.sessionDialogInitialPrompt}
+            agents={agentSettings}
             focusRequestId={agentsView.sessionDialogFocusRequestId}
-            shortcutLabel={newAgentSessionShortcut}
             onClose={agentsView.closeSessionDialog}
-            onNewSession={agentsView.showNewSessionStep}
-            onBack={agentsView.backToActivity}
             onCreated={handleAgentSessionCreated}
-            onOpenAgent={openActivityPaletteAgent}
+            onBack={agentsView.sessionDialogFromPalette ? agentsView.backToPalette : undefined}
           />
         </Suspense>
       )}
