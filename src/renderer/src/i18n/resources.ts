@@ -380,12 +380,15 @@ type TranslationResources = {
     english: string
     spanish: string
     fonts: string
+    fontsSectionTitle: string
+    searchFonts: string
     fontFamily: string
     fontFamilyDescription: string
     interfaceFontFamily: string
     monoFontFamily: string
     bundledFont: string
-    resetFontFamily: string
+    useCustomFont: string
+    noFontsFound: string
     gridAndSnapping: string
     gridSize: string
     gridVisible: string
@@ -440,7 +443,6 @@ type TranslationResources = {
     terminalActivityDescription: string
     timerNativeAttention: string
     timerNativeAttentionDescription: string
-    textScale: string
     themeAndActivity: string
     tileContentFontSize: string
     tiles: string
@@ -469,7 +471,6 @@ type TranslationResources = {
     light: string
     dark: string
     system: string
-    fontSize: string
   }
   dialogs: {
     closeDialog: string
@@ -1421,12 +1422,15 @@ const en: TranslationResources = {
     english: 'English',
     spanish: 'Español',
     fonts: 'Fonts',
+    fontsSectionTitle: 'Size and family',
+    searchFonts: 'Search fonts',
     fontFamily: 'Font family',
-    fontFamilyDescription: 'Pick a font installed on this computer. Leave it empty to use the bundled font.',
+    fontFamilyDescription: 'Choose fonts installed on this computer.',
     interfaceFontFamily: 'Interface font',
     monoFontFamily: 'Terminal and code font',
     bundledFont: '{{name}} (bundled)',
-    resetFontFamily: 'Use bundled font',
+    useCustomFont: 'Use “{{name}}”',
+    noFontsFound: 'No installed fonts match',
     gridAndSnapping: 'Grid and snapping',
     gridSize: 'Grid size',
     gridVisible: 'Grid visible',
@@ -1481,7 +1485,6 @@ const en: TranslationResources = {
     terminalActivityDescription: 'Show or hide output counters. Terminal output does not request native attention.',
     timerNativeAttention: 'Timer native attention',
     timerNativeAttentionDescription: 'Allow this timer to request native attention when it completes.',
-    textScale: 'Text scale',
     themeAndActivity: 'Theme and activity',
     tileContentFontSize: 'Tile content font size',
     tiles: 'Tiles',
@@ -1510,7 +1513,6 @@ const en: TranslationResources = {
     light: 'Light',
     dark: 'Dark',
     system: 'System',
-    fontSize: 'Font size',
   },
   dialogs: {
     closeDialog: 'Close dialog',
@@ -2462,12 +2464,15 @@ const es: TranslationResources = {
     english: 'English',
     spanish: 'Español',
     fonts: 'Fuentes',
+    fontsSectionTitle: 'Tamaño y familia',
+    searchFonts: 'Buscar fuentes',
     fontFamily: 'Familia de fuente',
-    fontFamilyDescription: 'Elige una fuente instalada en esta computadora. Déjala vacía para usar la fuente incluida.',
+    fontFamilyDescription: 'Elige fuentes instaladas en esta computadora.',
     interfaceFontFamily: 'Fuente de la interfaz',
     monoFontFamily: 'Fuente de terminal y código',
     bundledFont: '{{name}} (incluida)',
-    resetFontFamily: 'Usar fuente incluida',
+    useCustomFont: 'Usar “{{name}}”',
+    noFontsFound: 'Ninguna fuente instalada coincide',
     gridAndSnapping: 'Cuadrícula y ajuste',
     gridSize: 'Tamaño de cuadrícula',
     gridVisible: 'Cuadrícula visible',
@@ -2522,7 +2527,6 @@ const es: TranslationResources = {
     terminalActivityDescription: 'Muestra u oculta los contadores de salida. La salida de terminal no solicita atención nativa.',
     timerNativeAttention: 'Atención nativa del temporizador',
     timerNativeAttentionDescription: 'Permite que este temporizador solicite atención nativa cuando termine.',
-    textScale: 'Escala de texto',
     themeAndActivity: 'Tema y actividad',
     tileContentFontSize: 'Tamaño de fuente del contenido del panel',
     tiles: 'Paneles',
@@ -2551,7 +2555,6 @@ const es: TranslationResources = {
     light: 'Claro',
     dark: 'Oscuro',
     system: 'Sistema',
-    fontSize: 'Tamaño de fuente',
   },
   dialogs: {
     closeDialog: 'Cerrar diálogo',
