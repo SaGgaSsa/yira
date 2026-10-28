@@ -776,7 +776,7 @@ export function CommandPalette({
         role="dialog"
         aria-modal="true"
         aria-label={t('commandPalette.dialogLabel')}
-        className="mt-[12vh] flex max-h-[70vh] w-[min(640px,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border border-border-visible bg-bg-secondary shadow-2xl"
+        className="mt-[12vh] flex max-h-[70vh] w-[min(832px,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border border-border-visible bg-bg-secondary shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex h-[52px] shrink-0 items-center gap-2 border-b border-border px-4">
