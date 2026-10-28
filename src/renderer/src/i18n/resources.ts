@@ -386,13 +386,11 @@ type TranslationResources = {
     homeUrl: string
     interfaceFontSize: string
     keyboardShortcutCatalog: string
-    newAgentSessionShortcut: string
-    newAgentSessionShortcutDescription: string
     pressShortcut: string
+    resetAllShortcuts: string
     resetToDefault: string
     latestFound: string
     notificationsAndCreation: string
-    openHomeShortcut: string
     openRawCanvasJson: string
     restartToInstall: string
     sections: string
@@ -402,14 +400,23 @@ type TranslationResources = {
     shortcutsHelp: string
     shortcutClosePanelsOrClearSelection: string
     shortcutConfirmDialogAction: string
+    shortcutCopySelection: string
+    shortcutEditor: string
+    shortcutExplorer: string
     shortcutFocusLeftSplitPanel: string
     shortcutFocusRightSplitPanel: string
     shortcutNavigation: string
     shortcutFindInTerminal: string
+    shortcutMoveToTrash: string
     shortcutNextTab: string
     shortcutNewAgentSession: string
+    shortcutNewlineInPrompt: string
     shortcutOpenHome: string
+    shortcutOpenLink: string
+    shortcutPaste: string
     shortcutPreviousTab: string
+    shortcutRename: string
+    shortcutSaveFile: string
     shortcutIssueConflict: string
     shortcutIssueInvalid: string
     shortcutIssueReservedClipboard: string
@@ -1414,30 +1421,37 @@ const en: TranslationResources = {
     homeUrl: 'Home URL',
     interfaceFontSize: 'Interface font size',
     keyboardShortcutCatalog: 'Keyboard Shortcut catalog',
-    newAgentSessionShortcut: 'New agent session shortcut',
-    newAgentSessionShortcutDescription: 'Press a key combination that includes Ctrl, Cmd, or Alt to set the shortcut.',
     pressShortcut: 'Press a shortcut…',
+    resetAllShortcuts: 'Reset all',
     resetToDefault: 'Reset to default',
     latestFound: 'Latest found: v{{version}}',
     notificationsAndCreation: 'Notifications and creation',
-    openHomeShortcut: 'Open home shortcut',
     openRawCanvasJson: 'Open raw canvas JSON',
     restartToInstall: 'Restart to install',
     sections: 'Sections',
     selectCategory: 'Select a category to edit its controls.',
     settingsMatrix: 'Settings Matrix',
     shortcuts: 'Shortcuts',
-    shortcutsHelp: 'Click a shortcut and press a new combination. Esc cancels.',
+    shortcutsHelp: 'Click a shortcut and press a new combination. Esc cancels. Shortcuts shown as plain keys can\'t be changed.',
     shortcutClosePanelsOrClearSelection: 'Close panels or clear selection',
     shortcutConfirmDialogAction: 'Confirm dialog action',
+    shortcutCopySelection: 'Copy selection',
+    shortcutEditor: 'Editor',
+    shortcutExplorer: 'Explorer',
     shortcutFocusLeftSplitPanel: 'Focus left split panel',
     shortcutFocusRightSplitPanel: 'Focus right split panel',
     shortcutNavigation: 'Navigation',
     shortcutFindInTerminal: 'Find in terminal',
+    shortcutMoveToTrash: 'Move to trash',
     shortcutNextTab: 'Next tab',
     shortcutNewAgentSession: 'New agent session',
+    shortcutNewlineInPrompt: 'New line in prompt',
     shortcutOpenHome: 'Open home',
+    shortcutOpenLink: 'Open link',
+    shortcutPaste: 'Paste',
     shortcutPreviousTab: 'Previous tab',
+    shortcutRename: 'Rename',
+    shortcutSaveFile: 'Save file',
     shortcutIssueConflict: 'Already used by "{{name}}".',
     shortcutIssueInvalid: 'Use a combination with Ctrl, Cmd, or Alt and a letter, number, or named key.',
     shortcutIssueReservedClipboard: 'Reserved for copy and paste.',
@@ -2442,30 +2456,37 @@ const es: TranslationResources = {
     homeUrl: 'URL de inicio',
     interfaceFontSize: 'Tamaño de fuente de la interfaz',
     keyboardShortcutCatalog: 'Catálogo de atajos de teclado',
-    newAgentSessionShortcut: 'Atajo para nueva sesión de agente',
-    newAgentSessionShortcutDescription: 'Pulsa una combinación que incluya Ctrl, Cmd o Alt para definir el atajo.',
     pressShortcut: 'Pulsa un atajo…',
+    resetAllShortcuts: 'Restablecer todos',
     resetToDefault: 'Restablecer valor predeterminado',
     latestFound: 'Última encontrada: v{{version}}',
     notificationsAndCreation: 'Notificaciones y creación',
-    openHomeShortcut: 'Atajo para abrir el inicio',
     openRawCanvasJson: 'Abrir JSON sin procesar del lienzo',
     restartToInstall: 'Reiniciar para instalar',
     sections: 'Secciones',
     selectCategory: 'Selecciona una categoría para editar sus controles.',
     settingsMatrix: 'Matriz de configuración',
     shortcuts: 'Atajos',
-    shortcutsHelp: 'Haz clic en un atajo y pulsa una nueva combinación. Esc cancela.',
+    shortcutsHelp: 'Haz clic en un atajo y pulsa una nueva combinación. Esc cancela. Los atajos que se muestran como teclas fijas no se pueden cambiar.',
     shortcutClosePanelsOrClearSelection: 'Cerrar paneles o limpiar selección',
     shortcutConfirmDialogAction: 'Confirmar acción del diálogo',
+    shortcutCopySelection: 'Copiar selección',
+    shortcutEditor: 'Editor',
+    shortcutExplorer: 'Explorador',
     shortcutFocusLeftSplitPanel: 'Enfocar panel dividido izquierdo',
     shortcutFocusRightSplitPanel: 'Enfocar panel dividido derecho',
     shortcutNavigation: 'Navegación',
     shortcutFindInTerminal: 'Buscar en la terminal',
+    shortcutMoveToTrash: 'Mover a la papelera',
     shortcutNextTab: 'Pestaña siguiente',
     shortcutNewAgentSession: 'Nueva sesión de agente',
+    shortcutNewlineInPrompt: 'Salto de línea en el prompt',
     shortcutOpenHome: 'Abrir inicio',
+    shortcutOpenLink: 'Abrir enlace',
+    shortcutPaste: 'Pegar',
     shortcutPreviousTab: 'Pestaña anterior',
+    shortcutRename: 'Renombrar',
+    shortcutSaveFile: 'Guardar archivo',
     shortcutIssueConflict: 'Ya lo usa «{{name}}».',
     shortcutIssueInvalid: 'Usa una combinación con Ctrl, Cmd o Alt y una letra, número o tecla con nombre.',
     shortcutIssueReservedClipboard: 'Reservado para copiar y pegar.',
