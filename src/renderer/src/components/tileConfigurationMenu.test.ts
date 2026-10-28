@@ -24,11 +24,12 @@ const noteTile: TileState = {
   type: 'note',
 }
 
-function labelsFor(tile: TileState): string[] {
+function labelsFor(tile: TileState, onPinSession?: (tile: TileState) => void): string[] {
   return buildTileConfigurationMenuItems({
     tile,
     onEdit: () => {},
     onDuplicate: () => {},
+    onPinSession,
     onRefresh: () => {},
     onToggleNotificationsMuted: () => {},
     onToggleLock: () => {},
@@ -63,3 +64,27 @@ const noteLabels = labelsFor(noteTile)
 if (!noteLabels.includes('Rename')) throw new Error('non-terminal configuration menu must use Rename')
 if (noteLabels.includes('Duplicate')) throw new Error('non-terminal configuration menu must not include Duplicate')
 if (noteLabels.includes('Mute Notifications')) throw new Error('non-notifying tiles must not include notification controls')
+
+const agentSessionTile: TileState = {
+  ...terminalTile,
+  id: 'agent-session-1',
+  agent: { provider: 'claude', surface: 'agents-view' },
+}
+
+const agentSessionLabels = labelsFor(agentSessionTile)
+if (agentSessionLabels.includes('Edit')) throw new Error('agent session configuration menu must not include Edit')
+if (agentSessionLabels.includes('Duplicate')) throw new Error('agent session configuration menu must not include Duplicate')
+if (agentSessionLabels.includes('Keep as agent tile')) throw new Error('agent session menu must hide pin without onPinSession')
+for (const expectedLabel of ['Refresh', 'Mute Activity', 'Lock']) {
+  if (!agentSessionLabels.includes(expectedLabel)) {
+    throw new Error(`agent session configuration menu must include ${expectedLabel}`)
+  }
+}
+
+const pinnableSessionLabels = labelsFor(agentSessionTile, () => {})
+if (pinnableSessionLabels[0] !== 'Keep as agent tile') {
+  throw new Error('agent session configuration menu must pin first')
+}
+if (!pinnableSessionLabels.includes('Refresh')) {
+  throw new Error('agent session configuration menu must keep Refresh when pinning')
+}

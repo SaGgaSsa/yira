@@ -1,5 +1,6 @@
-import { Bell, BellOff, CopyPlus, Lock, Pencil, RefreshCw, LockOpen } from 'lucide-react'
+import { Bell, BellOff, CopyPlus, Lock, Pencil, Pin, RefreshCw, LockOpen } from 'lucide-react'
 import type { TileState } from '@shared/types'
+import { isAgentSessionTile } from '@/utils/agentSessionTiles'
 import type { MenuItem } from './ContextMenu'
 
 interface TileConfigurationMenuOptions {
@@ -7,6 +8,7 @@ interface TileConfigurationMenuOptions {
   tile: TileState
   onEdit: (tile: TileState) => void
   onDuplicate?: (tile: TileState) => void
+  onPinSession?: (tile: TileState) => void
   onRefresh: (tile: TileState) => void | Promise<void>
   onToggleNotificationsMuted: (tile: TileState) => void
   onToggleLock: (tile: TileState) => void
@@ -28,6 +30,7 @@ export function buildTileConfigurationMenuItems({
   tile,
   onEdit,
   onDuplicate,
+  onPinSession,
   onRefresh,
   onToggleNotificationsMuted,
   onToggleLock,
@@ -35,17 +38,27 @@ export function buildTileConfigurationMenuItems({
   translate,
 }: TileConfigurationMenuOptions): MenuItem[] {
   const label = (key: string, fallback: string): string => translate?.(key) ?? fallback
+  const agentSessionTile = isAgentSessionTile(tile)
   return [
-    {
-      label: tile.type === 'terminal' ? label('ui.editAction', 'Edit') : label('ui.renameAction', 'Rename'),
-      icon: Pencil,
-      action: runTileAction(tile, onEdit, onBeforeAction),
-    },
-    ...(tile.type === 'terminal' && onDuplicate
+    ...(agentSessionTile
+      ? []
+      : [{
+          label: tile.type === 'terminal' ? label('ui.editAction', 'Edit') : label('ui.renameAction', 'Rename'),
+          icon: Pencil,
+          action: runTileAction(tile, onEdit, onBeforeAction),
+        }]),
+    ...(!agentSessionTile && tile.type === 'terminal' && onDuplicate
       ? [{
           label: label('ui.duplicateAction', 'Duplicate'),
           icon: CopyPlus,
           action: runTileAction(tile, onDuplicate, onBeforeAction),
+        }]
+      : []),
+    ...(agentSessionTile && onPinSession
+      ? [{
+          label: label('agentsView.pinSession', 'Keep as agent tile'),
+          icon: Pin,
+          action: runTileAction(tile, onPinSession, onBeforeAction),
         }]
       : []),
     {

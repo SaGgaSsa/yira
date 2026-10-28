@@ -6,6 +6,7 @@ import type { TileState, ViewMode, SplitPanelId, SplitOrientation } from '@share
 import { getTileSizePreset, NOTE_COLORS } from '@shared/types'
 import { GripVertical, StickyNote, Globe, Terminal, Lock } from 'lucide-react'
 import { TileActionButtons } from './TileActionButtons'
+import { useAgentSessionTileButtons } from './AgentSessionTileContext'
 import { TerminalTileActivityIcon } from './TerminalActivityIcon'
 
 interface Props {
@@ -61,6 +62,7 @@ export function TileChrome({
   splitPanel = 'left',
   splitOrientation = 'vertical',
 }: Props): React.ReactElement {
+  const sessionButtons = useAgentSessionTileButtons(tile)
   const [isDragging, setIsDragging] = useState(false)
   const [isResizing, setIsResizing] = useState<ResizeDirection | null>(null)
   const dragStartRef = useRef<{ mx: number; my: number; positions: Array<{ id: string; x: number; y: number }>; anchorX: number; anchorY: number } | null>(null)
@@ -320,6 +322,7 @@ export function TileChrome({
             )}
 
             <TileActionButtons
+              {...sessionButtons}
               onConfigure={onConfigure}
               onFocus={onFocusView}
               onDetach={onDetach}

@@ -1,15 +1,13 @@
 export const MIN_CONTENT_WIDTH = 480
 
-export type MainView = 'workspace' | 'activity' | 'agents' | 'home'
+export type MainView = 'workspace' | 'activity' | 'home'
 
 export function resolveMainView(input: {
   hasWorkspace: boolean
   activityOpen: boolean
-  agentsViewOpen: boolean
   homeOpen: boolean
 }): MainView {
   if (input.activityOpen) return 'activity'
-  if (input.agentsViewOpen) return 'agents'
   if (input.homeOpen || !input.hasWorkspace) return 'home'
   return 'workspace'
 }
@@ -21,15 +19,12 @@ export interface PanelLayoutInput {
   workspacePanelHiddenByFocus: boolean
   // True when the current view hides the panel by default (Focus with tiles).
   focusViewActive: boolean
-  maximizedSessionId: string | null
-  workspacePanelRevealedForSessionId: string | null
   windowWidth: number
   sidePanelWidth: number
   narrowOverride: { sidebar: boolean; workspacePanel: boolean }
 }
 
 export interface PanelLayout {
-  agentSessionMaximized: boolean
   sidebarHidden: boolean
   sidebarHiddenByWidth: boolean
   tilesHidden: boolean
@@ -39,22 +34,14 @@ export interface PanelLayout {
   workspacePanelHiddenByWidth: boolean
   narrowWindow: boolean
   workspacePanelRevealedInFocus: boolean
-  workspacePanelRevealedForMaximizedSession: boolean
   workspacePanelRevealedInNarrowWindow: boolean
 }
 
 export function resolvePanelLayout(input: PanelLayoutInput): PanelLayout {
-  const agentSessionMaximized = input.maximizedSessionId !== null && input.mainView === 'agents'
-  const sidebarHiddenWithoutWidth = input.sidebarCollapsed || agentSessionMaximized
-  // Focus hides the panel outside Agents so it remains available beside agent sessions.
-  const focusSuppressesWorkspacePanel = input.workspacePanelHiddenByFocus && input.mainView !== 'agents'
-  // A reveal belongs to the maximized session, so switching sessions hides the panel again.
-  const maximizedSessionSuppressesWorkspacePanel = agentSessionMaximized
-    && input.workspacePanelRevealedForSessionId !== input.maximizedSessionId
-  const workspacePanelSuppressed = focusSuppressesWorkspacePanel || maximizedSessionSuppressesWorkspacePanel
+  const sidebarHiddenWithoutWidth = input.sidebarCollapsed
+  const workspacePanelSuppressed = input.workspacePanelHiddenByFocus
   const workspacePanelVisibleWithoutWidth = input.workspacePanelOpen && !workspacePanelSuppressed
-  const workspacePanelShownWithoutWidth = workspacePanelVisibleWithoutWidth
-    && (input.mainView === 'workspace' || input.mainView === 'agents')
+  const workspacePanelShownWithoutWidth = workspacePanelVisibleWithoutWidth && input.mainView === 'workspace'
   const narrowWindow = input.windowWidth - 2 * input.sidePanelWidth < MIN_CONTENT_WIDTH
   // The right panel gives way first, counting the sidebar only when it would be on screen.
   const sidebarWidthWithoutWidthRule = sidebarHiddenWithoutWidth ? 0 : input.sidePanelWidth
@@ -62,8 +49,7 @@ export function resolvePanelLayout(input: PanelLayoutInput): PanelLayout {
     && input.windowWidth - sidebarWidthWithoutWidthRule - input.sidePanelWidth < MIN_CONTENT_WIDTH
   const workspacePanelHiddenByWidth = workspacePanelTooWide && !input.narrowOverride.workspacePanel
   const workspacePanelVisible = workspacePanelVisibleWithoutWidth && !workspacePanelHiddenByWidth
-  const workspacePanelShown = workspacePanelVisible
-    && (input.mainView === 'workspace' || input.mainView === 'agents')
+  const workspacePanelShown = workspacePanelVisible && input.mainView === 'workspace'
   const sidebarHiddenByWidth = !sidebarHiddenWithoutWidth
     && !input.narrowOverride.sidebar
     && input.windowWidth - input.sidePanelWidth - (workspacePanelShown ? input.sidePanelWidth : 0) < MIN_CONTENT_WIDTH
@@ -73,16 +59,11 @@ export function resolvePanelLayout(input: PanelLayoutInput): PanelLayout {
   const workspacePanelRevealedInFocus = workspacePanelShown
     && input.focusViewActive
     && !input.workspacePanelHiddenByFocus
-    && input.mainView !== 'agents'
-  const workspacePanelRevealedForMaximizedSession = workspacePanelShown
-    && agentSessionMaximized
-    && input.workspacePanelRevealedForSessionId === input.maximizedSessionId
   const workspacePanelRevealedInNarrowWindow = workspacePanelShown
     && workspacePanelTooWide
     && input.narrowOverride.workspacePanel
 
   return {
-    agentSessionMaximized,
     sidebarHidden,
     sidebarHiddenByWidth,
     tilesHidden,
@@ -92,7 +73,6 @@ export function resolvePanelLayout(input: PanelLayoutInput): PanelLayout {
     workspacePanelHiddenByWidth,
     narrowWindow,
     workspacePanelRevealedInFocus,
-    workspacePanelRevealedForMaximizedSession,
     workspacePanelRevealedInNarrowWindow,
   }
 }

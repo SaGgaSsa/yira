@@ -24,17 +24,7 @@ export function getActiveWindowTitle(state: {
   fullviewActiveTileId: string | null
   splitViewState: SplitViewState
   agentTitles?: Record<string, string>
-  /** Agent session shown in the agents view, which hides the workspace tiles. */
-  agentsViewSession?: { tileId: string; title?: string } | null
 }): string {
-  const session = state.agentsViewSession
-  if (session !== undefined) {
-    if (!session) return getTileWindowTitle(null, state.terminalTitles, state.activeWorkspaceName)
-    const sessionTile: TileState = { id: session.tileId, type: 'terminal', x: 0, y: 0, width: 0, height: 0, zIndex: 0 }
-    const sessionTitles = session.title?.trim() ? { [session.tileId]: session.title } : {}
-    return getTileWindowTitle(sessionTile, state.terminalTitles, state.activeWorkspaceName, sessionTitles)
-  }
-
   const activeTileId = getVisibleActiveTileId(state)
   const tile = getAttachedTiles(state.tiles).find((candidate) => candidate.id === activeTileId) ?? null
   return getTileWindowTitle(tile, state.terminalTitles, state.activeWorkspaceName, state.agentTitles)

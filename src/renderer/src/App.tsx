@@ -27,6 +27,7 @@ import { useCanvasActions } from './hooks/useCanvasActions'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useAgentsView } from './hooks/useAgentsView'
 import { useAgentSessionSnapshot } from './hooks/useAgentSessionSnapshot'
+import { useAgentSessionTiles } from './hooks/useAgentSessionTiles'
 import { useTheme } from './hooks/useTheme'
 import { useFontSize } from './hooks/useFontSize'
 import { useSidePanelWidth } from './hooks/useSidePanelWidth'
@@ -65,20 +66,26 @@ import {
   reconcileGridStateWithSharedTiles,
 } from '@shared/workspaceTypeSwitch'
 import { getBoardReviewCount } from '@shared/board'
-import { countAgentsViewAttention } from './utils/agentsViewSessions'
+import { countAgentsViewAttention, pickNextAgentSession } from './utils/agentsViewSessions'
+import {
+  isAgentSessionTile,
+  stripAgentSessionTilesFromCanvasState,
+  stripAgentSessionTilesFromGridState,
+} from './utils/agentSessionTiles'
+import { AgentSessionTileContext, type AgentSessionTileActions } from './components/AgentSessionTileContext'
 import { getAgentSessionSurface, selectRestoredAgentSessions } from './utils/activityPalette'
 import { sanitizeAgentCwd } from './utils/agentPanel'
 import { getAttachedTiles, isTileDetached, selectFloatingTileWindowOpenRequests } from '@shared/floatingTiles'
 import { refreshGridTileContent } from './utils/gridTileRefresh'
 import { DEFAULT_SPLIT_ORIENTATION, placeTilesSideBySide, toggleSplitOrientation } from './utils/splitViewState'
 import { getActiveWindowTitle, getVisibleActiveTileId } from './utils/windowTitle'
-import { getAgentSessionTitle, getAgentSessionTitles } from './utils/terminalDisplayTitle'
+import { getAgentSessionTitles } from './utils/terminalDisplayTitle'
 import {
   buildAgentAlertNotificationText,
   decideAgentAlertNotification,
 } from './utils/agentAlertNotifications'
 import { playAgentAlertSound } from './utils/agentAlertSound'
-import { resolveAgentsViewSwitch, resolveViewModeTransition } from './utils/viewModeTransition'
+import { resolveViewModeTransition } from './utils/viewModeTransition'
 import {
   resolveSidebarCollapsedAfterWorkspaceViewChange,
   shouldKeepSidebarOpenForWorkspace,
@@ -115,7 +122,6 @@ import { Terminal, StickyNote, SlidersHorizontal, Plus, House } from 'lucide-rea
 const BoardView = React.lazy(() => import('./components/BoardView').then((module) => ({ default: module.BoardView })))
 const GridView = React.lazy(() => import('./components/GridView').then((module) => ({ default: module.GridView })))
 const SplitviewPanel = React.lazy(() => import('./components/SplitviewPanel').then((module) => ({ default: module.SplitviewPanel })))
-const AgentsView = React.lazy(() => import('./components/AgentsView').then((module) => ({ default: module.AgentsView })))
 const WorkspaceActivityView = React.lazy(() => import('./components/WorkspaceActivityView').then((module) => ({ default: module.WorkspaceActivityView })))
 const ActivityPalette = React.lazy(() => import('./components/ActivityPalette').then((module) => ({ default: module.ActivityPalette })))
 const SettingsPanel = React.lazy(() => import('./components/SettingsPanel').then((module) => ({ default: module.SettingsPanel })))
@@ -154,8 +160,9 @@ type CanvasSnapshotSource = Pick<
 >
 type GridSnapshotSource = Pick<ReturnType<typeof useCanvasStore.getState>, 'tiles' | 'nextZIndex' | 'focusedTileId' | 'viewMode' | 'fullviewActiveTileId' | 'boardVisible' | 'gridViewState' | 'splitViewState'>
 
+// Temporary agent session tiles live only while their session runs, so they are never saved.
 function createCanvasSnapshot(source: CanvasSnapshotSource): CanvasState {
-  return {
+  return stripAgentSessionTilesFromCanvasState({
     tiles: source.tiles.map((tile) => ({ ...tile })),
     viewport: { ...source.viewport },
     nextZIndex: source.nextZIndex,
@@ -168,11 +175,11 @@ function createCanvasSnapshot(source: CanvasSnapshotSource): CanvasState {
       leftTileIds: [...source.splitViewState.leftTileIds],
       rightTileIds: [...source.splitViewState.rightTileIds],
     },
-  }
+  })
 }
 
 function createGridSnapshot(source: GridSnapshotSource): GridWorkspaceState {
-  return {
+  return stripAgentSessionTilesFromGridState({
     tiles: source.tiles.map((tile) => ({ ...tile })),
     nextZIndex: source.nextZIndex,
     focusedTileId: source.focusedTileId,
@@ -187,7 +194,7 @@ function createGridSnapshot(source: GridSnapshotSource): GridWorkspaceState {
     gridViewState: {
       rootNode: source.gridViewState.rootNode ? JSON.parse(JSON.stringify(source.gridViewState.rootNode)) as GridWorkspaceState['gridViewState']['rootNode'] : null,
     },
-  }
+  })
 }
 
 function buildInitialSplitViewState(tiles: TileState[], activeTileId: string | null): SplitViewState {
@@ -449,7 +456,7 @@ function AppContent(): React.ReactElement {
     })
   }, [])
 
-  const closeAgentsSession = useCallback(async (session: AgentActiveSession): Promise<void> => {
+  const closeAgentsSession = useCallback(async (session: AgentActiveSession): Promise<boolean> => {
     // Closing kills the agent process, so ask first unless it already finished.
     if (session.status === 'working' || session.status === 'needs-input') {
       const confirmed = await requestConfirm({
@@ -461,7 +468,7 @@ function AppContent(): React.ReactElement {
         cancelLabel: t('ui.keepOpen'),
         danger: true,
       })
-      if (!confirmed) return
+      if (!confirmed) return false
     }
     try {
       const result = await window.electron.agents.closeSession({
@@ -480,6 +487,7 @@ function AppContent(): React.ReactElement {
           hideCancel: true,
         })
       }
+      return true
     } catch (error) {
       void requestConfirm({
         title: t('agentsView.closeSessionErrorTitle'),
@@ -487,6 +495,7 @@ function AppContent(): React.ReactElement {
         confirmLabel: t('common.close'),
         hideCancel: true,
       })
+      return false
     }
   }, [registry, requestConfirm, t])
 
@@ -494,7 +503,7 @@ function AppContent(): React.ReactElement {
     await destroyTerminalRuntime(registry, target, true, window.electron.terminal.destroyCurrent)
   }, [registry])
 
-  const { addTerminal, addRemoteTerminal, duplicateTerminalTile, addNote, addBrowser, deleteTile: deleteCanvasTile, resetZoom } = useCanvasActions({
+  const { addTerminal, addRemoteTerminal, duplicateTerminalTile, addNote, addBrowser, deleteTile: deleteCanvasTile, resetZoom, getSpawnPosition } = useCanvasActions({
     requestConfirm,
     destroyTerminalRuntime: destroyTerminalRuntimeForTile,
   })
@@ -519,14 +528,11 @@ function AppContent(): React.ReactElement {
   const hasOpenedActivityPalette = useHasBeenOpen(agentsView.activityPaletteStep !== null)
   const [homeOpen, setHomeOpen] = useState(true)
   const [expandedActiveWorkspaceIds, setExpandedActiveWorkspaceIds] = useState<Set<string>>(new Set())
-  const [agentsMaximizedSessionId, setAgentsMaximizedSessionId] = useState<string | null>(null)
-  // Focus view and a maximized agent session also hide the workspace panel without changing its saved state.
+  // Focus view also hides the workspace panel without changing its saved state.
   const [workspacePanelHiddenByFocus, setWorkspacePanelHiddenByFocus] = useState(false)
-  const [workspacePanelRevealedForSessionId, setWorkspacePanelRevealedForSessionId] = useState<string | null>(null)
   const mainView = resolveMainView({
     hasWorkspace: Boolean(activeWorkspaceId),
     activityOpen,
-    agentsViewOpen: agentsView.isOpen,
     homeOpen,
   })
   const panelLayout = resolvePanelLayout({
@@ -535,14 +541,11 @@ function AppContent(): React.ReactElement {
     workspacePanelOpen: activeWorkspaceConfig.workspacePanelOpen,
     workspacePanelHiddenByFocus,
     focusViewActive: shouldHideWorkspacePanelForView(viewMode, shouldKeepSidebarOpen, terminalReadingMode),
-    maximizedSessionId: agentsMaximizedSessionId,
-    workspacePanelRevealedForSessionId,
     windowWidth,
     sidePanelWidth,
     narrowOverride,
   })
   const {
-    agentSessionMaximized,
     sidebarHidden,
     sidebarHiddenByWidth,
     tilesHidden,
@@ -552,7 +555,6 @@ function AppContent(): React.ReactElement {
     workspacePanelHiddenByWidth,
     narrowWindow,
     workspacePanelRevealedInFocus,
-    workspacePanelRevealedForMaximizedSession,
     workspacePanelRevealedInNarrowWindow,
   } = panelLayout
   useEffect(() => {
@@ -567,35 +569,15 @@ function AppContent(): React.ReactElement {
       return
     }
     setNarrowOverride((current) => current.sidebar ? { ...current, sidebar: false } : current)
-    if (agentSessionMaximized) {
-      setAgentsMaximizedSessionId(null)
-      setSidebarCollapsed(false)
-      return
-    }
     setSidebarCollapsed((collapsed) => !collapsed)
-  }, [agentSessionMaximized, sidebarHiddenByWidth])
-  const [pendingAgentSession, setPendingAgentSession] = useState<{ workspaceId: string; tileId: string; maximize: boolean } | null>(null)
+  }, [sidebarHiddenByWidth])
+  // A session tile shows up only after the session snapshot reaches the renderer, so it is revealed then.
+  const [pendingAgentSession, setPendingAgentSession] = useState<{ workspaceId: string; tileId: string; reveal: 'current-view' | 'focus' } | null>(null)
   const pendingAgentSessionSourceRef = useRef('')
   useEffect(() => {
     if (agentsView.sessionDialogOpen) setActivityOpen(false)
-    if (activityOpen || agentsView.isOpen || agentsView.sessionDialogOpen) setHomeOpen(false)
-  }, [activityOpen, agentsView.isOpen, agentsView.sessionDialogOpen])
-  useEffect(() => {
-    if (!pendingAgentSession) return
-    if (activeWorkspaceId === pendingAgentSession.workspaceId) {
-      if (agentsView.effectiveProvider) {
-        if (pendingAgentSession.maximize) setAgentsMaximizedSessionId(pendingAgentSession.tileId)
-        agentsView.openForSession(pendingAgentSession.tileId)
-      }
-      pendingAgentSessionSourceRef.current = ''
-      setPendingAgentSession(null)
-      return
-    }
-    if (activeWorkspaceId !== pendingAgentSessionSourceRef.current) {
-      pendingAgentSessionSourceRef.current = ''
-      setPendingAgentSession(null)
-    }
-  }, [activeWorkspaceId, agentsView.effectiveProvider, agentsView.openForSession, pendingAgentSession])
+    if (activityOpen || agentsView.sessionDialogOpen) setHomeOpen(false)
+  }, [activityOpen, agentsView.sessionDialogOpen])
   const sidebarBeforeActivityRef = useRef(false)
   const previousActivityOpenRef = useRef(false)
   const [workspaceEditor, setWorkspaceEditor] = useState<WorkspaceEditorState>(null)
@@ -624,13 +606,28 @@ function AppContent(): React.ReactElement {
   }, [activityOpen])
 
   const deleteTile = useCallback(async (tileId: string): Promise<boolean> => {
-    const isGridWorkspace = useCanvasStore.getState().activeWorkspaceConfig.type === 'grid'
+    const state = useCanvasStore.getState()
+    const tile = state.tiles.find((entry) => entry.id === tileId)
+    // Closing a temporary session ends its agent; the tile leaves once the session is gone.
+    if (tile && isAgentSessionTile(tile)) {
+      const session = agentSessionSnapshotRef.current.sessions.find((entry) => entry.tileId === tileId)
+      if (session) return closeAgentsSession(session)
+      state.removeTile(tileId)
+      return true
+    }
+    const isGridWorkspace = state.activeWorkspaceConfig.type === 'grid'
     const deleted = await deleteCanvasTile(tileId)
     if (!deleted || !isGridWorkspace) return deleted
 
     setTileRefreshKeys((current) => refreshGridTileContent(current, useCanvasStore.getState().tiles))
     return true
-  }, [deleteCanvasTile])
+  }, [closeAgentsSession, deleteCanvasTile])
+
+  useAgentSessionTiles({
+    workspaceId: activeWorkspaceId,
+    sessions: agentsView.sessions,
+    placeTile: getSpawnPosition,
+  })
 
   const closeActiveDialog = useCallback(() => {
     if (!activeDialog) return
@@ -686,23 +683,12 @@ function AppContent(): React.ReactElement {
     () => getAgentSessionTitles(agentsView.snapshot.sessions, activeWorkspaceId),
     [activeWorkspaceId, agentsView.snapshot.sessions],
   )
-  const agentsViewTitleSession = useMemo(() => {
-    if (activityOpen || !agentsView.isOpen) return undefined
-    const sessions = agentsView.sessions
-    const session = sessions.find((candidate) => candidate.tileId === agentsView.focusedSessionId)
-      ?? (sessions.length === 1 ? sessions[0] : undefined)
-    return session ? { tileId: session.tileId, title: getAgentSessionTitle(session) } : null
-  }, [activityOpen, agentsView.focusedSessionId, agentsView.isOpen, agentsView.sessions])
-
   const focusedAgentTileId = useMemo(() => {
     if (activityOpen) return null
-    if (agentsViewTitleSession !== undefined) return agentsViewTitleSession?.tileId ?? null
     return getVisibleActiveTileId({ tiles, viewMode, focusedTileId, fullviewActiveTileId, splitViewState })
-  }, [activityOpen, agentsViewTitleSession, focusedTileId, fullviewActiveTileId, splitViewState, tiles, viewMode])
+  }, [activityOpen, focusedTileId, fullviewActiveTileId, splitViewState, tiles, viewMode])
 
-  const windowTitleTileId = agentsViewTitleSession !== undefined
-    ? agentsViewTitleSession?.tileId ?? null
-    : getVisibleActiveTileId({ tiles, viewMode, focusedTileId, fullviewActiveTileId, splitViewState })
+  const windowTitleTileId = getVisibleActiveTileId({ tiles, viewMode, focusedTileId, fullviewActiveTileId, splitViewState })
   const windowTitleTerminalTitle = useCanvasStore((s) => (
     windowTitleTileId ? s.terminalTitles[windowTitleTileId] : undefined
   ))
@@ -722,8 +708,7 @@ function AppContent(): React.ReactElement {
     fullviewActiveTileId,
     splitViewState,
     agentTitles,
-    agentsViewSession: agentsViewTitleSession,
-  }), [activeWorkspaceName, agentTitles, agentsViewTitleSession, focusedTileId, fullviewActiveTileId, splitViewState, tiles, viewMode, windowTitleTerminalTitles])
+  }), [activeWorkspaceName, agentTitles, focusedTileId, fullviewActiveTileId, splitViewState, tiles, viewMode, windowTitleTerminalTitles])
 
   useEffect(() => {
     void window.electron.window.setTitle(windowTitle)
@@ -1157,7 +1142,10 @@ function AppContent(): React.ReactElement {
       autosaveTimerRef.current = null
     }
 
-    const sharedTiles = state.tiles.map((tile) => ({ ...tile }))
+    // Session tiles come back from the running sessions once the new type is active.
+    const sharedTiles = state.tiles
+      .filter((tile) => !isAgentSessionTile(tile))
+      .map((tile) => ({ ...tile }))
     await saveToDisk(workspaceId, currentType)
     const targetRawState = await window.electron.canvas.load(workspaceId, nextType)
     const updatedWorkspace = await window.electron.workspace.setType(workspaceId, nextType)
@@ -1263,8 +1251,6 @@ function AppContent(): React.ReactElement {
     setFullviewActiveTileId,
     setSplitViewState,
     activityOpen: activityOpen || homeOpen,
-    agentsViewOpen: agentsView.isOpen,
-    onCloseAgentsView: agentsView.close,
     onClosePicker: closePicker,
   })
 
@@ -1340,15 +1326,13 @@ function AppContent(): React.ReactElement {
       agentProviders: createDefaultAgentProvidersConfig(),
     })
     restoreState(createEmptyCanvasState())
-    agentsView.close()
     agentsView.closeSessionDialog()
     setActivityOpen(false)
     setShowProfilePicker(false)
     setShowNotePicker(false)
-    setAgentsMaximizedSessionId(null)
     setHomeOpen(true)
     return true
-  }, [agentsView.close, agentsView.closeSessionDialog, restoreState, saveToDisk, setWorkspace])
+  }, [agentsView.closeSessionDialog, restoreState, saveToDisk, setWorkspace])
 
   const deactivateWorkspace = useCallback(async (workspace: WorkspaceMetadata) => {
     if (pendingWorkspaceDeactivationIds.has(workspace.id)) return
@@ -1558,15 +1542,14 @@ function AppContent(): React.ReactElement {
   const toggleWorkspacePanel = useCallback(() => {
     if (!activeWorkspaceId || !hasWorkspacePanel) return
     // Hiding a temporarily revealed panel undoes the reveal and keeps the saved preference.
-    if (workspacePanelRevealedInFocus || workspacePanelRevealedForMaximizedSession || workspacePanelRevealedInNarrowWindow) {
+    if (workspacePanelRevealedInFocus || workspacePanelRevealedInNarrowWindow) {
       if (workspacePanelRevealedInFocus) setWorkspacePanelHiddenByFocus(true)
-      if (workspacePanelRevealedForMaximizedSession) setWorkspacePanelRevealedForSessionId(null)
       if (workspacePanelRevealedInNarrowWindow) setNarrowOverride((current) => ({ ...current, workspacePanel: false }))
       return
     }
     const revealWithNarrowOverride = !workspacePanelVisible
       && narrowWindow
-      && (mainView === 'workspace' || mainView === 'agents')
+      && mainView === 'workspace'
     const keepNarrowOverride = workspacePanelHiddenByWidth || revealWithNarrowOverride
     if (keepNarrowOverride) {
       setNarrowOverride((current) => current.workspacePanel ? current : { ...current, workspacePanel: true })
@@ -1574,7 +1557,6 @@ function AppContent(): React.ReactElement {
     // While suppressed, the button reveals the panel instead of flipping the saved preference.
     if (workspacePanelSuppressed) {
       setWorkspacePanelHiddenByFocus(false)
-      if (agentSessionMaximized) setWorkspacePanelRevealedForSessionId(agentsMaximizedSessionId)
       if (activeWorkspaceConfig.workspacePanelOpen) return
     }
     if (keepNarrowOverride && activeWorkspaceConfig.workspacePanelOpen) return
@@ -1588,7 +1570,7 @@ function AppContent(): React.ReactElement {
       if (!updatedWorkspace) return
       handleWorkspaceConfigUpdated(updatedWorkspace)
     })
-  }, [activeWorkspaceConfig.workspacePanelOpen, activeWorkspaceId, agentSessionMaximized, agentsMaximizedSessionId, handleWorkspaceConfigUpdated, hasWorkspacePanel, mainView, narrowWindow, workspacePanelHiddenByWidth, workspacePanelRevealedForMaximizedSession, workspacePanelRevealedInFocus, workspacePanelRevealedInNarrowWindow, workspacePanelSuppressed, workspacePanelVisible])
+  }, [activeWorkspaceConfig.workspacePanelOpen, activeWorkspaceId, handleWorkspaceConfigUpdated, hasWorkspacePanel, mainView, narrowWindow, workspacePanelHiddenByWidth, workspacePanelRevealedInFocus, workspacePanelRevealedInNarrowWindow, workspacePanelSuppressed, workspacePanelVisible])
 
   // Zoom toggle: switch between 100% and previous zoom
   const handleZoomToggle = useCallback(() => {
@@ -1915,41 +1897,53 @@ function AppContent(): React.ReactElement {
   }, [focusTileInFullview])
 
   const openActivityWorkspace = useCallback((workspace: WorkspaceMetadata) => {
-    agentsView.close()
     agentsView.closeSessionDialog()
     setActivityOpen(false)
     setHomeOpen(false)
     switchWorkspace(workspace)
-  }, [agentsView.close, agentsView.closeSessionDialog, switchWorkspace])
+  }, [agentsView.closeSessionDialog, switchWorkspace])
 
-  const openAgentsViewSession = useCallback((workspaceId: string, tileId: string, options?: { maximize?: boolean }) => {
-    const maximize = options?.maximize === true
+  // 'focus' opens the session tile in Focus like other agent tiles; 'current-view' shows it where the view put it.
+  const openAgentsViewSession = useCallback((workspaceId: string, tileId: string, reveal: 'current-view' | 'focus' = 'focus') => {
     setHomeOpen(false)
+    setActivityOpen(false)
     agentsView.closeSessionDialog()
-    if (workspaceId === activeWorkspaceId) {
-      // Another maximized session would hide the one being opened, so maximize it or return to all sessions.
-      setAgentsMaximizedSessionId((current) => maximize || current === tileId ? tileId : null)
-      agentsView.openForSession(tileId)
+    if (workspaceId !== activeWorkspaceId) {
+      const workspace = sidebarWorkspaces.find((entry) => entry.id === workspaceId)
+      if (!workspace) return
+      pendingAgentSessionSourceRef.current = activeWorkspaceId
+      switchWorkspace(workspace)
+    }
+    setPendingAgentSession({ workspaceId, tileId, reveal })
+  }, [activeWorkspaceId, agentsView.closeSessionDialog, sidebarWorkspaces, switchWorkspace])
+
+  const pendingAgentSessionTileReady = useCanvasStore((state) => (
+    pendingAgentSession !== null
+    && state.activeWorkspaceId === pendingAgentSession.workspaceId
+    && state.tiles.some((tile) => tile.id === pendingAgentSession.tileId)
+  ))
+  useEffect(() => {
+    if (!pendingAgentSession) return
+    if (pendingAgentSessionTileReady) {
+      if (pendingAgentSession.reveal === 'focus') focusAgentTile(pendingAgentSession.tileId)
+      else revealTile(pendingAgentSession.tileId)
+      pendingAgentSessionSourceRef.current = ''
+      setPendingAgentSession(null)
       return
     }
+    // Moving on to a third workspace before the tile appears cancels the reveal.
+    if (activeWorkspaceId !== pendingAgentSession.workspaceId && activeWorkspaceId !== pendingAgentSessionSourceRef.current) {
+      pendingAgentSessionSourceRef.current = ''
+      setPendingAgentSession(null)
+    }
+  }, [activeWorkspaceId, focusAgentTile, pendingAgentSession, pendingAgentSessionTileReady, revealTile])
 
-    const workspace = sidebarWorkspaces.find((entry) => entry.id === workspaceId)
-    if (!workspace) return
-
-    setAgentsMaximizedSessionId(null)
-    pendingAgentSessionSourceRef.current = activeWorkspaceId
-    setPendingAgentSession({ workspaceId, tileId, maximize })
-    setActivityOpen(false)
-    agentsView.close()
-    switchWorkspace(workspace)
-  }, [activeWorkspaceId, agentsView.close, agentsView.closeSessionDialog, agentsView.openForSession, sidebarWorkspaces, switchWorkspace])
-
+  // A new Ctrl+N session joins the current view: Focus shows it, Grid appends it, Split adds it to the active panel.
   const handleAgentSessionCreated = useCallback((result: AgentSessionCreateResult) => {
-    openAgentsViewSession(result.workspaceId, result.tileId)
+    openAgentsViewSession(result.workspaceId, result.tileId, 'current-view')
   }, [openAgentsViewSession])
 
   const goToWorkspaceTerminal = useCallback((workspace: WorkspaceMetadata, tileId: string | null) => {
-    agentsView.close()
     agentsView.closeSessionDialog()
     setActivityOpen(false)
     setHomeOpen(false)
@@ -1981,7 +1975,7 @@ function AppContent(): React.ReactElement {
         console.error('[App] Failed to navigate to workspace terminal:', error)
       }
     })()
-  }, [activateWorkspace, agentsView.close, agentsView.closeSessionDialog, focusTile, focusTileInFullview, recordWorkspaceSelection, selectTiles, setFullviewActiveTileId])
+  }, [activateWorkspace, agentsView.closeSessionDialog, focusTile, focusTileInFullview, recordWorkspaceSelection, selectTiles, setFullviewActiveTileId])
 
   useEffect(() => {
     return window.electron.agents.onAlert((event) => {
@@ -2034,7 +2028,7 @@ function AppContent(): React.ReactElement {
     return window.electron.notifications.onAgentAlertClicked(({ workspaceId, tileId, surface }) => {
       if (!workspaceId) return
       if (surface === 'agents-view') {
-        openAgentsViewSession(workspaceId, tileId, { maximize: true })
+        openAgentsViewSession(workspaceId, tileId)
         return
       }
       const workspace = workspaceMetadata.find((entry) => entry.id === workspaceId)
@@ -2272,14 +2266,12 @@ function AppContent(): React.ReactElement {
   }, [t])
 
   const openHome = useCallback(() => {
-    agentsView.close()
     agentsView.closeSessionDialog()
     setActivityOpen(false)
     setShowProfilePicker(false)
     setShowNotePicker(false)
-    setAgentsMaximizedSessionId(null)
     setHomeOpen(true)
-  }, [agentsView.close, agentsView.closeSessionDialog])
+  }, [agentsView.closeSessionDialog])
 
   useEffect(() => {
     const handleOpenHomeShortcut = (event: KeyboardEvent): void => {
@@ -2294,11 +2286,10 @@ function AppContent(): React.ReactElement {
   }, [openHome, openHomeShortcut])
 
   const selectWorkspaceFromHome = useCallback((workspace: WorkspaceMetadata) => {
-    agentsView.close()
     agentsView.closeSessionDialog()
     setActivityOpen(false)
     switchWorkspace(workspace)
-  }, [agentsView.close, agentsView.closeSessionDialog, switchWorkspace])
+  }, [agentsView.closeSessionDialog, switchWorkspace])
 
   const createTerminalFromSidebar = useCallback(() => {
     if (availableProfiles.length <= 1 && defaultProfile && !remoteTerminalConfigured) {
@@ -2389,6 +2380,60 @@ function AppContent(): React.ReactElement {
     setBoardState(await window.electron.board.rejectReviewTask(activeWorkspaceId, { taskId: task.id, note }))
   }, [activeWorkspaceId, requestPrompt, t])
 
+  const pinAgentsSession = useCallback(async (session: AgentActiveSession) => {
+    if (!defaultProfile) return
+    const confirmed = await requestConfirm({
+      title: t('agentsView.pinSessionTitle'),
+      message: t('agentsView.pinSessionMessage'),
+      confirmLabel: t('agentsView.pinSessionConfirm'),
+      cancelLabel: t('common.cancel'),
+    })
+    if (!confirmed) return
+    const sessionTile = useCanvasStore.getState().tiles.find((tile) => tile.id === session.tileId)
+    if (!sessionTile?.agent) return
+    // Turn the tile into a regular agent tile before the session snapshot drops it, so it keeps
+    // its place and its terminal stays attached to the running agent.
+    updateTile(session.tileId, {
+      shellProfileId: defaultProfile.id,
+      agent: { provider: session.provider, sessionId: session.sessionId },
+    })
+    try {
+      const result = await window.electron.agents.pinSession({ workspaceId: session.workspaceId, tileId: session.tileId })
+      const cwd = sanitizeAgentCwd(result.cwd)
+      updateTile(session.tileId, {
+        agent: {
+          provider: result.provider,
+          ...(result.sessionId ? { sessionId: result.sessionId } : {}),
+          ...(cwd ? { cwd } : {}),
+        },
+      })
+    } catch (error) {
+      updateTile(session.tileId, { shellProfileId: sessionTile.shellProfileId, agent: sessionTile.agent })
+      void requestConfirm({
+        title: t('agentsView.pinSessionErrorTitle'),
+        message: error instanceof Error ? error.message : String(error),
+        confirmLabel: t('common.close'),
+        hideCancel: true,
+      })
+    }
+  }, [defaultProfile, requestConfirm, t, updateTile])
+  const canPinAgentsSession = Boolean(tileCreationAvailability.agent && defaultProfile)
+  const pinSessionTileById = useCallback((tileId: string) => {
+    const session = agentsView.sessions.find((entry) => entry.tileId === tileId)
+    if (session) void pinAgentsSession(session)
+  }, [agentsView.sessions, pinAgentsSession])
+  const agentSessionTileActions = useMemo<AgentSessionTileActions>(() => ({
+    getPinState: (tileId) => {
+      const session = agentsView.sessions.find((entry) => entry.tileId === tileId)
+      if (!session || !canPinAgentsSession) return null
+      return {
+        disabled: session.status === 'exited' || Boolean(session.worktreeRoot),
+        title: session.worktreeRoot ? t('agentsView.pinSessionWorktreeDisabled') : t('agentsView.pinSession'),
+      }
+    },
+    pinSessionTile: pinSessionTileById,
+  }), [agentsView.sessions, canPinAgentsSession, pinSessionTileById, t])
+
   const activeTileMenu = tileMenu ? tiles.find((tile) => tile.id === tileMenu.tileId) ?? null : null
   const tileMenuItems: MenuItem[] = activeTileMenu
     ? buildTileConfigurationMenuItems({
@@ -2398,6 +2443,9 @@ function AppContent(): React.ReactElement {
         onRefresh: handleRefreshTile,
         onToggleNotificationsMuted: toggleTileNotificationsMuted,
         onToggleLock: (tile) => updateTile(tile.id, { locked: !tile.locked }),
+        onPinSession: agentSessionTileActions.getPinState(activeTileMenu.id)?.disabled === false
+          ? (tile) => pinSessionTileById(tile.id)
+          : undefined,
         onBeforeAction: () => setTileMenu(null),
         translate: (key) => t(key),
       })
@@ -2562,41 +2610,8 @@ function AppContent(): React.ReactElement {
           cwd: sanitizeAgentCwd(item.cwd) ?? '.',
         })
         if (!tileId) return
-        agentsView.close()
         setActivityOpen(false)
         focusAgentTile(tileId)
-      }
-    : undefined
-  const pinAgentsSession = tileCreationAvailability.agent && defaultProfile
-    ? async (session: AgentActiveSession) => {
-        const confirmed = await requestConfirm({
-          title: t('agentsView.pinSessionTitle'),
-          message: t('agentsView.pinSessionMessage'),
-          confirmLabel: t('agentsView.pinSessionConfirm'),
-          cancelLabel: t('common.cancel'),
-        })
-        if (!confirmed) return
-        try {
-          const result = await window.electron.agents.pinSession({ workspaceId: session.workspaceId, tileId: session.tileId })
-          // The tile reuses the session's tileId, so its terminal attaches to the running agent.
-          const cwd = sanitizeAgentCwd(result.cwd)
-          const tileId = addTerminal(defaultProfile.id, {
-            provider: result.provider,
-            ...(result.sessionId ? { sessionId: result.sessionId } : {}),
-            ...(cwd ? { cwd } : {}),
-          }, { id: session.tileId })
-          if (!tileId) return
-          agentsView.close()
-          setActivityOpen(false)
-          focusAgentTile(tileId)
-        } catch (error) {
-          void requestConfirm({
-            title: t('agentsView.pinSessionErrorTitle'),
-            message: error instanceof Error ? error.message : String(error),
-            confirmLabel: t('common.close'),
-            hideCancel: true,
-          })
-        }
       }
     : undefined
   const tileCreationSelectorProps: TileCreationSelectorProps = {
@@ -2673,7 +2688,6 @@ function AppContent(): React.ReactElement {
         onToggleSidebar={toggleSidebar}
         mainView={mainView}
         onToggleActivity={() => {
-          agentsView.close()
           agentsView.closeSessionDialog()
           setHomeOpen(false)
           setActivityOpen((value) => !value)
@@ -2681,16 +2695,15 @@ function AppContent(): React.ReactElement {
         agentsViewAvailable={Boolean(activeWorkspaceId && agentsView.effectiveProvider)}
         agentSessionCount={agentsView.sessions.length}
         agentAttentionCount={countAgentsViewAttention(agentsView.sessions)}
-        agentsSessionMaximized={agentSessionMaximized}
-        agentsHasSessions={agentsView.sessions.length > 0}
         readingMode={terminalReadingMode}
         onToggleAgentsView={() => {
-          setHomeOpen(false)
-          setActivityOpen(false)
-          agentsView.closeSessionDialog()
-          // The button selects the Agents view like the other view buttons and always shows every session.
-          setAgentsMaximizedSessionId(null)
-          if (!agentsView.isOpen) agentsView.toggle()
+          // Without sessions the button starts one; otherwise it moves to the next session that waits.
+          const nextSession = pickNextAgentSession(agentsView.sessions, focusedTileId)
+          if (!nextSession) {
+            agentsView.openNewSessionDialog()
+            return
+          }
+          openAgentsViewSession(nextSession.workspaceId, nextSession.tileId, 'current-view')
         }}
         agentProvider={activeWorkspaceConfig.agentProvider}
         agentUsage={agentUsage}
@@ -2711,32 +2724,9 @@ function AppContent(): React.ReactElement {
         }}
         onSetViewMode={(mode) => {
           const overlayOpen = mainView !== 'workspace'
-          // With sessions to arrange, Agents View keeps the Focus and Grid/Canvas buttons for itself.
-          const agentsAction = mainView === 'agents'
-            ? resolveAgentsViewSwitch({
-                workspaceType: activeWorkspaceType,
-                requestedMode: mode,
-                visibleSessionIds: agentsView.sessions.map((session) => session.tileId),
-                focusedSessionId: agentsView.focusedSessionId,
-                maximizedSessionId: agentsMaximizedSessionId,
-              })
-            : null
-          if (agentsAction) {
-            if (agentsAction.type === 'maximize') {
-              setAgentsMaximizedSessionId(agentsAction.sessionId)
-              agentsView.openForSession(agentsAction.sessionId)
-            } else if (agentsAction.type === 'show-all') {
-              setAgentsMaximizedSessionId(null)
-            } else if (agentsAction.type === 'toggle-reading-mode') {
-              setTerminalReadingMode(!terminalReadingMode)
-            }
-            return
-          }
-
-          agentsView.close()
           setHomeOpen(false)
           setActivityOpen(false)
-          // Leaving Agents, Activity or Home for the view underneath restores it as it was,
+          // Leaving Activity or Home for the view underneath restores it as it was,
           // instead of toggling it (split orientation, canvas/grid swap).
           if (overlayOpen && mode === viewMode) return
           // Pressing Focus again in the workspace switches the Focus variant, like Split flips its orientation.
@@ -2898,14 +2888,12 @@ function AppContent(): React.ReactElement {
                         active={workspace.id === activeWorkspaceId}
                         sessionActive={sessionActiveWorkspaceIds.has(workspace.id)}
                         onClick={() => {
-                          agentsView.close()
                           agentsView.closeSessionDialog()
                           setActivityOpen(false)
                           switchWorkspace(workspace)
                         }}
                         onConfigure={() => openWorkspaceEditor(workspace)}
                         onFocus={() => {
-                          agentsView.close()
                           agentsView.closeSessionDialog()
                           setActivityOpen(false)
                           recordWorkspaceSelection(workspace.id)
@@ -2929,6 +2917,7 @@ function AppContent(): React.ReactElement {
         value={agentTextSendContext}
         className="flex min-w-0 flex-1 flex-col"
       >
+        <AgentSessionTileContext.Provider value={agentSessionTileActions}>
         <UpdateBanner />
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -3058,27 +3047,6 @@ function AppContent(): React.ReactElement {
               />
             </Suspense>
           )}
-          {mainView === 'agents' && activeWorkspaceId && agentsView.effectiveProvider && (
-            <div className="flex min-h-0 min-w-0 flex-1">
-              <Suspense fallback={<div className="h-full w-full" />}>
-                <AgentsView
-                  workspaceId={activeWorkspaceId}
-                  workspaceConfig={activeWorkspaceConfig}
-                  sessions={agentsView.sessions}
-                  focusedSessionId={agentsView.focusedSessionId}
-                  onFocusSession={agentsView.openForSession}
-                  maximizedSessionId={agentsMaximizedSessionId}
-                  onMaximizedSessionChange={setAgentsMaximizedSessionId}
-                  onCloseSession={(session) => { void closeAgentsSession(session) }}
-                  onPinSession={pinAgentsSession ? (session) => { void pinAgentsSession(session) } : undefined}
-                  onNewSession={agentsView.openNewSessionDialog}
-                  shortcutLabel={newAgentSessionShortcut}
-                  onOpenBrowserTile={(url) => addBrowser(url)}
-                  onOpenFileTile={openFileTile}
-                />
-              </Suspense>
-            </div>
-          )}
           {mainView === 'home' && (
             <WorkspaceHome
               workspaces={sidebarWorkspaces}
@@ -3122,7 +3090,7 @@ function AppContent(): React.ReactElement {
                 agentProviders={activeWorkspaceConfig.agentProviders}
                 tiles={tiles}
                 onFocusTile={focusAgentTile}
-                onOpenAgentsSession={agentsView.openForSession}
+                onOpenAgentsSession={focusAgentTile}
                 requestConfirm={requestConfirm}
                 onResumeInTile={resumeHistoryInTile}
                 onOpenWorkspaceSettings={openActiveWorkspaceEditor}
@@ -3130,6 +3098,7 @@ function AppContent(): React.ReactElement {
             </div>
           )}
         </div>
+        </AgentSessionTileContext.Provider>
       </AgentTextSendContextProvider>
       </div>
 
@@ -3205,7 +3174,7 @@ function AppContent(): React.ReactElement {
             useZenStore.getState().dismissSummary()
             if (!alert.workspaceId) return
             if (alert.surface === 'agents-view') {
-              openAgentsViewSession(alert.workspaceId, alert.tileId, { maximize: true })
+              openAgentsViewSession(alert.workspaceId, alert.tileId)
               return
             }
             const workspace = workspaceMetadata.find((entry) => entry.id === alert.workspaceId)

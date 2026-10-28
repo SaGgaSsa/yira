@@ -31,12 +31,9 @@ interface TopBarProps {
   agentsViewAvailable: boolean
   agentSessionCount: number
   agentAttentionCount: number
-  /** An Agent Session fills Agents View. */
-  agentsSessionMaximized: boolean
-  /** Agents View has sessions, so the view buttons arrange them instead of leaving the view. */
-  agentsHasSessions: boolean
   /** Focus view limits terminals to the reading column. */
   readingMode: boolean
+  /** Shows the next temporary session that waits, or starts one when there are none. */
   onToggleAgentsView: () => void
   agentProvider?: AgentProvider
   agentUsage: AgentUsageSnapshot | null
@@ -117,8 +114,6 @@ export function TopBar({
   agentsViewAvailable,
   agentSessionCount,
   agentAttentionCount,
-  agentsSessionMaximized,
-  agentsHasSessions,
   readingMode,
   onToggleAgentsView,
   agentProvider,
@@ -139,13 +134,10 @@ export function TopBar({
   const SplitIcon = splitOrientation === 'horizontal' ? SquareSplitVertical : SquareSplitHorizontal
   const isGridWorkspace = workspaceType === 'grid'
   const activityOpen = mainView === 'activity'
-  const agentsViewOpen = mainView === 'agents'
   const homeOpen = mainView === 'home'
-  // With Agents, Activity or Home on top, no view button is selected and the tile controls are hidden.
+  // With Activity or Home on top, no view button is selected and the tile controls are hidden.
   const overlayOpen = mainView !== 'workspace'
-  // With sessions to arrange, Agents View answers the Focus and Grid/Canvas buttons itself.
-  const agentsViewArranging = agentsViewOpen && agentsHasSessions
-  const focusActive = agentsViewArranging ? agentsSessionMaximized : !overlayOpen && viewMode === 'fullview'
+  const focusActive = !overlayOpen && viewMode === 'fullview'
   const FocusIcon = readingMode ? RectangleVertical : Columns2
   const tileViewOpen = !overlayOpen && viewMode !== 'board'
 
@@ -196,7 +188,7 @@ export function TopBar({
             />
             {isGridWorkspace ? (
               <SegmentedButton
-                active={agentsViewArranging ? !agentsSessionMaximized : !overlayOpen && viewMode === 'gridview'}
+                active={!overlayOpen && viewMode === 'gridview'}
                 label={t('shortcuts.grid')}
                 title={viewMode === 'gridview' ? t('workspace.canvas') : t('shortcuts.grid')}
                 icon={Grid3x3}
@@ -204,7 +196,7 @@ export function TopBar({
               />
             ) : (
               <SegmentedButton
-                active={agentsViewArranging ? !agentsSessionMaximized : !overlayOpen && viewMode === 'canvas'}
+                active={!overlayOpen && viewMode === 'canvas'}
                 label={t('shortcuts.canvas')}
                 title={viewMode === 'canvas' ? t('shortcuts.grid') : t('shortcuts.canvas')}
                 icon={LayoutGrid}
@@ -222,17 +214,12 @@ export function TopBar({
             )}
             {agentsViewAvailable && (
               <button
-                className={`relative inline-flex h-7 items-center gap-1.5 rounded-md px-1.5 text-xs transition-colors ${
-                  agentsViewOpen
-                    ? 'bg-text-primary text-text-inverse'
-                    : 'text-text-secondary hover:bg-hover-bg hover:text-text-primary'
-                }`}
+                className="relative inline-flex h-7 items-center gap-1.5 rounded-md px-1.5 text-xs text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-primary"
                 onClick={onToggleAgentsView}
                 title={agentAttentionCount > 0
                   ? `${t('agentsView.openAgentsView', { count: agentSessionCount })} · ${t('agentsView.needsAttention', { count: agentAttentionCount })}`
                   : t('agentsView.openAgentsView', { count: agentSessionCount })}
                 aria-label={t('agentsView.openAgentsView', { count: agentSessionCount })}
-                aria-pressed={agentsViewOpen}
               >
                 <Bot size={14} aria-hidden="true" />
                 <span className="font-mono text-[10px]">{agentSessionCount}</span>

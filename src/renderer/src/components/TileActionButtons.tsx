@@ -1,8 +1,9 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { Maximize2, PanelBottomClose, PanelTopOpen, Settings, X } from 'lucide-react'
+import { Maximize2, PanelBottomClose, PanelTopOpen, Pin, Settings, X } from 'lucide-react'
+import type { AgentSessionTileButtonProps } from './AgentSessionTileContext'
 
-interface TileActionButtonsProps {
+interface TileActionButtonsProps extends AgentSessionTileButtonProps {
   onConfigure: (event: React.MouseEvent<HTMLButtonElement>) => void
   onFocus: () => void
   onClose: () => void
@@ -15,14 +16,17 @@ function TileActionButton({
   title,
   onClick,
   children,
+  disabled = false,
 }: {
   title: string
   onClick: (event: React.MouseEvent<HTMLButtonElement>) => void
   children: React.ReactNode
+  disabled?: boolean
 }): React.ReactElement {
   return (
     <button
-      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
+      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display disabled:cursor-not-allowed disabled:opacity-40"
+      disabled={disabled}
       onMouseDown={(event) => event.stopPropagation()}
       onClick={(event) => {
         event.stopPropagation()
@@ -42,18 +46,39 @@ export function TileActionButtons({
   onClose,
   onDetach,
   detached = false,
+  temporary = false,
+  onPin,
+  pinDisabled,
+  pinTitle,
   className = '',
 }: TileActionButtonsProps): React.ReactElement {
   const { t } = useTranslation()
   return (
     <div className={`flex shrink-0 items-center gap-1 ${className}`.trim()}>
+      {temporary && (
+        <span
+          className="nd-caption shrink-0 rounded-full border border-border-visible px-2 py-0.5 text-text-secondary"
+          title={t('agentsView.temporaryBadgeTitle')}
+        >
+          {t('agentsView.temporaryBadge')}
+        </span>
+      )}
+      {onPin && (
+        <TileActionButton
+          title={pinTitle ?? t('agentsView.pinSession')}
+          onClick={() => onPin()}
+          disabled={pinDisabled}
+        >
+          <Pin size={13} />
+        </TileActionButton>
+      )}
       <TileActionButton title={t('ui.configureTile')} onClick={onConfigure}>
         <Settings size={13} />
       </TileActionButton>
       <TileActionButton title={t('ui.focusTile')} onClick={() => onFocus()}>
         <Maximize2 size={13} />
       </TileActionButton>
-      {onDetach && (
+      {onDetach && !temporary && (
         <TileActionButton title={detached ? t('ui.attachTile') : t('ui.detachTile')} onClick={() => onDetach()}>
           {detached ? <PanelBottomClose size={13} /> : <PanelTopOpen size={13} />}
         </TileActionButton>
