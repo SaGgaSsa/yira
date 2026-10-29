@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
-  Check,
   ChevronDown,
   Cloud,
   Ellipsis,
@@ -16,33 +15,23 @@ import { useTranslation } from 'react-i18next'
 import { i18n } from '@/i18n'
 import { groupBranches, canCreateBranch } from '@/utils/sourceControlBranches'
 import { formatRelativeDate } from '@/utils/relativeDate'
-
-interface BranchPickerPosition {
-  top?: number
-  bottom?: number
-  left: number
-  width: number
-  maxHeight: number
-}
-
-const PICKER_WIDTH = 420
-const PICKER_MAX_HEIGHT = 480
-const PICKER_MIN_HEIGHT_BELOW = 240
+import {
+  popoverMenuItemClass,
+  popoverSurfaceClass,
+  SelectGroupLabel,
+  SelectMessage,
+  SelectOption,
+  SelectOptionList,
+  SelectPopover,
+  SelectSearchInput,
+  useAnchoredPopover,
+} from './SelectPopover'
 
 // Shows only the remote when a branch tracks the remote branch of the same name.
 function formatUpstream(branchName: string, upstream: string): string {
   const slash = upstream.indexOf('/')
   if (slash > 0 && upstream.slice(slash + 1) === branchName) return upstream.slice(0, slash)
   return upstream
-}
-
-function isWithin(target: Node | null, ancestor: Node | null): boolean {
-  let current = target
-  while (current) {
-    if (current === ancestor) return true
-    current = current.parentNode
-  }
-  return false
 }
 
 export interface SourceControlBranchPickerProps {
@@ -90,22 +79,16 @@ function BranchRow({
   const canRunActions = !isCurrent
 
   return (
-    <div
-      role="option"
-      aria-selected={branch.current}
-      aria-disabled={disabledRow}
-      className={`group flex items-center gap-2 px-3 py-2 text-xs ${disabledRow ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-hover-bg'} ${highlighted ? 'bg-hover-bg' : ''}`}
+    <SelectOption
+      highlighted={highlighted}
+      selected={branch.current}
+      disabled={disabledRow}
+      icon={branch.remote ? <Cloud size={14} /> : <GitBranchIcon size={14} />}
+      meta={branch.worktreePath ? t('sourceControl.worktreeInUse') : (branch.upstream ? formatUpstream(branch.name, branch.upstream) : formatRelativeDate(branch.committerDate, i18n.language))}
       title={branch.worktreePath ?? branch.upstream ?? branch.name}
-      onMouseEnter={() => { if (!disabledRow) onHover() }}
-      onClick={() => { if (!disabledRow) onSelect() }}
-    >
-      {branch.remote ? <Cloud size={13} className="shrink-0 text-text-secondary" /> : <GitBranchIcon size={13} className="shrink-0 text-text-secondary" />}
-      <span className="min-w-0 flex-1 truncate text-text-display">{branch.name}</span>
-      <span className="min-w-0 max-w-[40%] truncate text-[10px] text-text-disabled">
-        {branch.worktreePath ? t('sourceControl.worktreeInUse') : (branch.upstream ? formatUpstream(branch.name, branch.upstream) : formatRelativeDate(branch.committerDate, i18n.language))}
-      </span>
-      {branch.current && <Check size={13} className="shrink-0 text-text-display" />}
-      {canRunActions && (
+      onHover={onHover}
+      onSelect={onSelect}
+      trailing={canRunActions && (
         <div className="relative shrink-0" onClick={(event) => event.stopPropagation()}>
           <button
             type="button"
@@ -118,13 +101,13 @@ function BranchRow({
           {actionMenuOpen && (
             <div
               role="menu"
-              className="absolute right-0 top-full z-70 mt-1 min-w-[180px] rounded-sm border border-border bg-bg-primary shadow-xl"
+              className={`absolute right-0 top-full z-70 mt-1 min-w-[220px] py-1 ${popoverSurfaceClass}`}
             >
               {onMerge && (
                 <button
                   type="button"
                   role="menuitem"
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-text-display hover:bg-hover-bg"
+                  className={popoverMenuItemClass}
                   onClick={() => { onMerge(branch); setActionMenuOpen(false) }}
                 >
                   <GitMerge size={13} className="shrink-0" />
@@ -135,7 +118,7 @@ function BranchRow({
                 <button
                   type="button"
                   role="menuitem"
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-text-display hover:bg-hover-bg"
+                  className={popoverMenuItemClass}
                   onClick={() => { onRebase(branch); setActionMenuOpen(false) }}
                 >
                   <GitPullRequestArrow size={13} className="shrink-0" />
@@ -146,7 +129,9 @@ function BranchRow({
           )}
         </div>
       )}
-    </div>
+    >
+      {branch.name}
+    </SelectOption>
   )
 }
 
@@ -160,7 +145,7 @@ function BranchGroup({ title, branches, renderItem }: BranchGroupProps): React.R
   if (branches.length === 0) return null
   return (
     <>
-      <div className="px-3 py-1 text-[10px] uppercase tracking-wide text-text-disabled">{title}</div>
+      <SelectGroupLabel>{title}</SelectGroupLabel>
       {branches.map((branch) => renderItem(branch))}
     </>
   )
@@ -180,11 +165,8 @@ export function SourceControlBranchPicker({
   children,
 }: SourceControlBranchPickerProps): React.ReactElement {
   const { t } = useTranslation()
-  const triggerRef = useRef<HTMLButtonElement | null>(null)
-  const menuRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const [isOpen, setIsOpen] = useState(false)
-  const [position, setPosition] = useState<BranchPickerPosition | null>(null)
   const [loading, setLoading] = useState(false)
   const [branches, setBranches] = useState<GitBranch[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -209,41 +191,28 @@ export function SourceControlBranchPicker({
     }
   }, [repositoryPath, workspaceId])
 
-  const getPickerPosition = useCallback((): BranchPickerPosition | null => {
-    const trigger = triggerRef.current
-    if (!trigger) return null
-    const rect = trigger.getBoundingClientRect()
-    const viewportWidth = window.innerWidth || rect.right
-    const viewportHeight = window.innerHeight || rect.bottom + 320
-    const width = Math.min(PICKER_WIDTH, viewportWidth - 16)
-    // Keep the trigger's left edge when the menu fits, otherwise align to its right edge.
-    const preferredLeft = rect.left + width <= viewportWidth - 8 ? rect.left : rect.right - width
-    const left = Math.max(8, Math.min(preferredLeft, viewportWidth - width - 8))
-    const spaceBelow = viewportHeight - rect.bottom - 12
-    const spaceAbove = rect.top - 12
-    if (spaceBelow < PICKER_MIN_HEIGHT_BELOW && spaceAbove > spaceBelow) {
-      const maxHeight = Math.min(PICKER_MAX_HEIGHT, spaceAbove)
-      return { bottom: viewportHeight - rect.top + 4, left, width, maxHeight }
-    }
-    const maxHeight = Math.min(PICKER_MAX_HEIGHT, Math.max(120, spaceBelow))
-    return { top: rect.bottom + 4, left, width, maxHeight }
-  }, [])
-
-  const openMenu = useCallback(() => {
-    setQuery('')
-    setCreateMode(null)
-    setHighlightIndex(0)
-    loadBranches().catch(() => undefined)
-    setPosition(getPickerPosition())
-    setIsOpen(true)
-  }, [getPickerPosition, loadBranches])
-
   const closeMenu = useCallback(() => {
     setIsOpen(false)
     setCreateMode(null)
     setQuery('')
     triggerRef.current?.focus()
   }, [])
+
+  const { triggerRef, popoverRef, position, measure } = useAnchoredPopover({
+    isOpen,
+    onDismiss: closeMenu,
+    width: 420,
+    maxHeight: 480,
+  })
+
+  const openMenu = useCallback(() => {
+    setQuery('')
+    setCreateMode(null)
+    setHighlightIndex(0)
+    loadBranches().catch(() => undefined)
+    measure()
+    setIsOpen(true)
+  }, [loadBranches, measure])
 
   const handleSelect = useCallback((branch: GitBranch) => {
     if (branch.current) {
@@ -273,29 +242,7 @@ export function SourceControlBranchPicker({
   useLayoutEffect(() => {
     if (!isOpen) return
     inputRef.current?.focus()
-    const updatePosition = (): void => {
-      const next = getPickerPosition()
-      if (next) setPosition(next)
-    }
-    updatePosition()
-    window.addEventListener('resize', updatePosition)
-    window.addEventListener('scroll', updatePosition, true)
-    return () => {
-      window.removeEventListener('resize', updatePosition)
-      window.removeEventListener('scroll', updatePosition, true)
-    }
-  }, [getPickerPosition, isOpen])
-
-  useEffect(() => {
-    if (!isOpen) return
-    const handleOutsidePointerDown = (event: PointerEvent): void => {
-      const target = event.target as Node | null
-      if (isWithin(target, triggerRef.current) || isWithin(target, menuRef.current)) return
-      closeMenu()
-    }
-    document.addEventListener('pointerdown', handleOutsidePointerDown)
-    return () => document.removeEventListener('pointerdown', handleOutsidePointerDown)
-  }, [closeMenu, isOpen])
+  }, [isOpen])
 
   const groups = useMemo(() => groupBranches(branches, query), [branches, query])
   const showCreateQuick = canCreateBranch(branches, query) && !createMode
@@ -417,56 +364,50 @@ export function SourceControlBranchPicker({
         <ChevronDown size={12} className="shrink-0" />
       </button>
 
-      {isOpen && position && createPortal(
-        <div
-          ref={menuRef}
+      {isOpen && position && (
+        <SelectPopover
+          ref={popoverRef}
+          position={position}
           id={listboxId}
           role="listbox"
           aria-label={t('sourceControl.localBranches')}
-          className="fixed z-60 flex flex-col overflow-hidden rounded-md border border-border bg-bg-primary shadow-xl"
-          style={{ top: position.top, bottom: position.bottom, left: position.left, width: position.width, maxHeight: position.maxHeight }}
         >
-          <div className="shrink-0 border-b border-border p-2">
-            <input
-              ref={inputRef}
-              type="text"
-              value={query}
-              onChange={(event) => {
-                setQuery(event.target.value)
-                setHighlightIndex(0)
-              }}
-              onKeyDown={handleKeyDown}
-              placeholder={placeholder}
-              className="w-full rounded-sm border border-border-visible bg-bg-primary px-2 py-1 text-xs text-text-display outline-hidden placeholder:text-text-disabled"
-            />
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <SelectSearchInput
+            ref={inputRef}
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value)
+              setHighlightIndex(0)
+            }}
+            onKeyDown={handleKeyDown}
+            placeholder={placeholder}
+          />
+          <SelectOptionList>
             {loading ? (
-              <div className="flex items-center gap-2 px-3 py-2 text-xs text-text-disabled">
+              <SelectMessage>
                 <LoaderCircle size={13} className="animate-spin" /> {t('sourceControl.loading')}
-              </div>
+              </SelectMessage>
             ) : error ? (
-              <div className="px-3 py-2 text-xs text-red-300">{error}</div>
+              <SelectMessage>
+                <span className="text-danger">{error}</span>
+              </SelectMessage>
             ) : (
               <>
                 {showCreateQuick && (
-                  <div
-                    role="option"
-                    aria-selected={highlightIndex === createQuickIndex}
-                    className={`flex cursor-pointer items-center gap-2 px-3 py-2 text-xs text-text-display hover:bg-hover-bg ${highlightIndex === createQuickIndex ? 'bg-hover-bg' : ''}`}
-                    onMouseEnter={() => setHighlightIndex(createQuickIndex)}
-                    onClick={() => handleCreateQuick(query)}
+                  <SelectOption
+                    highlighted={highlightIndex === createQuickIndex}
+                    icon={<Plus size={14} />}
+                    onHover={() => setHighlightIndex(createQuickIndex)}
+                    onSelect={() => handleCreateQuick(query)}
                   >
-                    <Plus size={13} className="shrink-0" />
-                    <span className="truncate">{t('sourceControl.createBranch', { name: query.trim() })}</span>
-                  </div>
+                    {t('sourceControl.createBranch', { name: query.trim() })}
+                  </SelectOption>
                 )}
-                <div
-                  role="option"
-                  aria-selected={highlightIndex === createFromIndex}
-                  className={`flex cursor-pointer items-center gap-2 px-3 py-2 text-xs text-text-display hover:bg-hover-bg ${highlightIndex === createFromIndex ? 'bg-hover-bg' : ''}`}
-                  onMouseEnter={() => setHighlightIndex(createFromIndex)}
-                  onClick={() => {
+                <SelectOption
+                  highlighted={highlightIndex === createFromIndex}
+                  icon={<Plus size={14} />}
+                  onHover={() => setHighlightIndex(createFromIndex)}
+                  onSelect={() => {
                     const branchStart = highlightedBranchName
                       ?? branches.find((item) => item.current)?.name
                       ?? currentBranch
@@ -477,22 +418,20 @@ export function SourceControlBranchPicker({
                     inputRef.current?.focus()
                   }}
                 >
-                  <Plus size={13} className="shrink-0" />
-                  <span>{t('sourceControl.createBranchFrom')}</span>
-                </div>
+                  {t('sourceControl.createBranchFrom')}
+                </SelectOption>
 
                 <BranchGroup title={t('sourceControl.recentBranches')} branches={groups.recent} renderItem={renderBranchRow} />
                 <BranchGroup title={t('sourceControl.localBranches')} branches={groups.local} renderItem={renderBranchRow} />
                 <BranchGroup title={t('sourceControl.remoteBranches')} branches={groups.remote} renderItem={renderBranchRow} />
 
-                {!loading && !error && groups.recent.length === 0 && groups.local.length === 0 && groups.remote.length === 0 && (
-                  <div className="px-3 py-2 text-xs text-text-disabled">{t('sourceControl.noBranch')}</div>
+                {groups.recent.length === 0 && groups.local.length === 0 && groups.remote.length === 0 && (
+                  <SelectMessage>{t('sourceControl.noBranch')}</SelectMessage>
                 )}
               </>
             )}
-          </div>
-        </div>,
-        document.body,
+          </SelectOptionList>
+        </SelectPopover>
       )}
     </>
   )
