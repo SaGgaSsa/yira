@@ -33,6 +33,7 @@ import { buildSourceControlTree, type SourceControlTreeNode } from '@/utils/sour
 import { useTranslation } from 'react-i18next'
 import { i18n } from '@/i18n'
 import { SourceControlBranchPicker } from './SourceControlBranchPicker'
+import { popoverMenuItemClass, popoverSurfaceClass } from './SelectPopover'
 import { formatRelativeDate } from '@/utils/relativeDate'
 
 export type SourceControlAction =
@@ -545,12 +546,12 @@ function CommitButton({ commitMessage, canCommit, pendingAction, onAction }: {
       {menuOpen && (
         <div
           role="menu"
-          className="absolute right-0 top-full z-50 mt-1 min-w-[160px] rounded-sm border border-border bg-bg-primary shadow-xl"
+          className={`absolute right-0 top-full z-50 mt-1 min-w-[160px] py-1 ${popoverSurfaceClass}`}
         >
           <button
             type="button"
             role="menuitem"
-            className="flex w-full items-center px-3 py-1.5 text-left text-sm text-text-display hover:bg-hover-bg"
+            className={popoverMenuItemClass}
             onClick={() => choose('commit')}
           >
             {t('sourceControl.commit')}
@@ -558,7 +559,7 @@ function CommitButton({ commitMessage, canCommit, pendingAction, onAction }: {
           <button
             type="button"
             role="menuitem"
-            className="flex w-full items-center px-3 py-1.5 text-left text-sm text-text-display hover:bg-hover-bg"
+            className={popoverMenuItemClass}
             onClick={() => choose('commitPush')}
           >
             {t('sourceControl.commitAndPush')}
