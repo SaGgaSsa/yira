@@ -106,8 +106,8 @@ export function WorkspacePanel({
 
   return (
     <aside className="relative box-border flex min-h-0 shrink-0 flex-col border-l border-border bg-bg-secondary" style={{ width, minWidth: 300 }}>
-      <div className="absolute bottom-0 left-0 top-0 z-10 w-2 cursor-col-resize" onMouseDown={handleResizeStart}>
-        <div className="absolute bottom-8 left-0 top-8 w-px bg-border-visible" />
+      <div className="group absolute bottom-0 left-0 top-0 z-10 w-2 cursor-col-resize" onMouseDown={handleResizeStart}>
+        <div className={`absolute bottom-8 left-0 top-8 w-px bg-border-visible transition-opacity ${resizing ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} />
       </div>
       <div className="flex shrink-0 border-b border-border px-2">
         {([
