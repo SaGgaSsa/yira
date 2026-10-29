@@ -59,10 +59,10 @@ export function Sidebar({ collapsed, children, footer }: SidebarProps): React.Re
     >
       {!collapsed && (
         <div
-          className="absolute right-0 top-0 bottom-0 z-10 w-2 cursor-col-resize"
+          className="group absolute right-0 top-0 bottom-0 z-10 w-2 cursor-col-resize"
           onMouseDown={handleResizeStart}
         >
-          <div className="absolute right-0 top-8 bottom-8 w-px bg-border-visible" />
+          <div className={`absolute right-0 top-8 bottom-8 w-px bg-border-visible transition-opacity ${resizing ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} />
         </div>
       )}
 
