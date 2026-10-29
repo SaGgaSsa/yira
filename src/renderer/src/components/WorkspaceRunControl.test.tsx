@@ -213,22 +213,22 @@ test('without history every package script is principal except lifecycle and pub
   ])
 })
 
-test('with history used scripts go first by run count and the rest move to more scripts', () => {
+test('with history used scripts go first by last run and the rest move to more scripts', () => {
   assert.deepEqual(groupNames([
     packageScript('package:.:build', 'build'),
     usedScript('package:.:dev', 'dev', 3, 1),
     packageScript('package:.:lint', 'lint'),
     usedScript('package:.:test', 'test', 9, 5),
   ]), [
-    { label: 'yira', names: ['test', 'dev'], more: ['build', 'lint'] },
+    { label: 'yira', names: ['dev', 'test'], more: ['build', 'lint'] },
   ])
 })
 
-test('ties on run count are ordered by last run, then by original order', () => {
+test('ties on last run keep the original order', () => {
   assert.deepEqual(groupNames([
-    usedScript('package:.:a', 'a', 2, 10),
-    usedScript('package:.:b', 'b', 2, 2),
-    usedScript('package:.:c', 'c', 2, 2),
+    usedScript('package:.:a', 'a', 9, 10),
+    usedScript('package:.:b', 'b', 1, 2),
+    usedScript('package:.:c', 'c', 5, 2),
   ]), [
     { label: 'yira', names: ['b', 'c', 'a'], more: [] },
   ])
@@ -290,7 +290,7 @@ test('custom commands are always principal and keep their order', () => {
   assert.deepEqual(custom?.moreScripts, [])
 })
 
-test('the default script is the most used one when nothing is running', () => {
+test('the default script is the last used one when nothing is running', () => {
   const scripts = [
     packageScript('package:.:dev', 'dev'),
     usedScript('package:.:test', 'test', 2, 3),
@@ -298,7 +298,7 @@ test('the default script is the most used one when nothing is running', () => {
     usedScript('package:.:old', 'old', 99, 40),
   ]
 
-  assert.equal(getDefaultWorkspaceScriptId(scripts, [], NOW), 'package:.:build')
+  assert.equal(getDefaultWorkspaceScriptId(scripts, [], NOW), 'package:.:test')
   assert.equal(
     getDefaultWorkspaceScriptId(scripts, [scriptRun('package:.:dev', 'script-dev', 'running')], NOW),
     'package:.:dev',

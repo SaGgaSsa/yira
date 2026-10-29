@@ -78,27 +78,17 @@ function isPrincipalPackageScript(
   return !hasHistory
 }
 
-// Run count for ranking; scripts without recent usage count as 0.
-function recentScriptRunCount(script: WorkspaceScript, now: number): number {
-  if (!isScriptUsageRecent(script, now)) return 0
-  return script.usage?.runCount ?? 0
-}
-
 function scriptUsageLastRunAt(script: WorkspaceScript): number {
   if (!script.usage) return Number.NEGATIVE_INFINITY
   const lastRunAt = Date.parse(script.usage.lastRunAt)
   return Number.isNaN(lastRunAt) ? Number.NEGATIVE_INFINITY : lastRunAt
 }
 
-// Ranking shared by group ordering and default selection: run count desc, then last run desc, then original order.
+// Ranking shared by group ordering and default selection: last run desc, then original order.
 function compareScriptsByUsage(
   left: { script: WorkspaceScript, index: number },
   right: { script: WorkspaceScript, index: number },
-  now: number,
 ): number {
-  const leftRunCount = recentScriptRunCount(left.script, now)
-  const rightRunCount = recentScriptRunCount(right.script, now)
-  if (leftRunCount !== rightRunCount) return rightRunCount - leftRunCount
   const leftLastRunAt = scriptUsageLastRunAt(left.script)
   const rightLastRunAt = scriptUsageLastRunAt(right.script)
   if (leftLastRunAt !== rightLastRunAt) return rightLastRunAt - leftLastRunAt
@@ -140,7 +130,7 @@ export function groupWorkspaceScripts(
     const sortedScripts = hasHistory
       ? principals
           .map((script, index) => ({ script, index }))
-          .sort((left, right) => compareScriptsByUsage(left, right, now))
+          .sort(compareScriptsByUsage)
           .map((entry) => entry.script)
       : principals
 
@@ -168,11 +158,11 @@ export function getDefaultWorkspaceScriptId(
   const runningScript = runs.find((run) => run.state === 'running' && scriptIds.has(run.scriptId))
   if (runningScript) return runningScript.scriptId
 
-  const mostUsedScript = scripts
+  const lastUsedScript = scripts
     .map((script, index) => ({ script, index }))
     .filter((entry) => entry.script.source === 'package' && isScriptUsageRecent(entry.script, now))
-    .sort((left, right) => compareScriptsByUsage(left, right, now))[0]
-  return mostUsedScript?.script.id ?? scripts[0]?.id ?? null
+    .sort(compareScriptsByUsage)[0]
+  return lastUsedScript?.script.id ?? scripts[0]?.id ?? null
 }
 
 export function isSelectableWorkspaceScriptId(
