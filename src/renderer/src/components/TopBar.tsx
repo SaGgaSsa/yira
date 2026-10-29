@@ -134,9 +134,21 @@ export function TopBar({
   const focusActive = !overlayOpen && viewMode === 'fullview'
   const FocusIcon = readingMode ? RectangleVertical : Columns2
   const tileViewOpen = !overlayOpen && viewMode !== 'board'
+  const settingsButton = (
+    <button
+      className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
+      onClick={onOpenSettings}
+      title={t('common.settings')}
+      aria-label={t('common.settings')}
+    >
+      <Settings size={14} />
+    </button>
+  )
 
   return (
     <header className="window-titlebar nd-panel relative flex shrink-0 items-center border-x-0 border-t-0">
+      {/* Settings stay reachable before any workspace is open. */}
+      {!hasWorkspace && <div className="ml-auto flex items-center">{settingsButton}</div>}
       {hasWorkspace && (
         <>
           <div className="flex max-w-[calc(50%-16rem)] items-center gap-1 overflow-hidden">
@@ -266,14 +278,7 @@ export function TopBar({
               </button>
             )}
 
-            <button
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
-              onClick={onOpenSettings}
-              title={t('common.settings')}
-              aria-label={t('common.settings')}
-            >
-              <Settings size={14} />
-            </button>
+            {settingsButton}
           </div>
         </>
       )}
