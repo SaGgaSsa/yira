@@ -18,10 +18,22 @@ import { groupBranches, canCreateBranch } from '@/utils/sourceControlBranches'
 import { formatRelativeDate } from '@/utils/relativeDate'
 
 interface BranchPickerPosition {
-  top: number
+  top?: number
+  bottom?: number
   left: number
   width: number
   maxHeight: number
+}
+
+const PICKER_WIDTH = 420
+const PICKER_MAX_HEIGHT = 480
+const PICKER_MIN_HEIGHT_BELOW = 240
+
+// Shows only the remote when a branch tracks the remote branch of the same name.
+function formatUpstream(branchName: string, upstream: string): string {
+  const slash = upstream.indexOf('/')
+  if (slash > 0 && upstream.slice(slash + 1) === branchName) return upstream.slice(0, slash)
+  return upstream
 }
 
 function isWithin(target: Node | null, ancestor: Node | null): boolean {
@@ -83,14 +95,14 @@ function BranchRow({
       aria-selected={branch.current}
       aria-disabled={disabledRow}
       className={`group flex items-center gap-2 px-3 py-2 text-xs ${disabledRow ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-hover-bg'} ${highlighted ? 'bg-hover-bg' : ''}`}
-      title={branch.worktreePath ?? undefined}
+      title={branch.worktreePath ?? branch.upstream ?? branch.name}
       onMouseEnter={() => { if (!disabledRow) onHover() }}
       onClick={() => { if (!disabledRow) onSelect() }}
     >
       {branch.remote ? <Cloud size={13} className="shrink-0 text-text-secondary" /> : <GitBranchIcon size={13} className="shrink-0 text-text-secondary" />}
       <span className="min-w-0 flex-1 truncate text-text-display">{branch.name}</span>
-      <span className="shrink-0 text-[10px] text-text-disabled">
-        {branch.worktreePath ? t('sourceControl.worktreeInUse') : (branch.upstream ? branch.upstream : formatRelativeDate(branch.committerDate, i18n.language))}
+      <span className="min-w-0 max-w-[40%] truncate text-[10px] text-text-disabled">
+        {branch.worktreePath ? t('sourceControl.worktreeInUse') : (branch.upstream ? formatUpstream(branch.name, branch.upstream) : formatRelativeDate(branch.committerDate, i18n.language))}
       </span>
       {branch.current && <Check size={13} className="shrink-0 text-text-display" />}
       {canRunActions && (
@@ -203,9 +215,17 @@ export function SourceControlBranchPicker({
     const rect = trigger.getBoundingClientRect()
     const viewportWidth = window.innerWidth || rect.right
     const viewportHeight = window.innerHeight || rect.bottom + 320
-    const width = Math.min(320, Math.max(rect.width, 220))
-    const left = Math.max(8, Math.min(rect.left, viewportWidth - width - 8))
-    const maxHeight = Math.min(360, Math.max(120, viewportHeight - rect.bottom - 12))
+    const width = Math.min(PICKER_WIDTH, viewportWidth - 16)
+    // Keep the trigger's left edge when the menu fits, otherwise align to its right edge.
+    const preferredLeft = rect.left + width <= viewportWidth - 8 ? rect.left : rect.right - width
+    const left = Math.max(8, Math.min(preferredLeft, viewportWidth - width - 8))
+    const spaceBelow = viewportHeight - rect.bottom - 12
+    const spaceAbove = rect.top - 12
+    if (spaceBelow < PICKER_MIN_HEIGHT_BELOW && spaceAbove > spaceBelow) {
+      const maxHeight = Math.min(PICKER_MAX_HEIGHT, spaceAbove)
+      return { bottom: viewportHeight - rect.top + 4, left, width, maxHeight }
+    }
+    const maxHeight = Math.min(PICKER_MAX_HEIGHT, Math.max(120, spaceBelow))
     return { top: rect.bottom + 4, left, width, maxHeight }
   }, [])
 
@@ -403,10 +423,10 @@ export function SourceControlBranchPicker({
           id={listboxId}
           role="listbox"
           aria-label={t('sourceControl.localBranches')}
-          className="fixed z-60 overflow-hidden rounded-md border border-border bg-bg-primary shadow-xl"
-          style={{ top: position.top, left: position.left, width: position.width, maxHeight: position.maxHeight }}
+          className="fixed z-60 flex flex-col overflow-hidden rounded-md border border-border bg-bg-primary shadow-xl"
+          style={{ top: position.top, bottom: position.bottom, left: position.left, width: position.width, maxHeight: position.maxHeight }}
         >
-          <div className="border-b border-border p-2">
+          <div className="shrink-0 border-b border-border p-2">
             <input
               ref={inputRef}
               type="text"
@@ -420,7 +440,7 @@ export function SourceControlBranchPicker({
               className="w-full rounded-sm border border-border-visible bg-bg-primary px-2 py-1 text-xs text-text-display outline-hidden placeholder:text-text-disabled"
             />
           </div>
-          <div className="overflow-y-auto" style={{ maxHeight: position.maxHeight - 44 }}>
+          <div className="min-h-0 flex-1 overflow-y-auto">
             {loading ? (
               <div className="flex items-center gap-2 px-3 py-2 text-xs text-text-disabled">
                 <LoaderCircle size={13} className="animate-spin" /> {t('sourceControl.loading')}
