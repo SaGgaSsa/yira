@@ -6,6 +6,7 @@ import type { MainView } from '../utils/layoutState'
 import { AgentUsageIndicator } from './AgentUsageIndicator'
 import { WorkspaceRunControl } from './WorkspaceRunControl'
 import { TileLauncher, type TileLauncherProps } from './TileLauncher'
+import { WorkspaceSwitcher, type WorkspaceSwitcherProps } from './WorkspaceSwitcher'
 import { ZenTimerControl } from './ZenTimerControl'
 import { useSettingsStore } from '@/store/settingsStore'
 
@@ -36,6 +37,7 @@ interface TopBarProps {
   workspacePanelOpen: boolean
   onToggleWorkspacePanel: () => void
   tileLauncher: TileLauncherProps
+  workspaceSwitcher: WorkspaceSwitcherProps
   onSetViewMode: (mode: ViewMode) => void
   onFitToContent: () => void
   onZoomToggle: () => void
@@ -113,6 +115,7 @@ export function TopBar({
   workspacePanelOpen,
   onToggleWorkspacePanel,
   tileLauncher,
+  workspaceSwitcher,
   onSetViewMode,
   onFitToContent,
   onZoomToggle,
@@ -136,7 +139,7 @@ export function TopBar({
     <header className="window-titlebar nd-panel relative flex shrink-0 items-center border-x-0 border-t-0">
       {hasWorkspace && (
         <>
-          <div className="flex max-w-[calc(50%-6rem)] items-center gap-1 overflow-hidden">
+          <div className="flex max-w-[calc(50%-16rem)] items-center gap-1 overflow-hidden">
             <button
               className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-hover-bg hover:text-text-display"
               onClick={onToggleSidebar}
@@ -162,6 +165,10 @@ export function TopBar({
           </div>
 
           <div className="absolute left-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1 rounded-md border border-border-visible bg-bg-secondary px-0.5 top-1/2">
+            {/* Anchored before the switcher so the centered view buttons never move. */}
+            <div className="absolute right-full top-1/2 mr-1.5 -translate-y-1/2">
+              <WorkspaceSwitcher {...workspaceSwitcher} />
+            </div>
             <SegmentedButton
               active={focusActive}
               label={t('shortcuts.focus')}

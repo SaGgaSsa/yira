@@ -51,6 +51,12 @@ type TranslationResources = {
     home: string
     noActiveWorkspaces: string
   }
+  workspaceSwitcher: {
+    label: string
+    allWorkspaces: string
+    waitingElsewhere_one: string
+    waitingElsewhere_other: string
+  }
   workspaceHome: {
     title: string
     subtitle: string
@@ -1116,6 +1122,12 @@ const en: TranslationResources = {
     home: 'Home',
     noActiveWorkspaces: 'No active workspaces',
   },
+  workspaceSwitcher: {
+    label: 'Switch workspace',
+    allWorkspaces: 'All workspaces',
+    waitingElsewhere_one: '{{count}} agent waiting in another workspace',
+    waitingElsewhere_other: '{{count}} agents waiting in other workspaces',
+  },
   workspaceHome: {
     title: 'What are you working on?',
     subtitle: 'Pick up where you left off, or start a new workspace.',
@@ -2180,6 +2192,12 @@ const es: TranslationResources = {
     open: 'Abrir barra lateral',
     home: 'Inicio',
     noActiveWorkspaces: 'Ningún workspace activo',
+  },
+  workspaceSwitcher: {
+    label: 'Cambiar de workspace',
+    allWorkspaces: 'Todos los workspaces',
+    waitingElsewhere_one: '{{count}} agente esperando en otro workspace',
+    waitingElsewhere_other: '{{count}} agentes esperando en otros workspaces',
   },
   workspaceHome: {
     title: '¿Con qué vas a trabajar?',

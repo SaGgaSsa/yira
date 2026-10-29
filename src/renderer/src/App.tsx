@@ -3067,6 +3067,13 @@ function AppContent(): React.ReactElement {
           onCreateNote: () => revealCreatedTile(addNote('rich')),
           onCreateBrowser: () => revealCreatedTile(addBrowser()),
         }}
+        workspaceSwitcher={{
+          workspaces: activeSidebarWorkspaces,
+          activeWorkspaceId,
+          sessions: agentsView.snapshot.sessions,
+          onSelect: openActivityWorkspace,
+          onOpenHome: openHome,
+        }}
         onSetViewMode={selectViewMode}
         onFitToContent={() => getCanvasMethods()?.fitViewToContent()}
         onZoomToggle={handleZoomToggle}
