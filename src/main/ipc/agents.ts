@@ -23,6 +23,7 @@ import type {
   AgentDetectionSnapshot,
   WorkspaceConfig,
 } from '@shared/types'
+import { getAgentPromptIssue } from '@shared/agentPrompt'
 import type { AgentUsageService } from '../agentUsage'
 import type { AgentUsageDetailsService } from '../agentUsageDetails'
 import type { AgentUsageIndex } from '../agentUsageIndex'
@@ -283,8 +284,7 @@ function normalizeCreateInput(
 
   let prompt: string | undefined
   if (value.prompt !== undefined) {
-    if (typeof value.prompt !== 'string' || value.prompt.length > 20_000
-      || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/.test(value.prompt)) {
+    if (typeof value.prompt !== 'string' || getAgentPromptIssue(value.prompt) !== null) {
       throw new Error('Invalid agent prompt')
     }
     // A blank prompt starts the agent without an initial message.

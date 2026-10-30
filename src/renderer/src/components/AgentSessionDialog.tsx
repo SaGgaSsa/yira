@@ -8,6 +8,7 @@ import type {
   UserSettings,
   WorkspaceMetadata,
 } from '@shared/types'
+import { getAgentPromptIssue, MAX_AGENT_PROMPT_LENGTH } from '@shared/agentPrompt'
 import { WorkspacePickerMenu } from './WorkspacePickerMenu'
 import {
   insertPromptImageReferences,
@@ -164,6 +165,16 @@ export function AgentSessionDialog({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const isSavingImages = promptImages.some((image) => image.path === null)
   const selectedWorkspace = usableWorkspaces.find(({ workspace }) => workspace.id === selectedWorkspaceId)
+  // The prompt is sent trimmed, so it is validated the same way the main process will.
+  const promptIssue = getAgentPromptIssue(prompt.trim())
+  const promptIssueMessage = promptIssue === 'too-long'
+    ? t('agentsView.promptTooLong', {
+      length: prompt.trim().length.toLocaleString(),
+      max: MAX_AGENT_PROMPT_LENGTH.toLocaleString(),
+    })
+    : promptIssue === 'invalid-characters'
+      ? t('agentsView.promptInvalidCharacters')
+      : null
 
   const updatePromptImages = (update: (current: PromptImagePreview[]) => PromptImagePreview[]): void => {
     const nextImages = update(promptImagesRef.current)
@@ -249,6 +260,7 @@ export function AgentSessionDialog({
   const createSession = async (promptValue = prompt): Promise<void> => {
     const trimmedPrompt = promptValue.trim()
     if (!selectedWorkspace || !selectedProvider || isSubmitting || isSavingImages) return
+    if (getAgentPromptIssue(trimmedPrompt)) return
 
     setIsSubmitting(true)
     setError(null)
@@ -459,7 +471,9 @@ export function AgentSessionDialog({
               )}
               <textarea
                 ref={promptRef}
-                className="min-h-36 w-full flex-1 resize-none rounded-xl border border-border-visible bg-bg-primary px-4 py-3 text-base leading-6 text-text-primary outline-hidden focus:border-text-secondary"
+                className={`min-h-36 w-full flex-1 resize-none rounded-xl border bg-bg-primary px-4 py-3 text-base leading-6 text-text-primary outline-hidden ${
+                  promptIssueMessage ? 'border-danger' : 'border-border-visible focus:border-text-secondary'
+                }`}
                 value={prompt}
                 onChange={(event) => setPrompt(event.target.value)}
                 onPaste={handlePromptPaste}
@@ -477,8 +491,15 @@ export function AgentSessionDialog({
                 }}
                 placeholder={t('agentsView.promptPlaceholder')}
                 aria-label={t('agentsView.prompt')}
+                aria-invalid={promptIssueMessage ? true : undefined}
+                aria-describedby={promptIssueMessage ? 'agent-session-prompt-issue' : undefined}
                 disabled={isSubmitting}
               />
+              {promptIssueMessage && (
+                <p id="agent-session-prompt-issue" role="alert" className="shrink-0 text-sm text-danger">
+                  {promptIssueMessage}
+                </p>
+              )}
             </div>
 
             {usableWorkspaces.length === 0 ? (
@@ -571,7 +592,7 @@ export function AgentSessionDialog({
             <button
               type="submit"
               className="rounded-full border border-text-display px-4 py-2 text-sm text-text-display transition-colors hover:bg-bg-primary disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={!selectedWorkspace || !selectedProvider || isSubmitting || isSavingImages}
+              disabled={!selectedWorkspace || !selectedProvider || isSubmitting || isSavingImages || promptIssue !== null}
             >
               {isSubmitting ? t('agentsView.creatingSession') : t('agentsView.createSession')}
             </button>
