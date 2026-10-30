@@ -277,6 +277,8 @@ type TranslationResources = {
     promptImageAttachError: string
     promptImageLimit: string
     promptImageTooLarge: string
+    promptTooLong: string
+    promptInvalidCharacters: string
     worktree: string
     worktreeDescription: string
     createSession: string
@@ -1348,6 +1350,8 @@ const en: TranslationResources = {
     promptImageAttachError: 'Could not attach image.',
     promptImageLimit: 'You can attach up to 10 images.',
     promptImageTooLarge: 'Each image must be 10 MB or smaller.',
+    promptTooLong: 'The prompt has {{length}} characters. The limit is {{max}}.',
+    promptInvalidCharacters: 'The prompt contains control characters, such as color codes copied from a terminal. Remove them to start the session.',
     worktree: 'Worktree',
     worktreeDescription: 'Run in a git worktree',
     createSession: 'Create session',
@@ -2377,6 +2381,8 @@ const es: TranslationResources = {
     promptImageAttachError: 'No se pudo adjuntar la imagen.',
     promptImageLimit: 'Puedes adjuntar hasta 10 imágenes.',
     promptImageTooLarge: 'Cada imagen debe pesar 10 MB o menos.',
+    promptTooLong: 'El prompt tiene {{length}} caracteres. El límite es {{max}}.',
+    promptInvalidCharacters: 'El prompt tiene caracteres de control, como códigos de color copiados de una terminal. Quítalos para iniciar la sesión.',
     worktreeDescription: 'Ejecutar en un worktree de Git',
     createSession: 'Crear sesión',
     creatingSession: 'Creando sesión…',

@@ -182,6 +182,8 @@ const translationCopy: Record<string, string> = {
   'agentsView.promptImageAttachError': 'Could not attach image.',
   'agentsView.promptImageLimit': 'You can attach up to 10 images.',
   'agentsView.promptImageTooLarge': 'Each image must be 10 MB or smaller.',
+  'agentsView.promptTooLong': 'The prompt has {{length}} characters. The limit is {{max}}.',
+  'agentsView.promptInvalidCharacters': 'The prompt contains control characters.',
   'agentsView.worktree': 'Worktree',
   'agentsView.worktreeDescription': 'Run in a git worktree',
   'agentsView.createSession': 'Create session',
@@ -191,7 +193,10 @@ const translationCopy: Record<string, string> = {
 const reactI18nextPath = require.resolve('react-i18next')
 require.cache[reactI18nextPath] = {
   exports: {
-    useTranslation: () => ({ t: (key: string) => translationCopy[key] ?? key }),
+    useTranslation: () => ({
+      t: (key: string, values: Record<string, unknown> = {}) => (translationCopy[key] ?? key)
+        .replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String(values[name])),
+    }),
   },
   filename: reactI18nextPath,
   id: reactI18nextPath,
@@ -681,6 +686,47 @@ test('starts a session without a prompt when the prompt is empty', async () => {
       worktree: false,
     })
     assert.equal(createdCount, 1)
+  } finally {
+    root.unmount()
+  }
+})
+
+function findAlert(container: any): any {
+  const paragraphs = container.getElementsByTagName('p')
+  for (let index = 0; index < paragraphs.length; index += 1) {
+    if (paragraphs[index].getAttribute('role') === 'alert') return paragraphs[index]
+  }
+  return null
+}
+
+test('shows why a prompt is invalid and does not start the session', async () => {
+  const { container, root } = renderDialog({
+    workspaces: [workspace('workspace-a', { agentProvider: 'claude' })],
+  })
+
+  try {
+    await settle()
+    const prompt = findElement(container, 'textarea')
+    prompt.value = 'x'.repeat(20_001)
+    dispatch(prompt, 'input')
+    await settle()
+    assert.match(findAlert(container)?.textContent ?? '', /20[,.]?001 characters\. The limit is 20[,.]?000/)
+    assert.equal(prompt.getAttribute('aria-invalid'), 'true')
+    assert.equal(findCreateButton(container).hasAttribute('disabled'), true)
+
+    prompt.value = 'Fix \u001b[31mthis\u001b[0m'
+    dispatch(prompt, 'input')
+    await settle()
+    assert.match(findAlert(container)?.textContent ?? '', /control characters/)
+    dispatch(prompt, 'keydown', { key: 'Enter', shiftKey: false })
+    await settle()
+    assert.equal(payloads.length, 0)
+
+    prompt.value = 'Fix this'
+    dispatch(prompt, 'input')
+    await settle()
+    assert.equal(findAlert(container), null)
+    assert.equal(findCreateButton(container).hasAttribute('disabled'), false)
   } finally {
     root.unmount()
   }
