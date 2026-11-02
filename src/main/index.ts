@@ -25,6 +25,7 @@ import { clearWindowAttention, registerNotificationIPC } from './ipc/notificatio
 import { registerWindowIPC, type WindowClosePreparationBridge } from './ipc/window'
 import { registerFloatingTilesIPC } from './ipc/floatingTiles'
 import { registerAgentsIPC } from './ipc/agents'
+import { registerBotsIPC } from './ipc/bots'
 import { configureAgentHistoryIndex, flushAgentHistoryIndex } from './agents/historyIndex'
 import { registerScriptsIPC } from './ipc/scripts'
 import { AgentUsageService } from './agentUsage'
@@ -311,6 +312,7 @@ app.whenReady().then(async () => {
     enabledProviders: async () => getEnabledAgentProviders(),
     workspaces: getWorkspaceRootFolders,
   })
+  registerBotsIPC()
   registerCanvasIPC()
   registerModPanelsIPC(modPanelBridge)
   void modPanelBridge.start().catch((error) => {

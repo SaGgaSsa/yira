@@ -23,6 +23,8 @@ export interface TerminalDaemonAgent {
   worktreeRoot?: string
   worktreeBranch?: string
   worktrees?: Array<{ path: string; baseSha: string }>
+  /** Bot the session was launched with; the UI shows its icon. */
+  botId?: string
 }
 
 export interface TerminalDaemonAlert {

@@ -86,6 +86,8 @@ export interface AgentActiveSession {
   worktreeRoot?: string
   worktreeBranch?: string
   worktrees?: Array<{ path: string; baseSha: string }>
+  /** Bot the session was launched with; the UI shows its icon. */
+  botId?: string
 }
 
 export type ActiveAgentSession = AgentActiveSession
@@ -189,6 +191,8 @@ export interface AgentSessionCreateInput {
   resumeSessionId?: string
   resumeCwd?: string
   worktree?: boolean
+  /** Launch the session as this bot: its provider, model and role replace the defaults. */
+  botId?: string
   /** Images saved with `savePromptImage`; the prompt refers to each one as `[Image #number]`. */
   images?: AgentPromptImageAttachment[]
 }

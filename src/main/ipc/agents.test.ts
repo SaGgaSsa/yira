@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 import test from 'node:test'
 import type { AgentActiveSessionSnapshot, AgentSessionTranscriptResult, AgentUsageSnapshot } from '@shared/types'
+import type { BotDefinition } from '@shared/bots'
 import { AgentSessionRegistry } from '../agents/registry'
 import { createAgentWorkspaceWorktrees, resolveWorkspaceWorktreeRepositories } from '../agents/worktree'
 import { execGitCommand } from '../git/runner'
@@ -362,6 +363,100 @@ test('allows a valid enabled provider override for a new session', async () => {
   assert.match(result.tileId, /^agent-[0-9a-f-]+$/)
   assert.equal(result.provider, 'codex')
   assert.equal(launch?.provider, 'codex')
+})
+
+function fakeBot(overrides: Partial<BotDefinition> = {}): BotDefinition {
+  return {
+    id: 'bot-1234',
+    name: 'Reviewer',
+    icon: 'eye',
+    color: 'sky',
+    provider: 'codex',
+    model: 'gpt-5',
+    description: 'Reviews changes',
+    role: 'Review the diff',
+    workspaces: { mode: 'all' },
+    createdAt: '2026-11-01T00:00:00.000Z',
+    updatedAt: '2026-11-01T00:00:00.000Z',
+    ...overrides,
+  }
+}
+
+function registerBotSessionIPC(bot: BotDefinition | null, onLaunch: (spec: AgentsViewLaunchSpec) => void): FakeIpcMain {
+  const ipcMain = new FakeIpcMain()
+  const { registerAgentsIPC } = loadAgentsIPC(ipcMain)
+  registerAgentsIPC({
+    enabledProviders: async () => ['claude', 'codex'],
+    workspaceAgentConfig: async () => workspaceAgentConfig(),
+    getBot: async () => bot,
+    createSession: async (_target, spec) => onLaunch(spec),
+  })
+  return ipcMain
+}
+
+test('launches a bot session with the bot provider, role and name as title', async () => {
+  let launch: AgentsViewLaunchSpec | undefined
+  const ipcMain = registerBotSessionIPC(fakeBot(), (spec) => { launch = spec })
+
+  const result = await ipcMain.call('agents:sessions:create', new FakeWebContents(70), {
+    workspaceId: 'workspace-a',
+    provider: 'claude',
+    botId: 'bot-1234',
+  }) as { provider: string }
+
+  assert.equal(result.provider, 'codex')
+  assert.equal(launch?.provider, 'codex')
+  assert.deepEqual(launch?.bot, { id: 'bot-1234', role: 'Review the diff', model: 'gpt-5' })
+  assert.equal(launch?.title, 'Reviewer')
+})
+
+test('rejects a bot session for an unknown bot', async () => {
+  let launches = 0
+  const ipcMain = registerBotSessionIPC(null, () => { launches += 1 })
+
+  await assert.rejects(
+    () => ipcMain.call('agents:sessions:create', new FakeWebContents(71), {
+      workspaceId: 'workspace-a',
+      botId: 'bot-1234',
+    }) as Promise<unknown>,
+    /Bot not found/,
+  )
+  assert.equal(launches, 0)
+})
+
+test('rejects a bot session in a workspace the bot is not enabled for', async () => {
+  let launches = 0
+  const bot = fakeBot({ workspaces: { mode: 'selected', workspaceIds: ['otro'] } })
+  const ipcMain = registerBotSessionIPC(bot, () => { launches += 1 })
+
+  await assert.rejects(
+    () => ipcMain.call('agents:sessions:create', new FakeWebContents(72), {
+      workspaceId: 'workspace-a',
+      botId: 'bot-1234',
+    }) as Promise<unknown>,
+    /This bot is not enabled for this workspace/,
+  )
+  assert.equal(launches, 0)
+})
+
+test('rejects an invalid bot id and a bot session that resumes a conversation', async () => {
+  const ipcMain = registerBotSessionIPC(fakeBot(), () => undefined)
+
+  await assert.rejects(
+    () => ipcMain.call('agents:sessions:create', new FakeWebContents(73), {
+      workspaceId: 'workspace-a',
+      botId: 'not a bot',
+    }) as Promise<unknown>,
+    /Invalid bot id/,
+  )
+  await assert.rejects(
+    () => ipcMain.call('agents:sessions:create', new FakeWebContents(74), {
+      workspaceId: 'workspace-a',
+      botId: 'bot-1234',
+      resumeSessionId: 'agent-resume-1',
+    }) as Promise<unknown>,
+    /Bot sessions cannot resume a conversation yet/,
+  )
 })
 
 test('passes attached image paths in the initial prompt and uses an image title when needed', async (t) => {

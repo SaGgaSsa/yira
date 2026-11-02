@@ -4,6 +4,7 @@ import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { DOMImplementation } from '@xmldom/xmldom'
 import React from 'react'
+import type { BotDefinition } from '@shared/bots'
 import type {
   AgentProvider,
   AgentPromptImage,
@@ -176,6 +177,10 @@ const translationCopy: Record<string, string> = {
   'agentsView.noUsableWorkspace': 'No workspace has an enabled agent.',
   'agentsView.closeDialog': 'Close dialog',
   'agentsView.prompt': 'Prompt',
+  'agentsView.bot': 'Bot',
+  'agentsView.noBot': 'No bot',
+  'agentsView.providerSetByBot': 'set by the bot',
+  'agentsView.botPromptPlaceholder': 'Instruction for {{name}} (optional)',
   'agentsView.promptPlaceholder': 'Enter starts the session',
   'agentsView.removePromptImage': 'Remove image',
   'agentsView.promptImageAlt': 'Attached image',
@@ -275,6 +280,7 @@ interface DialogOptions {
   initialWorkspaceId?: string | null
   initialPrompt?: string
   agents?: UserSettings['agents']
+  bots?: BotDefinition[]
   capabilities?: (workspaceId: string) => Promise<AgentSessionCapabilities>
   focusRequestId?: number
 }
@@ -299,6 +305,7 @@ function renderDialog(options: DialogOptions = {}): {
     initialWorkspaceId: options.initialWorkspaceId ?? 'workspace-a',
     initialPrompt: options.initialPrompt,
     agents: options.agents ?? enabledAgents,
+    bots: options.bots,
     focusRequestId: options.focusRequestId ?? 1,
     onClose: () => { closeCount += 1 },
     onCreated: () => { createdCount += 1 },
@@ -363,6 +370,40 @@ function findRadio(container: any, label: string): any {
   const buttons = container.getElementsByTagName('button')
   for (let index = 0; index < buttons.length; index += 1) {
     if (buttons[index].getAttribute('role') === 'radio' && buttons[index].textContent === label) return buttons[index]
+  }
+  return null
+}
+
+function bot(id: string, options: Partial<BotDefinition> = {}): BotDefinition {
+  return {
+    id,
+    name: id,
+    icon: 'bug',
+    color: 'sky',
+    provider: 'codex',
+    model: '',
+    description: '',
+    role: 'Review carefully',
+    workspaces: { mode: 'all' },
+    createdAt: '2026-11-01T00:00:00.000Z',
+    updatedAt: '2026-11-01T00:00:00.000Z',
+    ...options,
+  }
+}
+
+function findBotGroup(container: any): any {
+  const divs = container.getElementsByTagName('div')
+  for (let index = 0; index < divs.length; index += 1) {
+    if (divs[index].getAttribute('aria-label') === 'Bot') return divs[index]
+  }
+  return null
+}
+
+function findBotRadio(container: any, label: string): any {
+  const buttons = findBotGroup(container)?.getElementsByTagName('button')
+  if (!buttons) return null
+  for (let index = 0; index < buttons.length; index += 1) {
+    if (buttons[index].textContent === label) return buttons[index]
   }
   return null
 }
@@ -900,6 +941,64 @@ test('a repeated open request keeps the prompt and only re-focuses it', async ()
     render(2)
     await settle()
     assert.equal(findElement(container, 'textarea').value, 'Keep this prompt')
+  } finally {
+    root.unmount()
+  }
+})
+
+test('starts a session with the chosen bot and its provider', async () => {
+  const { container, root } = renderDialog({
+    bots: [bot('reviewer', { name: 'Reviewer', description: 'Reviews diffs', provider: 'codex' })],
+  })
+
+  try {
+    await settle()
+    const prompt = findElement(container, 'textarea')
+    assert.equal(findBotRadio(container, 'No bot')?.getAttribute('aria-checked'), 'true')
+    assert.equal(prompt.getAttribute('placeholder'), 'Enter starts the session')
+    dispatch(findBotRadio(container, 'Reviewer'), 'click')
+    await settle()
+
+    assert.equal(findBotRadio(container, 'Reviewer')?.getAttribute('aria-checked'), 'true')
+    assert.equal(findRadio(container, 'Claude'), null)
+    assert.equal(container.textContent.includes('set by the bot'), true)
+    assert.equal(container.textContent.includes('Reviews diffs'), true)
+    assert.equal(prompt.getAttribute('placeholder'), 'Instruction for Reviewer (optional)')
+
+    dispatch(findElement(container, 'form'), 'submit')
+    await settle()
+    assert.deepEqual(payloads[0], {
+      workspaceId: 'workspace-a',
+      provider: 'codex',
+      botId: 'reviewer',
+      worktree: false,
+    })
+  } finally {
+    root.unmount()
+  }
+})
+
+test('does not offer bots restricted to other workspaces', async () => {
+  const { container, root } = renderDialog({
+    bots: [bot('elsewhere', { name: 'Elsewhere', workspaces: { mode: 'selected', workspaceIds: ['otro'] } })],
+  })
+
+  try {
+    await settle()
+    assert.equal(findBotGroup(container), null)
+    assert.equal(container.textContent.includes('Elsewhere'), false)
+  } finally {
+    root.unmount()
+  }
+})
+
+test('does not show the bot row when there are no bots', async () => {
+  const { container, root } = renderDialog()
+
+  try {
+    await settle()
+    assert.equal(findBotGroup(container), null)
+    assert.equal(container.textContent.includes('No bot'), false)
   } finally {
     root.unmount()
   }

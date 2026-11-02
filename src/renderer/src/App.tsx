@@ -28,6 +28,7 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useAgentsView } from './hooks/useAgentsView'
 import { useAgentSessionSnapshot } from './hooks/useAgentSessionSnapshot'
 import { useAgentSessionTiles } from './hooks/useAgentSessionTiles'
+import { useBots } from '@/hooks/useBots'
 import { useTheme } from './hooks/useTheme'
 import { useFontSize } from './hooks/useFontSize'
 import { useSidePanelWidth } from './hooks/useSidePanelWidth'
@@ -532,6 +533,7 @@ function AppContent(): React.ReactElement {
   const [activityOpen, setActivityOpen] = useState(false)
   const hasOpenedCommandPalette = useHasBeenOpen(agentsView.commandPaletteStep === 'palette')
   const hasOpenedAgentSessionDialog = useHasBeenOpen(agentsView.commandPaletteStep === 'new-session')
+  const { bots } = useBots()
   const [paletteScripts, setPaletteScripts] = useState<WorkspaceScript[]>([])
   const [homeOpen, setHomeOpen] = useState(true)
   const [expandedActiveWorkspaceIds, setExpandedActiveWorkspaceIds] = useState<Set<string>>(new Set())
@@ -3486,6 +3488,7 @@ function AppContent(): React.ReactElement {
             initialWorkspaceId={agentsView.sessionDialogInitialWorkspaceId}
             initialPrompt={agentsView.sessionDialogInitialPrompt}
             agents={agentSettings}
+            bots={bots}
             focusRequestId={agentsView.sessionDialogFocusRequestId}
             onClose={agentsView.closeSessionDialog}
             onCreated={handleAgentSessionCreated}

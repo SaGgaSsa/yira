@@ -84,6 +84,7 @@ import type {
 import type { TerminalProcessActivitySnapshot } from '@shared/terminalProcessActivity'
 import type { TerminalSessionIdentity, TerminalSessionTarget } from '@shared/terminalSessionIdentity'
 import type { ModPanel, ModPanelChange, ModPanelPress } from '@shared/modPanels'
+import type { BotDefinition, BotDefinitionInput } from '@shared/bots'
 
 type NoteData = {
   title?: string
@@ -133,6 +134,12 @@ interface ElectronWorld {
     history: (query?: AgentSessionHistoryQuery) => Promise<AgentSessionHistoryResult>
     queryHistory: (query?: AgentSessionHistoryQuery) => Promise<AgentSessionHistoryResult>
     historyTranscript: (query: AgentSessionTranscriptQuery) => Promise<AgentSessionTranscriptResult>
+  }
+  bots: {
+    list: () => Promise<BotDefinition[]>
+    save: (input: BotDefinitionInput) => Promise<BotDefinition>
+    delete: (id: string) => Promise<boolean>
+    onChanged: (callback: (bots: BotDefinition[]) => void) => () => void
   }
   scripts: {
     snapshot: (workspaceId: string) => Promise<WorkspaceScriptsSnapshot>

@@ -39,6 +39,8 @@ import { normalizeAgentOpaqueId } from '../agents/query'
 import { buildAgentTerminalLaunch, type AgentTerminalLaunch } from '../agents/terminal'
 import { agentSessionExists, buildAgentCommand, normalizeResumeId } from '../agents/providers'
 import { ensureAgentShellStartupFiles } from '../agents/shellStartup'
+import { buildBotLaunchArgs } from '../agents/botLaunch'
+import { writeBotRoleFile } from './bots'
 import {
   buildAgentShellCommand,
   buildWorkspaceScriptShellCommand,
@@ -198,6 +200,7 @@ export interface AgentsViewLaunchSpec {
     branch: string
     worktrees: Array<{ path: string; baseSha: string }>
   }
+  bot?: { id: string; role: string; model: string }
 }
 
 let terminalProcessActivityMonitor: TerminalProcessActivityMonitor | null = null
@@ -470,6 +473,15 @@ export async function destroyWorkspaceScriptSession(target: TerminalSessionTarge
   publishWorkspaceScriptSessionDestroyed(runtimeTarget)
 }
 
+/** Claude reads the role from a file; Codex gets it inline, so only Claude needs the file written. */
+async function buildBotArgs(
+  provider: AgentProvider,
+  bot: NonNullable<AgentsViewLaunchSpec['bot']>,
+): Promise<string[]> {
+  const roleFilePath = provider === 'claude' && bot.role.trim() ? await writeBotRoleFile(bot) : undefined
+  return buildBotLaunchArgs({ provider, model: bot.model, role: bot.role, roleFilePath })
+}
+
 export async function createAgentsViewSession(
   target: TerminalSessionTarget,
   spec: AgentsViewLaunchSpec,
@@ -502,6 +514,7 @@ export async function createAgentsViewSession(
     // it later, the same mechanism buildFixedProviderCommand uses for tiles.
     const presetSessionId = spec.provider === 'claude' && !resumeSessionId ? randomUUID() : undefined
     if (presetSessionId) args.push('--session-id', presetSessionId)
+    if (spec.bot) args.push(...await buildBotArgs(spec.provider, spec.bot))
 
     const launch = buildAgentShellCommand({
       shellProfileId: shellProfile.id,
@@ -526,6 +539,7 @@ export async function createAgentsViewSession(
         worktreeBranch: spec.worktree.branch,
         worktrees: spec.worktree.worktrees.map(({ path, baseSha }) => ({ path, baseSha })),
       } : {}),
+      ...(spec.bot ? { botId: spec.bot.id } : {}),
     }
 
     return {

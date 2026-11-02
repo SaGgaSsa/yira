@@ -1,10 +1,12 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AgentActiveSession, WorkspaceMetadata } from '@shared/types'
+import { useBots } from '@/hooks/useBots'
 import { useNow } from '@/hooks/useNow'
 import { formatActivityElapsed } from '@/utils/activityPalette'
 import { getAgentSessionTitle } from '@/utils/terminalDisplayTitle'
 import { keepAgentSessionOrder } from '@/utils/workspaceSidebarSections'
+import { BotAvatar } from './botVisuals'
 
 const ELAPSED_REFRESH_MS = 30_000
 
@@ -41,6 +43,8 @@ export function WorkspaceAgentTree({
 }: WorkspaceAgentTreeProps): React.ReactElement | null {
   const { t } = useTranslation()
   const now = useNow(ELAPSED_REFRESH_MS)
+  const { bots } = useBots()
+  const botsById = useMemo(() => new Map(bots.map((bot) => [bot.id, bot])), [bots])
   // While the pointer or focus is on the list, rows keep their place so a click lands where the user aimed.
   const [hovered, setHovered] = useState(false)
   const [focusedWithin, setFocusedWithin] = useState(false)
@@ -65,6 +69,8 @@ export function WorkspaceAgentTree({
         const providerName = t(session.provider === 'claude' ? 'agentsView.claude' : 'agentsView.codex')
         const sessionName = getAgentSessionTitle(session) || providerName
         const statusLabel = getStatusLabel(session.status, t)
+        const bot = session.botId ? botsById.get(session.botId) : undefined
+        const rowName = bot ? `${bot.name} · ${sessionName}` : sessionName
         const focused = focusedTileId !== null && session.tileId === focusedTileId
         const waiting = session.status === 'needs-input'
         const done = session.status === 'done'
@@ -77,13 +83,14 @@ export function WorkspaceAgentTree({
             key={session.sessionId}
             type="button"
             data-workspace-agent-session={session.sessionId}
-            aria-label={`${sessionName}, ${statusLabel}`}
+            aria-label={`${rowName}, ${statusLabel}`}
             aria-current={focused ? 'true' : undefined}
-            title={`${sessionName} · ${statusLabel}`}
+            title={`${rowName} · ${statusLabel}`}
             onClick={() => onOpenAgent(workspace, session)}
             className={`relative flex h-[26px] min-w-0 items-center gap-2 pl-9 pr-3 text-left transition-colors ${focused ? 'bg-active-bg before:absolute before:inset-y-[5px] before:left-0 before:w-0.5 before:rounded-full before:bg-text-display' : 'hover:bg-hover-bg'} focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--interactive)`}
           >
             <StatusDot status={session.status} />
+            {bot && <BotAvatar icon={bot.icon} color={bot.color} size={14} />}
             <span className={`min-w-0 flex-1 truncate text-sm ${nameClass}`}>{sessionName}</span>
             {waiting && (
               <span className="shrink-0 font-mono text-[10px] text-warning">

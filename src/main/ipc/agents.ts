@@ -24,6 +24,7 @@ import type {
   WorkspaceConfig,
 } from '@shared/types'
 import { getAgentPromptIssue } from '@shared/agentPrompt'
+import { isBotAvailableInWorkspace, isValidBotId, type BotDefinition } from '@shared/bots'
 import type { AgentUsageService } from '../agentUsage'
 import type { AgentUsageDetailsService } from '../agentUsageDetails'
 import type { AgentUsageIndex } from '../agentUsageIndex'
@@ -62,6 +63,7 @@ import {
 } from '../agents/query'
 import { YIRA_HOME } from '../paths'
 import { getWorkspaceAgentConfigById, getWorkspaceRootFolderById } from './workspace'
+import { getBotById } from './bots'
 import type { AgentsViewLaunchSpec } from './terminal'
 import type { TerminalSessionTarget } from '@shared/terminalSessionIdentity'
 
@@ -100,6 +102,7 @@ export interface AgentIPCOptions {
   moveSessionToTile?: (target: TerminalSessionTarget) => Promise<void>
   workspaceAgentConfig?: (workspaceId: string) => Promise<Pick<WorkspaceConfig, 'rootFolderPath' | 'sourceControlRepositoryPaths' | 'agentProvider' | 'agentProviders'> | null>
   worktrees?: AgentIPCWorktrees
+  getBot?: (id: string) => Promise<BotDefinition | null>
 }
 
 export interface AgentIPCWorktrees {
@@ -116,6 +119,7 @@ interface NormalizedAgentSessionCreateInput {
   images: AgentPromptImageAttachment[]
   worktree: boolean
   provider?: AgentProvider
+  botId?: string
 }
 
 const defaultWorktrees: AgentIPCWorktrees = {
@@ -304,12 +308,20 @@ function normalizeCreateInput(
     throw new Error('Invalid agent provider')
   }
 
+  let botId: string | undefined
+  if (value.botId !== undefined) {
+    if (!isValidBotId(value.botId)) throw new Error('Invalid bot id')
+    if (resumeSessionId) throw new Error('Bot sessions cannot resume a conversation yet')
+    botId = value.botId
+  }
+
   const images = resumeSessionId
     ? []
     : normalizeAgentPromptImages(promptImageDirectory, value.images)
 
   return {
     workspaceId,
+    ...(botId !== undefined ? { botId } : {}),
     ...(prompt !== undefined ? { prompt } : {}),
     ...(resumeSessionId ? { resumeSessionId } : {}),
     ...(resumeCwd !== undefined ? { resumeCwd } : {}),
@@ -340,6 +352,19 @@ function sessionTitle(prompt: string | undefined, resumeSessionId: string | unde
     return `Resume ${shortId}`
   }
   return (prompt ?? '').split(/\r\n|\n|\r/, 1)[0].trim().slice(0, 80)
+}
+
+async function resolveBot(
+  getBot: (id: string) => Promise<BotDefinition | null>,
+  botId: string,
+  workspaceId: string,
+): Promise<BotDefinition> {
+  const bot = await getBot(botId)
+  if (!bot) throw new Error('Bot not found')
+  if (!isBotAvailableInWorkspace(bot, workspaceId)) {
+    throw new Error('This bot is not enabled for this workspace')
+  }
+  return bot
 }
 
 async function launchAgentSession(
@@ -426,6 +451,7 @@ export function registerAgentsIPC(options: AgentIPCOptions = {}): void {
 
   const workspaceAgentConfig = options.workspaceAgentConfig ?? getWorkspaceAgentConfigById
   const worktrees = options.worktrees ?? defaultWorktrees
+  const getBot = options.getBot ?? getBotById
 
   ipcMain.handle('agents:sessions:capabilities', async (_event, workspaceId: unknown): Promise<AgentSessionCapabilities> => {
     const normalizedWorkspaceId = normalizeAgentOpaqueId(workspaceId)
@@ -468,15 +494,18 @@ export function registerAgentsIPC(options: AgentIPCOptions = {}): void {
     const enabled = await enabledProviders(options)
     if (!config) throw new Error('This workspace has no enabled agent')
 
+    const bot = input.botId ? await resolveBot(getBot, input.botId, input.workspaceId) : undefined
+    const requestedProvider = bot?.provider ?? input.provider
+
     let provider: AgentProvider | null
-    if (input.provider) {
-      if (!enabled.includes(input.provider)) {
-        throw new Error(`Agent provider "${input.provider}" is disabled in user settings`)
+    if (requestedProvider) {
+      if (!enabled.includes(requestedProvider)) {
+        throw new Error(`Agent provider "${requestedProvider}" is disabled in user settings`)
       }
-      if (config.agentProviders[input.provider]?.enabled !== true) {
-        throw new Error(`Agent provider "${input.provider}" is disabled for this workspace`)
+      if (config.agentProviders[requestedProvider]?.enabled !== true) {
+        throw new Error(`Agent provider "${requestedProvider}" is disabled for this workspace`)
       }
-      provider = input.provider
+      provider = requestedProvider
     } else {
       provider = effectiveWorkspaceProvider(config, enabled)
     }
@@ -491,7 +520,7 @@ export function registerAgentsIPC(options: AgentIPCOptions = {}): void {
     const tileId = `agent-${randomUUID()}`
     const title = input.images.length > 0 && input.prompt === undefined
       ? 'Image prompt'
-      : sessionTitle(input.prompt, input.resumeSessionId)
+      : bot && input.prompt === undefined ? bot.name : sessionTitle(input.prompt, input.resumeSessionId)
     const prompt = appendAgentPromptImages(input.prompt, input.images)
     let worktree: AgentWorkspaceWorktree | undefined
 
@@ -532,6 +561,7 @@ export function registerAgentsIPC(options: AgentIPCOptions = {}): void {
           worktrees: worktree.worktrees.map(({ path, baseSha }) => ({ path, baseSha })),
         },
       } : {}),
+      ...(bot ? { bot: { id: bot.id, role: bot.role, model: bot.model } } : {}),
     }
 
     try {
