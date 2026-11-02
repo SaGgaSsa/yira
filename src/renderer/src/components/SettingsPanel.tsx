@@ -718,7 +718,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
 
     if (activeSection === 'canvas') {
       return (
-        <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
+        <section>
           <div className="mb-5 flex items-center gap-3">
             <ActiveSectionIcon size={16} className="text-text-secondary" />
             <div>
@@ -756,7 +756,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
     if (activeSection === 'bots') {
       const enabledProviders = (['claude', 'codex'] as const).filter((provider) => draft.agents[provider].enabled === true)
       return (
-        <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
+        <section>
           <div className="mb-5 flex items-center gap-3">
             <BotMessageSquare size={16} className="text-text-secondary" />
             <div>
@@ -771,7 +771,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
 
     if (activeSection === 'agents') {
       return (
-        <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
+        <section>
           <div className="mb-5 flex items-center gap-3">
             <Bot size={16} className="text-text-secondary" />
             <div>
@@ -930,7 +930,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
 
     if (activeSection === 'advanced') {
       return (
-        <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
+        <section>
           <div className="mb-5 flex items-center gap-3">
             <ActiveSectionIcon size={16} className="text-text-secondary" />
             <div>
@@ -966,7 +966,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
 
     if (activeSection === 'tiles') {
       return (
-        <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
+        <section>
           <div className="mb-5 flex items-center gap-3">
             <ActiveSectionIcon size={16} className="text-text-secondary" />
             <div>
@@ -1013,7 +1013,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
 
     if (activeSection === 'browser') {
       return (
-        <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
+        <section>
           <div className="mb-5 flex items-center gap-3">
             <ActiveSectionIcon size={16} className="text-text-secondary" />
             <div>
@@ -1040,7 +1040,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
         && (draft.appearance === 'light' || (draft.appearance === 'system' && !window.matchMedia('(prefers-color-scheme: dark)').matches))
 
       return (
-        <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
+        <section>
           <div className="mb-5 flex items-center gap-3">
             <ActiveSectionIcon size={16} className="text-text-secondary" />
             <div>
@@ -1113,7 +1113,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
       )
 
       return (
-        <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
+        <section>
           <div className="mb-5 flex items-center gap-3">
             <ActiveSectionIcon size={16} className="text-text-secondary" />
             <div>
@@ -1170,7 +1170,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
     }
 
     return (
-      <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
+      <section>
         <div className="mb-5 flex items-center gap-3">
           <ActiveSectionIcon size={16} className="text-text-secondary" />
           <div>
