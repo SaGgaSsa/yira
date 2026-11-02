@@ -29,6 +29,8 @@ import { useAgentsView } from './hooks/useAgentsView'
 import { useAgentSessionSnapshot } from './hooks/useAgentSessionSnapshot'
 import { useAgentSessionTiles } from './hooks/useAgentSessionTiles'
 import { useBots } from '@/hooks/useBots'
+import type { BotCallConfirmRequest } from '@shared/bots'
+import { BotCallConfirmDialog } from './components/BotCallConfirmDialog'
 import { useTheme } from './hooks/useTheme'
 import { useFontSize } from './hooks/useFontSize'
 import { useSidePanelWidth } from './hooks/useSidePanelWidth'
@@ -1986,6 +1988,31 @@ function AppContent(): React.ReactElement {
     openAgentsViewSession(result.workspaceId, result.tileId, 'current-view')
   }, [openAgentsViewSession])
 
+  // A bot opened a session through its Yira tools: show it like any session opened from the sidebar.
+  const openAgentsViewSessionRef = useRef(openAgentsViewSession)
+  openAgentsViewSessionRef.current = openAgentsViewSession
+  useEffect(() => {
+    if (!window.electron.bots?.onOpenSession) return
+    return window.electron.bots.onOpenSession((event) => {
+      openAgentsViewSessionRef.current(event.workspaceId, event.tileId, 'focus')
+    })
+  }, [])
+
+  // Bot calls wait here until the user answers, one dialog at a time.
+  const [botCallConfirmQueue, setBotCallConfirmQueue] = useState<BotCallConfirmRequest[]>([])
+  useEffect(() => {
+    if (!window.electron.bots?.onCallConfirmRequest) return
+    return window.electron.bots.onCallConfirmRequest((request) => {
+      setBotCallConfirmQueue((queue) => [...queue, request])
+    })
+  }, [])
+  const respondToBotCall = useCallback((allowed: boolean) => {
+    const current = botCallConfirmQueue[0]
+    if (!current) return
+    void window.electron.bots.respondCallConfirm(current.requestId, allowed)
+    setBotCallConfirmQueue((queue) => queue.filter((request) => request.requestId !== current.requestId))
+  }, [botCallConfirmQueue])
+
   const goToWorkspaceTerminal = useCallback((workspace: WorkspaceMetadata, tileId: string | null) => {
     agentsView.closeSessionDialog()
     setActivityOpen(false)
@@ -3496,6 +3523,7 @@ function AppContent(): React.ReactElement {
           />
         </Suspense>
       )}
+      <BotCallConfirmDialog request={botCallConfirmQueue[0] ?? null} onRespond={respondToBotCall} />
       {hasOpenedJsonEditor && (
         <Suspense fallback={null}>
           <RawJsonEditor

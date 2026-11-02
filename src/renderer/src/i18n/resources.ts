@@ -378,6 +378,29 @@ type TranslationResources = {
     workspacesHelp: string
     workspacesNone: string
     workspaceUnnamed: string
+    yiraTools: string
+    yiraToolsNote: string
+    toolLabels: {
+      sessions_search: string
+      session_read: string
+      session_open: string
+      session_create: string
+      bots_call: string
+    }
+    toolHelps: {
+      sessions_search: string
+      session_read: string
+      session_open: string
+      session_create: string
+      bots_call: string
+    }
+    callable: string
+    callableHelp: string
+    callConfirmTitle: string
+    callConfirmPrompt: string
+    callConfirmNotice: string
+    callConfirmDecline: string
+    callConfirmAllow: string
     counter: string
     save: string
     saving: string
@@ -1521,7 +1544,30 @@ const en: TranslationResources = {
     workspacesHelp: 'The bot only appears and runs in these workspaces.',
     workspacesNone: 'No workspaces available.',
     workspaceUnnamed: 'Unnamed',
-    counter: '{{current}} / {{max}}',
+    yiraTools: 'Yira tools',
+    yiraToolsNote: 'Tools apply to new sessions of this bot.',
+    toolLabels: {
+      sessions_search: 'Search earlier sessions',
+      session_read: 'Read sessions',
+      session_open: 'Open sessions',
+      session_create: 'Start sessions',
+      bots_call: 'Call other bots',
+    },
+    toolHelps: {
+      sessions_search: 'Find past Claude and Codex sessions by what was said in them.',
+      session_read: 'Read the messages of a session it found.',
+      session_open: 'Reopen a past session in a new tile, or show it if it is running.',
+      session_create: 'Start a new session with a handoff message.',
+      bots_call: 'Start a bot that allows being called, after you confirm.',
+    },
+    callable: 'Other bots can call this bot',
+    callableHelp: 'It appears in bots_list for bots that have “Call other bots”.',
+    callConfirmTitle: '{{caller}} wants to start {{target}}',
+    callConfirmPrompt: 'Message it will receive',
+    callConfirmNotice: 'A new {{target}} session starts in this workspace. It appears in the sidebar.',
+    callConfirmDecline: 'Decline',
+    callConfirmAllow: 'Allow',
+    counter:'{{current}} / {{max}}',
     save: 'Save bot',
     saving: 'Saving…',
     discard: 'Discard changes',
@@ -2664,7 +2710,30 @@ const es: TranslationResources = {
     workspacesHelp: 'El bot solo aparece y corre en estos workspaces.',
     workspacesNone: 'No hay workspaces disponibles.',
     workspaceUnnamed: 'Sin nombre',
-    counter: '{{current}} / {{max}}',
+    yiraTools: 'Herramientas de Yira',
+    yiraToolsNote: 'Las herramientas se aplican a las sesiones nuevas de este bot.',
+    toolLabels: {
+      sessions_search: 'Buscar sesiones anteriores',
+      session_read: 'Leer sesiones',
+      session_open: 'Abrir sesiones',
+      session_create: 'Iniciar sesiones',
+      bots_call: 'Llamar a otros bots',
+    },
+    toolHelps: {
+      sessions_search: 'Encuentra sesiones pasadas de Claude y Codex por lo que se dijo en ellas.',
+      session_read: 'Lee los mensajes de una sesión que encontró.',
+      session_open: 'Reabre una sesión pasada en un tile nuevo, o la muestra si está en ejecución.',
+      session_create: 'Inicia una sesión nueva con un mensaje de traspaso.',
+      bots_call: 'Inicia un bot que permite ser llamado, tras tu confirmación.',
+    },
+    callable: 'Otros bots pueden llamar a este bot',
+    callableHelp: 'Aparece en bots_list para los bots con “Llamar a otros bots”.',
+    callConfirmTitle: '{{caller}} quiere iniciar {{target}}',
+    callConfirmPrompt: 'Mensaje que recibirá',
+    callConfirmNotice: 'Se inicia una sesión nueva de {{target}} en este workspace. Aparece en la barra lateral.',
+    callConfirmDecline: 'Rechazar',
+    callConfirmAllow: 'Permitir',
+    counter:'{{current}} / {{max}}',
     save: 'Guardar bot',
     saving: 'Guardando…',
     discard: 'Descartar cambios',

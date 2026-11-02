@@ -2,7 +2,7 @@ import type { AppThemeId } from '@shared/appThemes'
 import type { WindowBackgroundMaterial, WindowBackgroundMaterialState } from '@shared/types'
 import type { TerminalProcessActivitySnapshot } from '@shared/terminalProcessActivity'
 import type { ModPanel, ModPanelChange, ModPanelPress } from '@shared/modPanels'
-import type { BotDefinition, BotDefinitionInput } from '@shared/bots'
+import type { BotCallConfirmRequest, BotDefinition, BotDefinitionInput, BotOpenSessionEvent } from '@shared/bots'
 import { contextBridge, ipcRenderer } from 'electron'
 import type {
   AgentActiveSessionSnapshot,
@@ -152,6 +152,18 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.on('bots:changed', handler)
       return () => ipcRenderer.removeListener('bots:changed', handler)
     },
+    onOpenSession: (callback: (event: BotOpenSessionEvent) => void) => {
+      const handler = (_event: unknown, payload: BotOpenSessionEvent) => callback(payload)
+      ipcRenderer.on('bots:openSession', handler)
+      return () => ipcRenderer.removeListener('bots:openSession', handler)
+    },
+    onCallConfirmRequest: (callback: (request: BotCallConfirmRequest) => void) => {
+      const handler = (_event: unknown, request: BotCallConfirmRequest) => callback(request)
+      ipcRenderer.on('bots:confirmCall', handler)
+      return () => ipcRenderer.removeListener('bots:confirmCall', handler)
+    },
+    respondCallConfirm: (requestId: string, allowed: boolean) =>
+      ipcRenderer.invoke('bots:confirmCall:respond', requestId, allowed) as Promise<boolean>,
   },
 
   // Workspace scripts run in persistent daemon PTYs without renderer terminal tiles.

@@ -219,6 +219,13 @@ export async function getWorkspaceRootFolders(): Promise<Array<{ id: string; roo
     : [])
 }
 
+export async function getWorkspaceSummaries(): Promise<Array<{ id: string; name: string; rootFolderPath: string }>> {
+  const config = await readConfig()
+  return config.workspaces.flatMap((workspace) => workspace.config.rootFolderPath
+    ? [{ id: workspace.id, name: workspace.name, rootFolderPath: workspace.config.rootFolderPath }]
+    : [])
+}
+
 export async function initWorkspaces(): Promise<void> {
   await configMutationQueue.run(async () => {
     await ensureDir(YIRA_HOME)
