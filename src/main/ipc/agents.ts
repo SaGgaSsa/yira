@@ -398,87 +398,24 @@ async function moveAgentSessionToTile(options: AgentIPCOptions, target: Terminal
   await terminal.moveAgentsViewSessionToTile(target)
 }
 
-/** Register all renderer-facing agent operations with validated, data-only inputs. */
-export function registerAgentsIPC(options: AgentIPCOptions = {}): void {
-  const registry = options.registry ?? agentSessionRegistry
+export type AgentSessionLauncher = (rawInput: unknown) => Promise<AgentSessionCreateResult>
+
+let agentSessionLauncher: AgentSessionLauncher | null = null
+
+/** The launcher built by `registerAgentsIPC`, shared with main-process callers such as the MCP bridge. */
+export function getAgentSessionLauncher(): AgentSessionLauncher | null {
+  return agentSessionLauncher
+}
+
+/** Builds the validated agent session launcher used by the IPC handler and main-process callers. */
+export function createAgentSessionLauncher(options: AgentIPCOptions = {}): AgentSessionLauncher {
   const promptImageDirectory = options.promptImageDirectory
     ?? getAgentPromptImageDirectory(YIRA_HOME)
-  const availability = options.availability ?? (() => getAgentProviderAvailability())
-  const usageService = options.usageService
-  const usageDetailsService = options.usageDetailsService
-  const usageIndex = options.usageIndex
-
-  ipcMain.handle('agents:promptImages:save', async (_event, input: unknown) =>
-    saveAgentPromptImage(promptImageDirectory, input))
-  ipcMain.handle('agents:availability', async (): Promise<AgentProviderAvailabilitySnapshot> => availability())
-  ipcMain.handle('agents:detect', async (): Promise<AgentDetectionSnapshot> => {
-    const home = homedir()
-    const result = {} as AgentDetectionSnapshot
-    for (const provider of ['claude', 'codex'] as const) {
-      const root = getAgentHomeDirectory(provider, home)
-      let installed = false
-      let hooksInstalled = false
-      try { installed = (await fs.stat(root)).isDirectory() } catch { /* absent */ }
-      try {
-        const hookPath = join(root, provider === 'claude' ? 'settings.json' : 'hooks.json')
-        hooksInstalled = hasManagedAgentHooks(await fs.readFile(hookPath, 'utf8'), provider)
-      } catch { /* absent or unreadable */ }
-      result[provider] = { installed, hooksInstalled }
-    }
-    return result
-  })
-  ipcMain.handle('agents:usage:snapshot', async (): Promise<AgentUsageSnapshot | null> => {
-    if (!usageService) return null
-    if (usageService.isStale(USAGE_SNAPSHOT_MAX_AGE_MS)) await usageService.refresh()
-    return usageService.getSnapshot()
-  })
-  ipcMain.handle('agents:usage:details', async (): Promise<AgentUsageDetailsSnapshot | null> => {
-    try {
-      return usageDetailsService ? await usageDetailsService.getSnapshot() : null
-    } catch {
-      return null
-    }
-  })
-  ipcMain.handle('agents:usage:history', async (_event, request: AgentUsageHistoryRequest): Promise<AgentUsageHistorySnapshot | null> => {
-    try {
-      if (!usageIndex || !request || !['today', '7d', '30d'].includes(request.period)) return null
-      const enabled = await (options.enabledProviders?.() ?? Promise.resolve(['claude', 'codex'] as AgentProvider[]))
-      const workspaces = await (options.workspaces?.() ?? Promise.resolve([]))
-      return await usageIndex.getHistory(request, enabled, workspaces)
-    } catch { return null }
-  })
-  usageService?.subscribe(broadcastUsageSnapshot)
-
   const workspaceAgentConfig = options.workspaceAgentConfig ?? getWorkspaceAgentConfigById
   const worktrees = options.worktrees ?? defaultWorktrees
   const getBot = options.getBot ?? getBotById
 
-  ipcMain.handle('agents:sessions:capabilities', async (_event, workspaceId: unknown): Promise<AgentSessionCapabilities> => {
-    const normalizedWorkspaceId = normalizeAgentOpaqueId(workspaceId)
-    if (!normalizedWorkspaceId) throw new Error('Invalid agent workspace id')
-    const config = await workspaceAgentConfig(normalizedWorkspaceId)
-    const enabled = await enabledProviders(options)
-    const provider = effectiveWorkspaceProvider(config, enabled)
-    const rootPath = config?.rootFolderPath
-    let repositories: AgentWorktreeRepository[] = []
-    if (typeof rootPath === 'string' && rootPath.trim().length > 0) {
-      try {
-        repositories = await worktrees.resolveWorkspaceWorktreeRepositories({
-          rootPath,
-          configuredRepositoryPaths: config?.sourceControlRepositoryPaths ?? [],
-        })
-      } catch {
-        // An inaccessible workspace cannot offer a worktree capability.
-      }
-    }
-    const providers = config
-      ? enabled.filter((candidate) => config.agentProviders?.[candidate]?.enabled === true)
-      : []
-    const worktreeAvailable = repositories.length > 0
-    return { provider, providers, worktreeAvailable }
-  })
-
-  ipcMain.handle('agents:sessions:create', async (_event, rawInput: unknown): Promise<AgentSessionCreateResult> => {
+  return async (rawInput: unknown): Promise<AgentSessionCreateResult> => {
     const input = normalizeCreateInput(rawInput, promptImageDirectory)
     for (const image of input.images) {
       try {
@@ -561,7 +498,7 @@ export function registerAgentsIPC(options: AgentIPCOptions = {}): void {
           worktrees: worktree.worktrees.map(({ path, baseSha }) => ({ path, baseSha })),
         },
       } : {}),
-      ...(bot ? { bot: { id: bot.id, role: bot.role, model: bot.model } } : {}),
+      ...(bot ? { bot: { id: bot.id, role: bot.role, model: bot.model, tools: bot.tools } } : {}),
     }
 
     try {
@@ -579,7 +516,92 @@ export function registerAgentsIPC(options: AgentIPCOptions = {}): void {
     }
 
     return { workspaceId: input.workspaceId, tileId, provider }
+  }
+}
+
+/** Register all renderer-facing agent operations with validated, data-only inputs. */
+export function registerAgentsIPC(options: AgentIPCOptions = {}): void {
+  const registry = options.registry ?? agentSessionRegistry
+  const promptImageDirectory = options.promptImageDirectory
+    ?? getAgentPromptImageDirectory(YIRA_HOME)
+  const availability = options.availability ?? (() => getAgentProviderAvailability())
+  const usageService = options.usageService
+  const usageDetailsService = options.usageDetailsService
+  const usageIndex = options.usageIndex
+
+  ipcMain.handle('agents:promptImages:save', async (_event, input: unknown) =>
+    saveAgentPromptImage(promptImageDirectory, input))
+  ipcMain.handle('agents:availability', async (): Promise<AgentProviderAvailabilitySnapshot> => availability())
+  ipcMain.handle('agents:detect', async (): Promise<AgentDetectionSnapshot> => {
+    const home = homedir()
+    const result = {} as AgentDetectionSnapshot
+    for (const provider of ['claude', 'codex'] as const) {
+      const root = getAgentHomeDirectory(provider, home)
+      let installed = false
+      let hooksInstalled = false
+      try { installed = (await fs.stat(root)).isDirectory() } catch { /* absent */ }
+      try {
+        const hookPath = join(root, provider === 'claude' ? 'settings.json' : 'hooks.json')
+        hooksInstalled = hasManagedAgentHooks(await fs.readFile(hookPath, 'utf8'), provider)
+      } catch { /* absent or unreadable */ }
+      result[provider] = { installed, hooksInstalled }
+    }
+    return result
   })
+  ipcMain.handle('agents:usage:snapshot', async (): Promise<AgentUsageSnapshot | null> => {
+    if (!usageService) return null
+    if (usageService.isStale(USAGE_SNAPSHOT_MAX_AGE_MS)) await usageService.refresh()
+    return usageService.getSnapshot()
+  })
+  ipcMain.handle('agents:usage:details', async (): Promise<AgentUsageDetailsSnapshot | null> => {
+    try {
+      return usageDetailsService ? await usageDetailsService.getSnapshot() : null
+    } catch {
+      return null
+    }
+  })
+  ipcMain.handle('agents:usage:history', async (_event, request: AgentUsageHistoryRequest): Promise<AgentUsageHistorySnapshot | null> => {
+    try {
+      if (!usageIndex || !request || !['today', '7d', '30d'].includes(request.period)) return null
+      const enabled = await (options.enabledProviders?.() ?? Promise.resolve(['claude', 'codex'] as AgentProvider[]))
+      const workspaces = await (options.workspaces?.() ?? Promise.resolve([]))
+      return await usageIndex.getHistory(request, enabled, workspaces)
+    } catch { return null }
+  })
+  usageService?.subscribe(broadcastUsageSnapshot)
+
+  const workspaceAgentConfig = options.workspaceAgentConfig ?? getWorkspaceAgentConfigById
+  const worktrees = options.worktrees ?? defaultWorktrees
+  const createSession = createAgentSessionLauncher(options)
+  agentSessionLauncher = createSession
+
+  ipcMain.handle('agents:sessions:capabilities', async (_event, workspaceId: unknown): Promise<AgentSessionCapabilities> => {
+    const normalizedWorkspaceId = normalizeAgentOpaqueId(workspaceId)
+    if (!normalizedWorkspaceId) throw new Error('Invalid agent workspace id')
+    const config = await workspaceAgentConfig(normalizedWorkspaceId)
+    const enabled = await enabledProviders(options)
+    const provider = effectiveWorkspaceProvider(config, enabled)
+    const rootPath = config?.rootFolderPath
+    let repositories: AgentWorktreeRepository[] = []
+    if (typeof rootPath === 'string' && rootPath.trim().length > 0) {
+      try {
+        repositories = await worktrees.resolveWorkspaceWorktreeRepositories({
+          rootPath,
+          configuredRepositoryPaths: config?.sourceControlRepositoryPaths ?? [],
+        })
+      } catch {
+        // An inaccessible workspace cannot offer a worktree capability.
+      }
+    }
+    const providers = config
+      ? enabled.filter((candidate) => config.agentProviders?.[candidate]?.enabled === true)
+      : []
+    const worktreeAvailable = repositories.length > 0
+    return { provider, providers, worktreeAvailable }
+  })
+
+  ipcMain.handle('agents:sessions:create', (_event, rawInput: unknown): Promise<AgentSessionCreateResult> =>
+    createSession(rawInput))
 
   ipcMain.handle('agents:sessions:close', async (_event, rawInput: unknown): Promise<AgentSessionCloseResult> => {
     if (!isRecord(rawInput)) throw new Error('Invalid agent session input')

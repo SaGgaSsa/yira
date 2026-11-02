@@ -408,8 +408,39 @@ test('launches a bot session with the bot provider, role and name as title', asy
 
   assert.equal(result.provider, 'codex')
   assert.equal(launch?.provider, 'codex')
-  assert.deepEqual(launch?.bot, { id: 'bot-1234', role: 'Review the diff', model: 'gpt-5' })
+  assert.deepEqual(launch?.bot, { id: 'bot-1234', role: 'Review the diff', model: 'gpt-5', tools: [] })
   assert.equal(launch?.title, 'Reviewer')
+})
+
+test('passes the bot tools through to the launch spec', async () => {
+  let launch: AgentsViewLaunchSpec | undefined
+  const bot = fakeBot({ tools: ['sessions_search', 'session_read'] })
+  const ipcMain = registerBotSessionIPC(bot, (spec) => { launch = spec })
+
+  await ipcMain.call('agents:sessions:create', new FakeWebContents(75), {
+    workspaceId: 'workspace-a',
+    botId: 'bot-1234',
+  })
+
+  assert.deepEqual(launch?.bot?.tools, ['sessions_search', 'session_read'])
+})
+
+test('the session launcher creates sessions without IPC', async () => {
+  const { createAgentSessionLauncher } = loadAgentsIPC(new FakeIpcMain())
+  let launch: AgentsViewLaunchSpec | undefined
+  const launcher = createAgentSessionLauncher({
+    enabledProviders: async () => ['claude', 'codex'],
+    workspaceAgentConfig: async () => workspaceAgentConfig(),
+    createSession: async (_target, spec) => { launch = spec },
+  })
+
+  const result = await launcher({ workspaceId: 'workspace-a', provider: 'codex', prompt: 'Find the bug' })
+
+  assert.equal(result.workspaceId, 'workspace-a')
+  assert.match(result.tileId, /^agent-[0-9a-f-]+$/)
+  assert.equal(result.provider, 'codex')
+  assert.equal(launch?.prompt, 'Find the bug')
+  await assert.rejects(() => launcher('nope'), /Invalid agent session input/)
 })
 
 test('rejects a bot session for an unknown bot', async () => {
