@@ -1,10 +1,11 @@
-import { app, BrowserWindow, shell, ipcMain, Menu, clipboard, ClipboardItem, dialog } from 'electron'
+import { app, BrowserWindow, shell, ipcMain, Menu, clipboard, ClipboardItem, dialog, Notification } from 'electron'
 import { join } from 'path'
 import { existsSync } from 'fs'
 import { mkdir, writeFile } from 'fs/promises'
 import { is } from '@electron-toolkit/utils'
 import { MOD_PANEL_BRIDGE_FILE_ENV } from '@shared/modPanels'
-import { getWorkspaceRootFolders, getWorkspaceSummaries, initWorkspaces, registerWorkspaceIPC } from './ipc/workspace'
+import type { AgentActiveSession } from '@shared/types'
+import { getWorkspaceRootFolderById, getWorkspaceRootFolders, getWorkspaceSummaries, initWorkspaces, registerWorkspaceIPC } from './ipc/workspace'
 import { registerCanvasIPC } from './ipc/canvas'
 import {
   registerTerminalIPC,
@@ -24,13 +25,15 @@ import { registerGitIPC } from './ipc/git'
 import { clearWindowAttention, registerNotificationIPC } from './ipc/notifications'
 import { registerWindowIPC, type WindowClosePreparationBridge } from './ipc/window'
 import { registerFloatingTilesIPC } from './ipc/floatingTiles'
-import { getAgentSessionLauncher, registerAgentsIPC } from './ipc/agents'
+import { getAgentSessionCloser, getAgentSessionLauncher, registerAgentsIPC } from './ipc/agents'
 import { getBotById, listBots, registerBotsIPC } from './ipc/bots'
-import { registerRoutinesIPC } from './ipc/routines'
+import { getRoutineStore, registerRoutinesIPC, setRoutineRunHandler } from './ipc/routines'
 import { BotBridge, setActiveBotBridge } from './bots/botBridge'
 import { BotCallConfirmBroker } from './bots/botCallConfirm'
 import { createBotToolProviders } from './bots/botTools'
 import { agentSessionRegistry } from './agents/registry'
+import { readAgentSessionTranscript } from './agents/transcript'
+import { RoutineScheduler } from './bots/routineScheduler'
 import { configureAgentHistoryIndex, flushAgentHistoryIndex } from './agents/historyIndex'
 import { registerScriptsIPC } from './ipc/scripts'
 import { AgentUsageService } from './agentUsage'
@@ -112,6 +115,32 @@ function registerBotTools(): void {
     confirmBotCall: (input) => callConfirmBroker.request(input),
   }))
 }
+
+/** The text of the last reply of a routine run, or null when the run ended without one. */
+async function readLastReply(session: AgentActiveSession): Promise<string | null> {
+  const workspaceRoot = await getWorkspaceRootFolderById(session.workspaceId)
+  const transcript = await readAgentSessionTranscript(
+    { provider: session.provider, identifier: session.sessionId, limit: 1 },
+    { workspaceRoot: workspaceRoot ?? undefined },
+  )
+  const lastEntry = transcript.entries.at(-1)
+  return lastEntry?.kind === 'reply' ? lastEntry.text : null
+}
+
+function notify(title: string, body: string): void {
+  if (Notification.isSupported()) new Notification({ title, body }).show()
+}
+
+const routineScheduler = new RoutineScheduler({
+  store: getRoutineStore(),
+  getBot: getBotById,
+  getLauncher: getAgentSessionLauncher,
+  getSession: (workspaceId, tileId) => agentSessionRegistry.get(workspaceId, tileId),
+  readLastReply,
+  closeSession: (workspaceId, tileId) =>
+    getAgentSessionCloser()?.({ workspaceId, tileId }).then(() => undefined) ?? Promise.resolve(),
+  notify,
+})
 
 async function promptClosePreparationFailure(phase: 'flush' | 'persist' | 'terminals', error: unknown): Promise<CloseFailureDecision> {
   const detail = error instanceof Error ? error.message : String(error)
@@ -206,6 +235,7 @@ app.on('before-quit', (event) => {
   if (closePreparationApproved) {
     stopTerminalProcessActivityMonitor()
     void modPanelBridge.close()
+    routineScheduler.stop()
     void botBridge.close().catch(() => undefined)
     void flushAgentHistoryIndex().catch(() => undefined)
     return
@@ -347,6 +377,8 @@ app.whenReady().then(async () => {
   registerBotsIPC()
   registerRoutinesIPC()
   registerBotTools()
+  setRoutineRunHandler((id) => routineScheduler.runRoutine(id, 'manual'))
+  routineScheduler.start()
   void botBridge.start().catch((error) => {
     console.warn('[main] bot bridge failed:', error instanceof Error ? error.message : String(error))
   })
