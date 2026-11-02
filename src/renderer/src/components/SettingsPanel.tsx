@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import {
   X, Monitor, Moon, Sun, Type, Grid3x3, Globe, CodeXml, Info, RefreshCw, Download,
-  LayoutGrid, Keyboard, Terminal, ExternalLink, FileText, Bot, Check,
+  LayoutGrid, Keyboard, Terminal, ExternalLink, FileText, Bot, BotMessageSquare, Check,
 } from 'lucide-react'
 import { createUserSettingsDraft, useSettingsStore } from '@/store/settingsStore'
 import { useUpdateStore } from '@/store/updateStore'
@@ -29,6 +29,7 @@ import type { LegalDocumentId } from './LegalDocuments'
 import { FontFamilyPicker } from './FontFamilyPicker'
 import { ShortcutInput } from './ShortcutInput'
 import { agentProviderDetails } from './AgentUsageIndicator'
+import { BotsSettings } from './BotsSettings'
 
 const LegalDocuments = React.lazy(() => import('./LegalDocuments').then((module) => ({ default: module.LegalDocuments })))
 
@@ -39,6 +40,7 @@ export type SettingsSectionId =
   | 'tiles'
   | 'terminal'
   | 'agents'
+  | 'bots'
   | 'shortcuts'
   | 'browser'
   | 'advanced'
@@ -125,6 +127,7 @@ const SETTINGS_SECTIONS: Array<{
   { id: 'tiles', icon: LayoutGrid },
   { id: 'terminal', icon: Terminal },
   { id: 'agents', icon: Bot },
+  { id: 'bots', icon: BotMessageSquare },
   { id: 'shortcuts', icon: Keyboard },
   { id: 'browser', icon: Globe },
   { id: 'advanced', icon: CodeXml },
@@ -179,6 +182,7 @@ function getSectionLabel(t: TFunction, id: SettingsSectionId): string {
     case 'tiles': return t('settings.tiles')
     case 'terminal': return t('settings.terminal')
     case 'agents': return t('settings.agents')
+    case 'bots': return t('settings.bots')
     case 'shortcuts': return t('settings.shortcuts')
     case 'browser': return t('settings.browser')
     case 'advanced': return t('settings.advanced')
@@ -651,6 +655,22 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
               />
             </label>
           </div>
+        </section>
+      )
+    }
+
+    if (activeSection === 'bots') {
+      const enabledProviders = (['claude', 'codex'] as const).filter((provider) => draft.agents[provider].enabled === true)
+      return (
+        <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
+          <div className="mb-5 flex items-center gap-3">
+            <BotMessageSquare size={16} className="text-text-secondary" />
+            <div>
+              <div className="nd-label text-text-secondary">{t('settings.bots')}</div>
+              <h3 className="mt-1 text-xl text-text-display">{t('bots.title')}</h3>
+            </div>
+          </div>
+          <BotsSettings enabledProviders={enabledProviders} />
         </section>
       )
     }

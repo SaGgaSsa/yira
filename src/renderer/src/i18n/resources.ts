@@ -341,7 +341,73 @@ type TranslationResources = {
     input: string
     permission: string
   }
+  bots: {
+    title: string
+    listLabel: string
+    newBot: string
+    newBotDraft: string
+    emptyTitle: string
+    emptyDescription: string
+    unsavedBadge: string
+    identity: string
+    name: string
+    namePlaceholder: string
+    icon: string
+    color: string
+    preview: string
+    agent: string
+    provider: string
+    providerDisabled: string
+    model: string
+    modelPlaceholder: string
+    modelHelp: string
+    modelInvalid: string
+    purpose: string
+    purposePlaceholder: string
+    purposeHelp: string
+    role: string
+    rolePlaceholder: string
+    roleHelp: string
+    workspaces: string
+    workspacesAll: string
+    workspacesSelected: string
+    workspacesHelp: string
+    workspacesNone: string
+    workspaceUnnamed: string
+    counter: string
+    save: string
+    saving: string
+    discard: string
+    delete: string
+    confirmDelete: string
+    cancel: string
+    deleteFailed: string
+    saveFailed: string
+    icons: {
+      history: string
+      eye: string
+      activity: string
+      book: string
+      bug: string
+      search: string
+      shield: string
+      sparkles: string
+      wrench: string
+      message: string
+    }
+    colors: {
+      amber: string
+      violet: string
+      lime: string
+      sky: string
+      rose: string
+      emerald: string
+      orange: string
+      slate: string
+    }
+  }
   settings: {
+    bots: string
     agentAlerts: string
     agentAlertsDescription: string
     desktopAlerts: string
@@ -1414,7 +1480,73 @@ const en: TranslationResources = {
     actionOpenSettings: 'Open settings',
     actionRunScript: 'Run {{name}}',
   },
+  bots: {
+    title: 'Bots',
+    listLabel: 'Bots',
+    newBot: 'New bot',
+    newBotDraft: 'New bot',
+    emptyTitle: 'No bots yet',
+    emptyDescription: 'A bot is a preconfigured agent session: a role, provider and model that you can start with one choice.',
+    unsavedBadge: 'Unsaved',
+    identity: 'Identity',
+    name: 'Name',
+    namePlaceholder: 'Bot name',
+    icon: 'Icon',
+    color: 'Color',
+    preview: 'Preview',
+    agent: 'Agent',
+    provider: 'Provider',
+    providerDisabled: 'Provider disabled in Settings › Agents',
+    model: 'Model',
+    modelPlaceholder: 'CLI default',
+    modelHelp: 'Alias or full name, for example sonnet or opus. Empty uses the CLI default.',
+    modelInvalid: 'Use only letters, numbers and . _ : - [ ] characters (up to 64).',
+    purpose: 'What it is for',
+    purposePlaceholder: 'Short description of what this bot does',
+    purposeHelp: 'Shown when choosing the bot while creating a session.',
+    role: 'Role',
+    rolePlaceholder: 'Instructions for the agent',
+    roleHelp: 'Added to the agent system instructions every time a session starts with this bot.',
+    workspaces: 'Workspaces',
+    workspacesAll: 'All workspaces',
+    workspacesSelected: 'Only these',
+    workspacesHelp: 'The bot only appears and runs in these workspaces.',
+    workspacesNone: 'No workspaces available.',
+    workspaceUnnamed: 'Unnamed',
+    counter: '{{current}} / {{max}}',
+    save: 'Save',
+    saving: 'Saving…',
+    discard: 'Discard changes',
+    delete: 'Delete bot',
+    confirmDelete: 'Confirm delete',
+    cancel: 'Cancel',
+    deleteFailed: 'The bot could not be deleted.',
+    saveFailed: 'The bot could not be saved.',
+    icons: {
+      history: 'History',
+      eye: 'Eye',
+      activity: 'Activity',
+      book: 'Book',
+      bug: 'Bug',
+      search: 'Search',
+      shield: 'Shield',
+      sparkles: 'Sparkles',
+      wrench: 'Wrench',
+      message: 'Message',
+    },
+    colors: {
+      amber: 'Amber',
+      violet: 'Violet',
+      lime: 'Lime',
+      sky: 'Sky',
+      rose: 'Rose',
+      emerald: 'Emerald',
+      orange: 'Orange',
+      slate: 'Slate',
+    },
+  },
   settings: {
+    bots: 'Bots',
     agentAlerts: 'Agent alerts',
     agentAlertsDescription: 'Show semantic completion and intervention alerts from configured Codex and Claude hooks.',
     desktopAlerts: 'Desktop notifications',
@@ -2487,7 +2619,73 @@ const es: TranslationResources = {
     started: 'Inicio',
     lastActivity: 'Última actividad',
   },
+  bots: {
+    title: 'Bots',
+    listLabel: 'Bots',
+    newBot: 'Nuevo bot',
+    newBotDraft: 'Nuevo bot',
+    emptyTitle: 'Todavía no hay bots',
+    emptyDescription: 'Un bot es una sesión de agente preconfigurada: un rol, un proveedor y un modelo que se inicia con una sola elección.',
+    unsavedBadge: 'Sin guardar',
+    identity: 'Identidad',
+    name: 'Nombre',
+    namePlaceholder: 'Nombre del bot',
+    icon: 'Icono',
+    color: 'Color',
+    preview: 'Vista previa',
+    agent: 'Agente',
+    provider: 'Proveedor',
+    providerDisabled: 'Proveedor deshabilitado en Ajustes › Agentes',
+    model: 'Modelo',
+    modelPlaceholder: 'Predeterminado del CLI',
+    modelHelp: 'Alias o nombre completo, por ejemplo sonnet u opus. Vacío usa el del CLI.',
+    modelInvalid: 'Usa solo letras, números y los caracteres . _ : - [ ] (hasta 64).',
+    purpose: 'Para qué sirve',
+    purposePlaceholder: 'Descripción breve de lo que hace este bot',
+    purposeHelp: 'Se muestra al elegir el bot al crear una sesión.',
+    role: 'Rol',
+    rolePlaceholder: 'Instrucciones para el agente',
+    roleHelp: 'Se agrega a las instrucciones de sistema del agente cada vez que inicia una sesión con este bot.',
+    workspaces: 'Workspaces',
+    workspacesAll: 'Todos los workspaces',
+    workspacesSelected: 'Solo estos',
+    workspacesHelp: 'El bot solo aparece y corre en estos workspaces.',
+    workspacesNone: 'No hay workspaces disponibles.',
+    workspaceUnnamed: 'Sin nombre',
+    counter: '{{current}} / {{max}}',
+    save: 'Guardar',
+    saving: 'Guardando…',
+    discard: 'Descartar cambios',
+    delete: 'Borrar bot',
+    confirmDelete: 'Confirmar borrado',
+    cancel: 'Cancelar',
+    deleteFailed: 'No se pudo borrar el bot.',
+    saveFailed: 'No se pudo guardar el bot.',
+    icons: {
+      history: 'Historial',
+      eye: 'Ojo',
+      activity: 'Actividad',
+      book: 'Libro',
+      bug: 'Bicho',
+      search: 'Búsqueda',
+      shield: 'Escudo',
+      sparkles: 'Destellos',
+      wrench: 'Llave',
+      message: 'Mensaje',
+    },
+    colors: {
+      amber: 'Ámbar',
+      violet: 'Violeta',
+      lime: 'Lima',
+      sky: 'Celeste',
+      rose: 'Rosa',
+      emerald: 'Esmeralda',
+      orange: 'Naranja',
+      slate: 'Pizarra',
+    },
+  },
   settings: {
+    bots: 'Bots',
     agentAlerts: 'Alertas de agentes',
     agentAlertsDescription: 'Muestra alertas semánticas de finalización e intervención de los hooks configurados de Codex y Claude.',
     desktopAlerts: 'Notificaciones de escritorio',
