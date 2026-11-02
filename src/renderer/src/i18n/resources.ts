@@ -272,6 +272,10 @@ type TranslationResources = {
     closeDialog: string
     prompt: string
     promptPlaceholder: string
+    bot: string
+    noBot: string
+    providerSetByBot: string
+    botPromptPlaceholder: string
     removePromptImage: string
     promptImageAlt: string
     promptImageAttachError: string
@@ -1411,6 +1415,10 @@ const en: TranslationResources = {
     closeDialog: 'Close dialog',
     prompt: 'Prompt (optional)',
     promptPlaceholder: 'Describe what you want the agent to do, or leave it empty. Enter starts the session; Shift+Enter adds a line.',
+    bot: 'Bot',
+    noBot: 'No bot',
+    providerSetByBot: 'set by the bot',
+    botPromptPlaceholder: 'Instruction for {{name}} (optional)',
     removePromptImage: 'Remove image',
     promptImageAlt: 'Attached image',
     promptImageAttachError: 'Could not attach image.',
@@ -2507,6 +2515,10 @@ const es: TranslationResources = {
     closeDialog: 'Cerrar diálogo',
     prompt: 'Instrucción (opcional)',
     promptPlaceholder: 'Describe qué quieres que haga el agente o déjalo vacío. Enter inicia la sesión; Shift+Enter agrega una línea.',
+    bot: 'Bot',
+    noBot: 'Sin bot',
+    providerSetByBot: 'lo define el bot',
+    botPromptPlaceholder: 'Instrucción para {{name}} (opcional)',
     worktree: 'Worktree',
     removePromptImage: 'Quitar imagen',
     promptImageAlt: 'Imagen adjunta',

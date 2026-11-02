@@ -6,15 +6,20 @@ export function useBots(): { bots: BotDefinition[]; loaded: boolean } {
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
+    const botsApi = window.electron?.bots
+    if (!botsApi) {
+      setLoaded(true)
+      return
+    }
     let active = true
     let receivedChange = false
-    const unsubscribe = window.electron.bots.onChanged((next) => {
+    const unsubscribe = botsApi.onChanged((next) => {
       if (!active) return
       receivedChange = true
       setBots(next)
       setLoaded(true)
     })
-    window.electron.bots.list()
+    botsApi.list()
       .then((next) => {
         if (!active) return
         // A change event is newer than the initial list response.

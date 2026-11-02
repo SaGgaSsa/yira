@@ -9,6 +9,9 @@ import type {
   WorkspaceMetadata,
 } from '@shared/types'
 import { getAgentPromptIssue, MAX_AGENT_PROMPT_LENGTH } from '@shared/agentPrompt'
+import { isBotAvailableInWorkspace } from '@shared/bots'
+import type { BotDefinition } from '@shared/bots'
+import { BotAvatar } from './botVisuals'
 import { WorkspacePickerMenu } from './WorkspacePickerMenu'
 import {
   insertPromptImageReferences,
@@ -38,6 +41,8 @@ export interface AgentSessionDialogProps {
   /** Prompt text written in the editor when the dialog opens. */
   initialPrompt?: string
   agents: UserSettings['agents']
+  /** Bots that can be picked to start the session; each one only shows in the workspaces it covers. */
+  bots?: BotDefinition[]
   focusRequestId: number
   onClose: () => void
   onCreated: (result: AgentSessionCreateResult) => void
@@ -135,6 +140,7 @@ export function AgentSessionDialog({
   initialWorkspaceId,
   initialPrompt = '',
   agents,
+  bots = [],
   focusRequestId,
   onClose,
   onCreated,
@@ -157,6 +163,7 @@ export function AgentSessionDialog({
   const firstWorkspace = getInitialWorkspace(usableWorkspaces, initialWorkspaceId)
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(firstWorkspace?.workspace.id ?? null)
   const [selectedProvider, setSelectedProvider] = useState<AgentProvider | null>(() => getDefaultProvider(firstWorkspace))
+  const [selectedBotId, setSelectedBotId] = useState<string | null>(null)
   const [prompt, setPrompt] = useState('')
   const [promptImages, setPromptImages] = useState<PromptImagePreview[]>([])
   const [worktree, setWorktree] = useState(false)
@@ -165,6 +172,15 @@ export function AgentSessionDialog({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const isSavingImages = promptImages.some((image) => image.path === null)
   const selectedWorkspace = usableWorkspaces.find(({ workspace }) => workspace.id === selectedWorkspaceId)
+  const availableBots = selectedWorkspace
+    ? bots.filter((bot) => (
+      isBotAvailableInWorkspace(bot, selectedWorkspace.workspace.id)
+      && selectedWorkspace.providers.includes(bot.provider)
+    ))
+    : []
+  const selectedBot = availableBots.find((bot) => bot.id === selectedBotId) ?? null
+  // A bot fixes the provider; without one the provider picker decides.
+  const effectiveProvider = selectedBot?.provider ?? selectedProvider
   // The prompt is sent trimmed, so it is validated the same way the main process will.
   const promptIssue = getAgentPromptIssue(prompt.trim())
   const promptIssueMessage = promptIssue === 'too-long'
@@ -218,6 +234,7 @@ export function AgentSessionDialog({
     const nextWorkspace = getInitialWorkspace(usableWorkspaces, initialWorkspaceId)
     setSelectedWorkspaceId(nextWorkspace?.workspace.id ?? null)
     setSelectedProvider(getDefaultProvider(nextWorkspace))
+    setSelectedBotId(null)
     setPrompt(initialPrompt)
     pendingCaretRef.current = initialPrompt ? initialPrompt.length : null
     promptImageGenerationRef.current += 1
@@ -259,7 +276,7 @@ export function AgentSessionDialog({
 
   const createSession = async (promptValue = prompt): Promise<void> => {
     const trimmedPrompt = promptValue.trim()
-    if (!selectedWorkspace || !selectedProvider || isSubmitting || isSavingImages) return
+    if (!selectedWorkspace || !effectiveProvider || isSubmitting || isSavingImages) return
     if (getAgentPromptIssue(trimmedPrompt)) return
 
     setIsSubmitting(true)
@@ -268,7 +285,8 @@ export function AgentSessionDialog({
     try {
       result = await window.electron.agents.createSession({
         workspaceId: selectedWorkspace.workspace.id,
-        provider: selectedProvider,
+        provider: effectiveProvider,
+        ...(selectedBot ? { botId: selectedBot.id } : {}),
         ...(trimmedPrompt ? { prompt: trimmedPrompt } : {}),
         ...(promptImages.length > 0
           ? {
@@ -489,7 +507,9 @@ export function AgentSessionDialog({
                   }
                   if (!isSavingImages) void createSession(event.currentTarget.value)
                 }}
-                placeholder={t('agentsView.promptPlaceholder')}
+                placeholder={selectedBot
+                  ? t('agentsView.botPromptPlaceholder', { name: selectedBot.name })
+                  : t('agentsView.promptPlaceholder')}
                 aria-label={t('agentsView.prompt')}
                 aria-invalid={promptIssueMessage ? true : undefined}
                 aria-describedby={promptIssueMessage ? 'agent-session-prompt-issue' : undefined}
@@ -506,74 +526,120 @@ export function AgentSessionDialog({
               <p className="rounded-lg border border-border-visible bg-bg-primary px-3 py-2 text-sm text-text-secondary">
                 {t('agentsView.noUsableWorkspace')}
               </p>
-            ) : selectedWorkspace && selectedProvider ? (
-              <div className="flex shrink-0 flex-wrap items-center justify-start gap-2">
-                <WorkspacePickerMenu
-                  options={usableWorkspaces.map(({ workspace }) => ({
-                    id: workspace.id,
-                    label: workspace.name.trim() || t('agentsView.unnamedWorkspace'),
-                  }))}
-                  selectedId={selectedWorkspaceId}
-                  label={t('agentsView.workspace')}
-                  disabled={isSubmitting}
-                  onSelect={(workspaceId) => {
-                    const nextWorkspace = usableWorkspaces.find(({ workspace }) => workspace.id === workspaceId)
-                    setSelectedWorkspaceId(nextWorkspace?.workspace.id ?? null)
-                    setSelectedProvider(getDefaultProvider(nextWorkspace))
-                    setWorktree(false)
-                    requestWorkspaceCapabilities(nextWorkspace?.workspace.id ?? null)
-                    setError(null)
-                    promptRef.current?.focus()
-                  }}
-                />
-
-                {selectedWorkspace.providers.length > 1 ? (
-                  <div
-                    role="radiogroup"
-                    aria-label={t('agentsView.provider')}
-                    className="inline-flex h-9 shrink-0 overflow-hidden rounded-full border border-border-visible"
-                  >
-                    {selectedWorkspace.providers.map((provider) => (
-                      <button
-                        key={provider}
-                        type="button"
-                        role="radio"
-                        aria-checked={selectedProvider === provider}
-                        className={`h-full px-3 text-sm transition-colors disabled:opacity-50 ${
-                          selectedProvider === provider
-                            ? 'bg-bg-primary text-text-display'
-                            : 'text-text-secondary hover:bg-hover-bg'
-                        }`}
-                        disabled={isSubmitting}
-                        onClick={() => setSelectedProvider(provider)}
-                      >
-                        {getProviderLabel(provider, t)}
-                      </button>
-                    ))}
+            ) : selectedWorkspace && effectiveProvider ? (
+              <div className="flex shrink-0 flex-col gap-3">
+                {availableBots.length > 0 && (
+                  <div className="flex flex-col gap-1.5">
+                    <div
+                      role="radiogroup"
+                      aria-label={t('agentsView.bot')}
+                      className="flex flex-wrap items-center gap-2"
+                    >
+                      {[null, ...availableBots].map((bot) => {
+                        const checked = (bot?.id ?? null) === (selectedBot?.id ?? null)
+                        return (
+                          <button
+                            key={bot?.id ?? 'no-bot'}
+                            type="button"
+                            role="radio"
+                            aria-checked={checked}
+                            className={`inline-flex h-9 shrink-0 items-center gap-2 rounded-full border px-3 text-sm transition-colors disabled:opacity-50 ${
+                              checked
+                                ? 'border-accent bg-accent-subtle text-text-display'
+                                : 'border-border-visible text-text-secondary hover:bg-hover-bg'
+                            }`}
+                            disabled={isSubmitting}
+                            onClick={() => {
+                              setSelectedBotId(bot?.id ?? null)
+                              promptRef.current?.focus()
+                            }}
+                          >
+                            {bot && <BotAvatar icon={bot.icon} color={bot.color} size={20} />}
+                            <span>{bot ? bot.name : t('agentsView.noBot')}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                    {selectedBot?.description && (
+                      <p className="text-xs text-text-secondary">{selectedBot.description}</p>
+                    )}
                   </div>
-                ) : (
-                  <span className="inline-flex h-9 shrink-0 items-center rounded-full border border-border-visible px-3 text-sm text-text-secondary">
-                    {getProviderLabel(selectedProvider, t)}
-                  </span>
                 )}
 
-                {worktreeAvailable && (
-                  <label
-                    className={`inline-flex h-9 shrink-0 items-center gap-2 rounded-full border border-border-visible px-3 text-sm text-text-primary transition-colors ${
-                      isSubmitting ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-hover-bg'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      className="h-3.5 w-3.5 accent-(--text-primary)"
-                      checked={worktree}
-                      disabled={isSubmitting}
-                      title={t('agentsView.worktreeDescription')}
-                      onChange={(event) => setWorktree(event.target.checked)}
-                    />
-                    <span>{t('agentsView.worktree')}</span>
-                  </label>
-                )}
+                <div className="flex flex-wrap items-center justify-start gap-2">
+                  <WorkspacePickerMenu
+                    options={usableWorkspaces.map(({ workspace }) => ({
+                      id: workspace.id,
+                      label: workspace.name.trim() || t('agentsView.unnamedWorkspace'),
+                    }))}
+                    selectedId={selectedWorkspaceId}
+                    label={t('agentsView.workspace')}
+                    disabled={isSubmitting}
+                    onSelect={(workspaceId) => {
+                      const nextWorkspace = usableWorkspaces.find(({ workspace }) => workspace.id === workspaceId)
+                      setSelectedWorkspaceId(nextWorkspace?.workspace.id ?? null)
+                      setSelectedProvider(getDefaultProvider(nextWorkspace))
+                      setSelectedBotId(null)
+                      setWorktree(false)
+                      requestWorkspaceCapabilities(nextWorkspace?.workspace.id ?? null)
+                      setError(null)
+                      promptRef.current?.focus()
+                    }}
+                  />
+
+                  {selectedBot ? (
+                    <span className="inline-flex h-9 shrink-0 items-center gap-2 rounded-full border border-border-visible px-3 text-sm text-text-secondary">
+                      <span className="text-text-primary">{getProviderLabel(selectedBot.provider, t)}</span>
+                      <span className="text-xs">{t('agentsView.providerSetByBot')}</span>
+                    </span>
+                  ) : selectedWorkspace.providers.length > 1 ? (
+                    <div
+                      role="radiogroup"
+                      aria-label={t('agentsView.provider')}
+                      className="inline-flex h-9 shrink-0 overflow-hidden rounded-full border border-border-visible"
+                    >
+                      {selectedWorkspace.providers.map((provider) => (
+                        <button
+                          key={provider}
+                          type="button"
+                          role="radio"
+                          aria-checked={selectedProvider === provider}
+                          className={`h-full px-3 text-sm transition-colors disabled:opacity-50 ${
+                            selectedProvider === provider
+                              ? 'bg-bg-primary text-text-display'
+                              : 'text-text-secondary hover:bg-hover-bg'
+                          }`}
+                          disabled={isSubmitting}
+                          onClick={() => setSelectedProvider(provider)}
+                        >
+                          {getProviderLabel(provider, t)}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="inline-flex h-9 shrink-0 items-center rounded-full border border-border-visible px-3 text-sm text-text-secondary">
+                      {getProviderLabel(effectiveProvider, t)}
+                    </span>
+                  )}
+
+                  {worktreeAvailable && (
+                    <label
+                      className={`inline-flex h-9 shrink-0 items-center gap-2 rounded-full border border-border-visible px-3 text-sm text-text-primary transition-colors ${
+                        isSubmitting ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-hover-bg'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        className="h-3.5 w-3.5 accent-(--text-primary)"
+                        checked={worktree}
+                        disabled={isSubmitting}
+                        title={t('agentsView.worktreeDescription')}
+                        onChange={(event) => setWorktree(event.target.checked)}
+                      />
+                      <span>{t('agentsView.worktree')}</span>
+                    </label>
+                  )}
+                </div>
               </div>
             ) : null}
 
@@ -592,7 +658,7 @@ export function AgentSessionDialog({
             <button
               type="submit"
               className="rounded-full border border-text-display px-4 py-2 text-sm text-text-display transition-colors hover:bg-bg-primary disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={!selectedWorkspace || !selectedProvider || isSubmitting || isSavingImages || promptIssue !== null}
+              disabled={!selectedWorkspace || !effectiveProvider || isSubmitting || isSavingImages || promptIssue !== null}
             >
               {isSubmitting ? t('agentsView.creatingSession') : t('agentsView.createSession')}
             </button>
