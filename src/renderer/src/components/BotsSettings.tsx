@@ -9,6 +9,7 @@ import {
   BOT_MODEL_MAX_LENGTH,
   BOT_NAME_MAX_LENGTH,
   BOT_ROLE_MAX_LENGTH,
+  BOT_TOOL_IDS,
   isValidBotModel,
 } from '@shared/bots'
 import type {
@@ -16,6 +17,7 @@ import type {
   BotDefinition,
   BotDefinitionInput,
   BotIconId,
+  BotToolId,
   BotWorkspaceScope,
 } from '@shared/bots'
 import type { AgentProvider, WorkspaceMetadata } from '@shared/types'
@@ -36,6 +38,9 @@ interface BotForm {
   description: string
   role: string
   workspaces: BotWorkspaceScope
+  /** Kept in `BOT_TOOL_IDS` order so the dirty check does not depend on click order. */
+  tools: BotToolId[]
+  callable: boolean
 }
 
 type Selection = { kind: 'bot'; id: string } | { kind: 'new'; key: number }
@@ -56,6 +61,8 @@ function emptyForm(provider: AgentProvider): BotForm {
     description: '',
     role: '',
     workspaces: { mode: 'all' },
+    tools: [],
+    callable: false,
   }
 }
 
@@ -69,6 +76,8 @@ function formFromBot(bot: BotDefinition): BotForm {
     description: bot.description,
     role: bot.role,
     workspaces: bot.workspaces,
+    tools: BOT_TOOL_IDS.filter((tool) => bot.tools.includes(tool)),
+    callable: bot.callable,
   }
 }
 
@@ -433,6 +442,33 @@ function BotEditor({ bot, enabledProviders, workspaces, onSaved, onDeleted }: Bo
         />
       </section>
 
+      <section className={BLOCK_CLASS} aria-labelledby={`${ids}-tools`}>
+        <h4 id={`${ids}-tools`} className="nd-label text-text-display">{t('bots.yiraTools')}</h4>
+        <p className="mt-2 text-xs text-text-secondary">{t('bots.yiraToolsNote')}</p>
+        <ul className="mt-3 space-y-1">
+          {BOT_TOOL_IDS.map((tool) => (
+            <li key={tool}>
+              <ToggleRow
+                label={t(`bots.toolLabels.${tool}`)}
+                help={t(`bots.toolHelps.${tool}`)}
+                checked={form.tools.includes(tool)}
+                onChange={(checked) => update({
+                  tools: BOT_TOOL_IDS.filter((id) => (id === tool ? checked : form.tools.includes(id))),
+                })}
+              />
+            </li>
+          ))}
+        </ul>
+        <div className="mt-3 border-t border-border pt-3">
+          <ToggleRow
+            label={t('bots.callable')}
+            help={t('bots.callableHelp')}
+            checked={form.callable}
+            onChange={(callable) => update({ callable })}
+          />
+        </div>
+      </section>
+
       <section className={BLOCK_CLASS} aria-labelledby={`${ids}-workspaces`}>
         <h4 id={`${ids}-workspaces`} className="nd-label text-text-display">{t('bots.workspaces')}</h4>
         <WorkspaceScopePicker
@@ -505,6 +541,32 @@ function BotEditor({ bot, enabledProviders, workspaces, onSaved, onDeleted }: Bo
         )}
       </div>
     </form>
+  )
+}
+
+interface ToggleRowProps {
+  label: string
+  help: string
+  checked: boolean
+  onChange: (checked: boolean) => void
+}
+
+function ToggleRow({ label, help, checked, onChange }: ToggleRowProps): React.ReactElement {
+  const helpId = useId()
+  return (
+    <label className="flex cursor-pointer items-start gap-2 rounded-[10px] px-2 py-1.5 hover:bg-hover-bg">
+      <input
+        type="checkbox"
+        className="mt-0.5 accent-(--accent)"
+        checked={checked}
+        aria-describedby={helpId}
+        onChange={(event) => onChange(event.target.checked)}
+      />
+      <span className="min-w-0">
+        <span className="block text-sm text-text-primary">{label}</span>
+        <span id={helpId} className="block text-xs text-text-secondary">{help}</span>
+      </span>
+    </label>
   )
 }
 
