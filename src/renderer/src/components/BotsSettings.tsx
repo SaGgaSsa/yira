@@ -497,7 +497,7 @@ function BotEditor({ bot, enabledProviders, workspaces, onSaved, onDeleted }: Bo
 
       {bot && <BotRoutines bot={bot} />}
 
-      <div className="sticky bottom-0 z-10 space-y-3 border-t border-border bg-bg-tertiary py-3">
+      <div className="sticky bottom-0 z-10 space-y-3 border-t border-border bg-bg-primary py-3">
         {error && (
           <p role="alert" className="rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>
         )}
