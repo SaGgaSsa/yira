@@ -508,6 +508,9 @@ type TranslationResources = {
     }
   }
   settings: {
+    pageTitle: string
+    saved: string
+    saveFailed: string
     bots: string
     agentAlerts: string
     agentAlertsDescription: string
@@ -600,9 +603,6 @@ type TranslationResources = {
     notificationsAndCreation: string
     openRawCanvasJson: string
     restartToInstall: string
-    sections: string
-    selectCategory: string
-    settingsMatrix: string
     shortcuts: string
     shortcutsHelp: string
     shortcutClosePanelsOrClearSelection: string
@@ -634,7 +634,6 @@ type TranslationResources = {
     shortcutToggleFullscreen: string
     shortcutWindow: string
     snapEnabled: string
-    systemControls: string
     terminal: string
     agents: string
     terminalActivity: string
@@ -1756,6 +1755,9 @@ const en: TranslationResources = {
     },
   },
   settings: {
+    pageTitle: 'Settings',
+    saved: 'Saved',
+    saveFailed: 'Could not save settings.',
     bots: 'Bots',
     agentAlerts: 'Agent alerts',
     agentAlertsDescription: 'Show semantic completion and intervention alerts from configured Codex and Claude hooks.',
@@ -1796,7 +1798,7 @@ const en: TranslationResources = {
     requiresWindows11: 'Requires Windows 11 or Linux',
     defaultAppearanceDescription: 'Applies only to the Default theme.',
     mode: 'Mode',
-    themePreviewHint: 'Changes preview instantly. Save to keep them or Cancel to revert.',
+    themePreviewHint: 'Changes apply and save instantly.',
     followAppTheme: 'Default · Follow application',
     appearance: 'Appearance',
     aboutAndUpdates: 'About & Updates',
@@ -1848,9 +1850,6 @@ const en: TranslationResources = {
     notificationsAndCreation: 'Notifications and creation',
     openRawCanvasJson: 'Open raw canvas JSON',
     restartToInstall: 'Restart to install',
-    sections: 'Sections',
-    selectCategory: 'Select a category to edit its controls.',
-    settingsMatrix: 'Settings Matrix',
     shortcuts: 'Shortcuts',
     shortcutsHelp: 'Click a shortcut and press a new combination. Esc cancels. Shortcuts shown as plain text can\'t be changed.',
     shortcutClosePanelsOrClearSelection: 'Close panels or clear selection',
@@ -1882,7 +1881,6 @@ const en: TranslationResources = {
     shortcutToggleFullscreen: 'Toggle fullscreen',
     shortcutWindow: 'Window',
     snapEnabled: 'Snap enabled',
-    systemControls: 'Yira system controls',
     terminal: 'Terminal',
     agents: 'Agents',
     terminalActivity: 'Terminal activity',
@@ -3004,6 +3002,9 @@ const es: TranslationResources = {
     },
   },
   settings: {
+    pageTitle: 'Configuración',
+    saved: 'Guardado',
+    saveFailed: 'No se pudieron guardar los ajustes.',
     bots: 'Bots',
     agentAlerts: 'Alertas de agentes',
     agentAlertsDescription: 'Muestra alertas semánticas de finalización e intervención de los hooks configurados de Codex y Claude.',
@@ -3044,7 +3045,7 @@ const es: TranslationResources = {
     requiresWindows11: 'Requiere Windows 11 o Linux',
     defaultAppearanceDescription: 'Solo se aplica al tema Default.',
     mode: 'Modo',
-    themePreviewHint: 'Los cambios se ven al instante. Guarda para conservarlos o cancela para revertirlos.',
+    themePreviewHint: 'Los cambios se aplican y guardan al instante.',
     followAppTheme: 'Default · Seguir aplicación',
     appearance: 'Apariencia',
     aboutAndUpdates: 'Acerca de y actualizaciones',
@@ -3096,9 +3097,6 @@ const es: TranslationResources = {
     notificationsAndCreation: 'Notificaciones y creación',
     openRawCanvasJson: 'Abrir JSON sin procesar del lienzo',
     restartToInstall: 'Reiniciar para instalar',
-    sections: 'Secciones',
-    selectCategory: 'Selecciona una categoría para editar sus controles.',
-    settingsMatrix: 'Matriz de configuración',
     shortcuts: 'Atajos',
     shortcutsHelp: 'Haz clic en un atajo y pulsa una nueva combinación. Esc cancela. Los atajos que se muestran como texto plano no se pueden cambiar.',
     shortcutClosePanelsOrClearSelection: 'Cerrar paneles o limpiar selección',
@@ -3130,7 +3128,6 @@ const es: TranslationResources = {
     shortcutToggleFullscreen: 'Alternar pantalla completa',
     shortcutWindow: 'Ventana',
     snapEnabled: 'Ajuste activado',
-    systemControls: 'Controles del sistema Yira',
     terminal: 'Terminal',
     agents: 'Agentes',
     terminalActivity: 'Actividad de terminal',

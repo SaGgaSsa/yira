@@ -164,7 +164,7 @@ export function BotRoutines({ bot }: { bot: BotDefinition }): React.ReactElement
   }
 
   return (
-    <section className={BLOCK_CLASS} aria-labelledby={`${ids}-title`} onKeyDown={preventFormSubmit}>
+    <section className={`${BLOCK_CLASS} @container`} aria-labelledby={`${ids}-title`} onKeyDown={preventFormSubmit}>
       <div className="flex items-center justify-between gap-3">
         <h4 id={`${ids}-title`} className="nd-label text-text-display">{t('bots.routines.title')}</h4>
         {!editing && (
@@ -185,7 +185,7 @@ export function BotRoutines({ bot }: { bot: BotDefinition }): React.ReactElement
       )}
 
       {botRoutines.length > 0 && (
-        <ul className="mt-3 space-y-2">
+        <ul className="mt-3 grid gap-2 @3xl:grid-cols-2 @3xl:items-start">
           {botRoutines.map((routine) => (
             <li key={routine.id}>
               {editing?.kind === 'routine' && editing.id === routine.id ? null : (
@@ -404,39 +404,41 @@ function RoutineEditor({ bot, routine, workspaces, onDone }: RoutineEditorProps)
 
   return (
     <div className="mt-3 space-y-4 rounded-[14px] border border-border-visible bg-bg-secondary px-3 py-4">
-      <div>
-        <label htmlFor={`${ids}-name`} className="nd-label text-text-secondary">{t('bots.routines.name')}</label>
-        <input
-          id={`${ids}-name`}
-          type="text"
-          className={`${FIELD_CLASS} mt-2`}
-          value={form.name}
-          maxLength={ROUTINE_NAME_MAX_LENGTH}
-          placeholder={t('bots.routines.namePlaceholder')}
-          onChange={(event) => update({ name: event.target.value })}
-        />
-      </div>
+      <div className="grid gap-4 @3xl:grid-cols-2 @3xl:items-start">
+        <div>
+          <label htmlFor={`${ids}-name`} className="nd-label text-text-secondary">{t('bots.routines.name')}</label>
+          <input
+            id={`${ids}-name`}
+            type="text"
+            className={`${FIELD_CLASS} mt-2`}
+            value={form.name}
+            maxLength={ROUTINE_NAME_MAX_LENGTH}
+            placeholder={t('bots.routines.namePlaceholder')}
+            onChange={(event) => update({ name: event.target.value })}
+          />
+        </div>
 
-      <div>
-        <label htmlFor={`${ids}-workspace`} className="nd-label text-text-secondary">{t('bots.routines.workspace')}</label>
-        <select
-          id={`${ids}-workspace`}
-          className={`${FIELD_CLASS} mt-2`}
-          value={workspaceValid ? workspaceId : ''}
-          disabled={workspaces.length === 0}
-          aria-describedby={workspaces.length === 0 ? `${ids}-workspace-hint` : undefined}
-          onChange={(event) => update({ workspaceId: event.target.value })}
-        >
-          {!workspaceValid && <option value="" disabled>{t('bots.routines.workspaceChoose')}</option>}
-          {workspaces.map((workspace) => (
-            <option key={workspace.id} value={workspace.id}>
-              {workspace.name.trim() || t('bots.workspaceUnnamed')}
-            </option>
-          ))}
-        </select>
-        {workspaces.length === 0 && (
-          <p id={`${ids}-workspace-hint`} className="mt-2 text-xs text-text-secondary">{t('bots.routines.noWorkspaces')}</p>
-        )}
+        <div>
+          <label htmlFor={`${ids}-workspace`} className="nd-label text-text-secondary">{t('bots.routines.workspace')}</label>
+          <select
+            id={`${ids}-workspace`}
+            className={`${FIELD_CLASS} mt-2`}
+            value={workspaceValid ? workspaceId : ''}
+            disabled={workspaces.length === 0}
+            aria-describedby={workspaces.length === 0 ? `${ids}-workspace-hint` : undefined}
+            onChange={(event) => update({ workspaceId: event.target.value })}
+          >
+            {!workspaceValid && <option value="" disabled>{t('bots.routines.workspaceChoose')}</option>}
+            {workspaces.map((workspace) => (
+              <option key={workspace.id} value={workspace.id}>
+                {workspace.name.trim() || t('bots.workspaceUnnamed')}
+              </option>
+            ))}
+          </select>
+          {workspaces.length === 0 && (
+            <p id={`${ids}-workspace-hint`} className="mt-2 text-xs text-text-secondary">{t('bots.routines.noWorkspaces')}</p>
+          )}
+        </div>
       </div>
 
       <div>
