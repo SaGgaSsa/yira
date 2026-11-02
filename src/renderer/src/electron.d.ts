@@ -85,6 +85,7 @@ import type { TerminalProcessActivitySnapshot } from '@shared/terminalProcessAct
 import type { TerminalSessionIdentity, TerminalSessionTarget } from '@shared/terminalSessionIdentity'
 import type { ModPanel, ModPanelChange, ModPanelPress } from '@shared/modPanels'
 import type { BotCallConfirmRequest, BotDefinition, BotDefinitionInput, BotOpenSessionEvent } from '@shared/bots'
+import type { Routine, RoutineInput, RoutineRunResult } from '@shared/routines'
 
 type NoteData = {
   title?: string
@@ -143,6 +144,13 @@ interface ElectronWorld {
     onOpenSession: (callback: (event: BotOpenSessionEvent) => void) => () => void
     onCallConfirmRequest: (callback: (request: BotCallConfirmRequest) => void) => () => void
     respondCallConfirm: (requestId: string, allowed: boolean) => Promise<boolean>
+  }
+  routines: {
+    list: () => Promise<Routine[]>
+    save: (input: RoutineInput) => Promise<Routine>
+    delete: (id: string) => Promise<boolean>
+    runNow: (id: string) => Promise<RoutineRunResult>
+    onChanged: (callback: (routines: Routine[]) => void) => () => void
   }
   scripts: {
     snapshot: (workspaceId: string) => Promise<WorkspaceScriptsSnapshot>

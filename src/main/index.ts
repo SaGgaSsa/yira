@@ -26,6 +26,7 @@ import { registerWindowIPC, type WindowClosePreparationBridge } from './ipc/wind
 import { registerFloatingTilesIPC } from './ipc/floatingTiles'
 import { getAgentSessionLauncher, registerAgentsIPC } from './ipc/agents'
 import { getBotById, listBots, registerBotsIPC } from './ipc/bots'
+import { registerRoutinesIPC } from './ipc/routines'
 import { BotBridge, setActiveBotBridge } from './bots/botBridge'
 import { BotCallConfirmBroker } from './bots/botCallConfirm'
 import { createBotToolProviders } from './bots/botTools'
@@ -344,6 +345,7 @@ app.whenReady().then(async () => {
     workspaces: getWorkspaceRootFolders,
   })
   registerBotsIPC()
+  registerRoutinesIPC()
   registerBotTools()
   void botBridge.start().catch((error) => {
     console.warn('[main] bot bridge failed:', error instanceof Error ? error.message : String(error))
