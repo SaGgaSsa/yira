@@ -277,6 +277,7 @@ function normalizeAgent(value: unknown): TerminalDaemonAgent | undefined {
   const cwd = normalizeMetadataString('cwd', MAX_WORKTREE_PATH_LENGTH)
   const worktreeRoot = normalizeMetadataString('worktreeRoot', MAX_WORKTREE_PATH_LENGTH)
   const worktreeBranch = normalizeMetadataString('worktreeBranch', MAX_ID_LENGTH)
+  const botId = normalizeMetadataString('botId', MAX_ID_LENGTH)
   let worktrees: Array<{ path: string; baseSha: string }> | undefined
   if (value.worktrees !== undefined) {
     if (!Array.isArray(value.worktrees) || value.worktrees.length > 32) {
@@ -307,6 +308,7 @@ function normalizeAgent(value: unknown): TerminalDaemonAgent | undefined {
     ...(worktreeRoot !== undefined ? { worktreeRoot } : {}),
     ...(worktreeBranch !== undefined ? { worktreeBranch } : {}),
     ...(worktrees !== undefined ? { worktrees } : {}),
+    ...(botId !== undefined ? { botId } : {}),
   }
 }
 

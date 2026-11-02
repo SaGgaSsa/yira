@@ -27,6 +27,7 @@ export interface AgentSessionRegistration {
   worktreeRoot?: string
   worktreeBranch?: string
   worktrees?: Array<{ path: string; baseSha: string }>
+  botId?: string
   /** Status before any hook or input arrives. Defaults to 'working'. */
   initialStatus?: 'working' | 'done'
 }
@@ -94,6 +95,7 @@ function normalizeRegistration(input: AgentSessionRegistration): AgentSessionReg
   const cwd = normalizeMetadataString(input.cwd, 'cwd', 4_096)
   const worktreeRoot = normalizeMetadataString(input.worktreeRoot, 'worktree root', 4_096)
   const worktreeBranch = normalizeMetadataString(input.worktreeBranch, 'worktree branch', 256)
+  const botId = normalizeMetadataString(input.botId, 'bot id', 128)
   let worktrees: Array<{ path: string; baseSha: string }> | undefined
   if (input.worktrees !== undefined) {
     if (!Array.isArray(input.worktrees) || input.worktrees.length > 32) {
@@ -121,6 +123,7 @@ function normalizeRegistration(input: AgentSessionRegistration): AgentSessionReg
     ...(worktreeRoot !== undefined ? { worktreeRoot } : {}),
     ...(worktreeBranch !== undefined ? { worktreeBranch } : {}),
     ...(worktrees !== undefined ? { worktrees } : {}),
+    ...(botId !== undefined ? { botId } : {}),
     ...(input.initialStatus === 'done' ? { initialStatus: 'done' as const } : {}),
   }
 }
@@ -170,6 +173,7 @@ export class AgentSessionRegistry {
       ...(normalized.worktreeRoot !== undefined ? { worktreeRoot: normalized.worktreeRoot } : {}),
       ...(normalized.worktreeBranch !== undefined ? { worktreeBranch: normalized.worktreeBranch } : {}),
       ...(normalized.worktrees !== undefined ? { worktrees: normalized.worktrees } : {}),
+      ...(normalized.botId !== undefined ? { botId: normalized.botId } : {}),
     }
     this.sessions.set(key, session)
     this.emit()

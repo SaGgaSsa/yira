@@ -615,6 +615,7 @@ export class PersistentTerminalSessions {
         ...(snapshot.agent.worktreeRoot !== undefined ? { worktreeRoot: snapshot.agent.worktreeRoot } : {}),
         ...(snapshot.agent.worktreeBranch !== undefined ? { worktreeBranch: snapshot.agent.worktreeBranch } : {}),
         ...(snapshot.agent.worktrees !== undefined ? { worktrees: snapshot.agent.worktrees } : {}),
+        ...(snapshot.agent.botId !== undefined ? { botId: snapshot.agent.botId } : {}),
       })
       record.agentRegistered = true
       // The snapshot buffer ends with the terminal's current title.
