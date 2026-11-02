@@ -3,6 +3,7 @@ import type { WindowBackgroundMaterial, WindowBackgroundMaterialState } from '@s
 import type { TerminalProcessActivitySnapshot } from '@shared/terminalProcessActivity'
 import type { ModPanel, ModPanelChange, ModPanelPress } from '@shared/modPanels'
 import type { BotCallConfirmRequest, BotDefinition, BotDefinitionInput, BotOpenSessionEvent } from '@shared/bots'
+import type { Routine, RoutineInput, RoutineRunResult } from '@shared/routines'
 import { contextBridge, ipcRenderer } from 'electron'
 import type {
   AgentActiveSessionSnapshot,
@@ -164,6 +165,19 @@ contextBridge.exposeInMainWorld('electron', {
     },
     respondCallConfirm: (requestId: string, allowed: boolean) =>
       ipcRenderer.invoke('bots:confirmCall:respond', requestId, allowed) as Promise<boolean>,
+  },
+
+  // Routines run a bot on a schedule in a workspace.
+  routines: {
+    list: () => ipcRenderer.invoke('routines:list') as Promise<Routine[]>,
+    save: (input: RoutineInput) => ipcRenderer.invoke('routines:save', input) as Promise<Routine>,
+    delete: (id: string) => ipcRenderer.invoke('routines:delete', id) as Promise<boolean>,
+    runNow: (id: string) => ipcRenderer.invoke('routines:runNow', id) as Promise<RoutineRunResult>,
+    onChanged: (callback: (routines: Routine[]) => void) => {
+      const handler = (_event: unknown, routines: Routine[]) => callback(routines)
+      ipcRenderer.on('routines:changed', handler)
+      return () => ipcRenderer.removeListener('routines:changed', handler)
+    },
   },
 
   // Workspace scripts run in persistent daemon PTYs without renderer terminal tiles.

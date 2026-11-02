@@ -770,6 +770,28 @@ test('rejects closing a persistent tile session from Agents View', async () => {
   assert.ok(registry.get('workspace-a', 'terminal-tile'))
 })
 
+test('the session closer closes Agents View sessions without IPC', async () => {
+  const { createAgentSessionCloser } = loadAgentsIPC(new FakeIpcMain())
+  const registry = new AgentSessionRegistry()
+  const destroyed: string[] = []
+  const closeSession = createAgentSessionCloser({
+    registry,
+    destroySession: async ({ tileId }) => { destroyed.push(tileId) },
+  })
+  registry.register({
+    sessionId: 'agent-closer',
+    tileId: 'agent-closer',
+    workspaceId: 'workspace-a',
+    provider: 'claude',
+    surface: 'agents-view',
+  })
+
+  assert.deepEqual(await closeSession({ workspaceId: 'workspace-a', tileId: 'agent-closer' }), { worktree: 'none' })
+  assert.deepEqual(destroyed, ['agent-closer'])
+  assert.equal(registry.get('workspace-a', 'agent-closer'), null)
+  await assert.rejects(() => closeSession({ workspaceId: 'workspace-a', tileId: 'agent-closer' }), /Agent session not found/)
+})
+
 test('closes Agents View sessions and reports whether their worktrees were kept or removed', async () => {
   for (const worktreeResult of ['kept', 'removed'] as const) {
     const ipcMain = new FakeIpcMain()

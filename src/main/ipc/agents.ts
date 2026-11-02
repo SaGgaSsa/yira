@@ -519,6 +519,60 @@ export function createAgentSessionLauncher(options: AgentIPCOptions = {}): Agent
   }
 }
 
+export type AgentSessionCloser = (rawInput: unknown) => Promise<AgentSessionCloseResult>
+
+let agentSessionCloser: AgentSessionCloser | null = null
+
+/** The closer built by `registerAgentsIPC`, shared with main-process callers such as the routine scheduler. */
+export function getAgentSessionCloser(): AgentSessionCloser | null {
+  return agentSessionCloser
+}
+
+/** Builds the validated closer for Agents View sessions, including worktree cleanup. */
+export function createAgentSessionCloser(options: AgentIPCOptions = {}): AgentSessionCloser {
+  const registry = options.registry ?? agentSessionRegistry
+  const worktrees = options.worktrees ?? defaultWorktrees
+
+  return async (rawInput: unknown): Promise<AgentSessionCloseResult> => {
+    if (!isRecord(rawInput)) throw new Error('Invalid agent session input')
+    const workspaceId = normalizeAgentOpaqueId(rawInput.workspaceId)
+    const tileId = normalizeAgentOpaqueId(rawInput.tileId)
+    if (!workspaceId || !tileId) throw new Error('Invalid agent session id')
+
+    const session = registry.get(workspaceId, tileId)
+    if (!session) throw new Error('Agent session not found')
+    if (session.surface !== 'agents-view') throw new Error('Only Agents View sessions can be closed here')
+
+    const target = { workspaceId, tileId }
+    await destroyAgentSession(options, target)
+    registry.remove(workspaceId, tileId)
+
+    let worktreeResult: AgentSessionCloseResult['worktree'] = 'none'
+    let worktreeRoot: string | undefined
+    if (session.worktreeRoot && session.worktreeBranch && session.worktrees?.length) {
+      worktreeRoot = session.worktreeRoot
+      try {
+        const allRemoved = await removeWorkspaceWorktrees({
+          branch: session.worktreeBranch,
+          worktrees: session.worktrees,
+        }, worktrees.removeAgentWorktreeIfClean)
+        if (allRemoved) {
+          await removeEmptyWorktreeRoot(session.worktreeRoot)
+          worktreeResult = 'removed'
+          worktreeRoot = undefined
+        } else {
+          worktreeResult = 'kept'
+        }
+      } catch {
+        // The session is already closed. A worktree Git refuses to remove
+        // (for example, files still locked on Windows) stays in place.
+        worktreeResult = 'kept'
+      }
+    }
+    return { worktree: worktreeResult, ...(worktreeResult === 'kept' && worktreeRoot ? { worktreeRoot } : {}) }
+  }
+}
+
 /** Register all renderer-facing agent operations with validated, data-only inputs. */
 export function registerAgentsIPC(options: AgentIPCOptions = {}): void {
   const registry = options.registry ?? agentSessionRegistry
@@ -603,44 +657,11 @@ export function registerAgentsIPC(options: AgentIPCOptions = {}): void {
   ipcMain.handle('agents:sessions:create', (_event, rawInput: unknown): Promise<AgentSessionCreateResult> =>
     createSession(rawInput))
 
-  ipcMain.handle('agents:sessions:close', async (_event, rawInput: unknown): Promise<AgentSessionCloseResult> => {
-    if (!isRecord(rawInput)) throw new Error('Invalid agent session input')
-    const workspaceId = normalizeAgentOpaqueId(rawInput.workspaceId)
-    const tileId = normalizeAgentOpaqueId(rawInput.tileId)
-    if (!workspaceId || !tileId) throw new Error('Invalid agent session id')
+  const closeSession = createAgentSessionCloser(options)
+  agentSessionCloser = closeSession
 
-    const session = registry.get(workspaceId, tileId)
-    if (!session) throw new Error('Agent session not found')
-    if (session.surface !== 'agents-view') throw new Error('Only Agents View sessions can be closed here')
-
-    const target = { workspaceId, tileId }
-    await destroyAgentSession(options, target)
-    registry.remove(workspaceId, tileId)
-
-    let worktreeResult: AgentSessionCloseResult['worktree'] = 'none'
-    let worktreeRoot: string | undefined
-    if (session.worktreeRoot && session.worktreeBranch && session.worktrees?.length) {
-      worktreeRoot = session.worktreeRoot
-      try {
-        const allRemoved = await removeWorkspaceWorktrees({
-          branch: session.worktreeBranch,
-          worktrees: session.worktrees,
-        }, worktrees.removeAgentWorktreeIfClean)
-        if (allRemoved) {
-          await removeEmptyWorktreeRoot(session.worktreeRoot)
-          worktreeResult = 'removed'
-          worktreeRoot = undefined
-        } else {
-          worktreeResult = 'kept'
-        }
-      } catch {
-        // The session is already closed. A worktree Git refuses to remove
-        // (for example, files still locked on Windows) stays in place.
-        worktreeResult = 'kept'
-      }
-    }
-    return { worktree: worktreeResult, ...(worktreeResult === 'kept' && worktreeRoot ? { worktreeRoot } : {}) }
-  })
+  ipcMain.handle('agents:sessions:close', (_event, rawInput: unknown): Promise<AgentSessionCloseResult> =>
+    closeSession(rawInput))
 
   ipcMain.handle('agents:sessions:pin', async (_event, rawInput: unknown): Promise<AgentSessionPinResult> => {
     if (!isRecord(rawInput)) throw new Error('Invalid agent session input')
