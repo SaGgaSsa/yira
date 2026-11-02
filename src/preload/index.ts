@@ -2,6 +2,7 @@ import type { AppThemeId } from '@shared/appThemes'
 import type { WindowBackgroundMaterial, WindowBackgroundMaterialState } from '@shared/types'
 import type { TerminalProcessActivitySnapshot } from '@shared/terminalProcessActivity'
 import type { ModPanel, ModPanelChange, ModPanelPress } from '@shared/modPanels'
+import type { BotDefinition, BotDefinitionInput } from '@shared/bots'
 import { contextBridge, ipcRenderer } from 'electron'
 import type {
   AgentActiveSessionSnapshot,
@@ -139,6 +140,18 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.invoke('agents:history', query) as Promise<AgentSessionHistoryResult>,
     historyTranscript: (query: AgentSessionTranscriptQuery) =>
       ipcRenderer.invoke('agents:history:transcript', query) as Promise<AgentSessionTranscriptResult>,
+  },
+
+  // Bots are saved agent definitions (profile, model and role) stored in the Yira home.
+  bots: {
+    list: () => ipcRenderer.invoke('bots:list') as Promise<BotDefinition[]>,
+    save: (input: BotDefinitionInput) => ipcRenderer.invoke('bots:save', input) as Promise<BotDefinition>,
+    delete: (id: string) => ipcRenderer.invoke('bots:delete', id) as Promise<boolean>,
+    onChanged: (callback: (bots: BotDefinition[]) => void) => {
+      const handler = (_event: unknown, bots: BotDefinition[]) => callback(bots)
+      ipcRenderer.on('bots:changed', handler)
+      return () => ipcRenderer.removeListener('bots:changed', handler)
+    },
   },
 
   // Workspace scripts run in persistent daemon PTYs without renderer terminal tiles.
