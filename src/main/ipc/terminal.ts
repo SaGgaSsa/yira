@@ -39,7 +39,11 @@ import { normalizeAgentOpaqueId } from '../agents/query'
 import { buildAgentTerminalLaunch, type AgentTerminalLaunch } from '../agents/terminal'
 import { agentSessionExists, buildAgentCommand, normalizeResumeId } from '../agents/providers'
 import { ensureAgentShellStartupFiles } from '../agents/shellStartup'
-import { buildBotLaunchArgs } from '../agents/botLaunch'
+import { is } from '@electron-toolkit/utils'
+import { writeFileAtomic } from '@shared/atomicWrite'
+import type { BotToolId } from '@shared/bots'
+import { buildBotLaunchArgs, buildBotMcpConfigJson, type BotLaunchInput } from '../agents/botLaunch'
+import { getActiveBotBridge } from '../bots/botBridge'
 import { writeBotRoleFile } from './bots'
 import {
   buildAgentShellCommand,
@@ -200,7 +204,7 @@ export interface AgentsViewLaunchSpec {
     branch: string
     worktrees: Array<{ path: string; baseSha: string }>
   }
-  bot?: { id: string; role: string; model: string }
+  bot?: { id: string; role: string; model: string; tools: BotToolId[] }
 }
 
 let terminalProcessActivityMonitor: TerminalProcessActivityMonitor | null = null
@@ -473,13 +477,45 @@ export async function destroyWorkspaceScriptSession(target: TerminalSessionTarge
   publishWorkspaceScriptSessionDestroyed(runtimeTarget)
 }
 
+const AUTO_APPROVED_READ_TOOLS: BotToolId[] = ['sessions_search', 'session_read']
+
+/** Yira MCP server for a bot with granted tools; undefined when it has none or the bridge is down. */
+async function buildBotMcpLaunch(
+  provider: AgentProvider,
+  bot: NonNullable<AgentsViewLaunchSpec['bot']>,
+  target: TerminalSessionTarget,
+): Promise<BotLaunchInput['mcp']> {
+  if (bot.tools.length === 0) return undefined
+  const bridge = getActiveBotBridge()
+  if (!bridge) {
+    console.warn('[bots] bridge not running; starting without Yira tools')
+    return undefined
+  }
+  const token = bridge.issueToken({ workspaceId: target.workspaceId, tileId: target.tileId, botId: bot.id })
+  const scriptPath = is.dev
+    ? join(process.cwd(), 'resources', 'yira-bot-mcp.mjs')
+    : join(process.resourcesPath, 'yira-bot-mcp.mjs')
+  const server = { scriptPath, bridgeFile: bridge.discoveryFilePath, token }
+  if (provider !== 'claude') return server
+
+  const claudeConfigPath = join(YIRA_HOME, 'bots', 'sessions', `${target.tileId}.mcp.json`)
+  await fs.mkdir(dirname(claudeConfigPath), { recursive: true })
+  await writeFileAtomic(claudeConfigPath, buildBotMcpConfigJson(server))
+  // Tools that open or start sessions stay out so the CLI asks the user.
+  const autoApprovedTools: string[] = AUTO_APPROVED_READ_TOOLS.filter((tool) => bot.tools.includes(tool))
+  if (bot.tools.includes('bots_call')) autoApprovedTools.push('bots_list')
+  return { ...server, claudeConfigPath, autoApprovedTools }
+}
+
 /** Claude reads the role from a file; Codex gets it inline, so only Claude needs the file written. */
 async function buildBotArgs(
   provider: AgentProvider,
   bot: NonNullable<AgentsViewLaunchSpec['bot']>,
+  target: TerminalSessionTarget,
 ): Promise<string[]> {
   const roleFilePath = provider === 'claude' && bot.role.trim() ? await writeBotRoleFile(bot) : undefined
-  return buildBotLaunchArgs({ provider, model: bot.model, role: bot.role, roleFilePath })
+  const mcp = await buildBotMcpLaunch(provider, bot, target)
+  return buildBotLaunchArgs({ provider, model: bot.model, role: bot.role, roleFilePath, mcp })
 }
 
 export async function createAgentsViewSession(
@@ -514,7 +550,7 @@ export async function createAgentsViewSession(
     // it later, the same mechanism buildFixedProviderCommand uses for tiles.
     const presetSessionId = spec.provider === 'claude' && !resumeSessionId ? randomUUID() : undefined
     if (presetSessionId) args.push('--session-id', presetSessionId)
-    if (spec.bot) args.push(...await buildBotArgs(spec.provider, spec.bot))
+    if (spec.bot) args.push(...await buildBotArgs(spec.provider, spec.bot, runtimeTarget))
 
     const launch = buildAgentShellCommand({
       shellProfileId: shellProfile.id,
