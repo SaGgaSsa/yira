@@ -164,7 +164,7 @@ export function BotsSettings({ enabledProviders }: BotsSettingsProps): React.Rea
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
+    <div className="grid gap-4 xl:grid-cols-[240px_minmax(0,1fr)]">
       <BotList
         bots={visibleBots}
         loaded={loaded}
@@ -201,7 +201,7 @@ function BotList({ bots, loaded, selection, onSelect, onNew }: BotListProps): Re
   }`
 
   return (
-    <div className="min-w-0 space-y-3">
+    <div className="min-w-0 space-y-3 self-start xl:sticky xl:top-0">
       <button
         type="button"
         className={`flex w-full items-center justify-center gap-2 rounded-full border border-border-visible px-4 py-2 text-sm text-text-display transition-colors hover:bg-hover-bg ${FOCUS_CLASS}`}
@@ -319,229 +319,244 @@ function BotEditor({ bot, enabledProviders, workspaces, onSaved, onDeleted }: Bo
         if (canSave) void save()
       }}
     >
-      <section className={BLOCK_CLASS} aria-labelledby={`${ids}-identity`}>
-        <h4 id={`${ids}-identity`} className="nd-label text-text-display">{t('bots.identity')}</h4>
-        <div className="mt-3 space-y-4">
-          <div>
-            <label htmlFor={`${ids}-name`} className="nd-label text-text-secondary">{t('bots.name')}</label>
-            <input
-              id={`${ids}-name`}
-              type="text"
-              className={`${FIELD_CLASS} mt-2`}
-              value={form.name}
-              maxLength={BOT_NAME_MAX_LENGTH}
-              placeholder={t('bots.namePlaceholder')}
-              onChange={(event) => update({ name: event.target.value })}
-            />
-          </div>
-          <IconPicker
-            labelId={`${ids}-icon`}
-            name={`${ids}-icon-radio`}
-            value={form.icon}
-            color={form.color}
-            onChange={(icon) => update({ icon })}
-          />
-          <ColorPicker
-            labelId={`${ids}-color`}
-            name={`${ids}-color-radio`}
-            value={form.color}
-            onChange={(color) => update({ color })}
-          />
-          <div className="flex items-center gap-3 border-t border-border pt-3">
-            <span className="nd-label text-text-secondary">{t('bots.preview')}</span>
-            <BotAvatar icon={form.icon} color={form.color} size={28} />
-            <span className="min-w-0 truncate text-sm text-text-display">
-              {form.name.trim() || t('bots.newBotDraft')}
-            </span>
-          </div>
-        </div>
-      </section>
-
-      <section className={BLOCK_CLASS} aria-labelledby={`${ids}-agent`}>
-        <h4 id={`${ids}-agent`} className="nd-label text-text-display">{t('bots.agent')}</h4>
-        <div className="mt-3 space-y-4">
-          <div>
-            <div id={`${ids}-provider`} className="nd-label text-text-secondary">{t('bots.provider')}</div>
-            <div role="radiogroup" aria-labelledby={`${ids}-provider`} className="mt-2 flex flex-wrap gap-2">
-              {providerOptions.map((provider) => (
-                <label
-                  key={provider}
-                  className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border-visible px-3 py-1.5 text-sm text-text-primary has-checked:border-accent has-checked:bg-accent-subtle has-focus-visible:outline-solid has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-(--interactive)"
-                >
+      {/*
+        Narrow editors stack every block in `order-*` sequence. From 56rem of editor width the two
+        wrappers become real columns (`contents` stops flattening them) and `order-*` only sorts
+        blocks inside each column.
+      */}
+      <div className="@container">
+        <div className="flex flex-col gap-3 @4xl:grid @4xl:grid-cols-2 @4xl:items-start">
+          <div className="contents @4xl:flex @4xl:min-w-0 @4xl:flex-col @4xl:gap-3">
+            <section className={`${BLOCK_CLASS} order-1`} aria-labelledby={`${ids}-identity`}>
+              <h4 id={`${ids}-identity`} className="nd-label text-text-display">{t('bots.identity')}</h4>
+              <div className="mt-3 space-y-4">
+                <div>
+                  <label htmlFor={`${ids}-name`} className="nd-label text-text-secondary">{t('bots.name')}</label>
                   <input
-                    type="radio"
-                    name={`${ids}-provider-radio`}
-                    className="accent-(--accent)"
-                    checked={form.provider === provider}
-                    onChange={() => update({ provider })}
+                    id={`${ids}-name`}
+                    type="text"
+                    className={`${FIELD_CLASS} mt-2`}
+                    value={form.name}
+                    maxLength={BOT_NAME_MAX_LENGTH}
+                    placeholder={t('bots.namePlaceholder')}
+                    onChange={(event) => update({ name: event.target.value })}
                   />
-                  {agentProviderDetails[provider].label}
-                </label>
-              ))}
-            </div>
-            {providerDisabled && (
-              <p className="mt-2 text-xs text-text-secondary" role="status">{t('bots.providerDisabled')}</p>
-            )}
-          </div>
-          <div>
-            <label htmlFor={`${ids}-model`} className="nd-label text-text-secondary">{t('bots.model')}</label>
-            <input
-              id={`${ids}-model`}
-              type="text"
-              className={`${FIELD_CLASS} mt-2`}
-              value={form.model}
-              maxLength={BOT_MODEL_MAX_LENGTH}
-              placeholder={t('bots.modelPlaceholder')}
-              aria-invalid={!modelValid}
-              aria-describedby={`${ids}-model-help`}
-              spellCheck={false}
-              onChange={(event) => update({ model: event.target.value })}
-            />
-            <p id={`${ids}-model-help`} className={`mt-2 text-xs ${modelValid ? 'text-text-secondary' : 'text-danger'}`}>
-              {modelValid ? t('bots.modelHelp') : t('bots.modelInvalid')}
-            </p>
-          </div>
-        </div>
-      </section>
+                </div>
+                <IconPicker
+                  labelId={`${ids}-icon`}
+                  name={`${ids}-icon-radio`}
+                  value={form.icon}
+                  color={form.color}
+                  onChange={(icon) => update({ icon })}
+                />
+                <ColorPicker
+                  labelId={`${ids}-color`}
+                  name={`${ids}-color-radio`}
+                  value={form.color}
+                  onChange={(color) => update({ color })}
+                />
+                <div className="flex items-center gap-3 border-t border-border pt-3">
+                  <span className="nd-label text-text-secondary">{t('bots.preview')}</span>
+                  <BotAvatar icon={form.icon} color={form.color} size={28} />
+                  <span className="min-w-0 truncate text-sm text-text-display">
+                    {form.name.trim() || t('bots.newBotDraft')}
+                  </span>
+                </div>
+              </div>
+            </section>
 
-      <section className={BLOCK_CLASS}>
-        <label htmlFor={`${ids}-description`} className="nd-label text-text-display">{t('bots.purpose')}</label>
-        <textarea
-          id={`${ids}-description`}
-          className={`${FIELD_CLASS} mt-3 min-h-20 resize-y`}
-          value={form.description}
-          maxLength={BOT_DESCRIPTION_MAX_LENGTH}
-          placeholder={t('bots.purposePlaceholder')}
-          aria-describedby={`${ids}-description-help`}
-          onChange={(event) => update({ description: event.target.value })}
-        />
-        <FieldFooter
-          id={`${ids}-description-help`}
-          help={t('bots.purposeHelp')}
-          length={form.description.length}
-          max={BOT_DESCRIPTION_MAX_LENGTH}
-        />
-      </section>
+            <section className={`${BLOCK_CLASS} order-2`} aria-labelledby={`${ids}-agent`}>
+              <h4 id={`${ids}-agent`} className="nd-label text-text-display">{t('bots.agent')}</h4>
+              <div className="mt-3 space-y-4">
+                <div>
+                  <div id={`${ids}-provider`} className="nd-label text-text-secondary">{t('bots.provider')}</div>
+                  <div role="radiogroup" aria-labelledby={`${ids}-provider`} className="mt-2 flex flex-wrap gap-2">
+                    {providerOptions.map((provider) => (
+                      <label
+                        key={provider}
+                        className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border-visible px-3 py-1.5 text-sm text-text-primary has-checked:border-accent has-checked:bg-accent-subtle has-focus-visible:outline-solid has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-(--interactive)"
+                      >
+                        <input
+                          type="radio"
+                          name={`${ids}-provider-radio`}
+                          className="accent-(--accent)"
+                          checked={form.provider === provider}
+                          onChange={() => update({ provider })}
+                        />
+                        {agentProviderDetails[provider].label}
+                      </label>
+                    ))}
+                  </div>
+                  {providerDisabled && (
+                    <p className="mt-2 text-xs text-text-secondary" role="status">{t('bots.providerDisabled')}</p>
+                  )}
+                </div>
+                <div>
+                  <label htmlFor={`${ids}-model`} className="nd-label text-text-secondary">{t('bots.model')}</label>
+                  <input
+                    id={`${ids}-model`}
+                    type="text"
+                    className={`${FIELD_CLASS} mt-2`}
+                    value={form.model}
+                    maxLength={BOT_MODEL_MAX_LENGTH}
+                    placeholder={t('bots.modelPlaceholder')}
+                    aria-invalid={!modelValid}
+                    aria-describedby={`${ids}-model-help`}
+                    spellCheck={false}
+                    onChange={(event) => update({ model: event.target.value })}
+                  />
+                  <p id={`${ids}-model-help`} className={`mt-2 text-xs ${modelValid ? 'text-text-secondary' : 'text-danger'}`}>
+                    {modelValid ? t('bots.modelHelp') : t('bots.modelInvalid')}
+                  </p>
+                </div>
+              </div>
+            </section>
 
-      <section className={BLOCK_CLASS}>
-        <label htmlFor={`${ids}-role`} className="nd-label text-text-display">{t('bots.role')}</label>
-        <textarea
-          id={`${ids}-role`}
-          className={`${FIELD_CLASS} mt-3 min-h-64 resize-y font-mono`}
-          value={form.role}
-          maxLength={BOT_ROLE_MAX_LENGTH}
-          placeholder={t('bots.rolePlaceholder')}
-          aria-describedby={`${ids}-role-help`}
-          spellCheck={false}
-          onChange={(event) => update({ role: event.target.value })}
-        />
-        <FieldFooter
-          id={`${ids}-role-help`}
-          help={t('bots.roleHelp')}
-          length={form.role.length}
-          max={BOT_ROLE_MAX_LENGTH}
-        />
-      </section>
-
-      <section className={BLOCK_CLASS} aria-labelledby={`${ids}-tools`}>
-        <h4 id={`${ids}-tools`} className="nd-label text-text-display">{t('bots.yiraTools')}</h4>
-        <p className="mt-2 text-xs text-text-secondary">{t('bots.yiraToolsNote')}</p>
-        <ul className="mt-3 space-y-1">
-          {BOT_TOOL_IDS.map((tool) => (
-            <li key={tool}>
-              <ToggleRow
-                label={t(`bots.toolLabels.${tool}`)}
-                help={t(`bots.toolHelps.${tool}`)}
-                checked={form.tools.includes(tool)}
-                onChange={(checked) => update({
-                  tools: BOT_TOOL_IDS.filter((id) => (id === tool ? checked : form.tools.includes(id))),
-                })}
+            <section className={`${BLOCK_CLASS} order-3`}>
+              <label htmlFor={`${ids}-description`} className="nd-label text-text-display">{t('bots.purpose')}</label>
+              <textarea
+                id={`${ids}-description`}
+                className={`${FIELD_CLASS} mt-3 min-h-20 resize-y`}
+                value={form.description}
+                maxLength={BOT_DESCRIPTION_MAX_LENGTH}
+                placeholder={t('bots.purposePlaceholder')}
+                aria-describedby={`${ids}-description-help`}
+                onChange={(event) => update({ description: event.target.value })}
               />
-            </li>
-          ))}
-        </ul>
-        <div className="mt-3 border-t border-border pt-3">
-          <ToggleRow
-            label={t('bots.callable')}
-            help={t('bots.callableHelp')}
-            checked={form.callable}
-            onChange={(callable) => update({ callable })}
-          />
-        </div>
-      </section>
+              <FieldFooter
+                id={`${ids}-description-help`}
+                help={t('bots.purposeHelp')}
+                length={form.description.length}
+                max={BOT_DESCRIPTION_MAX_LENGTH}
+              />
+            </section>
 
-      <section className={BLOCK_CLASS} aria-labelledby={`${ids}-workspaces`}>
-        <h4 id={`${ids}-workspaces`} className="nd-label text-text-display">{t('bots.workspaces')}</h4>
-        <WorkspaceScopePicker
-          name={`${ids}-workspaces-radio`}
-          labelId={`${ids}-workspaces`}
-          helpId={`${ids}-workspaces-help`}
-          value={form.workspaces}
-          workspaces={workspaces}
-          onChange={(scope) => update({ workspaces: scope })}
-        />
-      </section>
+            <section className={`${BLOCK_CLASS} order-6`} aria-labelledby={`${ids}-workspaces`}>
+              <h4 id={`${ids}-workspaces`} className="nd-label text-text-display">{t('bots.workspaces')}</h4>
+              <WorkspaceScopePicker
+                name={`${ids}-workspaces-radio`}
+                labelId={`${ids}-workspaces`}
+                helpId={`${ids}-workspaces-help`}
+                value={form.workspaces}
+                workspaces={workspaces}
+                onChange={(scope) => update({ workspaces: scope })}
+              />
+            </section>
+          </div>
+
+          <div className="contents @4xl:flex @4xl:min-w-0 @4xl:flex-col @4xl:gap-3">
+            <section className={`${BLOCK_CLASS} order-4`}>
+              <label htmlFor={`${ids}-role`} className="nd-label text-text-display">{t('bots.role')}</label>
+              <textarea
+                id={`${ids}-role`}
+                className={`${FIELD_CLASS} mt-3 min-h-64 resize-y font-mono @4xl:min-h-72`}
+                value={form.role}
+                maxLength={BOT_ROLE_MAX_LENGTH}
+                placeholder={t('bots.rolePlaceholder')}
+                aria-describedby={`${ids}-role-help`}
+                spellCheck={false}
+                onChange={(event) => update({ role: event.target.value })}
+              />
+              <FieldFooter
+                id={`${ids}-role-help`}
+                help={t('bots.roleHelp')}
+                length={form.role.length}
+                max={BOT_ROLE_MAX_LENGTH}
+              />
+            </section>
+
+            <section className={`${BLOCK_CLASS} order-5`} aria-labelledby={`${ids}-tools`}>
+              <h4 id={`${ids}-tools`} className="nd-label text-text-display">{t('bots.yiraTools')}</h4>
+              <p className="mt-2 text-xs text-text-secondary">{t('bots.yiraToolsNote')}</p>
+              <ul className="mt-3 space-y-1">
+                {BOT_TOOL_IDS.map((tool) => (
+                  <li key={tool}>
+                    <ToggleRow
+                      label={t(`bots.toolLabels.${tool}`)}
+                      help={t(`bots.toolHelps.${tool}`)}
+                      checked={form.tools.includes(tool)}
+                      onChange={(checked) => update({
+                        tools: BOT_TOOL_IDS.filter((id) => (id === tool ? checked : form.tools.includes(id))),
+                      })}
+                    />
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-3 border-t border-border pt-3">
+                <ToggleRow
+                  label={t('bots.callable')}
+                  help={t('bots.callableHelp')}
+                  checked={form.callable}
+                  onChange={(callable) => update({ callable })}
+                />
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
 
       {bot && <BotRoutines bot={bot} />}
 
-      {error && (
-        <p role="alert" className="rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>
-      )}
+      <div className="sticky bottom-0 z-10 space-y-3 border-t border-border bg-bg-tertiary py-3">
+        {error && (
+          <p role="alert" className="rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>
+        )}
 
-      <div className="flex flex-wrap items-center gap-3">
-        <button
-          type="submit"
-          className={`rounded-full bg-accent px-4 py-2 text-sm text-(--accent-text) transition-colors hover:bg-(--accent-hover) disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS_CLASS}`}
-          disabled={!canSave}
-        >
-          {saving ? t('bots.saving') : t('bots.save')}
-        </button>
-        {dirty && (
+        <div className="flex flex-wrap items-center gap-3">
           <button
-            type="button"
-            className={SECONDARY_BUTTON_CLASS}
-            disabled={saving}
-            onClick={() => {
-              setForm(baseline)
-              setError('')
-            }}
+            type="submit"
+            className={`rounded-full bg-accent px-4 py-2 text-sm text-(--accent-text) transition-colors hover:bg-(--accent-hover) disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS_CLASS}`}
+            disabled={!canSave}
           >
-            {t('bots.discard')}
+            {saving ? t('bots.saving') : t('bots.save')}
           </button>
-        )}
-        {bot && (
-          <div className="ml-auto flex items-center gap-2">
-            {confirmingDelete ? (
-              <>
+          {dirty && (
+            <button
+              type="button"
+              className={SECONDARY_BUTTON_CLASS}
+              disabled={saving}
+              onClick={() => {
+                setForm(baseline)
+                setError('')
+              }}
+            >
+              {t('bots.discard')}
+            </button>
+          )}
+          {bot && (
+            <div className="ml-auto flex items-center gap-2">
+              {confirmingDelete ? (
+                <>
+                  <button
+                    type="button"
+                    className={SECONDARY_BUTTON_CLASS}
+                    disabled={saving}
+                    onClick={() => setConfirmingDelete(false)}
+                  >
+                    {t('bots.cancel')}
+                  </button>
+                  <button
+                    type="button"
+                    className={`rounded-full border border-danger bg-danger/10 px-4 py-2 text-sm text-danger transition-colors hover:bg-danger/20 disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS_CLASS}`}
+                    disabled={saving}
+                    onClick={() => void remove()}
+                  >
+                    {t('bots.confirmDelete')}
+                  </button>
+                </>
+              ) : (
                 <button
                   type="button"
-                  className={SECONDARY_BUTTON_CLASS}
+                  className={`rounded-full border border-danger/40 px-4 py-2 text-sm text-danger transition-colors hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS_CLASS}`}
                   disabled={saving}
-                  onClick={() => setConfirmingDelete(false)}
+                  onClick={() => setConfirmingDelete(true)}
                 >
-                  {t('bots.cancel')}
+                  {t('bots.delete')}
                 </button>
-                <button
-                  type="button"
-                  className={`rounded-full border border-danger bg-danger/10 px-4 py-2 text-sm text-danger transition-colors hover:bg-danger/20 disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS_CLASS}`}
-                  disabled={saving}
-                  onClick={() => void remove()}
-                >
-                  {t('bots.confirmDelete')}
-                </button>
-              </>
-            ) : (
-              <button
-                type="button"
-                className={`rounded-full border border-danger/40 px-4 py-2 text-sm text-danger transition-colors hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS_CLASS}`}
-                disabled={saving}
-                onClick={() => setConfirmingDelete(true)}
-              >
-                {t('bots.delete')}
-              </button>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </form>
   )

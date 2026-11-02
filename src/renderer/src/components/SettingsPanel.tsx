@@ -7,7 +7,7 @@ import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import {
-  X, Monitor, Moon, Sun, Type, Grid3x3, Globe, CodeXml, Info, RefreshCw, Download,
+  ArrowLeft, Monitor, Moon, Sun, Type, Grid3x3, Globe, CodeXml, Info, RefreshCw, Download,
   LayoutGrid, Keyboard, Terminal, ExternalLink, FileText, Bot, BotMessageSquare, Check,
 } from 'lucide-react'
 import { createUserSettingsDraft, useSettingsStore } from '@/store/settingsStore'
@@ -115,6 +115,54 @@ function SegmentedControl<Value extends string>({ value, options, disabled = fal
   )
 }
 
+type CommittedTextInputProps = Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'> & {
+  value: string
+  onCommit: (value: string) => void
+}
+
+// Keeps the typed text local and only hands it to the settings draft on blur or Enter.
+// Escape reverts the text and is not allowed to reach the page-level handler that closes Settings.
+function CommittedTextInput({ value, onCommit, onBlur, onKeyDown, ...inputProps }: CommittedTextInputProps): React.ReactElement {
+  const [localValue, setLocalValue] = useState(value)
+
+  useEffect(() => {
+    setLocalValue(value)
+  }, [value])
+
+  const commit = () => {
+    if (localValue !== value) onCommit(localValue)
+  }
+
+  return (
+    <input
+      {...inputProps}
+      value={localValue}
+      onChange={(event) => setLocalValue(event.target.value)}
+      onBlur={(event) => {
+        commit()
+        onBlur?.(event)
+      }}
+      onKeyDown={(event) => {
+        onKeyDown?.(event)
+        if (event.key === 'Enter') {
+          commit()
+        } else if (event.key === 'Escape') {
+          event.preventDefault()
+          event.stopPropagation()
+          setLocalValue(value)
+        }
+      }}
+    />
+  )
+}
+
+const SETTINGS_AUTOSAVE_DELAY_MS = 200
+const SAVED_INDICATOR_MS = 1500
+
+type SaveStatus = 'idle' | 'saved' | 'error'
+
+const serializeDraft = (settings: UserSettings): string => JSON.stringify(settings)
+
 const SUPPORT_REPOSITORY_URL = 'https://github.com/SaGgaSsa/yira'
 
 const SETTINGS_SECTIONS: Array<{
@@ -197,27 +245,25 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
   const [modPanelPromptCopied, setModPanelPromptCopied] = useState(false)
   const [agentDetection, setAgentDetection] = useState<AgentDetectionSnapshot | null>(null)
   const [draft, setDraft] = useState<UserSettings>(() => createUserSettingsDraft(useSettingsStore.getState()))
-  const [saving, setSaving] = useState(false)
-  const [saveError, setSaveError] = useState('')
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [supportLinkFailed, setSupportLinkFailed] = useState(false)
   const [backgroundMaterialSupported, setBackgroundMaterialSupported] = useState<WindowBackgroundMaterial[]>(['none'])
   const [legalDocument, setLegalDocument] = useState<LegalDocumentId | null>(null)
   const privacyDocumentButtonRef = useRef<HTMLButtonElement | null>(null)
   const termsDocumentButtonRef = useRef<HTMLButtonElement | null>(null)
   const restoreLegalDocumentFocusRef = useRef<LegalDocumentId | null>(null)
-  const themePreviewBaselineRef = useRef<ThemePreview | null>(null)
+  // Last serialized value known to be persisted; the autosave effect compares the draft against it.
+  const lastPersistedRef = useRef(serializeDraft(draft))
+  const draftRef = useRef(draft)
+  const savingRef = useRef(false)
+  const savedIndicatorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Set while the theme preview writes to the store, so the external-change sync ignores it.
+  const previewingThemeRef = useRef(false)
   const applySettings = useSettingsStore((s) => s.applySettings)
   const windowBackgroundMaterialRequiresRestart = useSettingsStore((s) => s.windowBackgroundMaterialRequiresRestart)
 
   const previewTheme = useCallback((patch: Partial<ThemePreview>) => {
-    if (!themePreviewBaselineRef.current) {
-      const state = useSettingsStore.getState()
-      themePreviewBaselineRef.current = {
-        themeId: state.themeId,
-        appearance: state.appearance,
-        terminalThemeId: state.terminal.themeId,
-      }
-    }
+    previewingThemeRef.current = true
     useSettingsStore.setState((state) => ({
       themeId: patch.themeId ?? state.themeId,
       appearance: patch.appearance ?? state.appearance,
@@ -225,17 +271,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
         ? { ...state.terminal, themeId: patch.terminalThemeId }
         : state.terminal,
     }))
-  }, [])
-
-  const restoreThemePreview = useCallback(() => {
-    const baseline = themePreviewBaselineRef.current
-    if (!baseline) return
-    themePreviewBaselineRef.current = null
-    useSettingsStore.setState((state) => ({
-      themeId: baseline.themeId,
-      appearance: baseline.appearance,
-      terminal: { ...state.terminal, themeId: baseline.terminalThemeId },
-    }))
+    previewingThemeRef.current = false
   }, [])
 
   const language = draft.language
@@ -339,8 +375,11 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
   useEffect(() => {
     if (!open) return
     setActiveSection(initialSection)
-    setDraft(createUserSettingsDraft(useSettingsStore.getState()))
-    setSaveError('')
+    const freshDraft = createUserSettingsDraft(useSettingsStore.getState())
+    lastPersistedRef.current = serializeDraft(freshDraft)
+    draftRef.current = freshDraft
+    setDraft(freshDraft)
+    setSaveStatus('idle')
     setSupportLinkFailed(false)
     setLegalDocument(null)
     restoreLegalDocumentFocusRef.current = null
@@ -349,10 +388,83 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
       .catch(() => setBackgroundMaterialSupported(['none']))
   }, [initialSection, open])
 
+  // Persists the latest draft. Saves are serialized: while one runs, newer edits are picked up by the loop.
+  const flushSave = useCallback(async () => {
+    if (savingRef.current) return
+    savingRef.current = true
+    try {
+      while (true) {
+        const snapshot = draftRef.current
+        const serialized = serializeDraft(snapshot)
+        if (serialized === lastPersistedRef.current) break
+        try {
+          await applySettings(snapshot)
+        } catch (error) {
+          console.error('[SettingsPanel] Failed to save settings:', error)
+          setSaveStatus('error')
+          break
+        }
+        lastPersistedRef.current = serialized
+        setSaveStatus('saved')
+        if (savedIndicatorTimerRef.current) clearTimeout(savedIndicatorTimerRef.current)
+        savedIndicatorTimerRef.current = setTimeout(() => {
+          setSaveStatus((status) => (status === 'saved' ? 'idle' : status))
+        }, SAVED_INDICATOR_MS)
+        if (draftRef.current === snapshot) {
+          // applySettings normalizes values (trimmed text, default URL); show what was actually stored.
+          const stored = createUserSettingsDraft(useSettingsStore.getState())
+          const storedSerialized = serializeDraft(stored)
+          lastPersistedRef.current = storedSerialized
+          if (storedSerialized !== serialized) {
+            draftRef.current = stored
+            setDraft(stored)
+          }
+        }
+      }
+    } finally {
+      savingRef.current = false
+    }
+  }, [applySettings])
+
+  const flushSaveRef = useRef(flushSave)
+  flushSaveRef.current = flushSave
+
   useEffect(() => {
     if (!open) return
-    return () => restoreThemePreview()
-  }, [open, restoreThemePreview])
+    draftRef.current = draft
+    if (serializeDraft(draft) === lastPersistedRef.current) return
+    const timer = setTimeout(() => void flushSaveRef.current(), SETTINGS_AUTOSAVE_DELAY_MS)
+    return () => clearTimeout(timer)
+  }, [draft, open])
+
+  // Flush pending edits when the page closes or unmounts.
+  useEffect(() => {
+    if (!open) return
+    return () => {
+      void flushSaveRef.current()
+    }
+  }, [open])
+
+  useEffect(() => {
+    return () => {
+      if (savedIndicatorTimerRef.current) clearTimeout(savedIndicatorTimerRef.current)
+    }
+  }, [])
+
+  // Pick up settings changed elsewhere, as long as nothing local is pending or in flight.
+  useEffect(() => {
+    if (!open) return
+    return useSettingsStore.subscribe((state) => {
+      if (previewingThemeRef.current || savingRef.current) return
+      if (serializeDraft(draftRef.current) !== lastPersistedRef.current) return
+      const external = createUserSettingsDraft(state)
+      const serialized = serializeDraft(external)
+      if (serialized === lastPersistedRef.current) return
+      lastPersistedRef.current = serialized
+      draftRef.current = external
+      setDraft(external)
+    })
+  }, [open])
 
   useEffect(() => {
     if (!open) return
@@ -377,38 +489,20 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
     })
   }
 
-  const handleCancel = useCallback(() => {
-    if (saving) return
+  const handleClose = useCallback(() => {
+    void flushSaveRef.current()
     onClose()
-  }, [onClose, saving])
+  }, [onClose])
+
+  const handleOpenJsonEditor = useCallback(() => {
+    void flushSaveRef.current()
+    onOpenJsonEditor()
+  }, [onOpenJsonEditor])
 
   const handleLegalDocumentBack = useCallback(() => {
     restoreLegalDocumentFocusRef.current = legalDocument
     setLegalDocument(null)
   }, [legalDocument])
-
-  const handleSave = useCallback(async () => {
-    if (saving) return
-    setSaving(true)
-    setSaveError('')
-    try {
-      await applySettings(draft)
-      themePreviewBaselineRef.current = null
-      onClose()
-    } catch (error) {
-      console.error('[SettingsPanel] Failed to save settings:', error)
-      setSaveError(t('common.error'))
-    } finally {
-      setSaving(false)
-    }
-  }, [applySettings, draft, onClose, saving, t])
-
-  const handleBackdropClick = useCallback(
-    (e: React.MouseEvent) => {
-      if (e.target === e.currentTarget) handleCancel()
-    },
-    [handleCancel],
-  )
 
   if (!open) return null as unknown as React.ReactElement
 
@@ -860,7 +954,7 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
 
             <button
               className="flex w-full items-center justify-between rounded-full border border-border-visible px-4 py-3 text-left transition-colors hover:border-text-secondary"
-              onClick={onOpenJsonEditor}
+              onClick={handleOpenJsonEditor}
             >
               <span className="nd-label text-text-display">{t('settings.openRawCanvasJson')}</span>
               <span className="nd-caption text-text-secondary">[ {t('common.edit')} ]</span>
@@ -930,10 +1024,10 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
 
           <label className="block">
             <span className="nd-label mb-2 block text-text-secondary">{t('settings.homeUrl')}</span>
-            <input
+            <CommittedTextInput
               className="w-full rounded-full border border-border-visible bg-bg-primary px-4 py-3 font-mono text-sm text-text-display outline-hidden"
               value={browserHomeUrl}
-              onChange={(event) => setBrowserHomeUrl(event.target.value)}
+              onCommit={setBrowserHomeUrl}
               spellCheck={false}
             />
           </label>
@@ -1194,92 +1288,67 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-10000 flex items-center justify-center bg-black/80" onClick={handleBackdropClick}>
-      <div
-        className="flex h-[86vh] w-[1040px] max-w-[calc(100vw-32px)] flex-col overflow-hidden rounded-[24px] border border-border-visible bg-bg-secondary"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="general-settings-title"
-        tabIndex={-1}
-        autoFocus
-        onKeyDown={(event) => {
-          if (event.key !== 'Escape') return
-          event.preventDefault()
-          event.stopPropagation()
-          handleCancel()
-        }}
-      >
-        <div className="flex items-center justify-between border-b border-border px-6 py-5">
-          <div>
-            <div className="nd-label text-text-secondary">{t('settings.settingsMatrix')}</div>
-            <h2 id="general-settings-title" className="mt-2 text-xl text-text-display">{t('settings.systemControls')}</h2>
-          </div>
-          <button
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-border-visible text-text-secondary transition-colors hover:text-text-display"
-            onClick={handleCancel}
-            disabled={saving}
-          >
-            <X size={16} />
-          </button>
+    <div
+      className="fixed inset-0 z-10000 flex flex-col bg-bg-primary"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="general-settings-title"
+      tabIndex={-1}
+      autoFocus
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape') return
+        event.preventDefault()
+        event.stopPropagation()
+        handleClose()
+      }}
+    >
+      <header className="window-titlebar flex shrink-0 items-center gap-2 border-b border-border">
+        <button
+          type="button"
+          aria-label={t('common.back')}
+          className="flex size-7 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-bg-secondary hover:text-text-display"
+          onClick={handleClose}
+        >
+          <ArrowLeft size={16} />
+        </button>
+        <h2 id="general-settings-title" className="text-sm text-text-display">{t('settings.pageTitle')}</h2>
+        <div className="ml-auto text-xs" role="status">
+          {saveStatus === 'saved' && <span className="text-text-secondary">{t('settings.saved')}</span>}
+          {saveStatus === 'error' && <span className="text-danger">{t('settings.saveFailed')}</span>}
         </div>
+      </header>
 
-        <div className="flex min-h-0 flex-1">
-          <aside className="flex w-[236px] shrink-0 flex-col border-r border-border bg-bg-tertiary/60 px-4 py-5">
-            <div className="px-2">
-              <div className="nd-label text-text-secondary">{t('settings.sections')}</div>
-              <div className="mt-2 text-sm leading-6 text-text-secondary">
-                {t('settings.selectCategory')}
-              </div>
-            </div>
+      <div className="flex min-h-0 flex-1">
+        <aside className="flex w-52 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-border p-2">
+          {SETTINGS_SECTIONS.map(({ id, icon: Icon }) => {
+            const isActive = activeSection === id
 
-            <div className="mt-5 space-y-2 overflow-y-auto pr-1">
-              {SETTINGS_SECTIONS.map(({ id, icon: Icon }) => {
-                const isActive = activeSection === id
+            return (
+              <button
+                key={id}
+                type="button"
+                aria-current={isActive ? 'page' : undefined}
+                className={`flex h-8 w-full items-center gap-2.5 rounded-md px-2.5 text-left text-sm transition-colors ${
+                  isActive
+                    ? 'bg-bg-secondary text-text-display'
+                    : 'text-text-secondary hover:bg-bg-secondary/60 hover:text-text-display'
+                }`}
+                onClick={() => {
+                  setLegalDocument(null)
+                  setActiveSection(id)
+                }}
+              >
+                <Icon size={14} className="shrink-0" />
+                <span className="truncate">{getSectionLabel(t, id)}</span>
+              </button>
+            )
+          })}
+        </aside>
 
-                return (
-                  <button
-                    key={id}
-                    className={`flex w-full items-center gap-3 rounded-[18px] border px-4 py-3 text-left transition-colors ${
-                      isActive
-                        ? 'border-text-display bg-bg-primary text-text-display'
-                        : 'border-transparent text-text-secondary hover:border-border-visible hover:bg-bg-secondary'
-                    }`}
-                    onClick={() => {
-                      setLegalDocument(null)
-                      setActiveSection(id)
-                    }}
-                  >
-                    <Icon size={15} className={isActive ? 'text-text-display' : 'text-text-secondary'} />
-                    <span className="nd-label">{getSectionLabel(t, id)}</span>
-                  </button>
-                )
-              })}
-            </div>
-          </aside>
-
-          <div className="min-h-0 flex-1 px-6 py-6">
-            <div className="h-full overflow-y-auto pr-2">
-              {renderActiveSection()}
-            </div>
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className={`mx-auto w-full px-8 py-8 ${activeSection === 'bots' ? 'max-w-[1280px]' : 'max-w-[760px]'}`}>
+            {renderActiveSection()}
           </div>
-        </div>
-
-        <div className="flex items-center justify-end gap-3 border-t border-border px-6 py-4">
-          {saveError && <span className="mr-auto text-sm text-red-400">{saveError}</span>}
-          <button
-            className="rounded-full border border-border-visible px-4 py-2 text-sm text-text-secondary transition-colors hover:border-text-secondary hover:text-text-display disabled:cursor-not-allowed disabled:opacity-50"
-            onClick={handleCancel}
-            disabled={saving}
-          >
-            {t('common.cancel')}
-          </button>
-          <button
-            className="rounded-full border border-text-display px-4 py-2 text-sm text-text-display transition-colors hover:bg-bg-tertiary disabled:cursor-not-allowed disabled:opacity-50"
-            onClick={() => void handleSave()}
-            disabled={saving}
-          >
-            {t('common.save')}
-          </button>
         </div>
       </div>
     </div>,
