@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
+  botHasTool,
   isBotAvailableInWorkspace,
   normalizeBotInput,
   normalizeStoredBot,
@@ -92,12 +93,51 @@ test('normalizeStoredBot accepts complete data and rejects broken data', () => {
     updatedAt: '2026-07-04T10:30:00.000Z',
   }
 
-  assert.deepEqual(normalizeStoredBot(stored), stored)
+  const complete = { ...stored, tools: ['session_read'], callable: true }
+  assert.deepEqual(normalizeStoredBot(complete), complete)
   assert.equal(normalizeStoredBot({ ...stored, id: 'not-a-bot' }), null)
   assert.equal(normalizeStoredBot({ ...stored, createdAt: 123 }), null)
   assert.equal(normalizeStoredBot({ ...stored, updatedAt: undefined }), null)
   assert.equal(normalizeStoredBot({ ...stored, name: '' }), null)
   assert.equal(normalizeStoredBot(null), null)
+})
+
+test('tools and callable default to none and false', () => {
+  const bot = normalizeBotInput(validInput)
+  assert.deepEqual(bot.tools, [])
+  assert.equal(bot.callable, false)
+})
+
+test('keeps granted tools unique and in catalog order', () => {
+  const bot = normalizeBotInput({
+    ...validInput,
+    tools: ['bots_call', 'session_read', 'bots_call', 'sessions_search'],
+    callable: true,
+  })
+  assert.deepEqual(bot.tools, ['sessions_search', 'session_read', 'bots_call'])
+  assert.equal(bot.callable, true)
+})
+
+test('rejects unknown tools and malformed grants', () => {
+  assert.throws(() => normalizeBotInput({ ...validInput, tools: ['delete_everything'] }), /tool/i)
+  assert.throws(() => normalizeBotInput({ ...validInput, tools: 'session_read' }), /tools/i)
+  assert.throws(() => normalizeBotInput({ ...validInput, callable: 'yes' }), /callable/i)
+})
+
+test('normalizeStoredBot fills grants for older stored bots', () => {
+  const stored = normalizeStoredBot({
+    ...validInput,
+    id: 'bot-old',
+    createdAt: '2026-07-04T10:00:00.000Z',
+    updatedAt: '2026-07-04T10:30:00.000Z',
+  })
+  assert.deepEqual(stored?.tools, [])
+  assert.equal(stored?.callable, false)
+})
+
+test('botHasTool checks the granted list', () => {
+  assert.equal(botHasTool({ tools: ['session_read'] }, 'session_read'), true)
+  assert.equal(botHasTool({ tools: ['session_read'] }, 'bots_call'), false)
 })
 
 test('isBotAvailableInWorkspace respects both scope modes', () => {

@@ -25,7 +25,8 @@ import { clearWindowAttention, registerNotificationIPC } from './ipc/notificatio
 import { registerWindowIPC, type WindowClosePreparationBridge } from './ipc/window'
 import { registerFloatingTilesIPC } from './ipc/floatingTiles'
 import { registerAgentsIPC } from './ipc/agents'
-import { registerBotsIPC } from './ipc/bots'
+import { getBotById, registerBotsIPC } from './ipc/bots'
+import { BotBridge, setActiveBotBridge } from './bots/botBridge'
 import { configureAgentHistoryIndex, flushAgentHistoryIndex } from './agents/historyIndex'
 import { registerScriptsIPC } from './ipc/scripts'
 import { AgentUsageService } from './agentUsage'
@@ -58,6 +59,8 @@ const modPanelBridge = new ModPanelBridge({
   discoveryFile: MOD_PANEL_DISCOVERY_PATH,
   onChange: broadcastModPanelChange,
 })
+const botBridge = new BotBridge({ homeDirectory: YIRA_HOME, getBot: getBotById })
+setActiveBotBridge(botBridge)
 // Terminals inherit process.env, so mods can find the bridge before any spawns.
 process.env[MOD_PANEL_BRIDGE_FILE_ENV] = MOD_PANEL_DISCOVERY_PATH
 const supportsTitleBarOverlay = process.platform === 'win32' || process.platform === 'linux'
@@ -175,6 +178,7 @@ app.on('before-quit', (event) => {
   if (closePreparationApproved) {
     stopTerminalProcessActivityMonitor()
     void modPanelBridge.close()
+    void botBridge.close().catch(() => undefined)
     void flushAgentHistoryIndex().catch(() => undefined)
     return
   }
@@ -313,6 +317,9 @@ app.whenReady().then(async () => {
     workspaces: getWorkspaceRootFolders,
   })
   registerBotsIPC()
+  void botBridge.start().catch((error) => {
+    console.warn('[main] bot bridge failed:', error instanceof Error ? error.message : String(error))
+  })
   registerCanvasIPC()
   registerModPanelsIPC(modPanelBridge)
   void modPanelBridge.start().catch((error) => {

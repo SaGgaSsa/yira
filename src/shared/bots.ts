@@ -16,6 +16,10 @@ export const BOT_COLOR_HEX: Readonly<Record<BotColorId, string>> = {
   slate: '#94a3b8',
 }
 
+/** Yira tools a bot can be granted over MCP. */
+export const BOT_TOOL_IDS = ['sessions_search', 'session_read', 'session_open', 'session_create', 'bots_call'] as const
+export type BotToolId = typeof BOT_TOOL_IDS[number]
+
 export const BOT_NAME_MAX_LENGTH = 40
 export const BOT_DESCRIPTION_MAX_LENGTH = 280
 export const BOT_ROLE_MAX_LENGTH = 8000
@@ -37,11 +41,20 @@ export interface BotDefinition {
   /** Instrucciones que se agregan al system prompt del agente al iniciar. */
   role: string
   workspaces: BotWorkspaceScope
-  createdAt: string     // ISO
+  /** Yira tools this bot may use. */
+  tools: BotToolId[]
+  /** Other bot sessions may start this bot through `bots_call`. */
+  callable: boolean
+  createdAt: string    // ISO
   updatedAt: string     // ISO
 }
 
-export type BotDefinitionInput = Omit<BotDefinition, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
+/** Normalized input: what the store receives after validation. */
+export type NormalizedBotInput = Omit<BotDefinition, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
+
+/** Input as the renderer sends it; grants are optional and default to none. */
+export type BotDefinitionInput = Omit<NormalizedBotInput, 'tools' | 'callable'>
+  & Partial<Pick<NormalizedBotInput, 'tools' | 'callable'>>
 
 const BOT_MODEL_PATTERN = /^[A-Za-z0-9._:\-\[\]]{1,64}$/
 const BOT_ID_PATTERN = /^bot-[A-Za-z0-9-]{1,64}$/
@@ -64,6 +77,10 @@ export function isBotIconId(value: unknown): value is BotIconId {
 
 export function isBotColorId(value: unknown): value is BotColorId {
   return typeof value === 'string' && (BOT_COLOR_IDS as readonly string[]).includes(value)
+}
+
+export function isBotToolId(value: unknown): value is BotToolId {
+  return typeof value === 'string' && (BOT_TOOL_IDS as readonly string[]).includes(value)
 }
 
 export function isValidBotModel(value: string): boolean {
@@ -160,7 +177,22 @@ function normalizeWorkspaces(value: unknown): BotWorkspaceScope {
   return { mode: 'selected', workspaceIds }
 }
 
-export function normalizeBotInput(raw: unknown): BotDefinitionInput {
+function normalizeTools(value: unknown): BotToolId[] {
+  if (value === undefined) return []
+  if (!Array.isArray(value)) throw new Error('Bot tools must be an array')
+  for (const entry of value) {
+    if (!isBotToolId(entry)) throw new Error('Bot tool is unknown')
+  }
+  return BOT_TOOL_IDS.filter((tool) => value.includes(tool))
+}
+
+function normalizeCallable(value: unknown): boolean {
+  if (value === undefined) return false
+  if (typeof value !== 'boolean') throw new Error('Bot callable must be a boolean')
+  return value
+}
+
+export function normalizeBotInput(raw: unknown): NormalizedBotInput {
   if (!isPlainRecord(raw)) throw new Error('Bot input must be an object')
 
   const id = raw.id === undefined ? undefined : raw.id
@@ -176,12 +208,14 @@ export function normalizeBotInput(raw: unknown): BotDefinitionInput {
     description: normalizeDescription(raw.description),
     role: normalizeRole(raw.role),
     workspaces: normalizeWorkspaces(raw.workspaces),
+    tools: normalizeTools(raw.tools),
+    callable: normalizeCallable(raw.callable),
   }
 }
 
 export function normalizeStoredBot(raw: unknown): BotDefinition | null {
   if (!isPlainRecord(raw)) return null
-  let input: BotDefinitionInput
+  let input: NormalizedBotInput
   try {
     input = normalizeBotInput(raw)
   } catch {
@@ -205,4 +239,8 @@ export function isBotAvailableInWorkspace(
   workspaceId: string,
 ): boolean {
   return bot.workspaces.mode === 'all' || bot.workspaces.workspaceIds.includes(workspaceId)
+}
+
+export function botHasTool(bot: Pick<BotDefinition, 'tools'>, tool: BotToolId): boolean {
+  return bot.tools.includes(tool)
 }

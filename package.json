@@ -112,6 +112,10 @@
         "to": "agent-hook-client.mjs"
       },
       {
+        "from": "resources/yira-bot-mcp.mjs",
+        "to": "yira-bot-mcp.mjs"
+      },
+      {
         "from": "resources/claude-statusline-capture.mjs",
         "to": "claude-statusline-capture.mjs"
       },

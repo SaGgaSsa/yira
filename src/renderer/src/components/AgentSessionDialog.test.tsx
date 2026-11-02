@@ -385,6 +385,8 @@ function bot(id: string, options: Partial<BotDefinition> = {}): BotDefinition {
     description: '',
     role: 'Review carefully',
     workspaces: { mode: 'all' },
+    tools: [],
+    callable: false,
     createdAt: '2026-11-01T00:00:00.000Z',
     updatedAt: '2026-11-01T00:00:00.000Z',
     ...options,
