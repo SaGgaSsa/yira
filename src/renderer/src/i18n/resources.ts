@@ -432,6 +432,80 @@ type TranslationResources = {
       orange: string
       slate: string
     }
+    routines: {
+      title: string
+      newRoutine: string
+      note: string
+      empty: string
+      paused: string
+      enabled: string
+      runNow: string
+      edit: string
+      delete: string
+      confirmDelete: string
+      cancel: string
+      save: string
+      saving: string
+      saveFailed: string
+      deleteFailed: string
+      runStarted: string
+      runSkipped: string
+      runNoUpdate: string
+      runReported: string
+      runFailed: string
+      workspaceMissing: string
+      name: string
+      namePlaceholder: string
+      workspace: string
+      workspaceChoose: string
+      noWorkspaces: string
+      instruction: string
+      instructionPlaceholder: string
+      instructionHelp: string
+      when: string
+      whenManual: string
+      whenDaily: string
+      whenInterval: string
+      time: string
+      days: string
+      daysHelp: string
+      presetEveryDay: string
+      presetWeekdays: string
+      every: string
+      unit: string
+      unitMinutes: string
+      unitHours: string
+      intervalHelp: string
+      intervalInvalid: string
+      scheduleManual: string
+      scheduleEveryDay: string
+      scheduleWeekdays: string
+      scheduleDays: string
+      scheduleEveryMinutes_one: string
+      scheduleEveryMinutes_other: string
+      scheduleEveryHours_one: string
+      scheduleEveryHours_other: string
+      agoNow: string
+      agoMinutes: string
+      agoHours: string
+      agoDays: string
+      neverRun: string
+      lastRun: string
+      lastRunWithOutcome: string
+      outcomeStarted: string
+      outcomeNoUpdate: string
+      outcomeReported: string
+      outcomeSkipped: string
+      outcomeFailed: string
+      nextSoon: string
+      nextInMinutes: string
+      nextToday: string
+      nextTomorrow: string
+      nextDay: string
+      weekdays: Record<'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun', string>
+      weekdayNames: Record<'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun', string>
+      dayLetters: Record<'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun', string>
+    }
   }
   settings: {
     bots: string
@@ -1598,6 +1672,88 @@ const en: TranslationResources = {
       orange: 'Orange',
       slate: 'Slate',
     },
+    routines: {
+      title: 'Routines',
+      newRoutine: 'New routine',
+      note: 'Routines run only while Yira is open. Runs missed while it was closed become a single run when it opens.',
+      empty: 'No routines yet. A routine opens a new session of this bot on its own.',
+      paused: 'Paused after repeated failures',
+      enabled: 'Enabled',
+      runNow: 'Run now',
+      edit: 'Edit',
+      delete: 'Delete',
+      confirmDelete: 'Confirm delete',
+      cancel: 'Cancel',
+      save: 'Save routine',
+      saving: 'Saving…',
+      saveFailed: 'Could not save the routine.',
+      deleteFailed: 'Could not delete the routine.',
+      runStarted: 'Started',
+      runSkipped: 'Skipped: previous run still open',
+      runNoUpdate: 'No news',
+      runReported: 'Opened a session',
+      runFailed: 'The run failed.',
+      workspaceMissing: 'Workspace removed',
+      name: 'Name',
+      namePlaceholder: 'Morning summary',
+      workspace: 'Workspace',
+      workspaceChoose: 'Choose a workspace',
+      noWorkspaces: 'This bot is not enabled for any workspace. Enable it in Workspaces first.',
+      instruction: 'Instruction',
+      instructionPlaceholder: 'Summarize yesterday\'s commits',
+      instructionHelp: 'Describe one run. Do not include the schedule (write “summarize yesterday\'s commits”, not “every morning summarize…”). If the bot replies NO_UPDATE, the session closes silently.',
+      when: 'When',
+      whenManual: 'Manual only',
+      whenDaily: 'At a time',
+      whenInterval: 'Every',
+      time: 'Time',
+      days: 'Days',
+      daysHelp: 'No days selected means every day.',
+      presetEveryDay: 'Every day',
+      presetWeekdays: 'Weekdays',
+      every: 'Every',
+      unit: 'Unit',
+      unitMinutes: 'minutes',
+      unitHours: 'hours',
+      intervalHelp: 'At least {{minutes}} minutes.',
+      intervalInvalid: 'Enter a whole number, at least {{minutes}} minutes.',
+      scheduleManual: 'Manual only',
+      scheduleEveryDay: 'Every day at {{time}}',
+      scheduleWeekdays: 'Weekdays at {{time}}',
+      scheduleDays: '{{days}} at {{time}}',
+      scheduleEveryMinutes_one: 'Every minute',
+      scheduleEveryMinutes_other: 'Every {{count}} minutes',
+      scheduleEveryHours_one: 'Every hour',
+      scheduleEveryHours_other: 'Every {{count}} hours',
+      agoNow: 'just now',
+      agoMinutes: '{{count}} min ago',
+      agoHours: '{{count}} h ago',
+      agoDays: '{{count}} d ago',
+      neverRun: 'Never run',
+      lastRun: 'Last run {{ago}}',
+      lastRunWithOutcome: 'Last run {{ago}} · {{outcome}}',
+      outcomeStarted: 'running',
+      outcomeNoUpdate: 'no news',
+      outcomeReported: 'opened a session',
+      outcomeSkipped: 'skipped, previous run still open',
+      outcomeFailed: 'failed: {{error}}',
+      nextSoon: 'Next: soon',
+      nextInMinutes: 'Next: in {{count}} min',
+      nextToday: 'Next: today {{time}}',
+      nextTomorrow: 'Next: tomorrow {{time}}',
+      nextDay: 'Next: {{day}} {{time}}',
+      weekdays: { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' },
+      weekdayNames: {
+        mon: 'Monday',
+        tue: 'Tuesday',
+        wed: 'Wednesday',
+        thu: 'Thursday',
+        fri: 'Friday',
+        sat: 'Saturday',
+        sun: 'Sunday',
+      },
+      dayLetters: { mon: 'M', tue: 'T', wed: 'W', thu: 'T', fri: 'F', sat: 'S', sun: 'S' },
+    },
   },
   settings: {
     bots: 'Bots',
@@ -2763,6 +2919,88 @@ const es: TranslationResources = {
       emerald: 'Esmeralda',
       orange: 'Naranja',
       slate: 'Pizarra',
+    },
+    routines: {
+      title: 'Rutinas',
+      newRoutine: 'Nueva rutina',
+      note: 'Las rutinas corren sólo mientras Yira está abierta. Las ejecuciones perdidas con Yira cerrada se convierten en una sola al abrirla.',
+      empty: 'Aún no hay rutinas. Una rutina abre sola una sesión nueva de este bot.',
+      paused: 'En pausa tras fallos repetidos',
+      enabled: 'Activada',
+      runNow: 'Ejecutar ahora',
+      edit: 'Editar',
+      delete: 'Borrar',
+      confirmDelete: 'Confirmar borrado',
+      cancel: 'Cancelar',
+      save: 'Guardar rutina',
+      saving: 'Guardando…',
+      saveFailed: 'No se pudo guardar la rutina.',
+      deleteFailed: 'No se pudo borrar la rutina.',
+      runStarted: 'Iniciada',
+      runSkipped: 'Omitida: la ejecución anterior sigue abierta',
+      runNoUpdate: 'Sin novedades',
+      runReported: 'Abrió una sesión',
+      runFailed: 'La ejecución falló.',
+      workspaceMissing: 'Workspace eliminado',
+      name: 'Nombre',
+      namePlaceholder: 'Resumen de la mañana',
+      workspace: 'Workspace',
+      workspaceChoose: 'Elige un workspace',
+      noWorkspaces: 'Este bot no está activado en ningún workspace. Actívalo primero en Workspaces.',
+      instruction: 'Instrucción',
+      instructionPlaceholder: 'Resume los commits de ayer',
+      instructionHelp: 'Describe una sola ejecución. No incluyas el horario (escribe “resume los commits de ayer”, no “cada mañana resume…”). Si el bot responde NO_UPDATE, la sesión se cierra en silencio.',
+      when: 'Cuándo',
+      whenManual: 'Sólo manual',
+      whenDaily: 'A una hora',
+      whenInterval: 'Cada',
+      time: 'Hora',
+      days: 'Días',
+      daysHelp: 'Sin días elegidos significa todos los días.',
+      presetEveryDay: 'Todos los días',
+      presetWeekdays: 'Días hábiles',
+      every: 'Cada',
+      unit: 'Unidad',
+      unitMinutes: 'minutos',
+      unitHours: 'horas',
+      intervalHelp: 'Mínimo {{minutes}} minutos.',
+      intervalInvalid: 'Ingresa un número entero, mínimo {{minutes}} minutos.',
+      scheduleManual: 'Sólo manual',
+      scheduleEveryDay: 'Todos los días a las {{time}}',
+      scheduleWeekdays: 'Días hábiles a las {{time}}',
+      scheduleDays: '{{days}} a las {{time}}',
+      scheduleEveryMinutes_one: 'Cada minuto',
+      scheduleEveryMinutes_other: 'Cada {{count}} minutos',
+      scheduleEveryHours_one: 'Cada hora',
+      scheduleEveryHours_other: 'Cada {{count}} horas',
+      agoNow: 'recién',
+      agoMinutes: 'hace {{count}} min',
+      agoHours: 'hace {{count}} h',
+      agoDays: 'hace {{count}} d',
+      neverRun: 'Nunca ejecutada',
+      lastRun: 'Última ejecución {{ago}}',
+      lastRunWithOutcome: 'Última ejecución {{ago}} · {{outcome}}',
+      outcomeStarted: 'en curso',
+      outcomeNoUpdate: 'sin novedades',
+      outcomeReported: 'abrió una sesión',
+      outcomeSkipped: 'omitida, la anterior sigue abierta',
+      outcomeFailed: 'falló: {{error}}',
+      nextSoon: 'Próxima: pronto',
+      nextInMinutes: 'Próxima: en {{count}} min',
+      nextToday: 'Próxima: hoy {{time}}',
+      nextTomorrow: 'Próxima: mañana {{time}}',
+      nextDay: 'Próxima: {{day}} {{time}}',
+      weekdays: { mon: 'Lun', tue: 'Mar', wed: 'Mié', thu: 'Jue', fri: 'Vie', sat: 'Sáb', sun: 'Dom' },
+      weekdayNames: {
+        mon: 'Lunes',
+        tue: 'Martes',
+        wed: 'Miércoles',
+        thu: 'Jueves',
+        fri: 'Viernes',
+        sat: 'Sábado',
+        sun: 'Domingo',
+      },
+      dayLetters: { mon: 'L', tue: 'M', wed: 'X', thu: 'J', fri: 'V', sat: 'S', sun: 'D' },
     },
   },
   settings: {

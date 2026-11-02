@@ -24,6 +24,7 @@ import type { AgentProvider, WorkspaceMetadata } from '@shared/types'
 import { useBots } from '@/hooks/useBots'
 import { agentProviderDetails } from './AgentUsageIndicator'
 import { BOT_ICON_COMPONENTS, BotAvatar } from './botVisuals'
+import { BotRoutines } from './BotRoutines'
 
 interface BotsSettingsProps {
   enabledProviders: AgentProvider[]
@@ -480,6 +481,8 @@ function BotEditor({ bot, enabledProviders, workspaces, onSaved, onDeleted }: Bo
           onChange={(scope) => update({ workspaces: scope })}
         />
       </section>
+
+      {bot && <BotRoutines bot={bot} />}
 
       {error && (
         <p role="alert" className="rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>
