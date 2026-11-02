@@ -4,7 +4,7 @@ import { existsSync } from 'fs'
 import { mkdir, writeFile } from 'fs/promises'
 import { is } from '@electron-toolkit/utils'
 import { MOD_PANEL_BRIDGE_FILE_ENV } from '@shared/modPanels'
-import { getWorkspaceRootFolders, initWorkspaces, registerWorkspaceIPC } from './ipc/workspace'
+import { getWorkspaceRootFolders, getWorkspaceSummaries, initWorkspaces, registerWorkspaceIPC } from './ipc/workspace'
 import { registerCanvasIPC } from './ipc/canvas'
 import {
   registerTerminalIPC,
@@ -24,9 +24,12 @@ import { registerGitIPC } from './ipc/git'
 import { clearWindowAttention, registerNotificationIPC } from './ipc/notifications'
 import { registerWindowIPC, type WindowClosePreparationBridge } from './ipc/window'
 import { registerFloatingTilesIPC } from './ipc/floatingTiles'
-import { registerAgentsIPC } from './ipc/agents'
-import { getBotById, registerBotsIPC } from './ipc/bots'
+import { getAgentSessionLauncher, registerAgentsIPC } from './ipc/agents'
+import { getBotById, listBots, registerBotsIPC } from './ipc/bots'
 import { BotBridge, setActiveBotBridge } from './bots/botBridge'
+import { BotCallConfirmBroker } from './bots/botCallConfirm'
+import { createBotToolProviders } from './bots/botTools'
+import { agentSessionRegistry } from './agents/registry'
 import { configureAgentHistoryIndex, flushAgentHistoryIndex } from './agents/historyIndex'
 import { registerScriptsIPC } from './ipc/scripts'
 import { AgentUsageService } from './agentUsage'
@@ -84,6 +87,30 @@ let closePreparationBridge: WindowClosePreparationBridge | null = null
 let closePreparationApproved = false
 let closePreparationInFlight: Promise<boolean> | null = null
 const CLOSE_PREPARATION_TIMEOUT_MS = 5_000
+
+/** Sends an event to the main window; false when there is no window to receive it. */
+function sendToMainWindow(channel: string, payload: unknown): boolean {
+  if (!mainWindow || mainWindow.isDestroyed()) return false
+  mainWindow.webContents.send(channel, payload)
+  return true
+}
+
+/** Gives bot sessions their Yira tools and wires the user confirmation for bot-to-bot calls. */
+function registerBotTools(): void {
+  const callConfirmBroker = new BotCallConfirmBroker({
+    send: (request) => sendToMainWindow('bots:confirmCall', request),
+  })
+  ipcMain.handle('bots:confirmCall:respond', (_event, requestId: unknown, allowed: unknown) =>
+    callConfirmBroker.respond(requestId, allowed))
+  botBridge.setTools(createBotToolProviders({
+    getWorkspaces: getWorkspaceSummaries,
+    getBots: listBots,
+    getLauncher: getAgentSessionLauncher,
+    getActiveSessions: () => agentSessionRegistry.snapshot().sessions,
+    openSession: (event) => { sendToMainWindow('bots:openSession', event) },
+    confirmBotCall: (input) => callConfirmBroker.request(input),
+  }))
+}
 
 async function promptClosePreparationFailure(phase: 'flush' | 'persist' | 'terminals', error: unknown): Promise<CloseFailureDecision> {
   const detail = error instanceof Error ? error.message : String(error)
@@ -317,6 +344,7 @@ app.whenReady().then(async () => {
     workspaces: getWorkspaceRootFolders,
   })
   registerBotsIPC()
+  registerBotTools()
   void botBridge.start().catch((error) => {
     console.warn('[main] bot bridge failed:', error instanceof Error ? error.message : String(error))
   })

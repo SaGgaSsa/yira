@@ -20,6 +20,21 @@ export const BOT_COLOR_HEX: Readonly<Record<BotColorId, string>> = {
 export const BOT_TOOL_IDS = ['sessions_search', 'session_read', 'session_open', 'session_create', 'bots_call'] as const
 export type BotToolId = typeof BOT_TOOL_IDS[number]
 
+/** Main asks the renderer to show a session tile that a bot opened or started. */
+export interface BotOpenSessionEvent {
+  workspaceId: string
+  tileId: string
+}
+
+/** Main asks the user to allow one bot session to start another bot. */
+export interface BotCallConfirmRequest {
+  requestId: string
+  workspaceId: string
+  callerName: string
+  targetName: string
+  prompt: string
+}
+
 export const BOT_NAME_MAX_LENGTH = 40
 export const BOT_DESCRIPTION_MAX_LENGTH = 280
 export const BOT_ROLE_MAX_LENGTH = 8000
