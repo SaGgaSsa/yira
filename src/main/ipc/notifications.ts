@@ -99,8 +99,12 @@ function focusAgentAlertTarget(window: BrowserWindow | null, target: AgentAlertN
   window.webContents.send('notifications:agentAlertClicked', target)
 }
 
-export function clearWindowAttention(window: BrowserWindow): void {
+function clearWindowAttention(window: BrowserWindow): void {
   windowAttention.clear(window)
+}
+
+export function clearAllWindowAttention(): void {
+  for (const window of BrowserWindow.getAllWindows()) clearWindowAttention(window)
 }
 
 function forgetAgentAlertNotification(tileId: string, notification: Notification): void {
