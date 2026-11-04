@@ -22,7 +22,7 @@ import { registerNotesIPC } from './ipc/notes'
 import { registerBoardsIPC } from './ipc/boards'
 import { registerFilesIPC } from './ipc/files'
 import { registerGitIPC } from './ipc/git'
-import { clearWindowAttention, registerNotificationIPC } from './ipc/notifications'
+import { clearWindowAttention, dismissAgentAlertNotificationsOnQuit, registerNotificationIPC } from './ipc/notifications'
 import { registerWindowIPC, type WindowClosePreparationBridge } from './ipc/window'
 import { registerFloatingTilesIPC } from './ipc/floatingTiles'
 import { getAgentSessionCloser, getAgentSessionLauncher, registerAgentsIPC } from './ipc/agents'
@@ -233,6 +233,7 @@ async function requestApplicationQuit(): Promise<void> {
 
 app.on('before-quit', (event) => {
   if (closePreparationApproved) {
+    dismissAgentAlertNotificationsOnQuit()
     stopTerminalProcessActivityMonitor()
     void modPanelBridge.close()
     routineScheduler.stop()

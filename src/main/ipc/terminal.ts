@@ -103,6 +103,9 @@ let getMainWindow: () => BrowserWindow | null = () => null
 
 const agentAlerts = new SemanticAgentAlertState({
   onChange: (tileId, state) => {
+    // The episode ended (agent resumed, exited, or its tile closed), so the
+    // desktop notification no longer describes anything pending.
+    if (!state) dismissAgentAlertNotification(tileId)
     if (state) {
       const window = getMainWindow()
       if (window && !window.isDestroyed()) {

@@ -118,6 +118,13 @@ export function dismissAgentAlertNotification(tileId: string): void {
   }
 }
 
+// Windows toasts can still relaunch the app from the action center. Elsewhere
+// nothing handles a click once the app is gone, so the entries would be dead.
+export function dismissAgentAlertNotificationsOnQuit(): void {
+  if (process.platform === 'win32') return
+  for (const tileId of [...agentAlertNotifications.keys()]) dismissAgentAlertNotification(tileId)
+}
+
 export function registerNotificationIPC(getMainWindow: () => BrowserWindow | null): void {
   const usesToastActivation = process.platform === 'win32'
   if (usesToastActivation) {
