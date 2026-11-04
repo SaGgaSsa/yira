@@ -33,7 +33,7 @@ import { buildRemoteSshLaunch } from '../remote-ssh'
 import { ensureRemoteSshReady } from '../remote-host-readiness'
 import { SemanticAgentAlertState } from '../agentAlerts'
 import { getEnabledAgentProviders } from './settings'
-import { dismissAgentAlertNotification } from './notifications'
+import { clearAllWindowAttention, dismissAgentAlertNotification } from './notifications'
 import { agentSessionRegistry } from '../agents/registry'
 import { normalizeAgentOpaqueId } from '../agents/query'
 import { buildAgentTerminalLaunch, type AgentTerminalLaunch } from '../agents/terminal'
@@ -103,24 +103,30 @@ let getMainWindow: () => BrowserWindow | null = () => null
 
 const agentAlerts = new SemanticAgentAlertState({
   onChange: (tileId, state) => {
-    if (state) {
-      const window = getMainWindow()
-      if (window && !window.isDestroyed()) {
-        const session = agentSessionRegistry.findByTileId(tileId)
-        const alertEvent: AgentAlertEvent = {
-          tileId,
-          workspaceId: session?.workspaceId ?? null,
-          provider: state.provider,
-          event: state.event,
-          priority: state.priority,
-          sessionTitle: (getAgentNamedTitle(session?.liveTitle) || session?.title) ?? null,
-          surface: session?.surface ?? 'tile',
-        }
-        window.webContents.send('agents:alert', alertEvent)
-      }
+    if (!state) {
+      // The episode ended (agent resumed, exited, or its tile closed), so the
+      // desktop notification no longer describes anything pending. GNOME also
+      // shows the window flash as its own notification until the flash clears.
+      dismissAgentAlertNotification(tileId)
+      if (agentAlerts.snapshot().size === 0) clearAllWindowAttention()
+      return
     }
-    if (!state || BrowserWindow.getAllWindows().some((window) => !window.isDestroyed() && window.isFocused())) return
-    BrowserWindow.getAllWindows().find((window) => !window.isDestroyed())?.flashFrame(true)
+
+    const window = getMainWindow()
+    if (!window || window.isDestroyed()) return
+    const session = agentSessionRegistry.findByTileId(tileId)
+    const alertEvent: AgentAlertEvent = {
+      tileId,
+      workspaceId: session?.workspaceId ?? null,
+      provider: state.provider,
+      event: state.event,
+      priority: state.priority,
+      sessionTitle: (getAgentNamedTitle(session?.liveTitle) || session?.title) ?? null,
+      surface: session?.surface ?? 'tile',
+    }
+    window.webContents.send('agents:alert', alertEvent)
+    if (BrowserWindow.getAllWindows().some((entry) => !entry.isDestroyed() && entry.isFocused())) return
+    window.flashFrame(true)
   },
 })
 

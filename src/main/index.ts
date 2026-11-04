@@ -22,7 +22,7 @@ import { registerNotesIPC } from './ipc/notes'
 import { registerBoardsIPC } from './ipc/boards'
 import { registerFilesIPC } from './ipc/files'
 import { registerGitIPC } from './ipc/git'
-import { clearWindowAttention, registerNotificationIPC } from './ipc/notifications'
+import { clearAllWindowAttention, dismissAgentAlertNotificationsOnQuit, registerNotificationIPC } from './ipc/notifications'
 import { registerWindowIPC, type WindowClosePreparationBridge } from './ipc/window'
 import { registerFloatingTilesIPC } from './ipc/floatingTiles'
 import { getAgentSessionCloser, getAgentSessionLauncher, registerAgentsIPC } from './ipc/agents'
@@ -231,8 +231,12 @@ async function requestApplicationQuit(): Promise<void> {
   app.quit()
 }
 
+// A flash marks one window, so focusing a detached tile must also clear the main one.
+app.on('browser-window-focus', () => clearAllWindowAttention())
+
 app.on('before-quit', (event) => {
   if (closePreparationApproved) {
+    dismissAgentAlertNotificationsOnQuit()
     stopTerminalProcessActivityMonitor()
     void modPanelBridge.close()
     routineScheduler.stop()
@@ -291,9 +295,6 @@ async function createWindow(): Promise<BrowserWindow> {
   })
   win.on('unmaximize', () => {
     void saveWindowState(WINDOW_STATE_PATH, { maximized: false })
-  })
-  win.on('focus', () => {
-    clearWindowAttention(win)
   })
   win.on('close', (event) => {
     if (closePreparationApproved) return
