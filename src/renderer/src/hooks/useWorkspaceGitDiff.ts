@@ -5,6 +5,7 @@ export type WorkspaceGitDiffReader = (workspaceId: string) => Promise<WorkspaceG
 
 export interface WorkspaceGitDiffRequestController {
   refresh: () => Promise<void>
+  invalidate: () => void
   dispose: () => void
 }
 
@@ -27,6 +28,7 @@ export function createWorkspaceGitDiffRequestController({
 }: WorkspaceGitDiffRequestControllerOptions): WorkspaceGitDiffRequestController {
   let disposed = false
   let pending: Promise<void> | null = null
+  let rereadPending = false
 
   const refresh = (): Promise<void> => {
     if (disposed) return Promise.resolve()
@@ -42,18 +44,110 @@ export function createWorkspaceGitDiffRequestController({
         }
       } finally {
         pending = null
+        if (rereadPending && !disposed) {
+          rereadPending = false
+          void refresh()
+        }
       }
     })()
 
     return pending
   }
 
+  const invalidate = () => {
+    if (disposed) return
+    if (pending) {
+      rereadPending = true
+      return
+    }
+    void refresh()
+  }
+
   return {
     refresh,
+    invalidate,
     dispose: () => {
       disposed = true
     },
   }
+}
+
+export interface WorkspaceGitDiffWatchBridge {
+  watchWorkspaceDiff: (workspaceId: string) => Promise<void>
+  unwatchWorkspaceDiff: (workspaceId: string) => Promise<void>
+  onWorkspaceDiffChanged: (callback: (workspaceId: string) => void) => () => void
+}
+
+export interface WorkspaceGitDiffChangeHub {
+  subscribe: (workspaceId: string, listener: () => void) => () => void
+}
+
+interface WorkspaceGitDiffChangeSubscription {
+  notify: () => void
+}
+
+export function createWorkspaceGitDiffChangeHub(
+  bridge: WorkspaceGitDiffWatchBridge,
+): WorkspaceGitDiffChangeHub {
+  const subscriptionsByWorkspace = new Map<string, Set<WorkspaceGitDiffChangeSubscription>>()
+  let removeChangeListener: (() => void) | null = null
+
+  const watch = (workspaceId: string) => {
+    try {
+      void bridge.watchWorkspaceDiff(workspaceId).catch(() => {})
+    } catch {
+      // A failed watcher must not stop the indicator from refreshing normally.
+    }
+  }
+
+  const unwatch = (workspaceId: string) => {
+    try {
+      void bridge.unwatchWorkspaceDiff(workspaceId).catch(() => {})
+    } catch {
+      // Ignore unwatch failures for the same reason.
+    }
+  }
+
+  return {
+    subscribe(workspaceId, listener) {
+      if (!removeChangeListener) {
+        removeChangeListener = bridge.onWorkspaceDiffChanged((changedWorkspaceId) => {
+          const subscriptions = subscriptionsByWorkspace.get(changedWorkspaceId)
+          if (!subscriptions) return
+          for (const subscription of [...subscriptions]) subscription.notify()
+        })
+      }
+
+      const existingSubscriptions = subscriptionsByWorkspace.get(workspaceId)
+      const subscriptions = existingSubscriptions ?? new Set<WorkspaceGitDiffChangeSubscription>()
+      if (!existingSubscriptions) subscriptionsByWorkspace.set(workspaceId, subscriptions)
+      const firstForWorkspace = subscriptions.size === 0
+      const subscription: WorkspaceGitDiffChangeSubscription = {
+        notify: () => listener(),
+      }
+      subscriptions.add(subscription)
+      if (firstForWorkspace) watch(workspaceId)
+
+      let released = false
+      return () => {
+        if (released) return
+        released = true
+        subscriptions.delete(subscription)
+        if (subscriptions.size > 0) return
+        subscriptionsByWorkspace.delete(workspaceId)
+        unwatch(workspaceId)
+        if (subscriptionsByWorkspace.size > 0) return
+        removeChangeListener?.()
+        removeChangeListener = null
+      }
+    },
+  }
+}
+
+let sharedChangeHub: WorkspaceGitDiffChangeHub | null = null
+function getWorkspaceGitDiffChangeHub(): WorkspaceGitDiffChangeHub {
+  sharedChangeHub ??= createWorkspaceGitDiffChangeHub(window.electron.git)
+  return sharedChangeHub
 }
 
 function readWorkspaceGitDiff(workspaceId: string): Promise<WorkspaceGitDiffResult> {
@@ -110,18 +204,33 @@ export function useWorkspaceGitDiff({
     })
     controllerRef.current = controller
     void controller.refresh()
+    const unsubscribe = getWorkspaceGitDiffChangeHub().subscribe(
+      workspaceId,
+      () => controller.invalidate(),
+    )
 
     return () => {
       effectActive = false
+      unsubscribe()
       controller.dispose()
       if (controllerRef.current === controller) controllerRef.current = null
     }
   }, [configurationKey, configured, workspaceId])
 
-  // Git state changes outside the app, so refresh when the user opens the
-  // workspace instead of polling every workspace in the background.
+  // The main process reports changes to .git, and unstaged edits do not touch
+  // .git, so the active workspace also reads again when it becomes active and
+  // when the window regains focus.
   useEffect(() => {
     if (active) void controllerRef.current?.refresh()
+  }, [active])
+
+  useEffect(() => {
+    if (!active) return undefined
+    const handleWindowFocus = () => {
+      void controllerRef.current?.refresh()
+    }
+    window.addEventListener('focus', handleWindowFocus)
+    return () => window.removeEventListener('focus', handleWindowFocus)
   }, [active])
 
   return configured && snapshot.key === configurationKey ? snapshot.result : null

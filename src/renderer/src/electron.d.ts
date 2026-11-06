@@ -206,6 +206,9 @@ interface ElectronWorld {
     status: (workspaceId: string, repositoryPath: string) => Promise<GitStatusResult>
     history: (workspaceId: string, repositoryPath: string) => Promise<GitCommitHistoryResult>
     workspaceDiff: (workspaceId: string) => Promise<WorkspaceGitDiffResult>
+    watchWorkspaceDiff: (workspaceId: string) => Promise<void>
+    unwatchWorkspaceDiff: (workspaceId: string) => Promise<void>
+    onWorkspaceDiffChanged: (callback: (workspaceId: string) => void) => () => void
     fileDiff: (workspaceId: string, repositoryPath: string, relativePath: string, staged: boolean, originalPath?: string) => Promise<GitFileDiffContent>
     stage: (workspaceId: string, repositoryPath: string, relativePath: string, originalPath?: string) => Promise<void>
     unstage: (workspaceId: string, repositoryPath: string, relativePath: string, originalPath?: string) => Promise<void>

@@ -274,6 +274,13 @@ contextBridge.exposeInMainWorld('electron', {
     status: (workspaceId: string, repositoryPath: string) => ipcRenderer.invoke('git:status', workspaceId, repositoryPath) as Promise<GitStatusResult>,
     history: (workspaceId: string, repositoryPath: string) => ipcRenderer.invoke('git:history', workspaceId, repositoryPath) as Promise<GitCommitHistoryResult>,
     workspaceDiff: (workspaceId: string) => ipcRenderer.invoke('git:workspaceDiff', workspaceId) as Promise<WorkspaceGitDiffResult>,
+    watchWorkspaceDiff: (workspaceId: string) => ipcRenderer.invoke('git:workspaceDiff:watch', workspaceId) as Promise<void>,
+    unwatchWorkspaceDiff: (workspaceId: string) => ipcRenderer.invoke('git:workspaceDiff:unwatch', workspaceId) as Promise<void>,
+    onWorkspaceDiffChanged: (callback: (workspaceId: string) => void) => {
+      const handler = (_event: unknown, workspaceId: string) => callback(workspaceId)
+      ipcRenderer.on('git:workspaceDiff:changed', handler)
+      return () => ipcRenderer.removeListener('git:workspaceDiff:changed', handler)
+    },
     fileDiff: (workspaceId: string, repositoryPath: string, relativePath: string, staged: boolean, originalPath?: string) => ipcRenderer.invoke('git:fileDiff', workspaceId, repositoryPath, relativePath, staged, originalPath) as Promise<GitFileDiffContent>,
     stage: (workspaceId: string, repositoryPath: string, relativePath: string, originalPath?: string) => ipcRenderer.invoke('git:stage', workspaceId, repositoryPath, relativePath, originalPath),
     unstage: (workspaceId: string, repositoryPath: string, relativePath: string, originalPath?: string) => ipcRenderer.invoke('git:unstage', workspaceId, repositoryPath, relativePath, originalPath),
