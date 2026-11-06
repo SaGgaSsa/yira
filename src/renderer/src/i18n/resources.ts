@@ -309,6 +309,10 @@ type TranslationResources = {
     worktreeSessions_one: string
     worktreeSessions_other: string
     worktreeSummaryNew: string
+    worktreeName: string
+    worktreeNamePlaceholder: string
+    worktreeNameInvalid: string
+    worktreeSummaryNewNamed: string
     worktreeSummaryNewEmpty: string
     worktreeSummaryExisting: string
     worktreeKeptSharedMessage: string
@@ -1574,6 +1578,10 @@ const en: TranslationResources = {
     worktreeSessions_one: '{{count}} session',
     worktreeSessions_other: '{{count}} sessions',
     worktreeSummaryNew: 'Creates a new branch in {{modules}} under {{path}}. When the session closes, it is removed if it has no changes or commits.',
+    worktreeName: 'Name',
+    worktreeNamePlaceholder: 'Optional: generated if empty',
+    worktreeNameInvalid: 'Git does not accept this branch name. Use letters, numbers, ".", "_", "-" and "/", starting with a letter or number.',
+    worktreeSummaryNewNamed: 'Creates the branch {{branch}} in {{modules}}, in the folder {{folder}} under {{path}}. When the session closes, it is removed if it has no changes or commits.',
     worktreeSummaryNewEmpty: 'Choose at least one module.',
     worktreeSummaryExisting: 'Starts in {{path}} and works on {{modules}}. Yira keeps this worktree when the session closes.',
     worktreeKeptSharedMessage: 'Another session is still using this worktree, so it was kept at {{path}}.',
@@ -2804,6 +2812,10 @@ const es: TranslationResources = {
     worktreeSessions_one: '{{count}} sesión',
     worktreeSessions_other: '{{count}} sesiones',
     worktreeSummaryNew: 'Crea una rama nueva en {{modules}} dentro de {{path}}. Al cerrar la sesión, se borra si no tiene cambios ni commits.',
+    worktreeName: 'Nombre',
+    worktreeNamePlaceholder: 'Opcional: se genera si queda vacío',
+    worktreeNameInvalid: 'Git no acepta ese nombre de rama. Usa letras, números, ".", "_", "-" y "/", y empieza con letra o número.',
+    worktreeSummaryNewNamed: 'Crea la rama {{branch}} en {{modules}}, en la carpeta {{folder}} dentro de {{path}}. Al cerrar la sesión, se borra si no tiene cambios ni commits.',
     worktreeSummaryNewEmpty: 'Elige al menos un módulo.',
     worktreeSummaryExisting: 'Arranca en {{path}} y trabaja en {{modules}}. Yira conserva este worktree al cerrar la sesión.',
     worktreeKeptSharedMessage: 'Otra sesión sigue usando este worktree, así que se conservó en {{path}}.',

@@ -12,6 +12,12 @@ import type {
 import { getAgentPromptIssue, MAX_AGENT_PROMPT_LENGTH } from '@shared/agentPrompt'
 import { isBotAvailableInWorkspace } from '@shared/bots'
 import type { BotDefinition } from '@shared/bots'
+import {
+  isValidWorktreeName,
+  MAX_WORKTREE_NAME_LENGTH,
+  normalizeWorktreeName,
+  worktreeFolderName,
+} from '@shared/worktreeName'
 import { AgentWorktreePicker } from './AgentWorktreePicker'
 import type { AgentWorktreeSelection } from './AgentWorktreePicker'
 import { BotAvatar } from './botVisuals'
@@ -88,7 +94,8 @@ function getInitialWorkspace(
 }
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
+  const message = error instanceof Error ? error.message : String(error)
+  return message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
 }
 
 function getProviderLabel(provider: AgentProvider, translate: (key: string) => string): string {
@@ -170,6 +177,7 @@ export function AgentSessionDialog({
   const [prompt, setPrompt] = useState('')
   const [promptImages, setPromptImages] = useState<PromptImagePreview[]>([])
   const [worktreeSelection, setWorktreeSelection] = useState<AgentWorktreeSelection>({ kind: 'workspace' })
+  const [worktreeNameInput, setWorktreeNameInput] = useState('')
   const [worktreeAvailable, setWorktreeAvailable] = useState(false)
   const [worktreeRepositories, setWorktreeRepositories] = useState<GitRepository[]>([])
   const [worktreesDirectory, setWorktreesDirectory] = useState('')
@@ -197,6 +205,8 @@ export function AgentSessionDialog({
       ? t('agentsView.promptInvalidCharacters')
       : null
   const missingWorktreeModules = worktreeSelection.kind === 'new' && worktreeSelection.repositories.length === 0
+  const worktreeName = normalizeWorktreeName(worktreeNameInput)
+  const invalidWorktreeName = worktreeSelection.kind === 'new' && worktreeName !== '' && !isValidWorktreeName(worktreeName)
 
   const updatePromptImages = (update: (current: PromptImagePreview[]) => PromptImagePreview[]): void => {
     const nextImages = update(promptImagesRef.current)
@@ -208,6 +218,7 @@ export function AgentSessionDialog({
     const requestId = ++capabilityRequestRef.current
     setWorktreeAvailable(false)
     setWorktreeSelection({ kind: 'workspace' })
+    setWorktreeNameInput('')
     setWorktreeRepositories([])
     setWorktreesDirectory('')
     if (!workspaceId) return
@@ -254,6 +265,7 @@ export function AgentSessionDialog({
     promptImagesRef.current = []
     setPromptImages([])
     setWorktreeSelection({ kind: 'workspace' })
+    setWorktreeNameInput('')
     setWorktreeAvailable(false)
     setWorktreeRepositories([])
     setWorktreesDirectory('')
@@ -292,6 +304,7 @@ export function AgentSessionDialog({
     const trimmedPrompt = promptValue.trim()
     if (!selectedWorkspace || !effectiveProvider || isSubmitting || isSavingImages) return
     if (getAgentPromptIssue(trimmedPrompt)) return
+    if (invalidWorktreeName) return
     if (worktreeSelection.kind === 'new' && worktreeSelection.repositories.length === 0) return
 
     setIsSubmitting(true)
@@ -313,6 +326,7 @@ export function AgentSessionDialog({
         ...(worktreeAvailable && worktreeSelection.kind === 'new'
           ? {
             worktree: true,
+            ...(worktreeName ? { worktreeName } : {}),
             ...(worktreeSelection.repositories.length < worktreeRepositories.length
               ? { worktreeRepositories: worktreeSelection.repositories }
               : {}),
@@ -435,6 +449,14 @@ export function AgentSessionDialog({
         .filter((repository) => worktreeSelection.repositories.includes(repository.relativePath))
         .map((repository) => repository.name)
         .join(', ')
+      if (worktreeName && !invalidWorktreeName) {
+        return t('agentsView.worktreeSummaryNewNamed', {
+          branch: worktreeName,
+          modules,
+          folder: worktreeFolderName(worktreeName),
+          path: worktreesDirectory,
+        })
+      }
       return t('agentsView.worktreeSummaryNew', { modules, path: worktreesDirectory })
     }
     return t('agentsView.worktreeSummaryExisting', {
@@ -673,6 +695,27 @@ export function AgentSessionDialog({
                   )}
                 </div>
 
+                {worktreeSelection.kind === 'new' && (
+                  <>
+                    <label className="flex items-center gap-2 text-xs text-text-secondary">
+                      <span className="shrink-0">{t('agentsView.worktreeName')}</span>
+                      <input
+                        type="text"
+                        className="h-8 w-full max-w-sm rounded-full border border-border-visible bg-transparent px-3 text-sm text-text-display outline-none placeholder:text-text-secondary focus:border-accent aria-invalid:border-danger"
+                        value={worktreeNameInput}
+                        placeholder={t('agentsView.worktreeNamePlaceholder')}
+                        maxLength={MAX_WORKTREE_NAME_LENGTH}
+                        spellCheck={false}
+                        autoComplete="off"
+                        aria-invalid={invalidWorktreeName}
+                        disabled={isSubmitting}
+                        onChange={(event) => setWorktreeNameInput(event.target.value)}
+                      />
+                    </label>
+                    {invalidWorktreeName && <p className="text-xs text-danger">{t('agentsView.worktreeNameInvalid')}</p>}
+                  </>
+                )}
+
                 {worktreeSummary && (
                   <p className="text-xs text-text-secondary">{worktreeSummary}</p>
                 )}
@@ -694,7 +737,7 @@ export function AgentSessionDialog({
             <button
               type="submit"
               className="rounded-full border border-text-display px-4 py-2 text-sm text-text-display transition-colors hover:bg-bg-primary disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={!selectedWorkspace || !effectiveProvider || isSubmitting || isSavingImages || promptIssue !== null || missingWorktreeModules}
+              disabled={!selectedWorkspace || !effectiveProvider || isSubmitting || isSavingImages || promptIssue !== null || missingWorktreeModules || invalidWorktreeName}
             >
               {isSubmitting ? t('agentsView.creatingSession') : t('agentsView.createSession')}
             </button>

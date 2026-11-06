@@ -195,6 +195,8 @@ export interface AgentSessionCreateInput {
   worktree?: boolean
   /** With `worktree`, limits the new worktree to these workspace-relative repositories. */
   worktreeRepositories?: string[]
+  /** Branch and folder name for a new worktree; generated when absent. */
+  worktreeName?: string
   /** Starts in this existing worktree, as listed by `listWorktrees`. Excludes `worktree`. */
   existingWorktreePath?: string
   /** Launch the session as this bot: its provider, model and role replace the defaults. */

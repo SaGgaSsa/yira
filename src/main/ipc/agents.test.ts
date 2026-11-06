@@ -591,6 +591,84 @@ test('links the container around a new worktree with only the chosen repositorie
   assert.deepEqual(linked[0].excludedPaths, ['.worktrees'])
 })
 
+test('passes a chosen worktree name to worktree creation and omits it when absent', async () => {
+  const ipcMain = new FakeIpcMain()
+  const { registerAgentsIPC } = loadAgentsIPC(ipcMain)
+  const names: Array<string | undefined> = []
+  registerAgentsIPC({
+    enabledProviders: async () => ['claude'],
+    workspaceAgentConfig: async () => workspaceAgentConfig(),
+    worktreesDirectory: async () => 'C:\\agent-worktrees',
+    createSession: async () => undefined,
+    worktrees: {
+      resolveWorkspaceWorktreeRepositories: async () => [
+        { relativePath: '.', absolutePath: 'C:\\workspace' },
+      ],
+      listWorkspaceWorktrees: async () => [],
+      createAgentWorkspaceWorktrees: async (input) => {
+        names.push(input.name)
+        return {
+          root: join(input.baseDirectory, input.name ? 'feat-bug-389' : 'workspace-12345678'),
+          branch: input.name ?? 'yira/agent-12345678',
+          worktrees: [],
+        }
+      },
+      removeAgentWorktreeIfClean: async () => 'removed',
+    },
+  })
+
+  await ipcMain.call('agents:sessions:create', new FakeWebContents(120), {
+    workspaceId: 'workspace-a',
+    prompt: 'Run the task',
+    worktree: true,
+    worktreeName: 'feat/bug-389',
+  })
+  await ipcMain.call('agents:sessions:create', new FakeWebContents(121), {
+    workspaceId: 'workspace-a',
+    prompt: 'Run the task',
+    worktree: true,
+  })
+
+  assert.deepEqual(names, ['feat/bug-389', undefined])
+})
+
+test('rejects an invalid worktree name or a name without a new worktree', async () => {
+  const ipcMain = new FakeIpcMain()
+  const { registerAgentsIPC } = loadAgentsIPC(ipcMain)
+  let created = 0
+  registerAgentsIPC({
+    enabledProviders: async () => ['claude'],
+    workspaceAgentConfig: async () => workspaceAgentConfig(),
+    worktreesDirectory: async () => 'C:\\agent-worktrees',
+    createSession: async () => undefined,
+    worktrees: {
+      resolveWorkspaceWorktreeRepositories: async () => [
+        { relativePath: '.', absolutePath: 'C:\\workspace' },
+      ],
+      listWorkspaceWorktrees: async () => [],
+      createAgentWorkspaceWorktrees: async () => {
+        created += 1
+        throw new Error('not used')
+      },
+      removeAgentWorktreeIfClean: async () => 'missing',
+    },
+  })
+
+  const sender = new FakeWebContents(122)
+  for (const input of [
+    { workspaceId: 'workspace-a', worktree: true, worktreeName: 'a..b' },
+    { workspaceId: 'workspace-a', worktree: true, worktreeName: 42 },
+    { workspaceId: 'workspace-a', worktreeName: 'feat/bug-389' },
+    { workspaceId: 'workspace-a', worktree: false, worktreeName: 'feat/bug-389' },
+  ]) {
+    await assert.rejects(
+      () => ipcMain.call('agents:sessions:create', sender, input) as Promise<unknown>,
+      /Invalid agent worktree name/,
+    )
+  }
+  assert.equal(created, 0)
+})
+
 test('removes a new worktree when creating the container replica fails', async () => {
   const ipcMain = new FakeIpcMain()
   const { registerAgentsIPC } = loadAgentsIPC(ipcMain)
