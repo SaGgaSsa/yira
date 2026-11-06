@@ -16,6 +16,7 @@ import { AppDialog, type ConfirmDialogOptions, type PromptDialogOptions } from '
 import { ZenSummaryDialog } from './components/ZenSummaryDialog'
 import { WorkspaceDialog, type WorkspaceDialogRequest, type WorkspaceDialogValue } from './components/WorkspaceDialog'
 import { ActiveWorkspaceEntry } from './components/ActiveWorkspaceEntry'
+import { SplitDropOverlay } from './components/SplitDropOverlay'
 import { WorkspaceHome } from './components/WorkspaceHome'
 import { useWorkspaceTerminalCounts } from './hooks/useWorkspaceTerminalCounts'
 import { useTerminalProcessActivity } from './hooks/useTerminalProcessActivity'
@@ -84,7 +85,7 @@ import type { CommandPaletteSessionAction } from './components/CommandPalette'
 import { sanitizeAgentCwd } from './utils/agentPanel'
 import { getAttachedTiles, isTileDetached, selectFloatingTileWindowOpenRequests } from '@shared/floatingTiles'
 import { refreshGridTileContent } from './utils/gridTileRefresh'
-import { DEFAULT_SPLIT_ORIENTATION, placeTilesSideBySide, toggleSplitOrientation } from './utils/splitViewState'
+import { DEFAULT_SPLIT_ORIENTATION, canDropTileInSplit, placeTileBeside, placeTilesSideBySide, showTileInSplitPanel, toggleSplitOrientation } from './utils/splitViewState'
 import { getActiveWindowTitle, getVisibleActiveTileId } from './utils/windowTitle'
 import { getAgentSessionTitles } from './utils/terminalDisplayTitle'
 import {
@@ -2123,6 +2124,41 @@ function AppContent(): React.ReactElement {
     return Boolean(currentTileId && currentTileId !== session.tileId)
   }, [activeWorkspaceId, attachedTiles, focusedTileId, fullviewActiveTileId, viewMode])
 
+  const [draggedAgentTileId, setDraggedAgentTileId] = useState<string | null>(null)
+  const clearDraggedAgentTile = useCallback(() => setDraggedAgentTileId(null), [])
+
+  const canDragAgentToSplit = useCallback((session: AgentActiveSession): boolean => (
+    !tilesHidden
+    && session.workspaceId === activeWorkspaceId
+    && attachedTiles.some((tile) => tile.id === session.tileId)
+    && canDropTileInSplit(viewMode, session.tileId, fullviewActiveTileId)
+  ), [activeWorkspaceId, attachedTiles, fullviewActiveTileId, tilesHidden, viewMode])
+
+  const startAgentDrag = useCallback((session: AgentActiveSession) => {
+    // Chromium can cancel a drag when the DOM changes during dragstart, so the overlay appears on the next task.
+    window.setTimeout(() => setDraggedAgentTileId(session.tileId), 0)
+  }, [])
+
+  const dropAgentInSplitPanel = useCallback((panel: SplitPanelId) => {
+    const tileId = draggedAgentTileId
+    setDraggedAgentTileId(null)
+    if (!tileId) return
+
+    const state = useCanvasStore.getState()
+    if (state.viewMode === 'splitview') {
+      setSplitViewState(showTileInSplitPanel(state.splitViewState, tileId, panel))
+    } else if (state.fullviewActiveTileId && canDropTileInSplit(state.viewMode, tileId, state.fullviewActiveTileId)) {
+      setSplitViewState(placeTileBeside(state.splitViewState, tileId, state.fullviewActiveTileId, panel))
+      setViewMode('splitview')
+    } else {
+      return
+    }
+
+    focusTile(tileId)
+    selectTiles([tileId])
+    setFullviewActiveTileId(tileId)
+  }, [draggedAgentTileId, focusTile, selectTiles, setFullviewActiveTileId, setSplitViewState, setViewMode])
+
   const openCommandPaletteSession = useCallback((
     session: AgentActiveSession,
     options: { split: boolean },
@@ -3271,6 +3307,9 @@ function AppContent(): React.ReactElement {
                         onDeactivate={() => void deactivateWorkspace(workspace)}
                         deactivatePending={pendingWorkspaceDeactivationIds.has(workspace.id)}
                         onReorder={reorderSidebarWorkspace}
+                        canDragAgent={canDragAgentToSplit}
+                        onAgentDragStart={startAgentDrag}
+                        agentDragActive={draggedAgentTileId !== null}
                       />
                     ))}
                   </div>
@@ -3401,6 +3440,15 @@ function AppContent(): React.ReactElement {
                   />
                 )}
               </div>
+              {draggedAgentTileId
+                && attachedTiles.some((tile) => tile.id === draggedAgentTileId)
+                && canDropTileInSplit(viewMode, draggedAgentTileId, fullviewActiveTileId) && (
+                <SplitDropOverlay
+                  orientation={splitViewState.orientation}
+                  onDropInPanel={dropAgentInSplitPanel}
+                  onCancel={clearDraggedAgentTile}
+                />
+              )}
             </div>
           )}
           {mainView === 'activity' && (
