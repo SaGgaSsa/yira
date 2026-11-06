@@ -42,9 +42,9 @@ export function getEnabledAgentProviders(): AgentProvider[] {
   return (['claude', 'codex'] as const).filter((provider) => settings?.agents[provider].enabled === true)
 }
 
-/** Folder for new agent worktrees: the user's choice, or the default under the Yira home. */
+/** Folder chosen for new agent worktrees, or an empty string to use the workspace default. */
 export function getWorktreesDirectory(): string {
-  return currentSettings?.worktreesDirectory || join(YIRA_HOME, 'worktrees')
+  return currentSettings?.worktreesDirectory ?? ''
 }
 
 function getAgentHookPath(provider: AgentHookProvider): string {

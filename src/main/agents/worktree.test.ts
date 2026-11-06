@@ -308,7 +308,6 @@ test('groups the same branch of two modules under their shared worktree folder',
   assert.deepEqual(await listWorkspaceWorktrees({
     rootPath: workspaceRoot,
     configuredRepositoryPaths: [],
-    worktreesDirectory: join(temporaryDirectory, 'worktrees'),
     activeRoots: [],
   }, {
     executor,
@@ -321,14 +320,50 @@ test('groups the same branch of two modules under their shared worktree folder',
     branch: 'feature/shared',
     head: '1111111',
     repositories: [
-      { relativePath: 'alpha', name: 'alpha' },
-      { relativePath: 'zeta', name: 'zeta' },
+      { relativePath: 'alpha', name: 'alpha', path: alphaWorktree },
+      { relativePath: 'zeta', name: 'zeta', path: zetaWorktree },
     ],
-    createdByYira: true,
+    createdByYira: false,
     changedFiles: 2,
     activeSessions: 0,
     missing: false,
   }])
+})
+
+test('does not mark a manual worktree inside the workspace worktrees folder as created by Yira', async (t) => {
+  const temporaryDirectory = await makeTempDirectory()
+  t.after(() => rm(temporaryDirectory, { recursive: true, force: true }))
+  const workspaceRoot = join(temporaryDirectory, 'workspace')
+  const worktreesDirectory = join(workspaceRoot, '.worktrees')
+  const worktreePath = join(worktreesDirectory, 'workspace-manual')
+  await mkdir(worktreePath, { recursive: true })
+  const executor = worktreeGit(new Map([
+    [workspaceRoot, [
+      `worktree ${toGitPath(workspaceRoot)}`,
+      `HEAD ${'0'.repeat(40)}`,
+      'branch refs/heads/main',
+      '',
+      `worktree ${toGitPath(worktreePath)}`,
+      `HEAD ${'e'.repeat(40)}`,
+      'branch refs/heads/feature/manual',
+      '',
+    ].join('\n')],
+  ]))
+
+  const options = await listWorkspaceWorktrees({
+    rootPath: workspaceRoot,
+    configuredRepositoryPaths: [],
+    activeRoots: [],
+  }, {
+    executor,
+    resolveWorkspaceWorktreeRepositories: async () => [
+      { relativePath: '.', absolutePath: workspaceRoot },
+    ],
+  })
+
+  assert.equal(options.length, 1)
+  assert.equal(options[0].path, worktreePath)
+  assert.equal(options[0].createdByYira, false)
 })
 
 test('keeps the same branch in separate folders as separate options', async (t) => {
@@ -371,7 +406,6 @@ test('keeps the same branch in separate folders as separate options', async (t) 
   const options = await listWorkspaceWorktrees({
     rootPath: workspaceRoot,
     configuredRepositoryPaths: [],
-    worktreesDirectory: join(temporaryDirectory, 'worktrees'),
     activeRoots: [],
   }, {
     executor,
@@ -383,8 +417,8 @@ test('keeps the same branch in separate folders as separate options', async (t) 
 
   assert.deepEqual(options.map(({ path }) => path), [alphaWorktree, zetaWorktree])
   assert.deepEqual(options.map(({ repositories }) => repositories), [
-    [{ relativePath: 'alpha', name: 'alpha' }],
-    [{ relativePath: 'zeta', name: 'zeta' }],
+    [{ relativePath: 'alpha', name: 'alpha', path: alphaWorktree }],
+    [{ relativePath: 'zeta', name: 'zeta', path: zetaWorktree }],
   ])
   assert.ok(options.every(({ branch }) => branch === 'feature/topic'))
 })
@@ -407,7 +441,6 @@ test('excludes the repository checkout itself from the listed worktrees', async 
   assert.deepEqual(await listWorkspaceWorktrees({
     rootPath: join(tmpdir(), 'yira-worktree-main'),
     configuredRepositoryPaths: [],
-    worktreesDirectory: join(tmpdir(), 'yira-worktree-main-worktrees'),
     activeRoots: [],
   }, {
     executor,
@@ -441,7 +474,6 @@ test('continues listing worktrees when one repository fails', async (t) => {
   const options = await listWorkspaceWorktrees({
     rootPath: workspaceRoot,
     configuredRepositoryPaths: [],
-    worktreesDirectory: join(temporaryDirectory, 'worktrees'),
     activeRoots: [],
   }, {
     executor,
@@ -453,7 +485,7 @@ test('continues listing worktrees when one repository fails', async (t) => {
 
   assert.deepEqual(options.map(({ path, repositories }) => ({ path, repositories })), [{
     path: workingWorktree,
-    repositories: [{ relativePath: 'working', name: 'working' }],
+    repositories: [{ relativePath: 'working', name: 'working', path: workingWorktree }],
   }])
 })
 
@@ -480,7 +512,6 @@ test('counts live sessions that overlap a listed worktree path', async (t) => {
   const options = await listWorkspaceWorktrees({
     rootPath: workspaceRoot,
     configuredRepositoryPaths: [],
-    worktreesDirectory,
     activeRoots: [
       worktreePath,
       join(worktreePath, 'alpha'),

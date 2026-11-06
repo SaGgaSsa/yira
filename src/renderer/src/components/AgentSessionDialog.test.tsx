@@ -295,7 +295,7 @@ function worktreeOption(overrides: Partial<AgentWorktreeOption> = {}): AgentWork
     path: 'C:\\worktrees\\existing',
     branch: 'feat/existing',
     head: 'abc1234',
-    repositories: [worktreeRepositories[0]],
+    repositories: [{ ...worktreeRepositories[0], path: 'C:\\worktrees\\existing\\app' }],
     createdByYira: true,
     changedFiles: 0,
     activeSessions: 0,
@@ -937,12 +937,12 @@ test('filters existing worktrees by branch or module', async () => {
   const alpha = worktreeOption({
     path: 'C:\\worktrees\\alpha',
     branch: 'feat/alpha',
-    repositories: [{ relativePath: 'app', name: 'app' }],
+    repositories: [{ relativePath: 'app', name: 'app', path: 'C:\\worktrees\\alpha\\app' }],
   })
   const beta = worktreeOption({
     path: 'C:\\worktrees\\beta',
     branch: 'fix/beta',
-    repositories: [{ relativePath: 'libs/api', name: 'api' }],
+    repositories: [{ relativePath: 'libs/api', name: 'api', path: 'C:\\worktrees\\beta\\libs\\api' }],
   })
   const { container, root } = renderDialog({ worktrees: async () => [alpha, beta] })
 

@@ -268,8 +268,8 @@ export interface AgentWorktreeOption {
   branch?: string
   /** Abbreviated commit the worktree is on. */
   head: string
-  /** Repositories it covers. More than one means a group under `path`. */
-  repositories: GitRepository[]
+  /** Repositories it covers, each with its own worktree folder. More than one means a group under `path`. */
+  repositories: Array<GitRepository & { path: string }>
   createdByYira: boolean
   /** Uncommitted files across its repositories; absent when Git could not report them. */
   changedFiles?: number
