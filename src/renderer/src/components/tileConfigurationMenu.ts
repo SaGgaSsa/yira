@@ -1,4 +1,4 @@
-import { Bell, BellOff, CopyPlus, Lock, Pencil, Pin, RefreshCw, LockOpen } from 'lucide-react'
+import { Bell, BellOff, CopyPlus, Lock, Pencil, Pin, RefreshCw, LockOpen, X } from 'lucide-react'
 import type { TileState } from '@shared/types'
 import { isAgentSessionTile } from '@/utils/agentSessionTiles'
 import type { MenuItem } from './ContextMenu'
@@ -12,6 +12,7 @@ interface TileConfigurationMenuOptions {
   onRefresh: (tile: TileState) => void | Promise<void>
   onToggleNotificationsMuted: (tile: TileState) => void
   onToggleLock: (tile: TileState) => void
+  onClose?: (tile: TileState) => void | Promise<void>
   onBeforeAction?: () => void
 }
 
@@ -34,6 +35,7 @@ export function buildTileConfigurationMenuItems({
   onRefresh,
   onToggleNotificationsMuted,
   onToggleLock,
+  onClose,
   onBeforeAction,
   translate,
 }: TileConfigurationMenuOptions): MenuItem[] {
@@ -78,5 +80,13 @@ export function buildTileConfigurationMenuItems({
       icon: tile.locked ? LockOpen : Lock,
       action: runTileAction(tile, onToggleLock, onBeforeAction),
     },
+    ...(onClose
+      ? [{
+          label: label('ui.closeTile', 'Close tile'),
+          icon: X,
+          danger: true,
+          action: runTileAction(tile, onClose, onBeforeAction),
+        }]
+      : []),
   ]
 }

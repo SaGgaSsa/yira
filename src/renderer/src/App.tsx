@@ -614,7 +614,7 @@ function AppContent(): React.ReactElement {
   const [tileEditor, setTileEditor] = useState<TileEditorState>(null)
   const hasOpenedTileEditor = useHasBeenOpen(tileEditor !== null)
   const [tileRefreshKeys, setTileRefreshKeys] = useState<Record<string, number>>({})
-  const [tileMenu, setTileMenu] = useState<{ tileId: string; x: number; y: number } | null>(null)
+  const [tileMenu, setTileMenu] = useState<{ tileId: string; x: number; y: number; fromSidebar?: boolean } | null>(null)
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const workspaceTransitionRef = useRef(0)
   const previousSidebarWorkspaceIdRef = useRef(activeWorkspaceId)
@@ -2134,6 +2134,16 @@ function AppContent(): React.ReactElement {
     && canDropTileInSplit(viewMode, session.tileId, fullviewActiveTileId)
   ), [activeWorkspaceId, attachedTiles, fullviewActiveTileId, tilesHidden, viewMode])
 
+  const canOpenAgentMenu = useCallback((session: AgentActiveSession): boolean => (
+    session.workspaceId === activeWorkspaceId && tiles.some((tile) => tile.id === session.tileId)
+  ), [activeWorkspaceId, tiles])
+
+  const openAgentMenu = useCallback((session: AgentActiveSession, trigger: HTMLElement) => {
+    const rect = trigger.getBoundingClientRect()
+    // Right-align the menu (200px minimum width) with the button.
+    setTileMenu({ tileId: session.tileId, x: Math.max(8, rect.right - 200), y: rect.bottom + 4, fromSidebar: true })
+  }, [])
+
   const startAgentDrag = useCallback((session: AgentActiveSession) => {
     // Chromium can cancel a drag when the DOM changes during dragstart, so the overlay appears on the next task.
     window.setTimeout(() => setDraggedAgentTileId(session.tileId), 0)
@@ -2669,6 +2679,7 @@ function AppContent(): React.ReactElement {
         onPinSession: agentSessionTileActions.getPinState(activeTileMenu.id)?.disabled === false
           ? (tile) => pinSessionTileById(tile.id)
           : undefined,
+        onClose: tileMenu?.fromSidebar ? (tile) => closeTileFromSidebar(tile) : undefined,
         onBeforeAction: () => setTileMenu(null),
         translate: (key) => t(key),
       })
@@ -2776,6 +2787,17 @@ function AppContent(): React.ReactElement {
       activateSplitTile(panel, fallback)
     }
   }, [activateSplitTile, deleteTile, focusTile, selectTiles, setFullviewActiveTileId, setViewMode, splitViewState])
+
+  // A row can close a tile from any view, so it reuses the close path of the current view.
+  const closeTileFromSidebar = useCallback(async (tile: TileState) => {
+    const state = useCanvasStore.getState()
+    if (state.viewMode === 'fullview') return closeTileFromFullview(tile.id)
+    if (state.viewMode === 'splitview') {
+      if (state.splitViewState.leftTileIds.includes(tile.id)) return closeTileFromSplitview('left', tile.id)
+      if (state.splitViewState.rightTileIds.includes(tile.id)) return closeTileFromSplitview('right', tile.id)
+    }
+    await deleteTile(tile.id)
+  }, [closeTileFromFullview, closeTileFromSplitview, deleteTile])
 
   const moveTileToSplitPanel = useCallback((tileId: string, targetPanel: SplitPanelId) => {
     const sourcePanel = splitViewState.leftTileIds.includes(tileId)
@@ -3310,6 +3332,9 @@ function AppContent(): React.ReactElement {
                         canDragAgent={canDragAgentToSplit}
                         onAgentDragStart={startAgentDrag}
                         agentDragActive={draggedAgentTileId !== null}
+                        canOpenAgentMenu={canOpenAgentMenu}
+                        onOpenAgentMenu={openAgentMenu}
+                        agentMenuTileId={tileMenu?.fromSidebar ? tileMenu.tileId : null}
                       />
                     ))}
                   </div>

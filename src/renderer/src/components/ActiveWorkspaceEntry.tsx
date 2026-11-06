@@ -23,6 +23,9 @@ export interface ActiveWorkspaceEntryProps extends Omit<WorkspaceListItemProps, 
   canDragAgent?: (session: AgentActiveSession) => boolean
   onAgentDragStart?: (session: AgentActiveSession) => void
   agentDragActive?: boolean
+  canOpenAgentMenu?: (session: AgentActiveSession) => boolean
+  onOpenAgentMenu?: (session: AgentActiveSession, trigger: HTMLElement) => void
+  agentMenuTileId?: string | null
   className?: string
 }
 
@@ -37,6 +40,9 @@ export function ActiveWorkspaceEntry({
   canDragAgent,
   onAgentDragStart,
   agentDragActive = false,
+  canOpenAgentMenu,
+  onOpenAgentMenu,
+  agentMenuTileId = null,
   className = '',
   ...workspaceListItemProps
 }: ActiveWorkspaceEntryProps): React.ReactElement {
@@ -115,6 +121,9 @@ export function ActiveWorkspaceEntry({
           canDragAgent={canDragAgent}
           onAgentDragStart={onAgentDragStart}
           agentDragActive={agentDragActive}
+          canOpenAgentMenu={canOpenAgentMenu}
+          onOpenAgentMenu={onOpenAgentMenu}
+          agentMenuTileId={agentMenuTileId}
         />
       )}
       {dropPlacement && (

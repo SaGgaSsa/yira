@@ -78,6 +78,7 @@ type TranslationResources = {
     statusWaiting: string
     statusReady: string
     statusWorking: string
+    actions: string
     waitingCount_one: string
     waitingCount_other: string
     readyCount_one: string
@@ -1310,6 +1311,7 @@ const en: TranslationResources = {
     statusWaiting: 'Waiting for your reply',
     statusReady: 'Finished',
     statusWorking: 'Working',
+    actions: 'Agent actions',
     waitingCount_one: '{{count}} waiting',
     waitingCount_other: '{{count}} waiting',
     readyCount_one: '{{count}} ready',
@@ -2550,6 +2552,7 @@ const es: TranslationResources = {
     statusWaiting: 'Esperando respuesta',
     statusReady: 'Terminado',
     statusWorking: 'Trabajando',
+    actions: 'Acciones del agente',
     waitingCount_one: '{{count}} esperando',
     waitingCount_other: '{{count}} esperando',
     readyCount_one: '{{count}} listo',
