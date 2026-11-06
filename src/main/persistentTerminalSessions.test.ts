@@ -372,13 +372,97 @@ test('working state updates the registry without reaching the agent-alert callba
     { provider: 'claude', event: 'input', tileId: identity.tileId },
     null,
   ])
-  assert.equal(registry.alerts.has(identity.tileId), false)
 })
 
-test('a later snapshot does not replay an old working event after an interrupt', async () => {
+test('an agent-state event updates the registered session state and detail', async () => {
   const transport = new FakeTransport()
   const registry = new AgentSessionRegistry({ now: () => 1_700_000_000_000 })
-  const agent = { provider: 'claude' as const, sessionId: 'resume-interrupt', startedAt: '2024-01-01T00:00:00.000Z' }
+  const agent = { provider: 'claude' as const, sessionId: 'resume-detail', startedAt: '2024-01-01T00:00:00.000Z' }
+  transport.setHandler('attach', () => snapshot({ agent }))
+  const sessions = createSessions(transport, { registry })
+  await sessions.attach(target)
+
+  transport.emitEvent({
+    event: 'agent-state',
+    identity: { ...identity },
+    sequence: 2,
+    provider: 'claude',
+    state: 'needs-input',
+    detail: 'Approve Bash',
+  })
+  const waiting = registry.get(identity.workspaceId, identity.tileId)
+  assert.equal(waiting?.status, 'needs-input')
+  assert.equal(waiting?.statusDetail, 'Approve Bash')
+
+  transport.emitEvent({
+    event: 'agent-state',
+    identity: { ...identity },
+    sequence: 3,
+    provider: 'claude',
+    state: 'done',
+  })
+  const finished = registry.get(identity.workspaceId, identity.tileId)
+  assert.equal(finished?.status, 'done')
+  assert.equal(finished !== null && 'statusDetail' in finished, false)
+})
+
+test('an agent-state event reports the state for registered and unregistered terminals', async () => {
+  const transport = new FakeTransport()
+  const reported: Array<{ identity: TerminalSessionIdentity; provider: string; state: string }> = []
+  transport.setHandler('attach', () => snapshot())
+  const sessions = createSessions(transport, {
+    onAgentState: (reportedIdentity, provider, state) => {
+      reported.push({ identity: reportedIdentity, provider, state })
+    },
+  })
+  await sessions.attach(target)
+
+  transport.emitEvent({
+    event: 'agent-state',
+    identity: { ...identity },
+    sequence: 2,
+    provider: 'claude',
+    state: 'working',
+  })
+  const manualIdentity = { workspaceId: 'workspace-b', tileId: 'manual-terminal', generation: 1 }
+  transport.emitEvent({
+    event: 'agent-state',
+    identity: manualIdentity,
+    sequence: 1,
+    provider: 'codex',
+    state: 'done',
+  })
+
+  assert.deepEqual(reported, [
+    { identity, provider: 'claude', state: 'working' },
+    { identity: manualIdentity, provider: 'codex', state: 'done' },
+  ])
+})
+
+test('a snapshot with agentState restores the state when reconnecting', async () => {
+  const transport = new FakeTransport()
+  const registry = new AgentSessionRegistry({ now: () => 1_700_000_000_000 })
+  const agent = { provider: 'claude' as const, sessionId: 'resume-state', startedAt: '2024-01-01T00:00:00.000Z' }
+  const restoredSnapshot = snapshot({
+    agent,
+    sequence: 4,
+    agentState: { provider: 'claude', state: 'needs-input', detail: 'Which file?' },
+  })
+  transport.setHandler('list', () => [restoredSnapshot])
+  transport.setHandler('attach', () => restoredSnapshot)
+  const sessions = createSessions(transport, { registry })
+
+  await sessions.hydrate()
+
+  const restored = registry.get(identity.workspaceId, identity.tileId)
+  assert.equal(restored?.status, 'needs-input')
+  assert.equal(restored?.statusDetail, 'Which file?')
+})
+
+test('a later snapshot does not replay an older state event', async () => {
+  const transport = new FakeTransport()
+  const registry = new AgentSessionRegistry({ now: () => 1_700_000_000_000 })
+  const agent = { provider: 'claude' as const, sessionId: 'resume-replay', startedAt: '2024-01-01T00:00:00.000Z' }
   let attachedSnapshot = snapshot({ agent })
   transport.setHandler('attach', () => attachedSnapshot)
   const sessions = createSessions(transport, { registry })
@@ -393,68 +477,128 @@ test('a later snapshot does not replay an old working event after an interrupt',
   })
   assert.equal(registry.get(identity.workspaceId, identity.tileId)?.status, 'working')
 
-  registry.recordActivity(identity.workspaceId, identity.tileId, 'interrupt')
+  transport.emitEvent({
+    event: 'agent-state',
+    identity: { ...identity },
+    sequence: 3,
+    provider: 'claude',
+    state: 'done',
+  })
   assert.equal(registry.get(identity.workspaceId, identity.tileId)?.status, 'done')
-  attachedSnapshot = snapshot({ agent, sequence: 2 })
+  attachedSnapshot = snapshot({ agent, sequence: 3, agentState: { provider: 'claude', state: 'done' } })
   await sessions.attach(target)
 
   assert.equal(registry.get(identity.workspaceId, identity.tileId)?.status, 'done')
 })
 
-test('empty input does not restore working status or clear an agent alert', async () => {
+test('empty input does not change the state or clear an agent alert', async () => {
   const transport = new FakeTransport()
   const registry = new AgentSessionRegistry({ now: () => 1_700_000_000_000 })
   const agent = { provider: 'codex' as const, sessionId: 'resume-2', startedAt: '2024-01-01T00:00:00.000Z' }
   transport.setHandler('attach', () => snapshot({ agent }))
   transport.setHandler('write', () => null)
-  const sessions = createSessions(transport, { registry })
+  const alerts: Array<TerminalDaemonAlert | null> = []
+  const sessions = createSessions(transport, {
+    registry,
+    onAgentAlert: (_identity, alert) => alerts.push(alert),
+  })
   await sessions.attach(target)
-  await sessions.write(identity, 'input')
-  registry.reportAgentAlert({ provider: 'codex', event: 'permission', tileId: identity.tileId }, identity.workspaceId)
+  transport.emitEvent({
+    event: 'agent-state',
+    identity: { ...identity },
+    sequence: 2,
+    provider: 'codex',
+    state: 'needs-input',
+  })
+  const permission: TerminalDaemonAlert = { provider: 'codex', event: 'permission', tileId: identity.tileId }
+  transport.emitEvent({ event: 'alert', identity: { ...identity }, sequence: 3, alert: permission })
   await sessions.write(identity, '')
 
   assert.equal(registry.get(identity.workspaceId, identity.tileId)?.status, 'needs-input')
-  assert.equal(registry.alerts.has(identity.tileId), true)
+  assert.deepEqual(alerts, [permission])
 })
 
-test('terminal protocol replies do not restore working status or clear an agent alert', async () => {
+test('terminal protocol replies keep the state and alert until the user types', async () => {
   const transport = new FakeTransport()
   const registry = new AgentSessionRegistry({ now: () => 1_700_000_000_000 })
   const agent = { provider: 'codex' as const, sessionId: 'resume-3', startedAt: '2024-01-01T00:00:00.000Z' }
   transport.setHandler('attach', () => snapshot({ agent }))
+  transport.setHandler('rendererAttach', () => snapshot({ agent }))
   transport.setHandler('write', () => null)
   const sessions = createSessions(transport, { registry })
   await sessions.attach(target)
-  registry.reportAgentAlert({ provider: 'codex', event: 'completed', tileId: identity.tileId }, identity.workspaceId)
+  const sender = new FakeSender()
+  await sessions.rendererAttach(identity, sender)
+  const alertPayloads = (): unknown[] => sender.messages
+    .filter((message) => message.channel === `terminal:agentAlert:${identity.tileId}`)
+    .map((message) => message.payload)
+
+  transport.emitEvent({
+    event: 'agent-state',
+    identity: { ...identity },
+    sequence: 2,
+    provider: 'codex',
+    state: 'done',
+  })
+  transport.emitEvent({
+    event: 'alert',
+    identity: { ...identity },
+    sequence: 3,
+    alert: { provider: 'codex', event: 'completed', tileId: identity.tileId },
+  })
+
   await sessions.write(identity, '\u001b[I')
   await sessions.write(identity, '\u001b[12;40R\u001b[O')
 
   assert.equal(registry.get(identity.workspaceId, identity.tileId)?.status, 'done')
-  assert.equal(registry.alerts.has(identity.tileId), true)
+  assert.deepEqual(alertPayloads(), [
+    null,
+    { provider: 'codex', event: 'completed', tileId: identity.tileId, priority: 'normal' },
+  ])
 
   await sessions.write(identity, 'next\r')
-  assert.equal(registry.get(identity.workspaceId, identity.tileId)?.status, 'working')
+  assert.equal(registry.get(identity.workspaceId, identity.tileId)?.status, 'done')
+  assert.deepEqual(alertPayloads(), [
+    null,
+    { provider: 'codex', event: 'completed', tileId: identity.tileId, priority: 'normal' },
+    null,
+  ])
 })
 
-test('an agent found running after a restart starts idle and a new one starts working', async () => {
+test('startsWithPrompt decides the initial status of a new session', async () => {
   const transport = new FakeTransport()
   const registry = new AgentSessionRegistry({ now: () => 1_700_000_000_000 })
-  const agent = { provider: 'claude' as const, sessionId: 'resume-4', startedAt: '2024-01-01T00:00:00.000Z' }
+  const agent = {
+    provider: 'claude' as const,
+    sessionId: 'resume-4',
+    startedAt: '2024-01-01T00:00:00.000Z',
+    startsWithPrompt: true,
+  }
   transport.setHandler('attach', () => snapshot({ agent }))
   const restored = createSessions(transport, { registry })
   await restored.attach(target)
   assert.equal(registry.get(identity.workspaceId, identity.tileId)?.status, 'done')
 
-  const freshTransport = new FakeTransport()
-  const freshRegistry = new AgentSessionRegistry({ now: () => 1_700_000_000_000 })
-  freshTransport.setHandler('attach', () => null)
-  freshTransport.setHandler('create', () => snapshot({ agent }))
-  const fresh = createSessions(freshTransport, { registry: freshRegistry })
-  await fresh.create(target, () => ({ target, executable: '/bin/sh', args: [], cwd: '/tmp', env: {}, cols: 80, rows: 24, local: true }))
-  assert.equal(freshRegistry.get(identity.workspaceId, identity.tileId)?.status, 'working')
+  const createSession = (createdAgent: typeof agent) => {
+    const freshTransport = new FakeTransport()
+    const freshRegistry = new AgentSessionRegistry({ now: () => 1_700_000_000_000 })
+    freshTransport.setHandler('attach', () => null)
+    freshTransport.setHandler('create', () => snapshot({ agent: createdAgent }))
+    const fresh = createSessions(freshTransport, { registry: freshRegistry })
+    return { fresh, freshRegistry }
+  }
+  const build = () => ({ target, executable: '/bin/sh', args: [], cwd: '/tmp', env: {}, cols: 80, rows: 24, local: true })
+
+  const prompted = createSession(agent)
+  await prompted.fresh.create(target, build)
+  assert.equal(prompted.freshRegistry.get(identity.workspaceId, identity.tileId)?.status, 'working')
+
+  const plain = createSession({ ...agent, startsWithPrompt: false })
+  await plain.fresh.create(target, build)
+  assert.equal(plain.freshRegistry.get(identity.workspaceId, identity.tileId)?.status, 'done')
 })
 
-test('typing does not start a turn and Esc interrupts one', async () => {
+test('typing does not change the state the agent reported', async () => {
   const transport = new FakeTransport()
   const registry = new AgentSessionRegistry({ now: () => 1_700_000_000_000 })
   const agent = { provider: 'claude' as const, sessionId: 'resume-5', startedAt: '2024-01-01T00:00:00.000Z' }
@@ -463,12 +607,19 @@ test('typing does not start a turn and Esc interrupts one', async () => {
   const sessions = createSessions(transport, { registry })
   await sessions.attach(target)
 
+  transport.emitEvent({
+    event: 'agent-state',
+    identity: { ...identity },
+    sequence: 2,
+    provider: 'claude',
+    state: 'needs-input',
+  })
   await sessions.write(identity, 'draft a reply')
-  assert.equal(registry.get(identity.workspaceId, identity.tileId)?.status, 'done')
+  assert.equal(registry.get(identity.workspaceId, identity.tileId)?.status, 'needs-input')
   await sessions.write(identity, '\r')
-  assert.equal(registry.get(identity.workspaceId, identity.tileId)?.status, 'working')
+  assert.equal(registry.get(identity.workspaceId, identity.tileId)?.status, 'needs-input')
   await sessions.write(identity, '\u001b')
-  assert.equal(registry.get(identity.workspaceId, identity.tileId)?.status, 'done')
+  assert.equal(registry.get(identity.workspaceId, identity.tileId)?.status, 'needs-input')
 })
 
 test('workspace deletion waits for an in-flight create and blocks a later create', async () => {

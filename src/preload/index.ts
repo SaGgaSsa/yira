@@ -205,7 +205,6 @@ contextBridge.exposeInMainWorld('electron', {
   settings: {
     load: () => ipcRenderer.invoke('settings:load'),
     save: (settings: unknown) => ipcRenderer.invoke('settings:save', settings),
-    configureAgentHooks: (provider: 'codex' | 'claude') => ipcRenderer.invoke('agentHooks:configure', provider),
     uninstallAgentHooks: (provider: 'codex' | 'claude') => ipcRenderer.invoke('agentHooks:uninstall', provider),
     getClaudeStatusLineStatus: () => ipcRenderer.invoke('claudeStatusLine:status'),
     installClaudeStatusLine: () => ipcRenderer.invoke('claudeStatusLine:install'),

@@ -73,6 +73,8 @@ export function WorkspaceAgentTree({
         const rowName = bot ? `${bot.name} · ${sessionName}` : sessionName
         const focused = focusedTileId !== null && session.tileId === focusedTileId
         const waiting = session.status === 'needs-input'
+        const waitingDetail = waiting ? session.statusDetail?.trim() : ''
+        const statusText = waitingDetail ? `${statusLabel} · ${waitingDetail}` : statusLabel
         const done = session.status === 'done'
         const nameClass = focused
           ? 'font-medium text-text-display'
@@ -83,9 +85,9 @@ export function WorkspaceAgentTree({
             key={session.sessionId}
             type="button"
             data-workspace-agent-session={session.sessionId}
-            aria-label={`${rowName}, ${statusLabel}`}
+            aria-label={`${rowName}, ${statusText}`}
             aria-current={focused ? 'true' : undefined}
-            title={`${rowName} · ${statusLabel}`}
+            title={`${rowName} · ${statusText}`}
             onClick={() => onOpenAgent(workspace, session)}
             className={`relative flex h-[26px] min-w-0 items-center gap-2 pl-9 pr-3 text-left transition-colors ${focused ? 'bg-active-bg before:absolute before:inset-y-[5px] before:left-0 before:w-0.5 before:rounded-full before:bg-text-display' : 'hover:bg-hover-bg'} focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--interactive)`}
           >

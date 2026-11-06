@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import type { SerializeAddon as SerializeAddonType } from '@xterm/addon-serialize'
 import type {
   TerminalDaemonAgent,
+  TerminalDaemonAgentState,
   TerminalDaemonEndpoint,
   TerminalDaemonEvent,
   TerminalDaemonMethods,
@@ -20,11 +21,14 @@ import {
   type TerminalSessionTarget,
 } from '@shared/terminalSessionIdentity'
 import type { TerminalExitEvent } from '@shared/types'
-import { AgentAlertBridge } from './agentAlertBridge'
 import {
-  normalizeAgentAlert,
+  PROGRAM_STATUS_OSC,
+  PROGRAM_STATUS_SUPPORT_REPLY,
+  parseProgramStatus,
+  type ProgramStatusState,
+} from './agentProgramStatus'
+import {
   SemanticAgentAlertState,
-  type AgentAlert,
   type AgentAlertState,
 } from './agentAlerts'
 import { DeferredTerminalStartupCommand } from './terminalStartupCommand'
@@ -64,6 +68,7 @@ export interface TerminalDaemonPtyOptions {
   rows: number
   cwd: string
   env: Record<string, string>
+  useConptyDll?: boolean
 }
 
 export interface TerminalDaemonPtyFactory {
@@ -79,6 +84,9 @@ interface TerminalDaemonTerminal {
   readonly rows: number
   readonly onData?: (callback: (data: string) => void) => unknown
   readonly onTitleChange?: (callback: (title: string) => void) => unknown
+  readonly parser?: {
+    registerOscHandler(ident: number, callback: (data: string) => boolean | Promise<boolean>): { dispose(): void }
+  }
   write(data: string, callback?: () => void): void
   resize(cols: number, rows: number): void
   loadAddon(addon: unknown): void
@@ -140,6 +148,7 @@ const MAX_SNAPSHOT_BYTES = 12 * 1024 * 1024
 const MAX_CLIENT_QUEUE_BYTES = 32 * 1024 * 1024
 const MAX_PENDING_REQUESTS = 256
 
+// An app started from a terminal launched by an older version inherits these.
 const BRIDGE_ENV_KEYS = [
   'YIRA_AGENT_BRIDGE_URL',
   'YIRA_AGENT_BRIDGE_TOKEN',
@@ -263,6 +272,10 @@ function normalizeAgent(value: unknown): TerminalDaemonAgent | undefined {
   if (surface !== undefined && surface !== 'tile' && surface !== 'agents-view') {
     throw new Error('Invalid terminal agent surface')
   }
+  const startsWithPrompt = value.startsWithPrompt
+  if (startsWithPrompt !== undefined && typeof startsWithPrompt !== 'boolean') {
+    throw new Error('Invalid terminal agent startsWithPrompt')
+  }
 
   const normalizeMetadataString = (field: string, maxLength: number): string | undefined => {
     const entry = value[field]
@@ -309,6 +322,7 @@ function normalizeAgent(value: unknown): TerminalDaemonAgent | undefined {
     ...(worktreeBranch !== undefined ? { worktreeBranch } : {}),
     ...(worktrees !== undefined ? { worktrees } : {}),
     ...(botId !== undefined ? { botId } : {}),
+    ...(startsWithPrompt === true ? { startsWithPrompt: true } : {}),
   }
 }
 
@@ -621,6 +635,15 @@ class DaemonSession {
 
   private terminalDataSubscription: unknown
 
+  private programStatusSubscription: unknown
+
+  private programStatus: TerminalDaemonAgentState | undefined
+
+  private programStatusKey: string | undefined
+
+  /** The agent was launched with a first prompt, so its startup idle is not a finished turn. */
+  private awaitingFirstTurn: boolean
+
   private startupCommand: DeferredTerminalStartupCommand | undefined
 
   private disposed = false
@@ -635,8 +658,6 @@ class DaemonSession {
   private title: string | undefined
 
   private suppressAlertQueue = false
-
-  private localAlertRegistered = false
 
   private processExitHandled = false
 
@@ -657,6 +678,7 @@ class DaemonSession {
     this.terminal = terminal
     this.serializer = serializer
     this.pid = typeof pty.pid === 'number' && Number.isSafeInteger(pty.pid) ? pty.pid : 0
+    this.awaitingFirstTurn = spawn.agent?.startsWithPrompt === true
     this.alertState = new SemanticAgentAlertState({
       onChange: (_tileId, state) => {
         if (this.suppressAlertQueue || this.disposed) return
@@ -692,14 +714,11 @@ class DaemonSession {
         try { this.pty.write(data) } catch { /* PTY may have exited. */ }
       })
     }
-  }
 
-  setLocalAlertRegistered(value: boolean): void {
-    this.localAlertRegistered = value
-  }
-
-  isLocalAlertRegistered(): boolean {
-    return this.localAlertRegistered
+    this.programStatusSubscription = this.terminal.parser?.registerOscHandler(PROGRAM_STATUS_OSC, (payload) => {
+      this.receiveProgramStatus(payload)
+      return true
+    })
   }
 
   hasExited(): boolean {
@@ -781,14 +800,50 @@ class DaemonSession {
     this.startOutputDrain()
   }
 
-  reportAlert(alert: unknown): void {
+  private receiveProgramStatus(payload: string): void {
     if (this.disposed || this.exitObserved) return
-    const hook = normalizeAgentAlert(alert)
-    if (!hook) return
-    this.alertState.report(hook)
-    if (hook.event !== 'working') return
+    const report = parseProgramStatus(payload)
+    if (!report) return
+
+    if (report.type === 'query') {
+      try {
+        this.pty.write(PROGRAM_STATUS_SUPPORT_REPLY)
+      } catch (error) {
+        if (!isPtyAlreadyExitedError(error)) throw error
+      }
+      return
+    }
+
+    const provider = report.provider ?? this.programStatus?.provider
+    if (!provider) return
+    if (this.spawn.agent && this.spawn.agent.provider !== provider) return
+    if (this.awaitingFirstTurn && report.state === 'idle') return
+    if (report.state !== 'idle') this.awaitingFirstTurn = false
+
+    const state = daemonStatusFor(report.state)
+    const detail = report.state === 'working' || report.state === 'blocked' ? report.detail : undefined
+    const key = `${report.state}:${report.kind ?? ''}`
+    if (key !== this.programStatusKey) {
+      this.programStatusKey = key
+      if (report.state === 'blocked') {
+        this.alertState.report({
+          provider,
+          event: report.kind === 'question' ? 'input' : 'permission',
+          tileId: this.target.tileId,
+          ...(detail ? { detail } : {}),
+        })
+      } else if (report.state === 'done' || report.state === 'error') {
+        this.alertState.report({ provider, event: 'completed', tileId: this.target.tileId })
+      } else {
+        this.alertState.clear(this.target.tileId)
+      }
+    }
+
+    const next: TerminalDaemonAgentState = { provider, state, ...(detail ? { detail } : {}) }
+    if (sameAgentState(this.programStatus, next)) return
+    this.programStatus = next
     void this.enqueue(() => {
-      if (!this.disposed) this.publishAgentState(hook.provider)
+      if (!this.disposed) this.publishAgentState()
     }).catch(() => undefined)
   }
 
@@ -868,10 +923,12 @@ class DaemonSession {
     disposeSubscription(this.exitSubscription)
     disposeSubscription(this.titleSubscription)
     disposeSubscription(this.terminalDataSubscription)
+    disposeSubscription(this.programStatusSubscription)
     this.dataSubscription = undefined
     this.exitSubscription = undefined
     this.titleSubscription = undefined
     this.terminalDataSubscription = undefined
+    this.programStatusSubscription = undefined
     this.outputQueue = []
     this.outputQueueBytes = 0
     this.outputPaused = false
@@ -880,7 +937,6 @@ class DaemonSession {
     for (const client of [...this.subscribers]) this.unsubscribe(client)
     try { this.serializer.dispose() } catch { /* addon cleanup is best effort. */ }
     try { this.terminal.dispose() } catch { /* terminal cleanup is best effort. */ }
-    this.daemon.releaseLocalAlertTarget(this)
   }
 
   async startCommands(): Promise<void> {
@@ -1015,14 +1071,17 @@ class DaemonSession {
     })
   }
 
-  private publishAgentState(provider: AgentAlert['provider']): void {
+  private publishAgentState(): void {
+    const state = this.programStatus
+    if (!state) return
     this.sequence += 1
     this.broadcast({
       event: 'agent-state',
       identity: { ...this.identity },
       sequence: this.sequence,
-      provider,
-      state: 'working',
+      provider: state.provider,
+      state: state.state,
+      ...(state.detail ? { detail: state.detail } : {}),
     })
   }
 
@@ -1033,7 +1092,6 @@ class DaemonSession {
     this.exitEvent = normalizeExitEvent(value)
     this.startupCommand?.dispose()
     this.startupCommand = undefined
-    this.daemon.releaseLocalAlertTarget(this)
     this.suppressAlertQueue = true
     const hadAlert = this.alertState.has(this.target.tileId)
     this.alertState.clearOnDestroy(this.target.tileId)
@@ -1079,6 +1137,7 @@ class DaemonSession {
       ...(this.alertState.get(this.target.tileId)
         ? { alert: toDaemonAlert(this.alertState.get(this.target.tileId)!) }
         : {}),
+      ...(this.programStatus ? { agentState: { ...this.programStatus } } : {}),
       ...(this.exitEvent ? { exitEvent: { ...this.exitEvent } } : {}),
     }
     return snapshot
@@ -1114,11 +1173,28 @@ function cloneAgent(agent: TerminalDaemonAgent): TerminalDaemonAgent {
   }
 }
 
+function daemonStatusFor(state: ProgramStatusState): TerminalDaemonAgentState['state'] {
+  if (state === 'working') return 'working'
+  if (state === 'blocked') return 'needs-input'
+  return 'done'
+}
+
+function sameAgentState(
+  current: TerminalDaemonAgentState | undefined,
+  next: TerminalDaemonAgentState,
+): boolean {
+  if (!current) return false
+  return current.provider === next.provider
+    && current.state === next.state
+    && current.detail === next.detail
+}
+
 function toDaemonAlert(state: AgentAlertState): NonNullable<TerminalDaemonSnapshot['alert']> {
   return {
     provider: state.provider,
     event: state.event,
     tileId: state.tileId,
+    ...(state.detail ? { detail: state.detail } : {}),
   }
 }
 
@@ -1140,14 +1216,6 @@ export class TerminalDaemonServer {
   private readonly creations = new Map<string, Promise<DaemonSession>>()
 
   private readonly clients = new Set<DaemonClient>()
-
-  private readonly localAlertTargets = new Map<string, Set<string>>()
-
-  private readonly agentAlertBridge = new AgentAlertBridge({
-    onAlert: (alert) => this.receiveAgentAlert(alert),
-  })
-
-  private bridgeStartPromise: Promise<unknown> | undefined
 
   private server: Server | undefined
 
@@ -1220,18 +1288,6 @@ export class TerminalDaemonServer {
   removeClient(client: DaemonClient): void {
     this.clients.delete(client)
     this.scheduleIdleTimer()
-  }
-
-  releaseLocalAlertTarget(session: DaemonSession): void {
-    if (!session.spawn.local || !session.isLocalAlertRegistered()) return
-    session.setLocalAlertRegistered(false)
-    const key = terminalSessionLookupKey(session.target)
-    const targets = this.localAlertTargets.get(session.target.tileId)
-    if (!targets) return
-    targets.delete(key)
-    if (targets.size > 0) return
-    this.localAlertTargets.delete(session.target.tileId)
-    this.agentAlertBridge.unregisterTerminal(session.target.tileId)
   }
 
   async handleFrame(client: DaemonClient, line: string): Promise<void> {
@@ -1424,7 +1480,6 @@ export class TerminalDaemonServer {
     let serializer: SerializeAddonType | undefined
     let pty: TerminalDaemonPty | undefined
     let session: DaemonSession | undefined
-    let localRegistered = false
     try {
       terminal = createTerminal(this.terminalFactory, {
         cols: spawn.cols,
@@ -1441,11 +1496,6 @@ export class TerminalDaemonServer {
       environment.COLORTERM = 'truecolor'
       environment.TERM_PROGRAM = 'yira'
       delete environment.TERM_PROGRAM_VERSION
-      if (spawn.local) {
-        await this.ensureAgentAlertBridgeStarted()
-        Object.assign(environment, this.registerLocalAlertTarget(spawn.target))
-        localRegistered = true
-      }
       if (this.closing) throw new Error('Terminal daemon is closing')
       pty = this.ptyFactory.spawn(spawn.executable, [...spawn.args], {
         name: 'xterm-256color',
@@ -1453,13 +1503,14 @@ export class TerminalDaemonServer {
         rows: spawn.rows,
         cwd: spawn.cwd,
         env: environment,
+        // Only node-pty's bundled ConPTY delivers the OSC 7501 reply to the program.
+        ...(process.platform === 'win32' ? { useConptyDll: true } : {}),
       })
       if (!pty || typeof pty.write !== 'function' || typeof pty.resize !== 'function'
         || typeof pty.kill !== 'function' || typeof pty.onData !== 'function' || typeof pty.onExit !== 'function') {
         throw new Error('Terminal PTY factory returned an invalid PTY')
       }
       session = new DaemonSession(this, spawn, identity, pty, terminal, serializer)
-      if (localRegistered) session.setLocalAlertRegistered(true)
       session.initialize()
       this.sessions.set(terminalSessionLookupKey(spawn.target), session)
       await session.startCommands()
@@ -1470,7 +1521,6 @@ export class TerminalDaemonServer {
         this.sessions.delete(terminalSessionLookupKey(spawn.target))
         session.dispose()
       }
-      if (localRegistered) this.releaseUnownedLocalAlertTarget(spawn.target)
       try { pty?.kill() } catch { /* failed spawn cleanup is best effort. */ }
       try { serializer?.dispose() } catch { /* addon cleanup is best effort. */ }
       try { terminal?.dispose() } catch { /* terminal cleanup is best effort. */ }
@@ -1511,57 +1561,6 @@ export class TerminalDaemonServer {
       throw new Error('Terminal session generation space exhausted')
     }
     return generation
-  }
-
-  private registerLocalAlertTarget(target: TerminalSessionTarget): Record<string, string> {
-    const key = terminalSessionLookupKey(target)
-    const targets = this.localAlertTargets.get(target.tileId) ?? new Set<string>()
-    const first = targets.size === 0
-    if (first) this.agentAlertBridge.registerLocalTerminal(target.tileId)
-    targets.add(key)
-    this.localAlertTargets.set(target.tileId, targets)
-    const environment = this.agentAlertBridge.getLaunchEnvironment(target.tileId)
-    if (!environment) throw new Error('Agent alert bridge is not available')
-    return environment
-  }
-
-  private releaseUnownedLocalAlertTarget(target: TerminalSessionTarget): void {
-    const key = terminalSessionLookupKey(target)
-    const targets = this.localAlertTargets.get(target.tileId)
-    if (!targets) return
-    targets.delete(key)
-    if (targets.size > 0) return
-    this.localAlertTargets.delete(target.tileId)
-    this.agentAlertBridge.unregisterTerminal(target.tileId)
-  }
-
-  private receiveAgentAlert(alert: AgentAlert): void {
-    const tileCandidates = [...this.sessions.values()].filter((session) => (
-      session.spawn.local
-      && !session.hasExited()
-      && session.target.tileId === alert.tileId
-    ))
-    const providerCandidates = tileCandidates.filter(session => session.spawn.agent?.provider === alert.provider)
-    const candidates = providerCandidates.length === 1
-      ? providerCandidates
-      : providerCandidates.length === 0 && tileCandidates.length === 1
-        ? tileCandidates
-        : []
-    // The hook payload has no workspace ID. Ignore ambiguous matches instead
-    // of assigning an alert to an arbitrary workspace.
-    if (candidates.length !== 1) return
-    candidates[0].reportAlert(alert)
-  }
-
-  private ensureAgentAlertBridgeStarted(): Promise<unknown> {
-    if (!this.bridgeStartPromise) {
-      const starting = this.agentAlertBridge.start()
-      this.bridgeStartPromise = starting.catch((error) => {
-        this.bridgeStartPromise = undefined
-        throw error
-      })
-    }
-    return this.bridgeStartPromise
   }
 
   private async listen(): Promise<void> {
@@ -1627,8 +1626,6 @@ export class TerminalDaemonServer {
     const sessions = [...this.sessions.values()]
     this.sessions.clear()
     await Promise.allSettled(sessions.map(session => session.destroy()))
-    this.localAlertTargets.clear()
-    await this.agentAlertBridge.close().catch(() => undefined)
     const server = this.server
     this.server = undefined
     if (server) {

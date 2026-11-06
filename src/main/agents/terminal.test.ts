@@ -2,12 +2,9 @@ import assert from 'node:assert/strict'
 import { resolve } from 'node:path'
 import test from 'node:test'
 
-import { AgentSessionRegistry } from './registry'
 import {
   buildAgentTerminalLaunch,
-  createAgentTerminalExitGate,
-  classifyAgentInput,
-  createAgentTerminalLifecycle,
+  isAgentUserInput,
   isTerminalProtocolReply,
 } from './terminal'
 
@@ -73,82 +70,6 @@ test('rejects disabled providers and invalid resume identifiers before a PTY can
   }), /resume id/i)
 })
 
-test('maps agent alerts, input, and PTY exit into runtime lifecycle without marking focus done', () => {
-  const registry = new AgentSessionRegistry()
-  registry.register({
-    sessionId: 'session-1',
-    tileId: 'tile-4',
-    workspaceId: 'workspace-1',
-    provider: 'codex',
-  })
-  const lifecycle = createAgentTerminalLifecycle({
-    registry,
-    tileId: 'tile-4',
-    workspaceId: 'workspace-1',
-  })
-
-  assert.equal(lifecycle.onAlert({ provider: 'codex', event: 'completed', tileId: 'tile-4' }), true)
-  assert.equal(registry.get('workspace-1', 'tile-4')?.status, 'done')
-  assert.equal(lifecycle.onFocus(), true)
-  assert.equal(registry.get('workspace-1', 'tile-4')?.status, 'done')
-  assert.equal(lifecycle.onInput('\u001b[I'), false)
-  assert.equal(registry.get('workspace-1', 'tile-4')?.status, 'done')
-  assert.equal(lifecycle.onInput('yes\r'), true)
-  assert.equal(registry.get('workspace-1', 'tile-4')?.status, 'working')
-  assert.equal(lifecycle.onExit(), true)
-  assert.equal(registry.get('workspace-1', 'tile-4')?.status, 'exited')
-  assert.equal(lifecycle.onInput('late input'), false)
-})
-
-test('defers an immediate PTY exit until the runtime session registration is complete', () => {
-  const registry = new AgentSessionRegistry()
-  registry.register({
-    sessionId: 'session-5',
-    tileId: 'tile-5',
-    workspaceId: 'workspace-1',
-    provider: 'claude',
-  })
-  const lifecycle = createAgentTerminalLifecycle({
-    registry,
-    tileId: 'tile-5',
-    workspaceId: 'workspace-1',
-  })
-  const gate = createAgentTerminalExitGate(() => lifecycle.onExit())
-  let registered = false
-  const term = {
-    onExit: (callback: () => void) => {
-      callback()
-      assert.equal(registered, false)
-    },
-  }
-
-  term.onExit(gate.handle)
-  assert.equal(registry.get('workspace-1', 'tile-5')?.status, 'working')
-  registered = true
-  gate.markRegistered()
-  assert.equal(registry.get('workspace-1', 'tile-5')?.status, 'exited')
-})
-
-test('normalizes padded workspace and tile IDs before lifecycle registry calls', () => {
-  const registry = new AgentSessionRegistry()
-  registry.register({
-    sessionId: 'session-6',
-    tileId: 'tile-6',
-    workspaceId: 'workspace-1',
-    provider: 'codex',
-  })
-  const lifecycle = createAgentTerminalLifecycle({
-    registry,
-    tileId: ' tile-6 ',
-    workspaceId: ' workspace-1 ',
-  })
-
-  assert.equal(lifecycle.onAlert({ provider: 'codex', event: 'permission', tileId: ' tile-6 ' }), true)
-  assert.equal(registry.get('workspace-1', 'tile-6')?.status, 'needs-input')
-  assert.equal(lifecycle.onInput('yes\r'), true)
-  assert.equal(registry.get('workspace-1', 'tile-6')?.status, 'working')
-})
-
 test('recognizes terminal protocol replies but not typed input', () => {
   const replies = [
     '\u001b[I',
@@ -172,23 +93,23 @@ test('recognizes terminal protocol replies but not typed input', () => {
   for (const input of typed) assert.equal(isTerminalProtocolReply(input), false, JSON.stringify(input))
 })
 
-test('classifies agent input so only a submitted line starts a turn', () => {
-  assert.equal(classifyAgentInput(''), null)
-  assert.equal(classifyAgentInput('\u001b[I'), null)
-  assert.equal(classifyAgentInput('a'), 'typing')
-  assert.equal(classifyAgentInput('\u001b[A'), 'typing')
-  assert.equal(classifyAgentInput('\u001b\r'), 'typing')
-  assert.equal(classifyAgentInput('\u001b[200~line one\rline two\u001b[201~'), 'typing')
-  assert.equal(classifyAgentInput('\r'), 'submit')
-  assert.equal(classifyAgentInput('\u001b[200~pasted\u001b[201~\r'), 'submit')
-  assert.equal(classifyAgentInput('\u001b'), 'interrupt')
-  assert.equal(classifyAgentInput('\u0003'), 'interrupt')
+test('recognizes user input so typing can be recorded without changing the agent state', () => {
+  assert.equal(isAgentUserInput(''), false)
+  assert.equal(isAgentUserInput('\u001b[I'), false)
+  assert.equal(isAgentUserInput('a'), true)
+  assert.equal(isAgentUserInput('\u001b[A'), true)
+  assert.equal(isAgentUserInput('\u001b\r'), true)
+  assert.equal(isAgentUserInput('\u001b[200~line one\rline two\u001b[201~'), true)
+  assert.equal(isAgentUserInput('\r'), true)
+  assert.equal(isAgentUserInput('\u001b[200~pasted\u001b[201~\r'), true)
+  assert.equal(isAgentUserInput('\u001b'), true)
+  assert.equal(isAgentUserInput('\u0003'), true)
 })
 
-test('classifies a mouse click as typing but ignores release, motion and wheel reports', () => {
-  assert.equal(classifyAgentInput('\u001b[<0;12;5M'), 'typing')
-  assert.equal(classifyAgentInput('\u001b[<2;12;5M'), 'typing')
-  assert.equal(classifyAgentInput('\u001b[<0;12;5m'), null)
-  assert.equal(classifyAgentInput('\u001b[<32;12;5M'), null)
-  assert.equal(classifyAgentInput('\u001b[<64;12;5M'), null)
+test('treats a mouse click as user input but ignores release, motion and wheel reports', () => {
+  assert.equal(isAgentUserInput('\u001b[<0;12;5M'), true)
+  assert.equal(isAgentUserInput('\u001b[<2;12;5M'), true)
+  assert.equal(isAgentUserInput('\u001b[<0;12;5m'), false)
+  assert.equal(isAgentUserInput('\u001b[<32;12;5M'), false)
+  assert.equal(isAgentUserInput('\u001b[<64;12;5M'), false)
 })

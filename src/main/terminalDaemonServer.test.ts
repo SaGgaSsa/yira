@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { request as httpRequest } from 'node:http'
 import { mkdtemp, readFile, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -10,11 +9,12 @@ import test from 'node:test'
 import {
   defaultTerminalFactory,
   startTerminalDaemon,
+  TerminalDaemonServer,
   type TerminalDaemonPty,
   type TerminalDaemonPtyFactory,
   type TerminalDaemonPtyOptions,
 } from './terminalDaemonServer'
-import { AgentAlertBridge } from './agentAlertBridge'
+import { PROGRAM_STATUS_SUPPORT_REPLY } from './agentProgramStatus'
 import type { TerminalDaemonSnapshot } from '@shared/terminalDaemonProtocol'
 
 class FakePty implements TerminalDaemonPty {
@@ -184,14 +184,6 @@ async function request(
   }
 }
 
-async function waitForEventCount(messages: WireMessage[], event: string, count: number): Promise<void> {
-  const deadline = Date.now() + 5_000
-  while (messages.filter(message => message.event === event).length < count) {
-    if (Date.now() >= deadline) throw new Error(`Timed out waiting for ${event} event ${count}`)
-    await wait(5)
-  }
-}
-
 function spawnParams(target: { workspaceId: string; tileId: string }, extra: Record<string, unknown> = {}) {
   return {
     target,
@@ -204,6 +196,14 @@ function spawnParams(target: { workspaceId: string; tileId: string }, extra: Rec
     local: false,
     ...extra,
   }
+}
+
+function emitProgramStatus(pty: FakePty, payload: string): void {
+  pty.emitData(`\u001b]7501;${payload}\u001b\\`)
+}
+
+function encodeMessage(value: string): string {
+  return Buffer.from(value, 'utf8').toString('base64')
 }
 
 function snapshotResult(response: WireMessage): TerminalDaemonSnapshot {
@@ -666,6 +666,12 @@ test('authenticates every request and retains local semantic alerts without clie
     'create',
     spawnParams({ workspaceId: 'w', tileId: 'agent' }, {
       local: true,
+      env: {
+        YIRA_AGENT_BRIDGE_URL: 'http://127.0.0.1:1/agent-alert',
+        YIRA_AGENT_BRIDGE_TOKEN: 'stale-token',
+        YIRA_AGENT_TILE_ID: 'agent',
+        TEST_ENV: 'yes',
+      },
       agent: {
         provider: 'codex',
         sessionId: 'session-1',
@@ -684,8 +690,10 @@ test('authenticates every request and retains local semantic alerts without clie
   const pty = ptyFactory.instances[0]
   assert.equal(pty.writes.includes(''), false)
   assert.equal(pty.options.env.ELECTRON_RUN_AS_NODE, undefined)
-  const endpointUrl = new URL(pty.options.env.YIRA_AGENT_BRIDGE_URL)
-  const bridgeToken = pty.options.env.YIRA_AGENT_BRIDGE_TOKEN
+  assert.equal(pty.options.env.YIRA_AGENT_BRIDGE_URL, undefined)
+  assert.equal(pty.options.env.YIRA_AGENT_BRIDGE_TOKEN, undefined)
+  assert.equal(pty.options.env.YIRA_AGENT_TILE_ID, undefined)
+  assert.equal(pty.options.env.TEST_ENV, 'yes')
   assert.equal(created.agent?.provider, 'codex')
   assert.equal(created.agent?.surface, 'agents-view')
   assert.equal(created.agent?.title, 'Review the migration')
@@ -699,12 +707,20 @@ test('authenticates every request and retains local semantic alerts without clie
   const unauthorized = await request(client.socket, client.messages, 'wrong-token', 2, 'list')
   assert.match(unauthorized.error ?? '', /unauthorized/i)
   client.socket.destroy()
-  assert.equal(endpointUrl.hostname, '127.0.0.1')
-  assert.equal(await postAlert(endpointUrl.toString(), bridgeToken, {
-    provider: 'codex',
-    event: 'completed',
-    tileId: 'agent',
-  }), 202)
+
+  pty.emitData('\u001b]7501;state=done:app=codex\u001b\\')
+  const reconnect = await connectClient(handle.endpoint.port)
+  t.after(() => reconnect.socket.destroy())
+  const retained = snapshotResult(await request(
+    reconnect.socket,
+    reconnect.messages,
+    handle.endpoint.token,
+    3,
+    'snapshot',
+    created.identity,
+  ))
+  assert.deepEqual(retained.alert, { provider: 'codex', event: 'completed', tileId: 'agent' })
+  assert.deepEqual(retained.agentState, { provider: 'codex', state: 'done' })
 })
 
 test('rejects invalid Agents View metadata at daemon spawn validation', async (t) => {
@@ -720,6 +736,7 @@ test('rejects invalid Agents View metadata at daemon spawn validation', async (t
     { title: 'bad\ntitle' },
     { worktreeRoot: 'x'.repeat(4_097) },
     { worktreeBranch: 42 },
+    { startsWithPrompt: 'yes' },
     { worktrees: [{ path: 'safe', baseSha: 'bad\u007fsha' }] },
     { worktrees: Array.from({ length: 33 }, () => ({ path: 'safe', baseSha: 'abc' })) },
   ]
@@ -904,20 +921,22 @@ test('reports failed spawns without an unhandled rejection', async (t) => {
 test('waits for a pending creation before destroying a workspace', async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'yira-daemon-'))
   const ptyFactory = new FakePtyFactory()
-  const originalStart = AgentAlertBridge.prototype.start
-  let releaseStart!: () => void
-  const startGate = new Promise<void>(resolve => { releaseStart = resolve })
-  let reachedStart!: () => void
-  const startReached = new Promise<void>(resolve => { reachedStart = resolve })
-  AgentAlertBridge.prototype.start = async function(this: AgentAlertBridge) {
-    reachedStart()
-    await startGate
-    return originalStart.call(this)
+  type CreateSession = (this: TerminalDaemonServer, spawn: unknown) => Promise<unknown>
+  const prototype = TerminalDaemonServer.prototype as unknown as { createSession: CreateSession }
+  const originalCreateSession = prototype.createSession
+  let releaseCreate!: () => void
+  const createGate = new Promise<void>(resolve => { releaseCreate = resolve })
+  let reachedCreate!: () => void
+  const createReached = new Promise<void>(resolve => { reachedCreate = resolve })
+  prototype.createSession = async function(this: TerminalDaemonServer, spawn: unknown): Promise<unknown> {
+    reachedCreate()
+    await createGate
+    return originalCreateSession.call(this, spawn)
   }
   const handle = await startTerminalDaemon({ directory, ptyFactory, token: 'pending-destroy-token', idleMs: 5_000 })
   t.after(async () => {
-    releaseStart()
-    AgentAlertBridge.prototype.start = originalStart
+    releaseCreate()
+    prototype.createSession = originalCreateSession
     await handle.close()
   })
   const creator = await connectClient(handle.endpoint.port)
@@ -930,7 +949,7 @@ test('waits for a pending creation before destroying a workspace', async (t) => 
     'create',
     spawnParams({ workspaceId: 'w', tileId: 'pending' }, { local: true }),
   )
-  await startReached
+  await createReached
   const destroyResponsePromise = request(
     destroyer.socket,
     destroyer.messages,
@@ -943,7 +962,7 @@ test('waits for a pending creation before destroying a workspace', async (t) => 
   void destroyResponsePromise.then(() => { destroySettled = true })
   await wait(20)
   assert.equal(destroySettled, false)
-  releaseStart()
+  releaseCreate()
   const [createResponse, destroyResponse] = await Promise.all([createResponsePromise, destroyResponsePromise])
   assert.deepEqual(destroyResponse.result, null)
   assert.equal(ptyFactory.instances.length, 1)
@@ -953,10 +972,10 @@ test('waits for a pending creation before destroying a workspace', async (t) => 
   destroyer.socket.destroy()
 })
 
-test('routes hooks to the only local shell without agent metadata', async (t) => {
+test('accepts program status on a local shell without agent metadata', async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'yira-daemon-'))
   const ptyFactory = new FakePtyFactory()
-  const handle = await startTerminalDaemon({ directory, ptyFactory, token: 'shell-hook-token', idleMs: 5_000 })
+  const handle = await startTerminalDaemon({ directory, ptyFactory, token: 'shell-status-token', idleMs: 5_000 })
   t.after(() => handle.close())
   const client = await connectClient(handle.endpoint.port)
   const created = snapshotResult(await request(
@@ -968,14 +987,8 @@ test('routes hooks to the only local shell without agent metadata', async (t) =>
     spawnParams({ workspaceId: 'w', tileId: 'shell' }, { local: true }),
   ))
   const pty = ptyFactory.instances[0]
-  const endpointUrl = pty.options.env.YIRA_AGENT_BRIDGE_URL
-  const bridgeToken = pty.options.env.YIRA_AGENT_BRIDGE_TOKEN
-  assert.equal(await postAlert(endpointUrl, bridgeToken, {
-    provider: 'claude',
-    event: 'permission',
-    tileId: 'shell',
-  }), 202)
-  const snapshot = snapshotResult(await request(
+  emitProgramStatus(pty, 'state=blocked:app=claude-code:kind=permission')
+  const permissionSnapshot = snapshotResult(await request(
     client.socket,
     client.messages,
     handle.endpoint.token,
@@ -983,14 +996,11 @@ test('routes hooks to the only local shell without agent metadata', async (t) =>
     'snapshot',
     created.identity,
   ))
-  assert.deepEqual(snapshot.alert, { provider: 'claude', event: 'permission', tileId: 'shell' })
+  assert.deepEqual(permissionSnapshot.alert, { provider: 'claude', event: 'permission', tileId: 'shell' })
+  assert.deepEqual(permissionSnapshot.agentState, { provider: 'claude', state: 'needs-input' })
 
-  const stateEventsBeforePermissionWorking = client.messages.filter(message => message.event === 'agent-state').length
-  assert.equal(await postAlert(endpointUrl, bridgeToken, {
-    provider: 'claude', event: 'working', tileId: 'shell',
-  }), 202)
-  await waitForEventCount(client.messages, 'agent-state', stateEventsBeforePermissionWorking + 1)
-  const permissionSnapshot = snapshotResult(await request(
+  emitProgramStatus(pty, `state=blocked:app=claude-code:kind=question:msg=${encodeMessage('Which file?')}`)
+  const questionSnapshot = snapshotResult(await request(
     client.socket,
     client.messages,
     handle.endpoint.token,
@@ -998,16 +1008,19 @@ test('routes hooks to the only local shell without agent metadata', async (t) =>
     'snapshot',
     created.identity,
   ))
-  assert.deepEqual(permissionSnapshot.alert, { provider: 'claude', event: 'permission', tileId: 'shell' })
+  assert.deepEqual(questionSnapshot.alert, {
+    provider: 'claude',
+    event: 'input',
+    tileId: 'shell',
+    detail: 'Which file?',
+  })
+  assert.deepEqual(questionSnapshot.agentState, {
+    provider: 'claude',
+    state: 'needs-input',
+    detail: 'Which file?',
+  })
 
-  assert.equal(await postAlert(endpointUrl, bridgeToken, {
-    provider: 'claude', event: 'input', tileId: 'shell',
-  }), 202)
-  const stateEventsBeforeInputWorking = client.messages.filter(message => message.event === 'agent-state').length
-  assert.equal(await postAlert(endpointUrl, bridgeToken, {
-    provider: 'claude', event: 'working', tileId: 'shell',
-  }), 202)
-  await waitForEventCount(client.messages, 'agent-state', stateEventsBeforeInputWorking + 1)
+  emitProgramStatus(pty, 'state=working:app=claude-code')
   const workingSnapshot = snapshotResult(await request(
     client.socket,
     client.messages,
@@ -1017,31 +1030,8 @@ test('routes hooks to the only local shell without agent metadata', async (t) =>
     created.identity,
   ))
   assert.equal(workingSnapshot.alert, undefined)
-  assert.equal('agentState' in workingSnapshot, false)
+  assert.deepEqual(workingSnapshot.agentState, { provider: 'claude', state: 'working' })
 })
-
-function postAlert(url: string, token: string, body: unknown): Promise<number> {
-  const parsed = new URL(url)
-  return new Promise((resolve, reject) => {
-    const payload = JSON.stringify(body)
-    const req = httpRequest({
-      hostname: parsed.hostname,
-      port: Number(parsed.port),
-      path: parsed.pathname,
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${token}`,
-        'content-type': 'application/json',
-        'content-length': Buffer.byteLength(payload),
-      },
-    }, response => {
-      response.resume()
-      response.once('end', () => resolve(response.statusCode ?? 0))
-    })
-    req.once('error', reject)
-    req.end(payload)
-  })
-}
 
 test('setOutputPaused pauses and resumes the fake PTY', async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'yira-daemon-'))
@@ -1193,4 +1183,448 @@ test('coalesces many small PTY chunks into fewer larger data events', async (t) 
     previousSequence = message.sequence as number
   }
   client.socket.destroy()
+})
+
+test('answers the OSC 7501 support query through the PTY', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'yira-daemon-'))
+  const ptyFactory = new FakePtyFactory()
+  const handle = await startTerminalDaemon({ directory, ptyFactory, token: 'status-query-token', idleMs: 5_000 })
+  t.after(() => handle.close())
+  const client = await connectClient(handle.endpoint.port)
+  const created = snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    1,
+    'create',
+    spawnParams({ workspaceId: 'w', tileId: 'status-query' }),
+  ))
+  const pty = ptyFactory.instances[0]
+  emitProgramStatus(pty, '?')
+  snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    2,
+    'snapshot',
+    created.identity,
+  ))
+  assert.equal(pty.writes.includes(PROGRAM_STATUS_SUPPORT_REPLY), true)
+})
+
+test('a done report right after idle raises a completion alert that a later idle clears', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'yira-daemon-'))
+  const ptyFactory = new FakePtyFactory()
+  const handle = await startTerminalDaemon({ directory, ptyFactory, token: 'idle-done-token', idleMs: 5_000 })
+  t.after(() => handle.close())
+  const client = await connectClient(handle.endpoint.port)
+  const created = snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    1,
+    'create',
+    spawnParams({ workspaceId: 'w', tileId: 'idle-done' }),
+  ))
+  const pty = ptyFactory.instances[0]
+
+  emitProgramStatus(pty, 'state=idle:app=claude-code')
+  emitProgramStatus(pty, 'state=done:app=claude-code')
+  const completed = snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    2,
+    'snapshot',
+    created.identity,
+  ))
+  assert.deepEqual(completed.alert, { provider: 'claude', event: 'completed', tileId: 'idle-done' })
+  assert.deepEqual(completed.agentState, { provider: 'claude', state: 'done' })
+
+  emitProgramStatus(pty, 'state=idle:app=claude-code')
+  const cleared = snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    3,
+    'snapshot',
+    created.identity,
+  ))
+  assert.equal(cleared.alert, undefined)
+  assert.deepEqual(cleared.agentState, { provider: 'claude', state: 'done' })
+})
+
+test('maps blocked question and permission reports to alerts and agent state', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'yira-daemon-'))
+  const ptyFactory = new FakePtyFactory()
+  const handle = await startTerminalDaemon({ directory, ptyFactory, token: 'blocked-token', idleMs: 5_000 })
+  t.after(() => handle.close())
+  const client = await connectClient(handle.endpoint.port)
+  const created = snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    1,
+    'create',
+    spawnParams({ workspaceId: 'w', tileId: 'blocked' }, {
+      agent: { provider: 'claude', sessionId: 'session-1', startedAt: '2026-01-01T00:00:00.000Z' },
+    }),
+  ))
+  const pty = ptyFactory.instances[0]
+
+  emitProgramStatus(pty, `state=blocked:app=claude-code:kind=question:msg=${encodeMessage('Which file?')}`)
+  const question = snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    2,
+    'snapshot',
+    created.identity,
+  ))
+  assert.deepEqual(question.alert, {
+    provider: 'claude',
+    event: 'input',
+    tileId: 'blocked',
+    detail: 'Which file?',
+  })
+  assert.deepEqual(question.agentState, {
+    provider: 'claude',
+    state: 'needs-input',
+    detail: 'Which file?',
+  })
+
+  emitProgramStatus(pty, `state=blocked:app=claude-code:kind=permission:msg=${encodeMessage('Approve Bash')}`)
+  const permission = snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    3,
+    'snapshot',
+    created.identity,
+  ))
+  assert.deepEqual(permission.alert, {
+    provider: 'claude',
+    event: 'permission',
+    tileId: 'blocked',
+    detail: 'Approve Bash',
+  })
+  assert.deepEqual(permission.agentState, {
+    provider: 'claude',
+    state: 'needs-input',
+    detail: 'Approve Bash',
+  })
+})
+
+test('reports completed for done and error while idle and clear only dismiss alerts', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'yira-daemon-'))
+  const ptyFactory = new FakePtyFactory()
+  const handle = await startTerminalDaemon({ directory, ptyFactory, token: 'finished-token', idleMs: 5_000 })
+  t.after(() => handle.close())
+  const client = await connectClient(handle.endpoint.port)
+  const createTile = async (id: number, tileId: string): Promise<FakePty> => {
+    snapshotResult(await request(
+      client.socket,
+      client.messages,
+      handle.endpoint.token,
+      id,
+      'create',
+      spawnParams({ workspaceId: 'w', tileId }),
+    ))
+    return ptyFactory.instances[ptyFactory.instances.length - 1]
+  }
+
+  const donePty = await createTile(1, 'done-tile')
+  emitProgramStatus(donePty, 'state=working:app=claude-code')
+  emitProgramStatus(donePty, 'state=done:app=claude-code')
+  const doneSnapshot = snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    2,
+    'attach',
+    { workspaceId: 'w', tileId: 'done-tile' },
+  ))
+  assert.deepEqual(doneSnapshot.alert, { provider: 'claude', event: 'completed', tileId: 'done-tile' })
+
+  const errorPty = await createTile(3, 'error-tile')
+  emitProgramStatus(errorPty, 'state=working:app=codex')
+  emitProgramStatus(errorPty, 'state=error:app=codex')
+  const errorSnapshot = snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    4,
+    'attach',
+    { workspaceId: 'w', tileId: 'error-tile' },
+  ))
+  assert.deepEqual(errorSnapshot.alert, { provider: 'codex', event: 'completed', tileId: 'error-tile' })
+
+  const quietPty = await createTile(5, 'quiet-tile')
+  emitProgramStatus(quietPty, 'state=blocked:app=claude-code:kind=permission')
+  const blocked = snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    6,
+    'attach',
+    { workspaceId: 'w', tileId: 'quiet-tile' },
+  ))
+  assert.deepEqual(blocked.alert, { provider: 'claude', event: 'permission', tileId: 'quiet-tile' })
+
+  emitProgramStatus(quietPty, 'state=idle:app=claude-code')
+  const idle = snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    7,
+    'attach',
+    { workspaceId: 'w', tileId: 'quiet-tile' },
+  ))
+  assert.equal(idle.alert, undefined)
+  assert.deepEqual(idle.agentState, { provider: 'claude', state: 'done' })
+
+  emitProgramStatus(quietPty, 'state=blocked:app=claude-code:kind=permission')
+  const blockedAgain = snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    8,
+    'attach',
+    { workspaceId: 'w', tileId: 'quiet-tile' },
+  ))
+  assert.deepEqual(blockedAgain.alert, { provider: 'claude', event: 'permission', tileId: 'quiet-tile' })
+
+  emitProgramStatus(quietPty, 'state=clear')
+  const cleared = snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    9,
+    'attach',
+    { workspaceId: 'w', tileId: 'quiet-tile' },
+  ))
+  assert.equal(cleared.alert, undefined)
+  assert.deepEqual(cleared.agentState, { provider: 'claude', state: 'done' })
+})
+
+test('does not raise a repeated blocked report after input clears the alert', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'yira-daemon-'))
+  const ptyFactory = new FakePtyFactory()
+  const handle = await startTerminalDaemon({ directory, ptyFactory, token: 'repeated-blocked-token', idleMs: 5_000 })
+  t.after(() => handle.close())
+  const client = await connectClient(handle.endpoint.port)
+  const created = snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    1,
+    'create',
+    spawnParams({ workspaceId: 'w', tileId: 'repeated-blocked' }, {
+      agent: { provider: 'claude', sessionId: 'session-1', startedAt: '2026-01-01T00:00:00.000Z' },
+    }),
+  ))
+  const pty = ptyFactory.instances[0]
+  const payload = 'state=blocked:app=claude-code:kind=permission'
+
+  emitProgramStatus(pty, payload)
+  const blocked = snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    2,
+    'snapshot',
+    created.identity,
+  ))
+  assert.deepEqual(blocked.alert, { provider: 'claude', event: 'permission', tileId: 'repeated-blocked' })
+
+  await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    3,
+    'write',
+    { identity: created.identity, data: 'y' },
+  )
+  const acknowledged = snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    4,
+    'snapshot',
+    created.identity,
+  ))
+  assert.equal(acknowledged.alert, undefined)
+
+  emitProgramStatus(pty, payload)
+  const repeated = snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    5,
+    'snapshot',
+    created.identity,
+  ))
+  assert.equal(repeated.alert, undefined)
+  assert.deepEqual(repeated.agentState, { provider: 'claude', state: 'needs-input' })
+})
+
+test('ignores the startup idle of an agent launched with a prompt', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'yira-daemon-'))
+  const ptyFactory = new FakePtyFactory()
+  const handle = await startTerminalDaemon({ directory, ptyFactory, token: 'prompt-idle-token', idleMs: 5_000 })
+  t.after(() => handle.close())
+  const client = await connectClient(handle.endpoint.port)
+  const created = snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    1,
+    'create',
+    spawnParams({ workspaceId: 'w', tileId: 'prompt-idle' }, {
+      agent: {
+        provider: 'claude',
+        sessionId: 'session-1',
+        startedAt: '2026-01-01T00:00:00.000Z',
+        startsWithPrompt: true,
+      },
+    }),
+  ))
+  assert.equal(created.agent?.startsWithPrompt, true)
+  const pty = ptyFactory.instances[0]
+
+  emitProgramStatus(pty, 'state=idle:app=claude-code')
+  const startup = snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    2,
+    'snapshot',
+    created.identity,
+  ))
+  assert.equal('agentState' in startup, false)
+  assert.equal(client.messages.filter(message => message.event === 'agent-state').length, 0)
+
+  emitProgramStatus(pty, 'state=working:app=claude-code')
+  const working = snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    3,
+    'snapshot',
+    created.identity,
+  ))
+  assert.deepEqual(working.agentState, { provider: 'claude', state: 'working' })
+
+  emitProgramStatus(pty, 'state=idle:app=claude-code')
+  const finished = snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    4,
+    'snapshot',
+    created.identity,
+  ))
+  assert.deepEqual(finished.agentState, { provider: 'claude', state: 'done' })
+})
+
+test('a Codex session ignores Claude reports', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'yira-daemon-'))
+  const ptyFactory = new FakePtyFactory()
+  const handle = await startTerminalDaemon({ directory, ptyFactory, token: 'provider-filter-token', idleMs: 5_000 })
+  t.after(() => handle.close())
+  const client = await connectClient(handle.endpoint.port)
+  const created = snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    1,
+    'create',
+    spawnParams({ workspaceId: 'w', tileId: 'codex-tile' }, {
+      agent: { provider: 'codex', sessionId: 'session-1', startedAt: '2026-01-01T00:00:00.000Z' },
+    }),
+  ))
+  const pty = ptyFactory.instances[0]
+
+  emitProgramStatus(pty, 'state=working:app=claude-code')
+  const ignored = snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    2,
+    'snapshot',
+    created.identity,
+  ))
+  assert.equal('agentState' in ignored, false)
+
+  emitProgramStatus(pty, 'state=done:app=codex')
+  const accepted = snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    3,
+    'snapshot',
+    created.identity,
+  ))
+  assert.deepEqual(accepted.agentState, { provider: 'codex', state: 'done' })
+})
+
+test('a terminal without agent metadata accepts Claude reports and clear keeps the last provider', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'yira-daemon-'))
+  const ptyFactory = new FakePtyFactory()
+  const handle = await startTerminalDaemon({ directory, ptyFactory, token: 'provider-fallback-token', idleMs: 5_000 })
+  t.after(() => handle.close())
+  const client = await connectClient(handle.endpoint.port)
+  const created = snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    1,
+    'create',
+    spawnParams({ workspaceId: 'w', tileId: 'plain-tile' }),
+  ))
+  const pty = ptyFactory.instances[0]
+
+  emitProgramStatus(pty, 'state=working:app=claude-code')
+  const working = snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    2,
+    'snapshot',
+    created.identity,
+  ))
+  assert.deepEqual(working.agentState, { provider: 'claude', state: 'working' })
+
+  emitProgramStatus(pty, 'state=clear')
+  const cleared = snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    3,
+    'snapshot',
+    created.identity,
+  ))
+  assert.deepEqual(cleared.agentState, { provider: 'claude', state: 'done' })
+})
+
+test('requests the bundled ConPTY on Windows', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'yira-daemon-'))
+  const ptyFactory = new FakePtyFactory()
+  const handle = await startTerminalDaemon({ directory, ptyFactory, token: 'conpty-token', idleMs: 5_000 })
+  t.after(() => handle.close())
+  const client = await connectClient(handle.endpoint.port)
+  snapshotResult(await request(
+    client.socket,
+    client.messages,
+    handle.endpoint.token,
+    1,
+    'create',
+    spawnParams({ workspaceId: 'w', tileId: 'conpty' }),
+  ))
+  const pty = ptyFactory.instances[0]
+  if (process.platform === 'win32') {
+    assert.equal(pty.options.useConptyDll, true)
+  } else {
+    assert.equal('useConptyDll' in pty.options, false)
+  }
 })

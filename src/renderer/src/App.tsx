@@ -2081,6 +2081,7 @@ function AppContent(): React.ReactElement {
         workspaceName: workspace?.name ?? null,
         sessionTitle: event.sessionTitle,
         eventLabel,
+        detail: event.detail,
       })
 
       void window.electron.notifications.showAgentAlert({

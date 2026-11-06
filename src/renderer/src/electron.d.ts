@@ -164,7 +164,6 @@ interface ElectronWorld {
   settings: {
     load: () => Promise<UserSettings | null>
     save: (settings: UserSettings) => Promise<void>
-    configureAgentHooks: (provider: 'codex' | 'claude') => Promise<{ message: string }>
     uninstallAgentHooks: (provider: 'codex' | 'claude') => Promise<{ message: string }>
     getClaudeStatusLineStatus: () => Promise<ClaudeStatusLineState>
     installClaudeStatusLine: () => Promise<ClaudeStatusLineMutationResult>

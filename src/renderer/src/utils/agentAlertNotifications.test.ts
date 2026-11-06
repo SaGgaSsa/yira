@@ -88,3 +88,29 @@ test('toast text omits missing workspace and session names', () => {
     body: 'Finished',
   })
 })
+
+test('toast text adds the agent detail on its own line', () => {
+  assert.deepEqual(buildAgentAlertNotificationText({
+    providerLabel: 'Claude',
+    workspaceName: 'Yira',
+    sessionTitle: 'Fix alert routing',
+    eventLabel: 'Needs your permission',
+    detail: '  approve Bash: ping -n 1 127.0.0.1  ',
+  }), {
+    title: 'Claude · Yira',
+    body: 'Needs your permission — Fix alert routing\napprove Bash: ping -n 1 127.0.0.1',
+  })
+})
+
+test('toast text ignores a blank agent detail', () => {
+  assert.deepEqual(buildAgentAlertNotificationText({
+    providerLabel: 'Claude',
+    workspaceName: 'Yira',
+    sessionTitle: 'Fix alert routing',
+    eventLabel: 'Needs your permission',
+    detail: '   ',
+  }), {
+    title: 'Claude · Yira',
+    body: 'Needs your permission — Fix alert routing',
+  })
+})

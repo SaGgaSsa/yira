@@ -186,7 +186,6 @@ type TranslationResources = {
     working: string
     unread: string
     output: string
-    background: string
     done: string
     idle: string
     exited: string
@@ -516,20 +515,15 @@ type TranslationResources = {
     agentAlertsDescription: string
     desktopAlerts: string
     desktopAlertsDescription: string
-    agentHookSetup: string
-    agentHookSetupDescription: string
     agentIntegrations: string
     agentInstalled: string
     agentNotInstalled: string
     agentDetecting: string
     enableAgent: string
     agentDisabled: string
-    yiraHooks: string
-    hooksInstalled: string
-    hooksMissing: string
-    install: string
-    repair: string
-    codexHooksHelp: string
+    agentStatusRequirement: string
+    legacyHooksFound: string
+    legacyHooksRemove: string
     modPanels: string
     modPanelsDescription: string
     modPanelsSteps: string
@@ -538,7 +532,6 @@ type TranslationResources = {
     showModPanelPrompt: string
     backToAbout: string
     configure: string
-    uninstall: string
     appThemeDescription: string
     windowBackgroundEffect: string
     windowBackgroundNone: string
@@ -1425,11 +1418,10 @@ const en: TranslationResources = {
     working: 'Working',
     unread: 'Unreviewed activity',
     output: 'Terminals active',
-    background: 'Running in background',
     done: 'Completed activity',
     idle: 'No detected activity',
     exited: 'Exited',
-    summary: '{{working}} working; {{needsInput}} need input; {{done}} completed; {{unread}} unreviewed output events; {{recentOutput}} terminals with recent output; {{background}} running in background',
+    summary: '{{working}} working; {{needsInput}} need input; {{done}} completed; {{unread}} unreviewed output events; {{recentOutput}} terminals with recent output',
   },
   agents: {
     title: 'Agents',
@@ -1760,23 +1752,18 @@ const en: TranslationResources = {
     saveFailed: 'Could not save settings.',
     bots: 'Bots',
     agentAlerts: 'Agent alerts',
-    agentAlertsDescription: 'Show semantic completion and intervention alerts from configured Codex and Claude hooks.',
+    agentAlertsDescription: 'Show semantic completion and intervention alerts from Codex and Claude.',
     desktopAlerts: 'Desktop notifications',
     desktopAlertsDescription: 'Show a system notification and play a sound when an agent finishes or needs a reply while Yira is in the background. Clicking it opens the session.',
-    agentHookSetup: 'Codex and Claude hooks',
-    agentHookSetupDescription: 'Configure or repair only Yira-managed hooks. Codex requires approving new hooks with /hooks.',
     agentIntegrations: 'Agent integrations',
     agentInstalled: '{{path}} found',
     agentNotInstalled: 'Not installed on this machine',
     agentDetecting: 'Checking installation…',
     enableAgent: 'Enable agent',
     agentDisabled: 'Off. Yira does not read its files or show it in Activity.',
-    yiraHooks: 'Yira hooks',
-    hooksInstalled: 'Installed',
-    hooksMissing: 'Not installed',
-    install: 'Install',
-    repair: 'Repair',
-    codexHooksHelp: 'Codex asks you to approve new hooks with /hooks.',
+    agentStatusRequirement: 'Live status requires version {{version}} or later.',
+    legacyHooksFound: 'Yira no longer needs the hooks it installed earlier.',
+    legacyHooksRemove: 'Remove',
     modPanels: 'Claude Code mod panels',
     modPanelsDescription: 'Mods running in a Claude Code session started from a Yira terminal can show interactive panels in the Mods tab of the right panel.',
     modPanelsSteps: 'Copy the prompt and paste it into Claude Code to create a mod or adapt an existing one. It explains how the mod connects with Yira, which elements it can draw and includes the client to copy into the mod.',
@@ -1785,7 +1772,6 @@ const en: TranslationResources = {
     showModPanelPrompt: 'Show prompt',
     backToAbout: 'Back to About',
     configure: 'Configure',
-    uninstall: 'Uninstall',
     appThemeDescription: 'Applies to the interface and terminals that follow the application theme.',
     windowBackgroundEffect: 'Window background effect',
     windowBackgroundNone: 'None',
@@ -2672,11 +2658,10 @@ const es: TranslationResources = {
     working: 'Trabajando',
     unread: 'Actividad sin revisar',
     output: 'Terminales activas',
-    background: 'En segundo plano',
     done: 'Actividad finalizada',
     idle: 'Sin actividad detectada',
     exited: 'Finalizada',
-    summary: '{{working}} trabajando; {{needsInput}} requieren intervención; {{done}} finalizados; {{unread}} eventos de salida sin revisar; {{recentOutput}} terminales con salida reciente; {{background}} en segundo plano',
+    summary: '{{working}} trabajando; {{needsInput}} requieren intervención; {{done}} finalizados; {{unread}} eventos de salida sin revisar; {{recentOutput}} terminales con salida reciente',
   },
   agentsView: {
     title: 'Agentes',
@@ -3007,23 +2992,18 @@ const es: TranslationResources = {
     saveFailed: 'No se pudieron guardar los ajustes.',
     bots: 'Bots',
     agentAlerts: 'Alertas de agentes',
-    agentAlertsDescription: 'Muestra alertas semánticas de finalización e intervención de los hooks configurados de Codex y Claude.',
+    agentAlertsDescription: 'Muestra alertas semánticas de finalización e intervención de Codex y Claude.',
     desktopAlerts: 'Notificaciones de escritorio',
     desktopAlertsDescription: 'Muestra una notificación del sistema y reproduce un sonido cuando un agente termina o necesita respuesta mientras Yira está en segundo plano. Al hacer clic abre la sesión.',
-    agentHookSetup: 'Hooks de Codex y Claude',
-    agentHookSetupDescription: 'Configura o repara sólo hooks administrados por Yira. Codex requiere aprobar los nuevos hooks con /hooks.',
     agentIntegrations: 'Integraciones de agentes',
     agentInstalled: 'Se encontró {{path}}',
     agentNotInstalled: 'No está instalado en esta máquina',
     agentDetecting: 'Comprobando instalación…',
     enableAgent: 'Activar agente',
     agentDisabled: 'Apagado. Yira no lee sus archivos ni lo muestra en Actividad.',
-    yiraHooks: 'Hooks de Yira',
-    hooksInstalled: 'Instalados',
-    hooksMissing: 'No instalados',
-    install: 'Instalar',
-    repair: 'Reparar',
-    codexHooksHelp: 'Codex pide aprobar hooks nuevos con /hooks.',
+    agentStatusRequirement: 'El estado en vivo requiere la versión {{version}} o posterior.',
+    legacyHooksFound: 'Yira ya no necesita los hooks que instaló antes.',
+    legacyHooksRemove: 'Quitar',
     modPanels: 'Paneles de mods de Claude Code',
     modPanelsDescription: 'Los mods que corren en una sesión de Claude Code abierta desde una terminal de Yira pueden mostrar paneles interactivos en la pestaña Mods del panel derecho.',
     modPanelsSteps: 'Copia el prompt y pégalo en Claude Code para crear un mod o adaptar uno existente. Explica cómo el mod se conecta con Yira, qué elementos puede dibujar e incluye el cliente para copiar en el mod.',
@@ -3032,7 +3012,6 @@ const es: TranslationResources = {
     showModPanelPrompt: 'Ver prompt',
     backToAbout: 'Volver a Acerca de',
     configure: 'Configurar',
-    uninstall: 'Desinstalar',
     appThemeDescription: 'Se aplica a la interfaz y a las terminales que siguen el tema de la aplicación.',
     windowBackgroundEffect: 'Efecto de fondo de ventana',
     windowBackgroundNone: 'Ninguno',

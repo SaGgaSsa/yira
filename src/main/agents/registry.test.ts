@@ -10,20 +10,20 @@ const session = {
   provider: 'codex' as const,
 }
 
-test('tracks validated runtime sessions through working, input, done, and exited states', () => {
+test('tracks the state the agent reports through to exit', () => {
   let now = 1_000
   const registry = new AgentSessionRegistry({ now: () => now })
   const snapshots: string[] = []
   registry.subscribe((snapshot) => snapshots.push(snapshot.sessions.map((item) => item.status).join(',')))
 
   const created = registry.register(session)
-  assert.equal(created.status, 'working')
+  assert.equal(created.status, 'done')
   now += 100
-  assert.equal(registry.markNeedsInput('workspace-1', 'tile-1'), true)
+  assert.equal(registry.applyAgentState('workspace-1', 'tile-1', 'codex', 'working'), true)
   now += 100
-  assert.equal(registry.markWorking('workspace-1', 'tile-1'), true)
+  assert.equal(registry.applyAgentState('workspace-1', 'tile-1', 'codex', 'needs-input'), true)
   now += 100
-  assert.equal(registry.markDone('workspace-1', 'tile-1'), true)
+  assert.equal(registry.applyAgentState('workspace-1', 'tile-1', 'codex', 'done'), true)
   now += 100
   assert.equal(registry.markExited('workspace-1', 'tile-1'), true)
 
@@ -31,26 +31,54 @@ test('tracks validated runtime sessions through working, input, done, and exited
   assert.equal(current.sessions[0].status, 'exited')
   assert.equal(current.sessions[0].startedAt, new Date(1_000).toISOString())
   assert.equal(current.sessions[0].lastActivityAt, new Date(1_400).toISOString())
-  assert.deepEqual(snapshots, ['', 'working', 'needs-input', 'working', 'done', 'exited'])
+  assert.deepEqual(snapshots, ['', 'done', 'working', 'needs-input', 'done', 'exited'])
 })
 
-test('joins semantic AgentAlert events to the tile/workspace session without retaining payloads', () => {
+test('applies the agent state and detail and emits only when they change', () => {
+  let now = 2_000
+  const registry = new AgentSessionRegistry({ now: () => now })
+  registry.register(session)
+  const details: Array<string | undefined> = []
+  registry.subscribe((snapshot) => details.push(snapshot.sessions[0]?.statusDetail))
+
+  now += 100
+  assert.equal(
+    registry.applyAgentState('workspace-1', 'tile-1', 'codex', 'needs-input', 'Approve Bash'),
+    true,
+  )
+  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'needs-input')
+  assert.equal(registry.get('workspace-1', 'tile-1')?.statusDetail, 'Approve Bash')
+  assert.equal(registry.get('workspace-1', 'tile-1')?.lastActivityAt, new Date(2_100).toISOString())
+
+  now += 100
+  assert.equal(
+    registry.applyAgentState('workspace-1', 'tile-1', 'codex', 'needs-input', 'Approve Bash'),
+    false,
+  )
+  now += 100
+  assert.equal(
+    registry.applyAgentState('workspace-1', 'tile-1', 'codex', 'needs-input', 'Which file?'),
+    true,
+  )
+  now += 100
+  assert.equal(registry.applyAgentState('workspace-1', 'tile-1', 'codex', 'needs-input'), true)
+
+  const current = registry.get('workspace-1', 'tile-1')
+  assert.equal(current?.status, 'needs-input')
+  assert.equal(current !== null && 'statusDetail' in current, false)
+  assert.deepEqual(details, [undefined, 'Approve Bash', 'Which file?', undefined])
+})
+
+test('rejects agent state from another provider or an exited session', () => {
   const registry = new AgentSessionRegistry()
   registry.register(session)
+  assert.equal(registry.applyAgentState('workspace-1', 'tile-1', 'claude', 'working'), false)
+  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'done')
 
-  assert.equal(registry.reportAgentAlert({
-    provider: 'codex',
-    event: 'permission',
-    tileId: 'tile-1',
-    transcript: 'must not be retained',
-  }), true)
-  assert.equal(registry.snapshot().sessions[0].status, 'needs-input')
-  assert.equal(registry.snapshot().sessions[0] && 'transcript' in registry.snapshot().sessions[0], false)
-
-  assert.equal(registry.reportAgentAlert({ provider: 'codex', event: 'completed', tileId: 'tile-1' }), false)
-  assert.equal(registry.snapshot().sessions[0].status, 'needs-input')
-  assert.equal(registry.reportAgentAlert({ provider: 'codex', event: 'input', tileId: 'tile-1' }), true)
-  assert.equal(registry.snapshot().sessions[0].status, 'needs-input')
+  assert.equal(registry.applyAgentState('workspace-1', 'tile-1', 'codex', 'working'), true)
+  assert.equal(registry.markExited('workspace-1', 'tile-1'), true)
+  assert.equal(registry.applyAgentState('workspace-1', 'tile-1', 'codex', 'needs-input'), false)
+  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'exited')
 })
 
 test('keys sessions by workspace and tile and rejects unsafe identifiers', () => {
@@ -60,115 +88,42 @@ test('keys sessions by workspace and tile and rejects unsafe identifiers', () =>
   assert.equal(registry.snapshot().sessions.length, 2)
   assert.equal(registry.snapshot('workspace-2').sessions[0].sessionId, 'session-2')
   assert.throws(() => registry.register({ ...session, sessionId: '../escape' }), /invalid session/i)
-  assert.equal(registry.markDone('', 'tile-1'), false)
+  assert.equal(registry.applyAgentState('', 'tile-1', 'codex', 'working'), false)
 })
 
-test('records activity for an already-working session without changing its state', () => {
+test('records activity without changing the state the agent reported', () => {
   let now = 2_000
   const registry = new AgentSessionRegistry({ now: () => now })
   registry.register(session)
+  registry.applyAgentState('workspace-1', 'tile-1', 'codex', 'needs-input', 'Which file?')
   now += 250
   assert.equal(registry.recordActivity('workspace-1', 'tile-1'), true)
-  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'working')
+  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'needs-input')
+  assert.equal(registry.get('workspace-1', 'tile-1')?.statusDetail, 'Which file?')
   assert.equal(registry.get('workspace-1', 'tile-1')?.lastActivityAt, new Date(2_250).toISOString())
 })
 
-test('typing keeps the status, a submit starts a turn and an interrupt ends it', () => {
-  const registry = new AgentSessionRegistry()
-  registry.register({ ...session, initialStatus: 'done' })
-  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'done')
-
-  registry.recordActivity('workspace-1', 'tile-1', 'typing')
-  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'done')
-  registry.recordActivity('workspace-1', 'tile-1', 'submit')
-  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'working')
-  registry.recordActivity('workspace-1', 'tile-1', 'interrupt')
-  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'done')
-})
-
-test('question input falls back to working on typing even when daemon alert-clear arrives first', () => {
-  let now = 3_000
-  const registry = new AgentSessionRegistry({ now: () => now })
-  registry.register({ ...session, provider: 'claude' })
-
-  assert.equal(registry.reportAgentAlert({ provider: 'claude', event: 'input', tileId: 'tile-1' }), true)
-  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'needs-input')
-  registry.alerts.clearOnFocus('tile-1')
-
-  now += 100
-  assert.equal(registry.recordActivity('workspace-1', 'tile-1', 'typing'), true)
-  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'working')
-  assert.equal(registry.get('workspace-1', 'tile-1')?.lastActivityAt, new Date(now).toISOString())
-
-  assert.equal(registry.reportAgentAlert({ provider: 'claude', event: 'completed', tileId: 'tile-1' }), true)
-  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'done')
-})
-
-test('working hooks preserve permissions until submit, then completion marks done', () => {
-  const registry = new AgentSessionRegistry()
-  registry.register({ ...session, provider: 'claude' })
-
-  assert.equal(registry.reportAgentAlert({ provider: 'claude', event: 'permission', tileId: 'tile-1' }), true)
-  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'needs-input')
-  assert.equal(registry.reportAgentAlert({ provider: 'claude', event: 'working', tileId: 'tile-1' }), false)
-  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'needs-input')
-
-  assert.equal(registry.recordActivity('workspace-1', 'tile-1', 'submit'), true)
-  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'working')
-  assert.equal(registry.reportAgentAlert({ provider: 'claude', event: 'completed', tileId: 'tile-1' }), true)
-  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'done')
-})
-
-test('typing answers a permission while keeping needs-input until working arrives', () => {
-  const registry = new AgentSessionRegistry()
-  registry.register({ ...session, provider: 'claude' })
-
-  registry.reportAgentAlert({ provider: 'claude', event: 'permission', tileId: 'tile-1' })
-  registry.alerts.clearOnFocus('tile-1')
-  registry.recordActivity('workspace-1', 'tile-1', 'typing')
-
-  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'needs-input')
-  assert.equal(registry.reportAgentWorking('claude', 'tile-1', 'workspace-1'), true)
-  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'working')
-  assert.equal(registry.reportAgentWorking('claude', 'tile-1', 'workspace-1'), true)
-  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'working')
-  assert.equal(registry.reportAgentAlert({ provider: 'claude', event: 'completed', tileId: 'tile-1' }), true)
-  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'done')
-})
-
-test('completed after a typing response to a permission marks the session done', () => {
-  const registry = new AgentSessionRegistry()
-  registry.register({ ...session, provider: 'claude' })
-
-  registry.reportAgentAlert({ provider: 'claude', event: 'permission', tileId: 'tile-1' })
-  registry.recordActivity('workspace-1', 'tile-1', 'typing')
-
-  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'needs-input')
-  assert.equal(registry.reportAgentAlert({ provider: 'claude', event: 'completed', tileId: 'tile-1' }), true)
-  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'done')
-})
-
-test('re-registering the same live session keeps its status', () => {
+test('re-registering the same live session keeps its status and detail', () => {
   const registry = new AgentSessionRegistry()
   registry.register(session)
-  registry.markDone('workspace-1', 'tile-1')
+  registry.applyAgentState('workspace-1', 'tile-1', 'codex', 'working', 'Running tests')
   registry.register(session)
-  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'done')
+  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'working')
+  assert.equal(registry.get('workspace-1', 'tile-1')?.statusDetail, 'Running tests')
+
   registry.register({ ...session, sessionId: 'session-new' })
-  assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'working')
+  const current = registry.get('workspace-1', 'tile-1')
+  assert.equal(current?.status, 'done')
+  assert.equal(current !== null && 'statusDetail' in current, false)
 })
 
-test('keeps exited sessions exited when late activity or hooks arrive', () => {
+test('keeps exited sessions exited when late activity or state arrive', () => {
   const registry = new AgentSessionRegistry()
   registry.register(session)
   assert.equal(registry.markExited('workspace-1', 'tile-1'), true)
 
   assert.equal(registry.recordActivity('workspace-1', 'tile-1'), false)
-  assert.equal(registry.markWorking('workspace-1', 'tile-1'), false)
-  assert.equal(registry.markNeedsInput('workspace-1', 'tile-1'), false)
-  assert.equal(registry.markDone('workspace-1', 'tile-1'), false)
-  assert.equal(registry.reportAgentAlert({ provider: 'codex', event: 'permission', tileId: 'tile-1' }), false)
-  assert.equal(registry.alerts.has('tile-1'), false)
+  assert.equal(registry.applyAgentState('workspace-1', 'tile-1', 'codex', 'needs-input'), false)
   assert.equal(registry.get('workspace-1', 'tile-1')?.status, 'exited')
 })
 

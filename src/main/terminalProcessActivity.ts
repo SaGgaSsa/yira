@@ -1,7 +1,3 @@
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { join } from 'node:path'
-
 import type {
   TerminalProcessActivity,
   TerminalProcessActivitySnapshot,
@@ -13,16 +9,6 @@ export interface TerminalProcessRoot {
   workspaceId: string
   tileId: string
   pid: number
-}
-
-export interface ClaudeSessionState {
-  status?: string
-  sessionId?: string
-}
-
-export interface ClassifyOptions {
-  readClaudeSession: (pid: number) => ClaudeSessionState | null
-  hasRecentClaudeSubagentActivity: (sessionId: string) => boolean
 }
 
 function commandTokens(args: string): string[] {
@@ -66,7 +52,6 @@ export function isDelegatedAgentRun(process: ProcessInfo, agent: TerminalProcess
 export function classifyTerminalProcesses(
   processes: readonly ProcessInfo[],
   roots: readonly TerminalProcessRoot[],
-  options: ClassifyOptions,
 ): TerminalProcessActivity[] {
   const children = new Map<number, ProcessInfo[]>()
   for (const process of processes) {
@@ -102,128 +87,38 @@ export function classifyTerminalProcesses(
       return agent ? [{ process, agent }] : []
     })
     const principal = agents[0]
-    let state: TerminalProcessActivity['state'] | null = null
 
     if (agents.some(({ process, agent }) => isDelegatedAgentRun(process, agent))) {
-      state = 'working'
+      activities.push({ workspaceId: root.workspaceId, tileId: root.tileId, ...(principal && { agent: principal.agent }) })
     }
-
-    let claudeStatus: string | undefined
-    let claudeSessionId: string | undefined
-    if (principal?.agent === 'claude') {
-      for (const candidate of agents) {
-        if (candidate.agent !== 'claude') continue
-        const session = options.readClaudeSession(candidate.process.pid)
-        if (!session) continue
-        claudeStatus = session.status
-        claudeSessionId = session.sessionId
-        if (session.status === 'busy') state = 'working'
-        break
-      }
-      if (claudeSessionId && options.hasRecentClaudeSubagentActivity(claudeSessionId)) state = 'working'
-      if (!state && claudeStatus === 'shell') state = 'background'
-    }
-
-    if (state) activities.push({ workspaceId: root.workspaceId, tileId: root.tileId, state, ...(principal && { agent: principal.agent }) })
   }
 
   return activities
 }
 
-const SAFE_SESSION_ID = /^[A-Za-z0-9-]{8,80}$/
-const MAX_SESSION_FILE_SIZE = 64 * 1024
-
-export function createClaudeSessionReader(options: {
-  claudeDir?: string
-  now?: () => number
-  subagentWindowMs?: number
-} = {}): Pick<ClassifyOptions, 'readClaudeSession' | 'hasRecentClaudeSubagentActivity'> {
-  const claudeDir = options.claudeDir ?? process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), '.claude')
-  const now = options.now ?? Date.now
-  const subagentWindowMs = options.subagentWindowMs ?? 60_000
-  const discoveredPaths = new Map<string, string>()
-  const lastSearchAt = new Map<string, number>()
-
-  function readClaudeSession(pid: number): ClaudeSessionState | null {
-    try {
-      const filePath = join(claudeDir, 'sessions', `${pid}.json`)
-      const stats = statSync(filePath)
-      if (!stats.isFile() || stats.size > MAX_SESSION_FILE_SIZE) return null
-      const data: unknown = JSON.parse(readFileSync(filePath, 'utf8'))
-      if (!data || typeof data !== 'object') return null
-      const record = data as Record<string, unknown>
-      if (record.pid !== pid) return null
-      return {
-        ...(typeof record.status === 'string' && { status: record.status }),
-        ...(typeof record.sessionId === 'string' && SAFE_SESSION_ID.test(record.sessionId) && { sessionId: record.sessionId }),
-      }
-    } catch {
-      return null
-    }
-  }
-
-  function findSubagentDirectory(sessionId: string): string | null {
-    const cached = discoveredPaths.get(sessionId)
-    if (cached && existsSync(cached)) return cached
-    const currentTime = now()
-    const lastSearch = lastSearchAt.get(sessionId)
-    if (lastSearch !== undefined && currentTime - lastSearch < 30_000) return null
-    lastSearchAt.set(sessionId, currentTime)
-
-    try {
-      const projectsPath = join(claudeDir, 'projects')
-      for (const project of readdirSync(projectsPath, { withFileTypes: true })) {
-        if (!project.isDirectory()) continue
-        const candidate = join(projectsPath, project.name, sessionId, 'subagents')
-        if (existsSync(candidate)) {
-          discoveredPaths.set(sessionId, candidate)
-          return candidate
-        }
-      }
-    } catch {
-      return null
-    }
-    return null
-  }
-
-  function hasRecentClaudeSubagentActivity(sessionId: string): boolean {
-    if (!SAFE_SESSION_ID.test(sessionId)) return false
-    const directory = findSubagentDirectory(sessionId)
-    if (!directory) return false
-    try {
-      return readdirSync(directory, { withFileTypes: true }).some((entry) => {
-        if (!entry.isFile() || !entry.name.endsWith('.jsonl')) return false
-        const modifiedAt = statSync(join(directory, entry.name)).mtimeMs
-        return modifiedAt <= now() && now() - modifiedAt <= subagentWindowMs
-      })
-    } catch {
-      return false
-    }
-  }
-
-  return { readClaudeSession, hasRecentClaudeSubagentActivity }
+function terminalKey(terminal: { workspaceId: string; tileId: string }): string {
+  return JSON.stringify([terminal.workspaceId, terminal.tileId])
 }
 
 export class TerminalProcessActivityMonitor {
   private readonly listRoots: () => TerminalProcessRoot[]
   private readonly getProcesses: () => Promise<ProcessInfo[]>
-  private readonly reader: ClassifyOptions
   private readonly intervalMs: number
   private readonly onChange: (snapshot: TerminalProcessActivitySnapshot) => void
+  private readonly reportedWorking = new Map<string, TerminalProcessActivity>()
   private currentSnapshot: TerminalProcessActivitySnapshot = { terminals: [] }
+  private delegatedTerminals: TerminalProcessActivity[] = []
   private timer: NodeJS.Timeout | null = null
   private polling = false
 
   constructor(options: {
     listRoots: () => TerminalProcessRoot[]
     listProcesses?: () => Promise<ProcessInfo[]>
-    reader?: Pick<ClassifyOptions, 'readClaudeSession' | 'hasRecentClaudeSubagentActivity'>
     intervalMs?: number
     onChange: (snapshot: TerminalProcessActivitySnapshot) => void
   }) {
     this.listRoots = options.listRoots
     this.getProcesses = options.listProcesses ?? listProcesses
-    this.reader = options.reader ?? createClaudeSessionReader()
     this.intervalMs = options.intervalMs ?? 40_000
     this.onChange = options.onChange
   }
@@ -245,24 +140,54 @@ export class TerminalProcessActivityMonitor {
     return { terminals: this.currentSnapshot.terminals.map((terminal) => ({ ...terminal })) }
   }
 
+  /** Record what the agent in a terminal reported, so it counts without waiting for a poll. */
+  setReportedWorking(terminal: { workspaceId: string; tileId: string }, agent: TerminalProcessAgent, working: boolean): void {
+    const key = terminalKey(terminal)
+    if (!working) {
+      this.reportedWorking.delete(key)
+    } else {
+      this.reportedWorking.set(key, { workspaceId: terminal.workspaceId, tileId: terminal.tileId, agent })
+    }
+    this.publish()
+  }
+
+  forgetTerminal(terminal: { workspaceId: string; tileId: string }): void {
+    const key = terminalKey(terminal)
+    this.reportedWorking.delete(key)
+    this.delegatedTerminals = this.delegatedTerminals.filter((activity) => terminalKey(activity) !== key)
+    this.publish()
+  }
+
   async pollNow(): Promise<void> {
     if (this.polling) return
     this.polling = true
     try {
       const roots = this.listRoots()
       if (roots.length === 0) {
-        this.updateSnapshot({ terminals: [] })
+        this.delegatedTerminals = []
+        this.publish()
         return
       }
       const processes = await this.getProcesses()
-      const terminals = classifyTerminalProcesses(processes, roots, this.reader)
-      terminals.sort((left, right) => left.workspaceId.localeCompare(right.workspaceId) || left.tileId.localeCompare(right.tileId))
-      this.updateSnapshot({ terminals })
+      this.delegatedTerminals = classifyTerminalProcesses(processes, roots)
+      this.publish()
     } catch {
-      this.updateSnapshot({ terminals: [] })
+      this.delegatedTerminals = []
+      this.publish()
     } finally {
       this.polling = false
     }
+  }
+
+  private publish(): void {
+    const terminals = new Map<string, TerminalProcessActivity>()
+    for (const activity of this.reportedWorking.values()) terminals.set(terminalKey(activity), activity)
+    // A delegated run carries the process-detected agent and wins over a report.
+    for (const activity of this.delegatedTerminals) terminals.set(terminalKey(activity), activity)
+    const ordered = [...terminals.values()].sort((left, right) => (
+      left.workspaceId.localeCompare(right.workspaceId) || left.tileId.localeCompare(right.tileId)
+    ))
+    this.updateSnapshot({ terminals: ordered })
   }
 
   private updateSnapshot(next: TerminalProcessActivitySnapshot): void {

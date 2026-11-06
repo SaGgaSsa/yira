@@ -1,37 +1,24 @@
-/** Providers that can emit semantic lifecycle hooks to a Yira terminal. */
+/** Providers that can emit semantic lifecycle alerts to a Yira terminal. */
 export type AgentProvider = 'codex' | 'claude'
 
-/** Semantic hook kinds. PTY output is intentionally not part of this model. */
+/** Semantic alert kinds. PTY output is intentionally not part of this model. */
 export type AgentAlertKind = 'completed' | 'permission' | 'input'
-
-/** Semantic hook events also include a state transition that is not an alert. */
-export type AgentHookEvent = AgentAlertKind | 'working'
 
 /** Attention priority derived from an alert kind. */
 export type AgentAlertPriority = 'normal' | 'intervention'
 
-/** The only fields retained from an incoming agent hook envelope. */
+/** The only fields retained from an incoming agent alert. */
 export interface AgentAlert {
   provider: AgentProvider
-  event: AgentHookEvent
+  event: AgentAlertKind
   tileId: string
+  detail?: string
 }
-
-/** Alias used by callers that want to make the normalization boundary explicit. */
-export type NormalizedAgentAlert = AgentAlert
 
 /** State retained for one terminal attention episode. */
 export interface AgentAlertState extends Omit<AgentAlert, 'event'> {
   event: AgentAlertKind
   priority: AgentAlertPriority
-}
-
-/** Untrusted hook input. Extra properties are ignored by {@link normalizeAgentAlert}. */
-export interface AgentAlertHookEnvelope {
-  provider?: unknown
-  event?: unknown
-  tileId?: unknown
-  [key: string]: unknown
 }
 
 export type AgentAlertStateChange = (tileId: string, state: AgentAlertState | null) => void
@@ -42,8 +29,9 @@ export interface SemanticAgentAlertStateOptions {
 }
 
 const PROVIDERS: readonly AgentProvider[] = ['codex', 'claude']
-const KINDS: readonly AgentHookEvent[] = ['completed', 'permission', 'input', 'working']
+const KINDS: readonly AgentAlertKind[] = ['completed', 'permission', 'input']
 const MAX_TILE_ID_LENGTH = 256
+const MAX_DETAIL_LENGTH = 300
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -56,13 +44,13 @@ function normalizeEnum<T extends string>(value: unknown, values: readonly T[]): 
 }
 
 /**
- * Parse and normalize the minimal `{ provider, event, tileId }` hook envelope.
+ * Parse and normalize the minimal `{ provider, event, tileId, detail? }` alert.
  *
  * The returned object is freshly allocated and contains no command arguments,
- * transcript text, or other hook payload, even when those fields are present in
- * the input.
+ * transcript text, or other payload, even when those fields are present in the
+ * input.
  */
-export function normalizeAgentAlert(input: unknown): NormalizedAgentAlert | null {
+export function normalizeAgentAlert(input: unknown): AgentAlert | null {
   if (!isRecord(input)) return null
 
   const provider = normalizeEnum(input.provider, PROVIDERS)
@@ -72,7 +60,13 @@ export function normalizeAgentAlert(input: unknown): NormalizedAgentAlert | null
   const tileId = input.tileId.trim()
   if (!tileId || tileId.length > MAX_TILE_ID_LENGTH) return null
 
-  return { provider, event, tileId }
+  let detail: string | undefined
+  if (typeof input.detail === 'string') {
+    const normalized = input.detail.trim().slice(0, MAX_DETAIL_LENGTH)
+    if (normalized) detail = normalized
+  }
+
+  return { provider, event, tileId, ...(detail ? { detail } : {}) }
 }
 
 function priorityFor(event: AgentAlertKind): AgentAlertPriority {
@@ -86,8 +80,9 @@ function cloneState(state: AgentAlertState): AgentAlertState {
 /**
  * Small semantic state manager for agent attention episodes.
  *
- * It accepts only normalized semantic hook fields, stores one state per tile,
- * coalesces duplicate provider/kind reports, and never consumes terminal output.
+ * It accepts only normalized semantic alert fields, stores one state per tile,
+ * coalesces duplicate provider/kind/detail reports, and never consumes terminal
+ * output.
  */
 export class SemanticAgentAlertState {
   private readonly states = new Map<string, AgentAlertState>()
@@ -113,7 +108,7 @@ export class SemanticAgentAlertState {
 
   /**
    * Record one semantic alert. Returns false when disabled, invalid, or
-   * coalesced with the current provider/kind episode.
+   * coalesced with the current provider/kind/detail episode.
    */
   report(input: unknown): boolean {
     if (!this.enabled) return false
@@ -121,27 +116,17 @@ export class SemanticAgentAlertState {
     const alert = normalizeAgentAlert(input)
     if (!alert) return false
 
-    if (alert.event === 'working') {
-      if (this.states.get(alert.tileId)?.event === 'permission') return false
-      return this.clear(alert.tileId)
-    }
-
     const current = this.states.get(alert.tileId)
-    if (current?.priority === 'intervention' && alert.event === 'completed') {
-      return false
-    }
-    if (current && current.provider === alert.provider && current.event === alert.event) {
+    if (current
+      && current.provider === alert.provider
+      && current.event === alert.event
+      && current.detail === alert.detail) {
       return false
     }
 
-    const event = alert.event as AgentAlertKind
-    const nextPriority = current?.priority === 'intervention'
-      ? 'intervention'
-      : priorityFor(event)
     const next: AgentAlertState = {
       ...alert,
-      event,
-      priority: nextPriority,
+      priority: priorityFor(alert.event),
     }
     this.states.set(alert.tileId, next)
     this.onChange?.(alert.tileId, cloneState(next))
