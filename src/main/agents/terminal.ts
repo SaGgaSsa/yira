@@ -7,7 +7,6 @@ import type {
 import { normalizeAgentProviderConfig } from '@shared/workspaceConfig'
 import { normalizeAgentOpaqueId, isAgentProvider } from './query'
 import { buildAgentCommand, normalizeResumeId } from './providers'
-import { AgentSessionRegistry, type AgentInputKind } from './registry'
 
 const WINDOWS_ABSOLUTE_PATH = /^[A-Za-z]:[\\/]/
 const UNC_ABSOLUTE_PATH = /^\\\\/
@@ -32,26 +31,6 @@ export interface AgentTerminalLaunch {
   cwd: string
   /** Provider session ID for resumes, or the tile ID for a new runtime session. */
   sessionId: string
-}
-
-export interface AgentTerminalLifecycleOptions {
-  registry: AgentSessionRegistry
-  tileId: string
-  workspaceId: string
-}
-
-export interface AgentTerminalLifecycle {
-  onAlert: (alert: unknown) => boolean
-  onInput: (data: string) => boolean
-  onFocus: () => boolean
-  onExit: () => boolean
-}
-
-export interface AgentTerminalExitGate {
-  /** Attach this callback directly to the PTY before session registration. */
-  handle: () => void
-  /** Complete registration and replay an exit observed during the gap. */
-  markRegistered: () => void
 }
 
 function normalizeCwdValue(value: unknown): string | undefined {
@@ -128,34 +107,6 @@ export function buildAgentTerminalLaunch(input: AgentTerminalLaunchInput): Agent
   }
 }
 
-/**
- * PTYs can report an exit before the runtime registry has accepted the
- * session. Hold that signal until registration completes so it cannot be
- * lost during the launch handoff.
- */
-export function createAgentTerminalExitGate(onExit: () => void): AgentTerminalExitGate {
-  let registered = false
-  let exited = false
-  let delivered = false
-
-  const deliver = () => {
-    if (delivered) return
-    delivered = true
-    onExit()
-  }
-
-  return {
-    handle: () => {
-      exited = true
-      if (registered) deliver()
-    },
-    markRegistered: () => {
-      registered = true
-      if (exited) deliver()
-    },
-  }
-}
-
 const ESC = '\u001b'
 const BEL = '\u0007'
 // Sequences the terminal emulator sends by itself: focus in/out, cursor and
@@ -179,10 +130,6 @@ export function isTerminalProtocolReply(data: string): boolean {
   return TERMINAL_PROTOCOL_REPLY.test(data)
 }
 
-// Pasted text and Alt+Enter (a newline inside the prompt) carry a carriage
-// return without submitting anything.
-const NON_SUBMIT_RETURNS = new RegExp(`${ESC}\\[200~[\\s\\S]*?(?:${ESC}\\[201~|$)|${ESC}\\r`, 'g')
-
 // An SGR mouse button press. Motion (32) and wheel (64) reports are not clicks.
 const SGR_MOUSE_PRESS = new RegExp(`^${ESC}\\[<(\\d+);\\d+;\\d+M$`)
 
@@ -191,45 +138,8 @@ function isMouseClick(data: string): boolean {
   return match !== null && (Number(match[1]) & (32 | 64)) === 0
 }
 
-/**
- * What a chunk of user input means for the agent's turn. Only Enter starts
- * a turn; Esc or Ctrl+C on their own interrupt it. Any other key is typing.
- * A mouse click counts as typing too: Claude dialogs can be answered by clicking.
- */
-export function classifyAgentInput(data: string): AgentInputKind | null {
-  if (isMouseClick(data)) return 'typing'
-  if (!data || isTerminalProtocolReply(data)) return null
-  if (data === ESC || data === '\u0003') return 'interrupt'
-  return data.replace(NON_SUBMIT_RETURNS, '').includes('\r') ? 'submit' : 'typing'
-}
-
-/**
- * Adapt PTY lifecycle signals to the shared runtime registry. Focus clears
- * semantic attention only; it deliberately never changes the session status.
- */
-export function createAgentTerminalLifecycle({
-  registry,
-  tileId,
-  workspaceId,
-}: AgentTerminalLifecycleOptions): AgentTerminalLifecycle {
-  const normalizedTileId = normalizeAgentOpaqueId(tileId)
-  const normalizedWorkspaceId = normalizeAgentOpaqueId(workspaceId)
-  if (!normalizedTileId) throw new Error('Invalid agent tile id')
-  if (!normalizedWorkspaceId) throw new Error('Invalid agent workspace id')
-
-  let exited = false
-
-  return {
-    onAlert: (alert: unknown) => registry.reportAgentAlert(alert, normalizedWorkspaceId),
-    onInput: (data: string) => {
-      const kind = classifyAgentInput(data)
-      return kind !== null && registry.recordActivity(normalizedWorkspaceId, normalizedTileId, kind)
-    },
-    onFocus: () => registry.alerts.clearOnFocus(normalizedTileId),
-    onExit: () => {
-      if (exited) return false
-      exited = true
-      return registry.markExited(normalizedWorkspaceId, normalizedTileId)
-    },
-  }
+/** True when the input came from the user, not from the terminal answering a query. */
+export function isAgentUserInput(data: string): boolean {
+  if (isMouseClick(data)) return true
+  return data !== '' && !isTerminalProtocolReply(data)
 }

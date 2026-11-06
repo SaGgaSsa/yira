@@ -6,12 +6,6 @@ import type {
   AgentSessionStatus,
 } from '@shared/types'
 import { normalizeAgentTerminalTitle } from '@shared/agentTerminalTitle'
-import {
-  normalizeAgentAlert,
-  SemanticAgentAlertState,
-  type AgentAlert,
-  type AgentAlertKind,
-} from '../agentAlerts'
 import { normalizeAgentOpaqueId, isAgentProvider } from './query'
 import { normalizeResumeId } from './providers'
 
@@ -28,16 +22,12 @@ export interface AgentSessionRegistration {
   worktreeBranch?: string
   worktrees?: Array<{ path: string; baseSha: string }>
   botId?: string
-  /** Status before any hook or input arrives. Defaults to 'working'. */
+  /** Status before the agent reports its first state. */
   initialStatus?: 'working' | 'done'
 }
 
-/** What user input means for the turn: see classifyAgentInput. */
-export type AgentInputKind = 'typing' | 'submit' | 'interrupt'
-
 export interface AgentSessionRegistryOptions {
   now?: () => number
-  alerts?: SemanticAgentAlertState
 }
 
 export type AgentSessionSnapshotSubscriber = (snapshot: AgentActiveSessionSnapshot) => void
@@ -124,7 +114,9 @@ function normalizeRegistration(input: AgentSessionRegistration): AgentSessionReg
     ...(worktreeBranch !== undefined ? { worktreeBranch } : {}),
     ...(worktrees !== undefined ? { worktrees } : {}),
     ...(botId !== undefined ? { botId } : {}),
-    ...(input.initialStatus === 'done' ? { initialStatus: 'done' as const } : {}),
+    ...(input.initialStatus === 'working' || input.initialStatus === 'done'
+      ? { initialStatus: input.initialStatus }
+      : {}),
   }
 }
 
@@ -135,18 +127,12 @@ function normalizeRegistration(input: AgentSessionRegistration): AgentSessionReg
 export class AgentSessionRegistry {
   private readonly sessions = new Map<string, AgentActiveSession>()
 
-  /** Retains the last intervention kind across daemon alert-clear events. */
-  private readonly interventionKinds = new Map<string, AgentAlertKind>()
-
   private readonly subscribers = new Set<AgentSessionSnapshotSubscriber>()
-
-  readonly alerts: SemanticAgentAlertState
 
   private readonly now: () => number
 
   constructor(options: AgentSessionRegistryOptions = {}) {
     this.now = options.now ?? (() => Date.now())
-    this.alerts = options.alerts ?? new SemanticAgentAlertState()
   }
 
   register(input: AgentSessionRegistration): AgentActiveSession {
@@ -154,17 +140,18 @@ export class AgentSessionRegistry {
     const currentTime = timestamp(this.now)
     const key = sessionKey(normalized.workspaceId, normalized.tileId)
     const previous = this.sessions.get(key)
-    if (previous && previous.sessionId !== normalized.sessionId) this.interventionKinds.delete(key)
     // Re-registering the same live session keeps the turn status it reached.
     const keptStatus = previous?.sessionId === normalized.sessionId && previous.status !== 'exited'
       ? previous.status
       : undefined
+    const keptStatusDetail = keptStatus !== undefined ? previous?.statusDetail : undefined
     const session: AgentActiveSession = {
       sessionId: normalized.sessionId,
       tileId: normalized.tileId,
       workspaceId: normalized.workspaceId,
       provider: normalized.provider,
-      status: keptStatus ?? normalized.initialStatus ?? 'working',
+      status: keptStatus ?? normalized.initialStatus ?? 'done',
+      ...(keptStatusDetail !== undefined ? { statusDetail: keptStatusDetail } : {}),
       startedAt: normalized.startedAt ?? currentTime,
       lastActivityAt: currentTime,
       ...(normalized.surface !== undefined ? { surface: normalized.surface } : {}),
@@ -229,7 +216,7 @@ export class AgentSessionRegistry {
     return () => this.subscribers.delete(callback)
   }
 
-  updateStatus(workspaceId: string, tileId: string, status: AgentSessionStatus): boolean {
+  private updateStatus(workspaceId: string, tileId: string, status: AgentSessionStatus): boolean {
     if (!['working', 'needs-input', 'done', 'exited'].includes(status)) return false
     const workspace = normalizeAgentOpaqueId(workspaceId)
     const tile = normalizeAgentOpaqueId(tileId)
@@ -237,6 +224,7 @@ export class AgentSessionRegistry {
     const session = this.sessions.get(sessionKey(workspace, tile))
     if (!session || session.status === 'exited' || session.status === status) return false
     session.status = status
+    if (status === 'exited') delete session.statusDetail
     session.lastActivityAt = timestamp(this.now)
     this.emit()
     return true
@@ -268,103 +256,45 @@ export class AgentSessionRegistry {
     return true
   }
 
-  markWorking(workspaceId: string, tileId: string): boolean {
-    const session = this.get(workspaceId, tileId)
-    if (!session || session.status === 'exited') return false
-    this.interventionKinds.delete(sessionKey(session.workspaceId, session.tileId))
-    const changed = this.updateStatus(workspaceId, tileId, 'working')
-    this.alerts.clearOnInput(tileId)
-    return changed
+  /** Apply the state the agent reported; it is the only source of the session status. */
+  applyAgentState(
+    workspaceId: string,
+    tileId: string,
+    provider: AgentProvider,
+    status: 'working' | 'needs-input' | 'done',
+    detail?: string,
+  ): boolean {
+    if (!isAgentProvider(provider)) return false
+    const workspace = normalizeAgentOpaqueId(workspaceId)
+    const tile = normalizeAgentOpaqueId(tileId)
+    if (!workspace || !tile) return false
+    const session = this.sessions.get(sessionKey(workspace, tile))
+    if (!session || session.status === 'exited' || session.provider !== provider) return false
+    if (session.status === status && session.statusDetail === detail) return false
+    session.status = status
+    if (detail !== undefined) session.statusDetail = detail
+    else delete session.statusDetail
+    session.lastActivityAt = timestamp(this.now)
+    this.emit()
+    return true
   }
 
-  /**
-   * Record user input and clear an intervention episode. Only a submitted
-   * line starts a turn; an interrupt ends one; typing starts a turn for a question.
-   */
-  recordActivity(workspaceId: string, tileId: string, input: AgentInputKind = 'submit'): boolean {
+  /** Record that the user typed, without changing the status the agent reported. */
+  recordActivity(workspaceId: string, tileId: string): boolean {
     const workspace = normalizeAgentOpaqueId(workspaceId)
     const tile = normalizeAgentOpaqueId(tileId)
     if (!workspace || !tile) return false
     const session = this.sessions.get(sessionKey(workspace, tile))
     if (!session || session.status === 'exited') return false
-    const key = sessionKey(workspace, tile)
-    const interventionKind = this.interventionKinds.get(key)
-    if (input === 'submit') session.status = 'working'
-    else if (input === 'interrupt' && session.status !== 'done') session.status = 'done'
-    else if (input === 'typing' && session.status === 'needs-input' && interventionKind === 'input') {
-      session.status = 'working'
-    }
     session.lastActivityAt = timestamp(this.now)
-    this.interventionKinds.delete(key)
-    this.alerts.clearOnInput(tile)
     this.emit()
     return true
-  }
-
-  markNeedsInput(workspaceId: string, tileId: string): boolean {
-    return this.updateStatus(workspaceId, tileId, 'needs-input')
-  }
-
-  markDone(workspaceId: string, tileId: string): boolean {
-    return this.updateStatus(workspaceId, tileId, 'done')
   }
 
   markExited(workspaceId: string, tileId: string): boolean {
     const session = this.get(workspaceId, tileId)
     if (!session || session.status === 'exited') return false
-    this.interventionKinds.delete(sessionKey(session.workspaceId, session.tileId))
-    const changed = this.updateStatus(workspaceId, tileId, 'exited')
-    this.alerts.clearOnDestroy(tileId)
-    return changed
-  }
-
-  /** Translate a minimal semantic hook alert into runtime status. */
-  reportAgentAlert(input: unknown, workspaceId?: string): boolean {
-    const alert = normalizeAgentAlert(input)
-    if (!alert) return false
-    const matching = [...this.sessions.values()].filter((session) => {
-      return session.tileId === alert.tileId && session.provider === alert.provider &&
-        (workspaceId === undefined || session.workspaceId === workspaceId)
-    })
-    if (matching.length !== 1) return false
-    const session = matching[0]
-    if (session.status === 'exited') return false
-    const key = sessionKey(session.workspaceId, session.tileId)
-    if (alert.event === 'working') {
-      return this.reportAgentWorking(alert.provider, alert.tileId, session.workspaceId)
-    }
-    if (alert.event === 'completed' && this.interventionKinds.has(key)) return false
-    if (!this.alerts.report(alert)) return false
-    if (alert.event === 'permission' || alert.event === 'input') this.interventionKinds.set(key, alert.event)
-    const status: AgentSessionStatus = alert.event === 'completed' ? 'done' : 'needs-input'
-    // The alert is still retained by SemanticAgentAlertState even if the
-    // runtime status was already equal; reporting itself remains meaningful.
-    if (session.status === status) return true
-    session.status = status
-    session.lastActivityAt = timestamp(this.now)
-    this.emit()
-    return true
-  }
-
-  /** Apply a working hook without allowing it to dismiss an active permission. */
-  reportAgentWorking(provider: AgentProvider, tileId: string, workspaceId: string): boolean {
-    const workspace = normalizeAgentOpaqueId(workspaceId)
-    const tile = normalizeAgentOpaqueId(tileId)
-    if (!workspace || !tile || !isAgentProvider(provider)) return false
-    const session = this.sessions.get(sessionKey(workspace, tile))
-    if (!session || session.status === 'exited' || session.provider !== provider) return false
-
-    const key = sessionKey(workspace, tile)
-    if (this.interventionKinds.get(key) === 'permission' || this.alerts.get(tile)?.event === 'permission') {
-      return false
-    }
-
-    this.interventionKinds.delete(key)
-    this.alerts.clearOnInput(tile)
-    session.status = 'working'
-    session.lastActivityAt = timestamp(this.now)
-    this.emit()
-    return true
+    return this.updateStatus(workspaceId, tileId, 'exited')
   }
 
   remove(workspaceId: string, tileId: string): boolean {
@@ -373,16 +303,12 @@ export class AgentSessionRegistry {
     if (!workspace || !tile) return false
     const removed = this.sessions.delete(sessionKey(workspace, tile))
     if (!removed) return false
-    this.interventionKinds.delete(sessionKey(workspace, tile))
-    this.alerts.clearOnDestroy(tile)
     this.emit()
     return true
   }
 
   clear(): void {
     if (this.sessions.size === 0) return
-    for (const session of this.sessions.values()) this.alerts.clearOnDestroy(session.tileId)
-    this.interventionKinds.clear()
     this.sessions.clear()
     this.emit()
   }
@@ -405,5 +331,3 @@ export class AgentSessionRegistry {
 
 /** Shared main-process registry used by IPC and later terminal integration. */
 export const agentSessionRegistry = new AgentSessionRegistry()
-
-export type { AgentAlert }

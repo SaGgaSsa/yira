@@ -9,7 +9,7 @@ import type { AgentProvider, ClaudeStatusLineMutationResult, ClaudeStatusLineSta
 import { CONFIGURABLE_SHORTCUT_IDS, normalizeShortcutSettings } from '@shared/shortcuts'
 import { normalizeUserSettings } from '@shared/userSettings'
 import { resolveSupportedLanguage } from '@shared/language'
-import { installClaudeHookConfiguration, installCodexHookConfiguration, uninstallClaudeHookConfiguration, uninstallCodexHookConfiguration, type AgentHookProvider } from '../agentHookConfiguration'
+import { uninstallClaudeHookConfiguration, uninstallCodexHookConfiguration, type AgentHookProvider } from '../agentHookConfiguration'
 import { getClaudeStatusLineState, installClaudeStatusLine, uninstallClaudeStatusLine } from '../claudeStatusLineConfiguration'
 import { setMainLanguage } from '../i18n'
 import { getAgentHomeDirectory } from '../agents/providers'
@@ -111,7 +111,7 @@ async function mutateClaudeStatusLine(operation: 'install' | 'uninstall'): Promi
   }
 }
 
-async function mutateAgentHooks(provider: AgentHookProvider, operation: 'install' | 'uninstall') {
+async function removeAgentHooks(provider: AgentHookProvider) {
   const path = getAgentHookPath(provider)
   let text = '{}'
   try { text = await fs.readFile(path, 'utf8') } catch (error) {
@@ -119,8 +119,8 @@ async function mutateAgentHooks(provider: AgentHookProvider, operation: 'install
   }
   const command = getAgentHookClientCommand()
   const result = provider === 'codex'
-    ? operation === 'install' ? installCodexHookConfiguration(text, command) : uninstallCodexHookConfiguration(text, command)
-    : operation === 'install' ? installClaudeHookConfiguration(text, command) : uninstallClaudeHookConfiguration(text, command)
+    ? uninstallCodexHookConfiguration(text, command)
+    : uninstallClaudeHookConfiguration(text, command)
   if (result.ok && result.changed) {
     await fs.mkdir(join(path, '..'), { recursive: true })
     await fs.writeFile(path, result.text, 'utf8')
@@ -200,8 +200,7 @@ export function registerSettingsIPC(options: { onSave?: () => void } = {}): void
     if (agentUsageSettingsChanged(previous, normalized)) options.onSave?.()
   })
 
-  ipcMain.handle('agentHooks:configure', async (_, provider: AgentHookProvider) => mutateAgentHooks(provider, 'install'))
-  ipcMain.handle('agentHooks:uninstall', async (_, provider: AgentHookProvider) => mutateAgentHooks(provider, 'uninstall'))
+  ipcMain.handle('agentHooks:uninstall', async (_, provider: AgentHookProvider) => removeAgentHooks(provider))
   ipcMain.handle('claudeStatusLine:status', async (): Promise<ClaudeStatusLineState> => getClaudeStatusLine())
   ipcMain.handle('claudeStatusLine:install', async (): Promise<ClaudeStatusLineMutationResult> => mutateClaudeStatusLine('install'))
   ipcMain.handle('claudeStatusLine:uninstall', async (): Promise<ClaudeStatusLineMutationResult> => mutateClaudeStatusLine('uninstall'))

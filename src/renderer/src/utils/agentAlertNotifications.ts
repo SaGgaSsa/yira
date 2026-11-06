@@ -16,6 +16,7 @@ export interface AgentAlertNotificationTextInput {
   workspaceName: string | null
   sessionTitle: string | null
   eventLabel: string
+  detail?: string | null
 }
 
 export interface AgentAlertNotificationText {
@@ -45,11 +46,13 @@ export function buildAgentAlertNotificationText(
     ? `${input.providerLabel} · ${workspaceName}`
     : input.providerLabel
   const sessionTitle = input.sessionTitle?.trim()
+  const body = sessionTitle
+    ? `${input.eventLabel} — ${sessionTitle}`
+    : input.eventLabel
+  const detail = input.detail?.trim()
 
   return {
     title,
-    body: sessionTitle
-      ? `${input.eventLabel} — ${sessionTitle}`
-      : input.eventLabel,
+    body: detail ? `${body}\n${detail}` : body,
   }
 }

@@ -123,6 +123,7 @@ const agentAlerts = new SemanticAgentAlertState({
       priority: state.priority,
       sessionTitle: (getAgentNamedTitle(session?.liveTitle) || session?.title) ?? null,
       surface: session?.surface ?? 'tile',
+      ...(state.detail ? { detail: state.detail } : {}),
     }
     window.webContents.send('agents:alert', alertEvent)
     if (BrowserWindow.getAllWindows().some((entry) => !entry.isDestroyed() && entry.isFocused())) return
@@ -147,11 +148,16 @@ const persistentTerminalSessions = new PersistentTerminalSessions({
     if (alert && getEnabledAgentProviders().includes(alert.provider)) agentAlerts.report(alert)
     else agentAlerts.clearOnFocus(identity.tileId)
   },
+  onAgentState: (identity, provider, state) => {
+    getTerminalProcessActivityMonitor().setReportedWorking(identity, provider, state === 'working')
+  },
   onAgentExit: (identity) => {
+    getTerminalProcessActivityMonitor().forgetTerminal(identity)
     agentAlerts.clearOnDestroy(identity.tileId)
     publishWorkspaceScriptSessionExit(identity)
   },
   onAgentDestroyed: (identity) => {
+    getTerminalProcessActivityMonitor().forgetTerminal(identity)
     agentAlerts.clearOnDestroy(identity.tileId)
     if (identity.tileId.startsWith('script-')) {
       publishWorkspaceScriptSessionDestroyed({ workspaceId: identity.workspaceId, tileId: identity.tileId })
@@ -582,6 +588,7 @@ export async function createAgentsViewSession(
         worktrees: spec.worktree.worktrees.map(({ path, baseSha }) => ({ path, baseSha })),
       } : {}),
       ...(spec.bot ? { botId: spec.bot.id } : {}),
+      ...(!resumeSessionId && spec.prompt !== undefined ? { startsWithPrompt: true } : {}),
     }
 
     return {

@@ -25,17 +25,24 @@ export interface TerminalDaemonAgent {
   worktrees?: Array<{ path: string; baseSha: string }>
   /** Bot the session was launched with; the UI shows its icon. */
   botId?: string
+  /** The agent was launched with a first prompt, so its startup idle report is not a finished turn. */
+  startsWithPrompt?: boolean
 }
 
 export interface TerminalDaemonAlert {
   provider: 'codex' | 'claude'
   event: 'completed' | 'permission' | 'input'
   tileId: string
+  /** What the agent is waiting for, as the agent described it. */
+  detail?: string
 }
+
+export type TerminalDaemonAgentStatus = 'working' | 'needs-input' | 'done'
 
 export interface TerminalDaemonAgentState {
   provider: 'codex' | 'claude'
-  state: 'working'
+  state: TerminalDaemonAgentStatus
+  detail?: string
 }
 
 export interface TerminalDaemonSpawn {
@@ -61,6 +68,7 @@ export interface TerminalDaemonSnapshot {
   pid: number
   agent?: TerminalDaemonAgent
   alert?: TerminalDaemonAlert
+  agentState?: TerminalDaemonAgentState
   exitEvent?: TerminalExitEvent
 }
 

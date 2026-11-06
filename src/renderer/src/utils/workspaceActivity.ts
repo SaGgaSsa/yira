@@ -79,7 +79,7 @@ function summarizeWorkspaceAgents(processes: readonly TerminalProcessActivity[])
       return {
         agent,
         count: agentProcesses.length,
-        working: agentProcesses.filter((activity) => activity.state === 'working').length,
+        working: agentProcesses.length,
       }
     })
     .filter((summary) => summary.count > 0)
@@ -120,7 +120,7 @@ export function buildWorkspaceActivityCards({
     const attentionCount = attentionCounts[workspace.id] ?? 0
     const recentOutput = recentOutputCounts[workspace.id] ?? 0
     const workspaceProcesses = processActivity.filter((activity) => activity.workspaceId === workspace.id)
-    const processWorkingCount = workspaceProcesses.filter((activity) => activity.state === 'working').length
+    const processWorkingCount = workspaceProcesses.length
     const status: WorkspaceActivityStatus = recentOutput > 0 || processWorkingCount > 0
       ? 'active'
       : attentionCount > 0 ? 'unread' : 'idle'

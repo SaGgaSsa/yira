@@ -74,6 +74,8 @@ export interface AgentActiveSession {
   workspaceId: string
   provider: AgentProvider
   status: AgentSessionStatus
+  /** What the agent is doing or waiting for, as the agent described it. */
+  statusDetail?: string
   startedAt: string
   lastActivityAt: string
   /** Missing values from older daemons are interpreted as 'tile'. */
@@ -771,6 +773,7 @@ export interface AgentAlertEvent {
   priority: 'normal' | 'intervention'
   sessionTitle: string | null
   surface: AgentSessionSurface
+  detail?: string
 }
 
 export interface AgentAlertNotificationRequest {

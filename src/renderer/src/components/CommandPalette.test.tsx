@@ -213,6 +213,7 @@ const attentionSession = session({
   workspaceId: 'gamma',
   provider: 'codex',
   status: 'needs-input',
+  statusDetail: 'answer: Do you prefer tea or coffee?',
   title: 'Needs help',
   worktreeBranch: 'feat/x',
   startedAt: minutesAgo(5),
@@ -221,6 +222,7 @@ const refactorSession = session({
   sessionId: 'session-refactor',
   tileId: 'tile-refactor',
   workspaceId: 'alpha',
+  statusDetail: 'Writing prueba.txt',
   title: 'Refactor alpha',
   startedAt: minutesAgo(10),
 })
@@ -524,6 +526,31 @@ test('groups attention and the first three active agents, and "Show more" expand
     await settle()
     assert.equal(findMore(container), null)
     assert.equal(findAll(findSection(container, 'active'), 'div').filter((element) => element.getAttribute('role') === 'option').length, 5)
+  } finally {
+    root.unmount()
+  }
+})
+
+test('a waiting session shows its detail first in the subtitle and keeps the full text in the title', async () => {
+  const { container, root } = renderPalette()
+
+  try {
+    await settle()
+    const waitingRow = findOption(container, sessionItemKey('session-input'))
+    assert.ok(waitingRow)
+    const waitingMeta = findAll(waitingRow, 'span')
+      .find((element) => Boolean(element.getAttribute('title')))
+    assert.ok(waitingMeta)
+    assert.equal(waitingMeta.textContent, 'answer: Do you prefer tea or coffee? · Gamma · Codex · ⎇ feat/x')
+    assert.equal(waitingMeta.getAttribute('title'), 'answer: Do you prefer tea or coffee? · Gamma · Codex · ⎇ feat/x')
+
+    const workingRow = findOption(container, sessionItemKey('session-refactor'))
+    assert.ok(workingRow)
+    const workingMeta = findAll(workingRow, 'span')
+      .find((element) => Boolean(element.getAttribute('title')))
+    assert.ok(workingMeta)
+    assert.equal(workingMeta.textContent, 'Alpha · Claude')
+    assert.equal(workingMeta.getAttribute('title'), 'Alpha · Claude')
   } finally {
     root.unmount()
   }

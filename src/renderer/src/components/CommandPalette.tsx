@@ -564,7 +564,9 @@ export function CommandPalette({
 
   const sessionMeta = (session: AgentActiveSession): string => {
     const workspace = workspaces.find((entry) => entry.id === session.workspaceId)
+    const statusDetail = session.status === 'needs-input' ? session.statusDetail?.trim() : ''
     return [
+      statusDetail,
       workspace ? workspaceName(workspace) : '',
       providerLabel(session.provider),
       ...(session.worktreeBranch ? [`⎇ ${session.worktreeBranch}`] : []),
@@ -648,6 +650,7 @@ export function CommandPalette({
 
   const renderItemLabel = (item: CommandPaletteItem, match?: CommandPaletteMatch): React.ReactNode => {
     if (item.kind === 'session') {
+      const meta = sessionMeta(item.session)
       return (
         <div className="min-w-0 flex-1">
           <div className="truncate text-[13.5px] leading-5">
@@ -659,7 +662,7 @@ export function CommandPalette({
               style={{ backgroundColor: providerColor(item.session.provider) }}
               aria-hidden="true"
             />
-            <span className="truncate">{sessionMeta(item.session)}</span>
+            <span className="truncate" title={meta}>{meta}</span>
           </div>
         </div>
       )

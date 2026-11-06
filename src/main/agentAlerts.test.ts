@@ -8,11 +8,12 @@ import {
   type AgentAlertState,
 } from './agentAlerts'
 
-test('normalizes a minimal hook envelope and drops command, transcript, and arbitrary payload', () => {
+test('normalizes a minimal alert and drops command, transcript, and arbitrary payload', () => {
   const normalized = normalizeAgentAlert({
     provider: ' CODEX ',
     event: ' Permission ',
     tileId: ' terminal-1 ',
+    detail: 'Approve the Bash command',
     command: ['do-not-retain-this'],
     transcript: 'do-not-retain-this-either',
     hookPayload: { secret: 'do-not-retain-this-too' },
@@ -22,25 +23,50 @@ test('normalizes a minimal hook envelope and drops command, transcript, and arbi
     provider: 'codex',
     event: 'permission',
     tileId: 'terminal-1',
+    detail: 'Approve the Bash command',
   })
   assert.equal(normalized && 'transcript' in normalized, false)
+  assert.equal(normalized && 'command' in normalized, false)
 })
 
-test('rejects non-envelope values and unknown providers or events', () => {
+test('trims alert details and limits them to 300 characters', () => {
+  const normalized = normalizeAgentAlert({
+    provider: 'claude',
+    event: 'input',
+    tileId: 'terminal-1',
+    detail: `  ${'x'.repeat(400)}  `,
+  })
+
+  assert.equal(normalized?.detail, 'x'.repeat(300))
+  assert.equal(normalizeAgentAlert({
+    provider: 'claude',
+    event: 'input',
+    tileId: 'terminal-1',
+    detail: '   ',
+  })?.detail, undefined)
+})
+
+test('rejects non-alert values and unknown providers or events', () => {
   assert.equal(normalizeAgentAlert('terminal output'), null)
   assert.equal(normalizeAgentAlert(null), null)
   assert.equal(normalizeAgentAlert({ provider: 'cursor', event: 'completed', tileId: 'terminal-1' }), null)
   assert.equal(normalizeAgentAlert({ provider: 'codex', event: 'output', tileId: 'terminal-1' }), null)
+  assert.equal(normalizeAgentAlert({ provider: 'codex', event: 'working', tileId: 'terminal-1' }), null)
   assert.equal(normalizeAgentAlert({ provider: 'codex', event: 'completed', tileId: '' }), null)
 })
 
-test('deduplicates same-provider same-kind episodes and upgrades completion to intervention', () => {
+test('deduplicates same-provider same-kind same-detail episodes', () => {
   const changes: Array<{ tileId: string; state: AgentAlertState | null }> = []
   const state = new SemanticAgentAlertState({
     onChange: (tileId, next) => changes.push({ tileId, state: next }),
   })
   const completed: AgentAlert = { provider: 'codex', event: 'completed', tileId: 'terminal-1' }
-  const permission: AgentAlert = { provider: 'codex', event: 'permission', tileId: 'terminal-1' }
+  const permission: AgentAlert = {
+    provider: 'codex',
+    event: 'permission',
+    tileId: 'terminal-1',
+    detail: 'Approve the Bash command',
+  }
 
   assert.equal(state.report(completed), true)
   assert.equal(state.report(completed), false)
@@ -58,37 +84,37 @@ test('deduplicates same-provider same-kind episodes and upgrades completion to i
   assert.equal(changes.length, 2)
 })
 
-test('does not downgrade an intervention episode when completion arrives later', () => {
+test('completed replaces an intervention episode', () => {
   const state = new SemanticAgentAlertState()
 
   assert.equal(state.report({ provider: 'claude', event: 'permission', tileId: 'terminal-2' }), true)
-  assert.equal(state.report({ provider: 'claude', event: 'completed', tileId: 'terminal-2' }), false)
+  assert.equal(state.report({ provider: 'claude', event: 'completed', tileId: 'terminal-2' }), true)
   assert.deepEqual(state.get('terminal-2'), {
     provider: 'claude',
-    event: 'permission',
+    event: 'completed',
     tileId: 'terminal-2',
-    priority: 'intervention',
+    priority: 'normal',
   })
 })
 
-test('working clears a non-permission alert without retaining an alert episode', () => {
+test('a different detail emits the alert again', () => {
   const changes: Array<AgentAlertState | null> = []
   const state = new SemanticAgentAlertState({ onChange: (_tileId, next) => changes.push(next) })
+  const alert: AgentAlert = {
+    provider: 'claude',
+    event: 'input',
+    tileId: 'detail-tile',
+    detail: 'Which file should I edit?',
+  }
 
-  assert.equal(state.report({ provider: 'claude', event: 'input', tileId: 'working-tile' }), true)
-  assert.equal(state.report({ provider: 'claude', event: 'working', tileId: 'working-tile' }), true)
-  assert.equal(state.get('working-tile'), null)
-  assert.deepEqual(changes.at(-1), null)
-  assert.equal(state.report({ provider: 'claude', event: 'working', tileId: 'working-tile' }), false)
-})
-
-test('working does not clear a permission alert', () => {
-  const state = new SemanticAgentAlertState()
-  const permission: AgentAlert = { provider: 'claude', event: 'permission', tileId: 'permission-tile' }
-
-  assert.equal(state.report(permission), true)
-  assert.equal(state.report({ provider: 'claude', event: 'working', tileId: 'permission-tile' }), false)
-  assert.deepEqual(state.get('permission-tile'), { ...permission, priority: 'intervention' })
+  assert.equal(state.report(alert), true)
+  assert.equal(state.report(alert), false)
+  assert.equal(state.report({ ...alert, detail: 'Approve the Bash command' }), true)
+  assert.equal(state.get('detail-tile')?.detail, 'Approve the Bash command')
+  assert.deepEqual(changes.map((entry) => entry?.detail), [
+    'Which file should I edit?',
+    'Approve the Bash command',
+  ])
 })
 
 test('focus, input, and destroy clear attention for a tile', () => {

@@ -109,11 +109,31 @@ test('leaves non-Linux package outputs untouched', async () => {
     await writeFile(launcherPath, 'electron-binary')
 
     await afterPack({
-      electronPlatformName: 'win32',
+      electronPlatformName: 'darwin',
       appOutDir,
     })
 
     assert.equal(await readFile(launcherPath, 'utf8'), 'electron-binary')
+  } finally {
+    await rm(appOutDir, { recursive: true, force: true })
+  }
+})
+
+test('fails a Windows package without the bundled ConPTY', async () => {
+  const { afterPack } = await import(new URL('../build/linux/after-pack.cjs', import.meta.url))
+  const appOutDir = await mkdtemp(join(tmpdir(), 'yira-win-packaging-'))
+  const native = join(appOutDir, 'resources', 'app.asar.unpacked', 'node_modules', 'node-pty', 'prebuilds', 'win32-x64')
+
+  try {
+    await assert.rejects(afterPack({ electronPlatformName: 'win32', appOutDir }), /Missing node-pty native module/)
+
+    await mkdir(join(native, 'conpty'), { recursive: true })
+    await writeFile(join(native, 'conpty.node'), '')
+    await assert.rejects(afterPack({ electronPlatformName: 'win32', appOutDir }), /Missing bundled ConPTY file/)
+
+    await writeFile(join(native, 'conpty', 'conpty.dll'), '')
+    await writeFile(join(native, 'conpty', 'OpenConsole.exe'), '')
+    await afterPack({ electronPlatformName: 'win32', appOutDir })
   } finally {
     await rm(appOutDir, { recursive: true, force: true })
   }

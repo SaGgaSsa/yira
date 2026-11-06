@@ -1,5 +1,5 @@
 import React from 'react'
-import { CircleCheck, CircleDot, CircleQuestionMark, Hourglass, LoaderCircle, Terminal } from 'lucide-react'
+import { CircleCheck, CircleDot, CircleQuestionMark, LoaderCircle, Terminal } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { TerminalActivitySummary } from '@/utils/terminalActivity'
 import { summarizeTerminalActivity } from '@/utils/terminalActivity'
@@ -12,7 +12,6 @@ const ACTIVITY_STYLES = {
   working: { Icon: LoaderCircle, className: 'text-activity motion-safe:animate-spin' },
   unread: { Icon: CircleDot, className: 'text-text-display' },
   output: { Icon: LoaderCircle, className: 'text-activity motion-safe:animate-spin' },
-  background: { Icon: Hourglass, className: 'text-activity' },
   done: { Icon: CircleCheck, className: 'text-success' },
   idle: { Icon: Terminal, className: 'text-text-disabled' },
 } as const

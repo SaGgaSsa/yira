@@ -11,7 +11,7 @@ function session(tileId: string, status: AgentSessionStatus, workspaceId = 'a'):
 test('aggregates every terminal in a workspace and prioritizes intervention over work and completion', () => {
   const sessions = [session('1', 'done'), session('2', 'working'), session('3', 'needs-input'), session('4', 'working')]
   assert.deepEqual(summarizeTerminalActivity(sessions, 'a', 3), {
-    status: 'needs-input', working: 2, needsInput: 1, done: 1, unread: 3, recentOutput: 0, background: 0,
+    status: 'needs-input', working: 2, needsInput: 1, done: 1, unread: 3, recentOutput: 0,
   })
   assert.equal(summarizeTerminalActivity([...sessions].reverse(), 'a').status, 'needs-input')
   assert.equal(summarizeTerminalActivity(sessions.filter((s) => s.tileId !== '3'), 'a', 3).status, 'working')
@@ -70,33 +70,29 @@ test('recent output ranks above unread and done but below work and intervention'
   assert.equal(summarizeTerminalActivity([session('1', 'done')], 'a', 0, undefined, 0).status, 'done')
 })
 
-test('process activity counts working terminals once and reports background activity', () => {
+test('process activity counts each working terminal once', () => {
   const processActivity: TerminalProcessActivity[] = [
-    { workspaceId: 'a', tileId: '1', state: 'working' },
+    { workspaceId: 'a', tileId: '1' },
   ]
   assert.equal(summarizeTerminalActivity([], 'a', 0, undefined, 0, processActivity).status, 'working')
 
   const sameTile = summarizeTerminalActivity([session('1', 'working')], 'a', 0, undefined, 0, processActivity)
   assert.equal(sameTile.working, 1)
 
-  const background = summarizeTerminalActivity([], 'a', 0, undefined, 0, [
-    { workspaceId: 'a', tileId: '2', state: 'background' },
+  const duplicate = summarizeTerminalActivity([], 'a', 0, undefined, 0, [
+    { workspaceId: 'a', tileId: '2' },
+    { workspaceId: 'a', tileId: '2', agent: 'claude' },
   ])
-  assert.equal(background.status, 'background')
-  assert.equal(background.background, 1)
-  assert.equal(summarizeTerminalActivity([], 'a', 0, undefined, 1, [
-    { workspaceId: 'a', tileId: '2', state: 'background' },
-  ]).status, 'output')
+  assert.equal(duplicate.working, 1)
 })
 
 test('filters process activity by workspace and tile', () => {
   const processActivity: TerminalProcessActivity[] = [
-    { workspaceId: 'a', tileId: '1', state: 'working' },
-    { workspaceId: 'a', tileId: '2', state: 'background' },
-    { workspaceId: 'b', tileId: '1', state: 'working' },
+    { workspaceId: 'a', tileId: '1' },
+    { workspaceId: 'a', tileId: '2' },
+    { workspaceId: 'b', tileId: '1' },
   ]
   const summary = summarizeTerminalActivity([], 'a', 0, '2', 0, processActivity)
-  assert.equal(summary.status, 'background')
-  assert.equal(summary.working, 0)
-  assert.equal(summary.background, 1)
+  assert.equal(summary.status, 'working')
+  assert.equal(summary.working, 1)
 })

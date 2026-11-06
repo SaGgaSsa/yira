@@ -18,7 +18,7 @@ import type { AgentSessionSurface, TerminalCreateResult } from '@shared/types'
 import { agentSessionRegistry, type AgentSessionRegistry } from './agents/registry'
 import { mainText } from './i18n'
 import { AgentTerminalTitleTracker } from './agents/terminalTitle'
-import { classifyAgentInput } from './agents/terminal'
+import { isAgentUserInput } from './agents/terminal'
 import type { TerminalProcessRoot } from './terminalProcessActivity'
 
 const DATA_BATCH_THRESHOLD_CHARS = 256 * 1024
@@ -48,6 +48,11 @@ export interface PersistentTerminalSessionsOptions {
   connect: () => Promise<PersistentTerminalTransport>
   registry?: AgentSessionRegistry
   onAgentAlert?: (identity: TerminalSessionIdentity, alert: TerminalDaemonAlert | null) => void
+  onAgentState?: (
+    identity: TerminalSessionIdentity,
+    provider: TerminalDaemonAgentState['provider'],
+    state: TerminalDaemonAgentState['state'],
+  ) => void
   onAgentExit?: (identity: TerminalSessionIdentity) => void
   onAgentDestroyed?: (identity: TerminalSessionIdentity) => void
   /** Minimum time between agent title updates; tests shorten it. */
@@ -153,6 +158,8 @@ export class PersistentTerminalSessions {
 
   private readonly onAgentAlert?: PersistentTerminalSessionsOptions['onAgentAlert']
 
+  private readonly onAgentState?: PersistentTerminalSessionsOptions['onAgentState']
+
   private readonly onAgentExit?: PersistentTerminalSessionsOptions['onAgentExit']
 
   private readonly onAgentDestroyed?: PersistentTerminalSessionsOptions['onAgentDestroyed']
@@ -201,6 +208,7 @@ export class PersistentTerminalSessions {
     this.connect = options.connect
     this.registry = options.registry ?? agentSessionRegistry
     this.onAgentAlert = options.onAgentAlert
+    this.onAgentState = options.onAgentState
     this.onAgentExit = options.onAgentExit
     this.onAgentDestroyed = options.onAgentDestroyed
     this.onDisconnect = options.onDisconnect
@@ -435,9 +443,8 @@ export class PersistentTerminalSessions {
   async write(identity: TerminalSessionIdentity, data: string): Promise<void> {
     const client = await this.ensureClient()
     await client.request('write', { identity, data })
-    const inputKind = classifyAgentInput(data)
-    if (inputKind) {
-      this.registry.recordActivity(identity.workspaceId, identity.tileId, inputKind)
+    if (isAgentUserInput(data)) {
+      this.registry.recordActivity(identity.workspaceId, identity.tileId)
       this.broadcastAlert(identity, null)
     }
   }
@@ -450,7 +457,6 @@ export class PersistentTerminalSessions {
   async acknowledge(identity: TerminalSessionIdentity): Promise<void> {
     const client = await this.ensureClient()
     await client.request('acknowledge', identity)
-    this.registry.alerts.clearOnFocus(identity.tileId)
     this.broadcastAlert(identity, null)
   }
 
@@ -571,7 +577,7 @@ export class PersistentTerminalSessions {
 
   /**
    * An agent found already running (after an app restart) has no record of
-   * its turn, so it starts idle; only a session created now starts working.
+   * its turn, so it starts done unless it was launched with a first prompt.
    */
   private adoptSnapshot(snapshot: TerminalDaemonSnapshot, origin: 'created' | 'existing' = 'existing'): boolean {
     const key = identityKey(snapshot.identity)
@@ -608,7 +614,7 @@ export class PersistentTerminalSessions {
         workspaceId: snapshot.identity.workspaceId,
         provider: snapshot.agent.provider,
         startedAt: snapshot.agent.startedAt,
-        initialStatus: origin === 'created' ? 'working' : 'done',
+        initialStatus: origin === 'created' && snapshot.agent.startsWithPrompt === true ? 'working' : 'done',
         ...(snapshot.agent.surface !== undefined ? { surface: snapshot.agent.surface } : {}),
         ...(snapshot.agent.title !== undefined ? { title: snapshot.agent.title } : {}),
         ...(snapshot.agent.cwd !== undefined ? { cwd: snapshot.agent.cwd } : {}),
@@ -621,8 +627,15 @@ export class PersistentTerminalSessions {
       // The snapshot buffer ends with the terminal's current title.
       this.agentTitles.receive(snapshot.identity.workspaceId, snapshot.identity.tileId, snapshot.buffer)
     }
+    if (snapshot.agentState) {
+      this.applyAgentState(
+        record,
+        snapshot.agentState.provider,
+        snapshot.agentState.state,
+        snapshot.agentState.detail,
+      )
+    }
     if (snapshot.alert) {
-      this.registry.reportAgentAlert(snapshot.alert, snapshot.identity.workspaceId)
       if (!sameAlert(previousAlert, snapshot.alert)) this.applyAlert(record, snapshot.alert)
     } else if (previousAlert) {
       this.applyAlert(record, null)
@@ -634,7 +647,7 @@ export class PersistentTerminalSessions {
     for (const event of pendingStateEvents) {
       if (!isEventForIdentity(event, snapshot.identity)) continue
       if (event.event === 'alert') this.applyAlert(record, event.alert)
-      else if (event.event === 'agent-state') this.applyAgentState(record, event.provider, event.state)
+      else if (event.event === 'agent-state') this.applyAgentState(record, event.provider, event.state, event.detail)
       else if (event.event === 'exit') {
         record.exited = true
         if (record.snapshot) record.snapshot = { ...record.snapshot, exitEvent: { ...event.exitEvent } }
@@ -669,7 +682,7 @@ export class PersistentTerminalSessions {
     if (event.event === 'alert') {
       this.applyAlert(record, event.alert)
     } else if (event.event === 'agent-state') {
-      this.applyAgentState(record, event.provider, event.state)
+      this.applyAgentState(record, event.provider, event.state, event.detail)
     } else if (event.event === 'exit') {
       record.exited = true
       record.snapshot = record.snapshot
@@ -693,21 +706,22 @@ export class PersistentTerminalSessions {
     record: SessionRecord,
     provider: TerminalDaemonAgentState['provider'],
     state: TerminalDaemonAgentState['state'],
+    detail?: string,
   ): void {
-    if (state === 'working') {
-      this.registry.reportAgentWorking(provider, record.identity.tileId, record.identity.workspaceId)
-    }
+    this.registry.applyAgentState(
+      record.identity.workspaceId,
+      record.identity.tileId,
+      provider,
+      state,
+      detail,
+    )
+    this.onAgentState?.(record.identity, provider, state)
   }
 
   private applyAlert(record: SessionRecord, alert: TerminalDaemonAlert | null): void {
     const previous = record.alert
-    if (sameAlertOrNull(previous, alert)) {
-      if (alert) this.registry.reportAgentAlert(alert, record.identity.workspaceId)
-      return
-    }
+    if (sameAlertOrNull(previous, alert)) return
     record.alert = alert ? { ...alert } : null
-    if (alert) this.registry.reportAgentAlert(alert, record.identity.workspaceId)
-    else this.registry.alerts.clearOnFocus(record.identity.tileId)
     this.onAgentAlert?.(record.identity, alert)
   }
 
@@ -976,7 +990,8 @@ export class PersistentTerminalSessions {
 }
 
 function sameAlert(first: TerminalDaemonAlert | null | undefined, second: TerminalDaemonAlert): boolean {
-  return !!first && first.provider === second.provider && first.event === second.event && first.tileId === second.tileId
+  return !!first && first.provider === second.provider && first.event === second.event &&
+    first.tileId === second.tileId && first.detail === second.detail
 }
 function sameAlertOrNull(
   first: TerminalDaemonAlert | null | undefined,

@@ -61,26 +61,18 @@ test('recent output marks the workspace active', () => {
   assert.equal(hasWorkspaceActivityAttention(card), false)
 })
 
-test('process working marks its workspace active and background does not', () => {
-  const [working] = buildWorkspaceActivityCards({
+test('process activity marks its workspace active', () => {
+  const [active] = buildWorkspaceActivityCards({
     workspaces: [workspace('working')],
     sessionActiveIds: new Set(['working']),
     attentionCounts: {},
     terminalCounts: {},
     activeWorkspaceId: null,
-    processActivity: [{ workspaceId: 'working', tileId: 't1', state: 'working' }],
-  })
-  const [background] = buildWorkspaceActivityCards({
-    workspaces: [workspace('background')],
-    sessionActiveIds: new Set(['background']),
-    attentionCounts: {},
-    terminalCounts: {},
-    activeWorkspaceId: null,
-    processActivity: [{ workspaceId: 'background', tileId: 't1', state: 'background' }],
+    processActivity: [{ workspaceId: 'working', tileId: 't1' }],
   })
 
-  assert.equal(working.status, 'active')
-  assert.equal(background.status, 'idle')
+  assert.equal(active.status, 'active')
+  assert.equal(active.workingTerminalCount, 1)
 })
 
 test('active wins over unread', () => {
@@ -289,16 +281,16 @@ test('summarizes agents and working terminals per workspace', () => {
     terminalCounts: { busy: 4 },
     activeWorkspaceId: null,
     processActivity: [
-      { workspaceId: 'busy', tileId: 't1', state: 'working', agent: 'codex' },
-      { workspaceId: 'busy', tileId: 't2', state: 'background', agent: 'claude' },
-      { workspaceId: 'busy', tileId: 't3', state: 'working', agent: 'claude' },
-      { workspaceId: 'other', tileId: 't4', state: 'working', agent: 'claude' },
+      { workspaceId: 'busy', tileId: 't1', agent: 'codex' },
+      { workspaceId: 'busy', tileId: 't2', agent: 'claude' },
+      { workspaceId: 'busy', tileId: 't3', agent: 'claude' },
+      { workspaceId: 'other', tileId: 't4', agent: 'claude' },
     ],
   })
 
-  assert.equal(card.workingTerminalCount, 2)
+  assert.equal(card.workingTerminalCount, 3)
   assert.deepEqual(card.agents, [
-    { agent: 'claude', count: 2, working: 1 },
+    { agent: 'claude', count: 2, working: 2 },
     { agent: 'codex', count: 1, working: 1 },
   ])
 })

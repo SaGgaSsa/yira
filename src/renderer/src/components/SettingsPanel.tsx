@@ -165,6 +165,8 @@ const serializeDraft = (settings: UserSettings): string => JSON.stringify(settin
 
 const SUPPORT_REPOSITORY_URL = 'https://github.com/SaGgaSsa/yira'
 
+const AGENT_STATUS_MIN_VERSION = { claude: '2.1.295', codex: '0.163' } as const
+
 const SETTINGS_SECTIONS: Array<{
   id: SettingsSectionId
   icon: typeof Monitor
@@ -810,11 +812,9 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
               const detection = agentDetection?.[provider]
               const enabled = draft.agents[provider].enabled
               const busy = !detection?.installed && !enabled
-              const mutateHooks = async (operation: 'install' | 'uninstall') => {
+              const removeHooks = async () => {
                 try {
-                  const result = operation === 'install'
-                    ? await window.electron.settings.configureAgentHooks(provider)
-                    : await window.electron.settings.uninstallAgentHooks(provider)
+                  const result = await window.electron.settings.uninstallAgentHooks(provider)
                   setAgentHookMessages((messages) => ({ ...messages, [provider]: result.message }))
                   setAgentDetection(await window.electron.agents.detect())
                 } catch (error) {
@@ -857,33 +857,22 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
                   </div>
                   {enabled ? (
                     <div className="mt-4 border-t border-border pt-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="mr-auto text-sm text-text-secondary">
-                          {t('settings.yiraHooks')}: {detection?.hooksInstalled
-                            ? t('settings.hooksInstalled')
-                            : t('settings.hooksMissing')}
-                        </span>
-                        <button
-                          type="button"
-                          className="rounded-full border border-border-visible px-3 py-1.5 text-xs text-text-display"
-                          onClick={() => void mutateHooks('install')}
-                        >
-                          {detection?.hooksInstalled ? t('settings.repair') : t('settings.install')}
-                        </button>
-                        {detection?.hooksInstalled && (
+                      <p className="text-xs text-text-secondary">
+                        {t('settings.agentStatusRequirement', { version: AGENT_STATUS_MIN_VERSION[provider] })}
+                      </p>
+                      {detection?.hooksInstalled && (
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <span className="mr-auto text-xs text-text-secondary">
+                            {t('settings.legacyHooksFound')}
+                          </span>
                           <button
                             type="button"
                             className="rounded-full border border-border-visible px-3 py-1.5 text-xs text-text-secondary"
-                            onClick={() => void mutateHooks('uninstall')}
+                            onClick={() => void removeHooks()}
                           >
-                            {t('settings.uninstall')}
+                            {t('settings.legacyHooksRemove')}
                           </button>
-                        )}
-                      </div>
-                      {provider === 'codex' && (
-                        <p className="mt-2 text-xs text-text-secondary">
-                          {t('settings.codexHooksHelp')}
-                        </p>
+                        </div>
                       )}
                       {agentHookMessages[provider] && (
                         <p className="mt-2 text-xs text-text-secondary" role="status">

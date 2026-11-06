@@ -1,5 +1,6 @@
 /**
- * Pure configuration helpers for the semantic-agent hooks.
+ * Pure configuration helpers for the semantic-agent hooks that earlier Yira
+ * versions installed.
  *
  * The helpers in this module intentionally do not read or write files. Callers
  * can use the returned text with an adapter that performs its own
@@ -7,10 +8,7 @@
  */
 
 export type AgentHookProvider = 'codex' | 'claude'
-export type AgentHookOperation = 'install' | 'uninstall'
 export type AgentHookMutationStatus =
-  | 'installed'
-  | 'already-installed'
   | 'uninstalled'
   | 'already-uninstalled'
   | 'malformed'
@@ -19,12 +17,11 @@ export type AgentHookMutationStatus =
   | 'invalid'
 
 export interface AgentHookMutationResult {
-  /** True when the configuration was valid and the requested operation completed. */
+  /** True when the configuration was valid and the removal completed. */
   readonly ok: boolean
   /** Alias for consumers that use success-oriented result handling. */
   readonly success: boolean
   readonly provider: AgentHookProvider
-  readonly operation: AgentHookOperation
   readonly status: AgentHookMutationStatus
   readonly changed: boolean
   /** The original text on a failure, or the serialized configuration on success. */
@@ -136,31 +133,15 @@ export function buildManagedAgentHookCommand(
   return `${command} ${YIRA_MANAGED_HOOK_MARKER}=${provider} ${YIRA_MANAGED_EVENT_MARKER}=${normalizedEvent}`
 }
 
-/** Install Yira-managed Stop and PermissionRequest groups in Codex hooks.json text. */
-export function installCodexHookConfiguration(text: string, clientCommand: string): AgentHookMutationResult {
-  return mutateConfiguration('codex', 'install', text, clientCommand)
-}
-
 /** Remove only untouched Yira-managed Codex groups from hooks.json text. */
 export function uninstallCodexHookConfiguration(text: string, clientCommand: string): AgentHookMutationResult {
-  return mutateConfiguration('codex', 'uninstall', text, clientCommand)
-}
-
-/** Install Yira-managed lifecycle and Notification groups in Claude settings.json text. */
-export function installClaudeHookConfiguration(text: string, clientCommand: string): AgentHookMutationResult {
-  return mutateConfiguration('claude', 'install', text, clientCommand)
+  return mutateConfiguration('codex', text, clientCommand)
 }
 
 /** Remove only untouched Yira-managed Claude hook groups from settings.json text. */
 export function uninstallClaudeHookConfiguration(text: string, clientCommand: string): AgentHookMutationResult {
-  return mutateConfiguration('claude', 'uninstall', text, clientCommand)
+  return mutateConfiguration('claude', text, clientCommand)
 }
-
-// Short aliases keep the pure API convenient for settings/IPC callers.
-export const installCodexHooks = installCodexHookConfiguration
-export const uninstallCodexHooks = uninstallCodexHookConfiguration
-export const installClaudeHooks = installClaudeHookConfiguration
-export const uninstallClaudeHooks = uninstallClaudeHookConfiguration
 
 /** Detect any intact Yira-managed hook by its ownership markers; performs no I/O. */
 export function hasManagedAgentHooks(text: string, provider: AgentHookProvider): boolean {
@@ -181,34 +162,30 @@ export function hasManagedAgentHooks(text: string, provider: AgentHookProvider):
 
 interface EventPlan {
   readonly key: string
-  readonly spec: CodexHookSpec | ClaudeHookSpec
   readonly existing: JsonValue[] | undefined
   readonly managedIndices: readonly number[]
-  readonly needsAddition: boolean
 }
 
 type JsonValue = unknown
 
 function mutateConfiguration(
   provider: AgentHookProvider,
-  operation: AgentHookOperation,
   text: string,
   clientCommand: string,
 ): AgentHookMutationResult {
   const baseCommand = clientCommand.trim()
   if (!baseCommand || baseCommand.includes(YIRA_MANAGED_HOOK_MARKER) || baseCommand.includes(YIRA_MANAGED_EVENT_MARKER)) {
-    return failureResult(provider, operation, text, 'invalid', 'A resolved client command is required; no changes were made.')
+    return failureResult(provider, text, 'invalid', 'A resolved client command is required; no changes were made.')
   }
 
   const parsed = parseHookConfiguration(text, provider)
-  if (!parsed.ok) return failureResult(provider, operation, text, parsed.status, parsed.message)
+  if (!parsed.ok) return failureResult(provider, text, parsed.status, parsed.message)
 
   const root = parsed.value
   const existingHooks = root.hooks
   if (existingHooks !== undefined && !isJsonObject(existingHooks)) {
     return failureResult(
       provider,
-      operation,
       text,
       'unsupported',
       `${providerLabel(provider)} hooks must be a JSON object; no changes were made.`,
@@ -225,7 +202,7 @@ function mutateConfiguration(
     const key = spec.event
     const existing = existingHooks?.[key]
     if (existing === undefined) {
-      plans.push({ key, spec, existing: undefined, managedIndices: [], needsAddition: operation === 'install' })
+      plans.push({ key, existing: undefined, managedIndices: [] })
       continue
     }
 
@@ -249,63 +226,47 @@ function mutateConfiguration(
 
     plans.push({
       key,
-      spec,
       existing: existing as JsonValue[],
       managedIndices,
-      needsAddition: operation === 'install' && managedIndices.length === 0,
     })
   }
 
-  if (unsupportedMessage) return failureResult(provider, operation, text, 'unsupported', unsupportedMessage)
+  if (unsupportedMessage) return failureResult(provider, text, 'unsupported', unsupportedMessage)
   if (conflict) {
     return failureResult(
       provider,
-      operation,
       text,
       'conflict',
       `A Yira-managed ${providerLabel(provider)} hook was changed externally; review it before retrying.`,
     )
   }
 
-  const shouldChange = plans.some((plan) => operation === 'install' ? plan.needsAddition : plan.managedIndices.length > 0)
+  const shouldChange = plans.some((plan) => plan.managedIndices.length > 0)
   if (!shouldChange) {
     return successResult(
       provider,
-      operation,
       text,
-      operation === 'install' ? 'already-installed' : 'already-uninstalled',
+      'already-uninstalled',
       false,
-      operation === 'install'
-        ? `${providerLabel(provider)} hooks are already installed.`
-        : `No Yira-managed ${providerLabel(provider)} hooks were found.`,
+      `No Yira-managed ${providerLabel(provider)} hooks were found.`,
     )
   }
 
   const hooks = existingHooks ?? {}
-  if (operation === 'install') {
-    for (const plan of plans) {
-      if (!plan.needsAddition) continue
-      const managedEntry = makeManagedEntry(provider, plan.spec, baseCommand)
-      if (plan.existing) plan.existing.push(managedEntry)
-      else if (Array.isArray(hooks[plan.key])) (hooks[plan.key] as JsonValue[]).push(managedEntry)
-      else hooks[plan.key] = [managedEntry]
-    }
-  } else {
-    // Claude has two managed specs in one Notification array. Combine their
-    // indices before assigning the array so the second spec cannot restore an
-    // entry removed while processing the first one.
-    const removals = new Map<string, { source: JsonValue[]; indices: Set<number> }>()
-    for (const plan of plans) {
-      if (!plan.existing || plan.managedIndices.length === 0) continue
-      const removal = removals.get(plan.key) ?? { source: plan.existing, indices: new Set<number>() }
-      for (const index of plan.managedIndices) removal.indices.add(index)
-      removals.set(plan.key, removal)
-    }
-    for (const [key, removal] of removals) {
-      const remaining = removal.source.filter((_entry, index) => !removal.indices.has(index))
-      if (remaining.length === 0) delete hooks[key]
-      else hooks[key] = remaining
-    }
+  // Claude has two managed specs in one Notification array. Combine their
+  // indices before assigning the array so the second spec cannot restore an
+  // entry removed while processing the first one.
+  const removals = new Map<string, { source: JsonValue[]; indices: Set<number> }>()
+  for (const plan of plans) {
+    if (!plan.existing || plan.managedIndices.length === 0) continue
+    const removal = removals.get(plan.key) ?? { source: plan.existing, indices: new Set<number>() }
+    for (const index of plan.managedIndices) removal.indices.add(index)
+    removals.set(plan.key, removal)
+  }
+  for (const [key, removal] of removals) {
+    const remaining = removal.source.filter((_entry, index) => !removal.indices.has(index))
+    if (remaining.length === 0) delete hooks[key]
+    else hooks[key] = remaining
   }
 
   if (Object.keys(hooks).length === 0) delete root.hooks
@@ -314,13 +275,10 @@ function mutateConfiguration(
   const serialized = serializeConfiguration(root, text)
   return successResult(
     provider,
-    operation,
     serialized,
-    operation === 'install' ? 'installed' : 'uninstalled',
+    'uninstalled',
     true,
-    operation === 'install'
-      ? `Installed Yira-managed ${providerLabel(provider)} hooks.`
-      : `Removed Yira-managed ${providerLabel(provider)} hooks.`,
+    `Removed Yira-managed ${providerLabel(provider)} hooks.`,
   )
 }
 
@@ -399,21 +357,6 @@ function isExactManagedEntry(
   return hook.type === 'command' && hook.command === expectedCommand
 }
 
-function makeManagedEntry(
-  provider: AgentHookProvider,
-  spec: CodexHookSpec | ClaudeHookSpec,
-  clientCommand: string,
-): JsonObject {
-  const hook = {
-    type: 'command',
-    command: buildManagedAgentHookCommand(clientCommand, provider, spec.normalizedEvent),
-    ...('async' in spec && spec.async === true ? { async: true } : {}),
-  }
-  if (provider === 'codex') return { hooks: [hook] }
-  const claudeSpec = spec as ClaudeHookSpec
-  return claudeSpec.matcher === undefined ? { hooks: [hook] } : { matcher: claudeSpec.matcher, hooks: [hook] }
-}
-
 function hasManagedMarker(command: string): boolean {
   const tokens = command.split(/\s+/)
   return tokens.some((token) => token.startsWith(`${YIRA_MANAGED_HOOK_MARKER}=`))
@@ -478,21 +421,19 @@ function providerLabel(provider: AgentHookProvider): string {
 
 function failureResult(
   provider: AgentHookProvider,
-  operation: AgentHookOperation,
   text: string,
   status: Extract<AgentHookMutationStatus, 'malformed' | 'unsupported' | 'conflict' | 'invalid'>,
   message: string,
 ): AgentHookMutationResult {
-  return { ok: false, success: false, provider, operation, status, changed: false, text, message }
+  return { ok: false, success: false, provider, status, changed: false, text, message }
 }
 
 function successResult(
   provider: AgentHookProvider,
-  operation: AgentHookOperation,
   text: string,
-  status: Extract<AgentHookMutationStatus, 'installed' | 'already-installed' | 'uninstalled' | 'already-uninstalled'>,
+  status: Extract<AgentHookMutationStatus, 'uninstalled' | 'already-uninstalled'>,
   changed: boolean,
   message: string,
 ): AgentHookMutationResult {
-  return { ok: true, success: true, provider, operation, status, changed, text, message }
+  return { ok: true, success: true, provider, status, changed, text, message }
 }
