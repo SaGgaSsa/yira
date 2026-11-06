@@ -290,6 +290,21 @@ test('normalizes selected repositories through workspace creation and update', (
   assert.deepEqual(sourceControlPaths(cleared), [])
 })
 
+test('persists a disabled Git diff setting through workspace creation and updates', () => {
+  const created = createWorkspaceFromInput({ name: 'Git diff created', gitDiffEnabled: false })
+  assert.equal(created.config.gitDiffEnabled, false)
+
+  const existing = workspace('git-diff-updated')
+  const disabled = updateWorkspace(existing, { config: { gitDiffEnabled: false } })
+  assert.equal(disabled.config.gitDiffEnabled, false)
+
+  const preserved = updateWorkspace(disabled, { config: { workspacePanelOpen: false } })
+  assert.equal(preserved.config.gitDiffEnabled, false)
+
+  const reenabled = updateWorkspace(preserved, { config: { gitDiffEnabled: true } })
+  assert.equal(reenabled.config.gitDiffEnabled, undefined)
+})
+
 test('awaits beforeDelete and preserves workspace state when it fails', async () => {
   const callbackOrder: string[] = []
   const removable = await ipcMain.invoke('workspace:create', { name: 'Callback removable' }) as Workspace

@@ -426,6 +426,8 @@ export interface WorkspaceConfig {
   sourceControlViewMode: SourceControlViewMode
   initialCommand?: string
   terminalHistoryEnabled?: boolean
+  /** Counts Git changes for this workspace unless false. */
+  gitDiffEnabled?: boolean
   remoteTerminal?: RemoteTerminalConfig
   agentProvider?: AgentProvider
   agentProviders: AgentProvidersConfig
@@ -504,6 +506,7 @@ export interface WorkspaceCreateInput {
   sourceControlViewMode?: SourceControlViewMode
   initialCommand?: string
   terminalHistoryEnabled?: boolean
+  gitDiffEnabled?: boolean
   remoteTerminal?: RemoteTerminalConfig
   agentProvider?: AgentProvider
   agentProviders?: AgentProvidersConfigInput
@@ -520,6 +523,7 @@ export interface WorkspaceManagementEntry {
   sourceControlViewMode?: SourceControlViewMode
   initialCommand?: string
   terminalHistoryEnabled?: boolean
+  gitDiffEnabled?: boolean
   remoteTerminal?: RemoteTerminalConfig
   agentProvider?: AgentProvider
   agentProviders?: AgentProvidersConfigInput

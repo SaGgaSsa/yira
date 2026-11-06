@@ -64,7 +64,8 @@ export function WorkspaceActivityCard({
   const provider = getEffectiveAgentProvider(workspace.config, agents)
   const statusColor = getStatusColor(status)
   const StatusIcon = status === 'active' ? LoaderCircle : status === 'unread' ? CircleDot : Terminal
-  const hasWorkspaceGitDiff = canReadWorkspaceGitDiff(workspace.config.rootFolderPath)
+  const hasWorkspaceGitDiff = workspace.config.gitDiffEnabled !== false
+    && canReadWorkspaceGitDiff(workspace.config.rootFolderPath)
 
   return (
     <article

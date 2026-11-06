@@ -48,3 +48,16 @@ test('passes workspace identity and repository paths through management and app 
   assert.match(appSource, /sourceControlRepositoryPaths: workspace\.config\.sourceControlRepositoryPaths/)
   assert.match(appSource, /sourceControlRepositoryPaths: value\.sourceControlRepositoryPaths/)
 })
+
+test('passes the Git diff toggle through dialog, app, management, and translations', () => {
+  assert.match(source, /gitDiffEnabled\?: boolean/)
+  assert.match(source, /value\.gitDiffEnabled === false/)
+  assert.match(source, /checked=\{value\.gitDiffEnabled !== false\}/)
+  assert.match(appSource, /gitDiffEnabled: workspace\.config\.gitDiffEnabled/)
+  assert.match(appSource, /gitDiffEnabled: value\.gitDiffEnabled,/)
+  assert.match(appSource, /gitDiffEnabled: value\.gitDiffEnabled !== false/)
+  assert.match(managementSource, /gitDiffEnabled: workspace\.config\.gitDiffEnabled/)
+  assert.match(managementSource, /gitDiffEnabled: draft\.gitDiffEnabled !== false/)
+  assert.match(resources, /gitDiffEnabled: 'Count Git changes'/)
+  assert.match(resources, /gitDiffEnabledHelp: 'Shows lines added and removed/)
+})

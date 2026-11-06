@@ -714,6 +714,8 @@ type TranslationResources = {
     sourceControl: string
     repository: string
     selectRepositories: string
+    gitDiffEnabled: string
+    gitDiffEnabledHelp: string
     noRepositoriesConfigured: string
     configureSourceControl: string
     canvas: string
@@ -1991,6 +1993,8 @@ const en: TranslationResources = {
     sourceControl: 'Source Control',
     repository: 'Repository',
     selectRepositories: 'Select repositories',
+    gitDiffEnabled: 'Count Git changes',
+    gitDiffEnabledHelp: 'Shows lines added and removed for this workspace. Turn it off for folders like your home directory, where the repositories found are unrelated to this work.',
     noRepositoriesConfigured: 'No repositories configured',
     configureSourceControl: 'Configure Source Control',
     canvas: 'Canvas',
@@ -3268,6 +3272,8 @@ const es: TranslationResources = {
     sourceControl: 'Source Control',
     repository: 'Repositorio',
     selectRepositories: 'Seleccionar repositorios',
+    gitDiffEnabled: 'Contar cambios de Git',
+    gitDiffEnabledHelp: 'Muestra las líneas agregadas y eliminadas de este workspace. Desactívalo en carpetas como el home, donde los repositorios encontrados no tienen que ver con este trabajo.',
     noRepositoriesConfigured: 'No hay repositorios configurados',
     configureSourceControl: 'Configurar Source Control',
     canvas: 'Lienzo',
