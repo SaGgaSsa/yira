@@ -49,6 +49,8 @@ export function WorkspaceListItem({
     )
   const highlighted = active || sessionActive
   const menuOpen = menuPosition !== null
+  // The menu button overlays the row, so the name only gives up room while the button shows.
+  const reserve = menuOpen ? 'pr-8' : 'pr-3 hover:pr-8 has-focus-visible:pr-8'
   const menuItems: MenuItem[] = [
     { label: t('workspace.configure'), icon: Settings, action: onConfigure },
     { label: t('workspace.focus'), icon: Maximize2, action: onFocus },
@@ -59,14 +61,14 @@ export function WorkspaceListItem({
 
   return (
     <div
-      className={`group relative flex h-7 items-center ${active ? 'bg-bg-tertiary' : 'hover:bg-hover-bg'} ${className}`.trim()}
+      className={`group relative flex h-7 items-center ${reserve} ${active ? 'bg-bg-tertiary' : 'hover:bg-hover-bg'} ${className}`.trim()}
       draggable={draggable}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
     >
       {leading && <div className="flex shrink-0 items-center pl-3">{leading}</div>}
       <button
-        className={`flex h-full min-w-0 flex-1 items-center pr-2 text-left ${leading ? 'pl-0.5' : 'pl-5'} focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--interactive)`}
+        className={`flex h-full min-w-0 flex-1 items-center text-left ${leading ? 'pl-0.5' : 'pl-5'} focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--interactive)`}
         onClick={onClick}
         title={workspace.name}
         type="button"
@@ -76,7 +78,7 @@ export function WorkspaceListItem({
         </span>
       </button>
 
-      <div className="flex shrink-0 items-center gap-1.5 pr-3">
+      <div className="flex shrink-0 items-center gap-1.5 pl-2 empty:hidden">
         {trailing}
         {hasWorkspaceGitDiff && (
           <WorkspaceGitDiff
@@ -86,24 +88,24 @@ export function WorkspaceListItem({
             active={active}
           />
         )}
-        <button
-          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-text-secondary transition-[opacity,color,background-color] hover:bg-hover-bg ${menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'} hover:text-text-display focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--interactive)`}
-          onMouseDown={(event) => event.stopPropagation()}
-          onClick={(event) => {
-            event.stopPropagation()
-            const rect = event.currentTarget.getBoundingClientRect()
-            // Right-align the menu (200px minimum width) with the button.
-            setMenuPosition((current) => (current ? null : { x: Math.max(8, rect.right - 200), y: rect.bottom + 4 }))
-          }}
-          aria-label={t('workspace.actions')}
-          aria-haspopup="menu"
-          aria-expanded={menuOpen}
-          title={t('workspace.actions')}
-          type="button"
-        >
-          <EllipsisVertical size={13} aria-hidden="true" />
-        </button>
       </div>
+      <button
+        className={`absolute right-3 top-1 flex h-5 w-5 items-center justify-center rounded-sm text-text-secondary transition-[opacity,color,background-color] hover:bg-hover-bg ${menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-has-focus-visible:opacity-100'} hover:text-text-display focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--interactive)`}
+        onMouseDown={(event) => event.stopPropagation()}
+        onClick={(event) => {
+          event.stopPropagation()
+          const rect = event.currentTarget.getBoundingClientRect()
+          // Right-align the menu (200px minimum width) with the button.
+          setMenuPosition((current) => (current ? null : { x: Math.max(8, rect.right - 200), y: rect.bottom + 4 }))
+        }}
+        aria-label={t('workspace.actions')}
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        title={t('workspace.actions')}
+        type="button"
+      >
+        <EllipsisVertical size={13} aria-hidden="true" />
+      </button>
 
       {menuPosition && (
         <ContextMenu
