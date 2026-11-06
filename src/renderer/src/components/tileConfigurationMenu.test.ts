@@ -88,3 +88,33 @@ if (pinnableSessionLabels[0] !== 'Keep as agent tile') {
 if (!pinnableSessionLabels.includes('Refresh')) {
   throw new Error('agent session configuration menu must keep Refresh when pinning')
 }
+
+const closedTiles: TileState[] = []
+const itemsWithClose = buildTileConfigurationMenuItems({
+  tile: terminalTile,
+  onEdit: () => {},
+  onDuplicate: () => {},
+  onRefresh: () => {},
+  onToggleNotificationsMuted: () => {},
+  onToggleLock: () => {},
+  onClose: (tile) => {
+    closedTiles.push(tile)
+  },
+})
+const closeItem = itemsWithClose[itemsWithClose.length - 1]
+if (!closeItem) {
+  throw new Error('configuration menu must end with Close tile when onClose is provided')
+}
+if (closeItem.label !== 'Close tile') {
+  throw new Error('configuration menu must end with Close tile when onClose is provided')
+}
+if (closeItem.danger !== true) {
+  throw new Error('Close tile must be a danger item')
+}
+closeItem.action?.()
+if (closedTiles.length !== 1 || closedTiles[0] !== terminalTile) {
+  throw new Error('Close tile must call onClose with the tile')
+}
+if (terminalLabels.includes('Close tile')) {
+  throw new Error('configuration menu must not include Close tile without onClose')
+}

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { EllipsisVertical } from 'lucide-react'
 import type { AgentActiveSession, WorkspaceMetadata } from '@shared/types'
 import { useBots } from '@/hooks/useBots'
 import { useNow } from '@/hooks/useNow'
@@ -21,6 +22,10 @@ export interface WorkspaceAgentTreeProps {
   canDragAgent?: (session: AgentActiveSession) => boolean
   onAgentDragStart?: (session: AgentActiveSession) => void
   agentDragActive?: boolean
+  canOpenAgentMenu?: (session: AgentActiveSession) => boolean
+  onOpenAgentMenu?: (session: AgentActiveSession, trigger: HTMLElement) => void
+  /** Tile whose row menu is open; keeps its button visible and the list order frozen. */
+  agentMenuTileId?: string | null
 }
 
 function getStatusLabel(status: AgentActiveSession['status'], translate: (key: string) => string): string {
@@ -47,16 +52,19 @@ export function WorkspaceAgentTree({
   canDragAgent,
   onAgentDragStart,
   agentDragActive = false,
+  canOpenAgentMenu,
+  onOpenAgentMenu,
+  agentMenuTileId = null,
 }: WorkspaceAgentTreeProps): React.ReactElement | null {
   const { t } = useTranslation()
   const now = useNow(ELAPSED_REFRESH_MS)
   const { bots } = useBots()
   const botsById = useMemo(() => new Map(bots.map((bot) => [bot.id, bot])), [bots])
-  // While the pointer or focus is on the list, rows keep their place so a click lands where the user aimed. A native drag leaves the list too.
+  // While the pointer or focus is on the list, rows keep their place so a click lands where the user aimed. A native drag leaves the list too, and an open row menu keeps the order frozen.
   const [hovered, setHovered] = useState(false)
   const [focusedWithin, setFocusedWithin] = useState(false)
   const shownIdsRef = useRef<string[]>([])
-  const shownSessions = hovered || focusedWithin || agentDragActive ? keepAgentSessionOrder(sessions, shownIdsRef.current) : sessions
+  const shownSessions = hovered || focusedWithin || agentDragActive || sessions.some(({ tileId }) => tileId === agentMenuTileId) ? keepAgentSessionOrder(sessions, shownIdsRef.current) : sessions
   useEffect(() => {
     shownIdsRef.current = shownSessions.map(({ sessionId }) => sessionId)
   })
@@ -87,38 +95,60 @@ export function WorkspaceAgentTree({
           ? 'font-medium text-text-display'
           : waiting || done ? 'text-text-primary' : 'text-text-secondary'
         const draggable = canDragAgent?.(session) ?? false
+        const menuAvailable = canOpenAgentMenu?.(session) ?? false
+        const menuOpen = agentMenuTileId === session.tileId
+        // The menu button takes the place of the time and the waiting label.
+        const reserve = !menuAvailable ? '' : menuOpen ? 'pr-8' : 'group-hover:pr-8 group-has-focus-visible:pr-8'
+        const hideTrailing = !menuAvailable ? '' : menuOpen ? 'hidden' : 'group-hover:hidden group-has-focus-visible:hidden'
 
         return (
-          <button
+          <div
             key={session.sessionId}
-            type="button"
-            data-workspace-agent-session={session.sessionId}
-            aria-label={`${rowName}, ${statusText}`}
-            aria-current={focused ? 'true' : undefined}
-            title={`${rowName} · ${statusText}`}
-            draggable={draggable}
-            onDragStart={draggable ? (event) => {
-              event.dataTransfer.effectAllowed = 'move'
-              event.dataTransfer.setData(AGENT_TILE_DRAG_TYPE, session.tileId)
-              onAgentDragStart?.(session)
-            } : undefined}
-            onClick={() => onOpenAgent(workspace, session)}
-            className={`relative flex h-[26px] min-w-0 items-center gap-2 pl-6 pr-3 text-left transition-colors ${focused ? 'bg-active-bg before:absolute before:inset-y-[5px] before:left-0 before:w-0.5 before:rounded-full before:bg-text-display' : 'hover:bg-hover-bg'} focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--interactive)`}
+            className={`group relative flex min-w-0 transition-colors ${focused ? 'bg-active-bg before:absolute before:inset-y-[5px] before:left-0 before:w-0.5 before:rounded-full before:bg-text-display' : 'hover:bg-hover-bg'}`}
           >
-            <StatusDot status={session.status} />
-            {bot && <BotAvatar icon={bot.icon} color={bot.color} size={14} />}
-            <span className={`min-w-0 flex-1 truncate text-sm ${nameClass}`}>{sessionName}</span>
-            {waiting && (
-              <span className="shrink-0 font-mono text-[10px] text-warning">
-                {t('workspaceAgents.statusWaiting')}
-              </span>
+            <button
+              type="button"
+              data-workspace-agent-session={session.sessionId}
+              aria-label={`${rowName}, ${statusText}`}
+              aria-current={focused ? 'true' : undefined}
+              title={`${rowName} · ${statusText}`}
+              draggable={draggable}
+              onDragStart={draggable ? (event) => {
+                event.dataTransfer.effectAllowed = 'move'
+                event.dataTransfer.setData(AGENT_TILE_DRAG_TYPE, session.tileId)
+                onAgentDragStart?.(session)
+              } : undefined}
+              onClick={() => onOpenAgent(workspace, session)}
+              className={`flex h-[26px] w-full min-w-0 items-center gap-2 pl-6 pr-3 text-left focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--interactive) ${reserve}`}
+            >
+              <StatusDot status={session.status} />
+              {bot && <BotAvatar icon={bot.icon} color={bot.color} size={14} />}
+              <span className={`min-w-0 flex-1 truncate text-sm ${nameClass}`}>{sessionName}</span>
+              {waiting && (
+                <span className={`shrink-0 font-mono text-[10px] text-warning ${hideTrailing}`}>
+                  {t('workspaceAgents.statusWaiting')}
+                </span>
+              )}
+              {done && (
+                <span className={`shrink-0 font-mono text-[10px] tabular-nums text-text-muted ${hideTrailing}`}>
+                  {formatActivityElapsed(session.lastActivityAt, now)}
+                </span>
+              )}
+            </button>
+            {menuAvailable && (
+              <button
+                type="button"
+                className={`absolute right-3 top-[3px] flex h-5 w-5 items-center justify-center rounded-sm text-text-secondary transition-[opacity,color,background-color] hover:bg-hover-bg hover:text-text-display ${menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-has-focus-visible:opacity-100'} focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--interactive)`}
+                onClick={(event) => onOpenAgentMenu?.(session, event.currentTarget)}
+                aria-label={t('workspaceAgents.actions')}
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                title={t('workspaceAgents.actions')}
+              >
+                <EllipsisVertical size={13} aria-hidden="true" />
+              </button>
             )}
-            {done && (
-              <span className="shrink-0 font-mono text-[10px] tabular-nums text-text-muted">
-                {formatActivityElapsed(session.lastActivityAt, now)}
-              </span>
-            )}
-          </button>
+          </div>
         )
       })}
     </div>
