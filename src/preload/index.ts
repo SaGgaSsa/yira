@@ -15,6 +15,7 @@ import type {
   AgentPromptImageSaveInput,
   AgentProviderAvailabilitySnapshot,
   AgentSessionCapabilities,
+  AgentWorktreeOption,
   AgentSessionCloseInput,
   AgentSessionCloseResult,
   AgentSessionCreateInput,
@@ -100,6 +101,8 @@ contextBridge.exposeInMainWorld('electron', {
     getAvailability: () => ipcRenderer.invoke('agents:availability') as Promise<AgentProviderAvailabilitySnapshot>,
     sessionCapabilities: (workspaceId: string) =>
       ipcRenderer.invoke('agents:sessions:capabilities', workspaceId) as Promise<AgentSessionCapabilities>,
+    listWorktrees: (workspaceId: string) =>
+      ipcRenderer.invoke('agents:worktrees:list', workspaceId) as Promise<AgentWorktreeOption[]>,
     createSession: (input: AgentSessionCreateInput) =>
       ipcRenderer.invoke('agents:sessions:create', input) as Promise<AgentSessionCreateResult>,
     savePromptImage: (input: AgentPromptImageSaveInput) =>

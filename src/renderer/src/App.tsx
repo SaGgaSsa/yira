@@ -489,7 +489,7 @@ function AppContent(): React.ReactElement {
       if (result.worktree === 'kept') {
         void requestConfirm({
           title: t('agentsView.worktreeKeptTitle'),
-          message: t('agentsView.worktreeKeptMessage', {
+          message: t(result.worktreeKeptReason === 'shared' ? 'agentsView.worktreeKeptSharedMessage' : 'agentsView.worktreeKeptMessage', {
             path: result.worktreeRoot ?? t('agentsView.worktreePathUnavailable'),
           }),
           confirmLabel: t('common.close'),

@@ -887,6 +887,40 @@ export function SettingsPanel({ open, onClose, onOpenJsonEditor, initialSection 
               )
             })}
             <article className="rounded-[20px] border border-border-visible bg-bg-primary px-4 py-4">
+              <div className="flex flex-wrap items-start gap-3">
+                <div className="min-w-0 flex-1">
+                  <h4 className="nd-label text-text-display">{t('settings.worktreesDirectory')}</h4>
+                  <p className="mt-2 text-sm leading-6 text-text-secondary">{t('settings.worktreesDirectoryDescription')}</p>
+                  <p className="mt-2 break-all font-mono text-xs text-text-primary">
+                    {draft.worktreesDirectory || t('settings.worktreesDirectoryDefault')}
+                  </p>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  {draft.worktreesDirectory && (
+                    <button
+                      type="button"
+                      className="rounded-full border border-border-visible px-3 py-1.5 text-xs text-text-secondary"
+                      onClick={() => setDraft((current) => ({ ...current, worktreesDirectory: '' }))}
+                    >
+                      {t('settings.worktreesDirectoryReset')}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="rounded-full border border-border-visible px-3 py-1.5 text-xs text-text-display"
+                    onClick={() => {
+                      void window.electron.files.selectFolder(draft.worktreesDirectory || undefined).then((folder) => {
+                        if (!folder) return
+                        setDraft((current) => ({ ...current, worktreesDirectory: folder.path }))
+                      })
+                    }}
+                  >
+                    {t('settings.worktreesDirectoryChoose')}
+                  </button>
+                </div>
+              </div>
+            </article>
+            <article className="rounded-[20px] border border-border-visible bg-bg-primary px-4 py-4">
               <div className="flex items-start gap-3">
                 <div className="min-w-0 flex-1">
                   <h4 className="nd-label text-text-display">{t('settings.modPanels')}</h4>

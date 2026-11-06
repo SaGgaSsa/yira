@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events'
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { dirname, resolve } from 'node:path'
+import { basename, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 import test from 'node:test'
@@ -25,6 +25,7 @@ test('registers restricted agent availability, snapshot/subscription, and histor
   assert.match(text, /ipcMain\.handle\('agents:availability'/)
   assert.match(text, /ipcMain\.handle\('agents:sessions:snapshot'/)
   assert.match(text, /ipcMain\.handle\('agents:sessions:capabilities'/)
+  assert.match(text, /ipcMain\.handle\('agents:worktrees:list'/)
   assert.match(text, /ipcMain\.handle\('agents:sessions:create'/)
   assert.match(text, /ipcMain\.handle\('agents:sessions:close'/)
   assert.match(text, /ipcMain\.handle\('agents:sessions:subscribe'/)
@@ -299,8 +300,10 @@ test('reports no effective provider when user settings have not enabled the work
   registerAgentsIPC({
     enabledProviders: async () => [],
     workspaceAgentConfig: async () => workspaceAgentConfig(),
+    worktreesDirectory: async () => 'C:\\agent-worktrees',
     worktrees: {
       resolveWorkspaceWorktreeRepositories: async () => [{ relativePath: '.', absolutePath: 'C:\\workspace' }],
+      listWorkspaceWorktrees: async () => [],
       createAgentWorkspaceWorktrees: async () => { throw new Error('not used') },
       removeAgentWorktreeIfClean: async () => 'missing',
     },
@@ -311,6 +314,8 @@ test('reports no effective provider when user settings have not enabled the work
     provider: null,
     providers: [],
     worktreeAvailable: true,
+    worktreeRepositories: [{ relativePath: '.', name: basename('C:\\workspace') }],
+    worktreesDirectory: 'C:\\agent-worktrees',
   })
   await assert.rejects(
     () => ipcMain.call('agents:sessions:create', sender, { workspaceId: 'workspace-a', prompt: 'hello' }) as Promise<unknown>,
@@ -332,15 +337,85 @@ test('reports only providers enabled globally and in the workspace', async () =>
     }),
     worktrees: {
       resolveWorkspaceWorktreeRepositories: async () => [],
+      listWorkspaceWorktrees: async () => [],
       createAgentWorkspaceWorktrees: async () => { throw new Error('not used') },
       removeAgentWorktreeIfClean: async () => 'missing',
     },
+    worktreesDirectory: async () => 'C:\\agent-worktrees',
   })
 
   assert.deepEqual(
     await ipcMain.call('agents:sessions:capabilities', new FakeWebContents(61), 'workspace-a'),
-    { provider: 'claude', providers: ['claude'], worktreeAvailable: false },
+    {
+      provider: 'claude',
+      providers: ['claude'],
+      worktreeAvailable: false,
+      worktreeRepositories: [],
+      worktreesDirectory: 'C:\\agent-worktrees',
+    },
   )
+})
+
+test('lists worktrees for a workspace and derives active roots from live sessions', async () => {
+  const ipcMain = new FakeIpcMain()
+  const { registerAgentsIPC } = loadAgentsIPC(ipcMain)
+  const registry = new AgentSessionRegistry()
+  const inputs: Array<{
+    rootPath: string
+    configuredRepositoryPaths: string[]
+    worktreesDirectory: string
+    activeRoots: string[]
+  }> = []
+  registerAgentsIPC({
+    registry,
+    workspaceAgentConfig: async (workspaceId) => ({
+      ...workspaceAgentConfig(),
+      rootFolderPath: workspaceId === 'workspace-a' ? 'C:\\workspace' : '',
+    }),
+    worktreesDirectory: async () => 'C:\\agent-worktrees',
+    worktrees: {
+      resolveWorkspaceWorktreeRepositories: async () => [],
+      listWorkspaceWorktrees: async (input) => {
+        inputs.push(input)
+        return [{
+          path: 'C:\\worktrees\\feature',
+          branch: 'feature/topic',
+          head: 'abcdef1',
+          repositories: [{ relativePath: '.', name: 'workspace' }],
+          createdByYira: false,
+          activeSessions: 1,
+          missing: false,
+        }]
+      },
+      createAgentWorkspaceWorktrees: async () => { throw new Error('not used') },
+      removeAgentWorktreeIfClean: async () => 'missing',
+    },
+  })
+  registry.register({
+    sessionId: 'live',
+    tileId: 'live',
+    workspaceId: 'workspace-a',
+    provider: 'claude',
+    worktreeRoot: 'C:\\worktrees\\feature',
+  })
+  registry.register({
+    sessionId: 'exited',
+    tileId: 'exited',
+    workspaceId: 'workspace-a',
+    provider: 'claude',
+    worktreeRoot: 'C:\\worktrees\\old',
+  })
+  registry.markExited('workspace-a', 'exited')
+
+  const sender = new FakeWebContents(88)
+  assert.equal((await ipcMain.call('agents:worktrees:list', sender, 'workspace-a') as unknown[]).length, 1)
+  assert.deepEqual(inputs, [{
+    rootPath: 'C:\\workspace',
+    configuredRepositoryPaths: [],
+    worktreesDirectory: 'C:\\agent-worktrees',
+    activeRoots: ['C:\\worktrees\\feature'],
+  }])
+  assert.deepEqual(await ipcMain.call('agents:worktrees:list', sender, 'workspace-empty'), [])
 })
 
 test('allows a valid enabled provider override for a new session', async () => {
@@ -662,6 +737,7 @@ test('ignores legacy overrides when launching a resumed session from its worktre
     createSession: async (target, spec) => { launch = { target, spec } },
     worktrees: {
       resolveWorkspaceWorktreeRepositories: async () => [{ relativePath: '.', absolutePath: 'C:\\workspace' }],
+      listWorkspaceWorktrees: async () => [],
       createAgentWorkspaceWorktrees: async () => ({
         root: 'C:\\worktrees\\sample-workspace',
         branch: 'yira/agent-12345678',
@@ -713,6 +789,7 @@ test('cleans up a newly created worktree when the terminal launch fails', async 
     createSession: async () => { throw launchError },
     worktrees: {
       resolveWorkspaceWorktreeRepositories: async () => [{ relativePath: '.', absolutePath: 'C:\\workspace' }],
+      listWorkspaceWorktrees: async () => [],
       createAgentWorkspaceWorktrees: async () => ({
         root: 'C:\\worktrees\\sample-workspace',
         branch: 'yira/agent-12345678',
@@ -740,6 +817,233 @@ test('cleans up a newly created worktree when the terminal launch fails', async 
     'C:\\worktrees\\sample-workspace\\packages\\app',
     'C:\\worktrees\\sample-workspace',
   ])
+})
+
+test('starts a session in an existing worktree and closes it without removing files', async () => {
+  const ipcMain = new FakeIpcMain()
+  const { registerAgentsIPC } = loadAgentsIPC(ipcMain)
+  const registry = new AgentSessionRegistry()
+  const removed: string[] = []
+  const listInputs: unknown[] = []
+  let launch: AgentsViewLaunchSpec | undefined
+  const worktreePath = 'C:\\worktrees\\feature-topic'
+  registerAgentsIPC({
+    registry,
+    enabledProviders: async () => ['claude'],
+    workspaceAgentConfig: async () => workspaceAgentConfig(),
+    worktreesDirectory: async () => 'C:\\agent-worktrees',
+    createSession: async (_target, spec) => { launch = spec },
+    destroySession: async () => undefined,
+    worktrees: {
+      resolveWorkspaceWorktreeRepositories: async () => [],
+      listWorkspaceWorktrees: async (input) => {
+        listInputs.push(input)
+        return [{
+          path: worktreePath,
+          branch: 'feature/topic',
+          head: 'abcdef1234',
+          repositories: [{ relativePath: '.', name: 'workspace' }],
+          createdByYira: false,
+          changedFiles: 2,
+          activeSessions: 0,
+          missing: false,
+        }]
+      },
+      createAgentWorkspaceWorktrees: async () => { throw new Error('not used') },
+      removeAgentWorktreeIfClean: async ({ path }) => {
+        removed.push(path)
+        return 'removed'
+      },
+    },
+  })
+
+  const result = await ipcMain.call('agents:sessions:create', new FakeWebContents(80), {
+    workspaceId: 'workspace-a',
+    // The dialog always sends the flag, so `false` must not count as a conflict.
+    worktree: false,
+    existingWorktreePath: worktreePath,
+  }) as { tileId: string }
+  assert.equal(launch?.cwd, worktreePath)
+  assert.deepEqual(launch?.worktree, {
+    root: worktreePath,
+    branch: 'feature/topic',
+    worktrees: [],
+  })
+  assert.equal('relativeCwd' in (launch ?? {}), false)
+  assert.deepEqual(listInputs, [{
+    rootPath: 'C:\\workspace',
+    configuredRepositoryPaths: [],
+    worktreesDirectory: 'C:\\agent-worktrees',
+    activeRoots: [],
+  }])
+
+  registry.register({
+    sessionId: result.tileId,
+    tileId: result.tileId,
+    workspaceId: 'workspace-a',
+    provider: 'claude',
+    surface: 'agents-view',
+    worktreeRoot: worktreePath,
+    worktreeBranch: 'feature/topic',
+    worktrees: [],
+  })
+  assert.deepEqual(await ipcMain.call('agents:sessions:close', new FakeWebContents(81), {
+    workspaceId: 'workspace-a',
+    tileId: result.tileId,
+  }), { worktree: 'none' })
+  assert.deepEqual(removed, [])
+})
+
+test('rejects an existing worktree that is no longer available', async () => {
+  const ipcMain = new FakeIpcMain()
+  const { registerAgentsIPC } = loadAgentsIPC(ipcMain)
+  let launches = 0
+  let options = [{
+    path: 'C:\\worktrees\\other',
+    branch: 'feature/other',
+    head: 'abcdef1',
+    repositories: [{ relativePath: '.', name: 'workspace' }],
+    createdByYira: false,
+    activeSessions: 0,
+    missing: false,
+  }]
+  registerAgentsIPC({
+    enabledProviders: async () => ['claude'],
+    workspaceAgentConfig: async () => workspaceAgentConfig(),
+    createSession: async () => { launches += 1 },
+    worktrees: {
+      resolveWorkspaceWorktreeRepositories: async () => [],
+      listWorkspaceWorktrees: async () => options,
+      createAgentWorkspaceWorktrees: async () => { throw new Error('not used') },
+      removeAgentWorktreeIfClean: async () => 'removed',
+    },
+  })
+
+  await assert.rejects(
+    () => ipcMain.call('agents:sessions:create', new FakeWebContents(82), {
+      workspaceId: 'workspace-a',
+      existingWorktreePath: 'C:\\worktrees\\missing',
+    }) as Promise<unknown>,
+    /This worktree is no longer available/,
+  )
+
+  options = [{ ...options[0], path: 'C:\\worktrees\\missing', missing: true }]
+  await assert.rejects(
+    () => ipcMain.call('agents:sessions:create', new FakeWebContents(83), {
+      workspaceId: 'workspace-a',
+      existingWorktreePath: 'C:\\worktrees\\missing',
+    }) as Promise<unknown>,
+    /This worktree is no longer available/,
+  )
+  assert.equal(launches, 0)
+})
+
+test('rejects combining an existing worktree with a new worktree or a resume', async () => {
+  const ipcMain = new FakeIpcMain()
+  const { registerAgentsIPC } = loadAgentsIPC(ipcMain)
+  registerAgentsIPC({})
+
+  for (const input of [
+    { workspaceId: 'workspace-a', existingWorktreePath: 'C:\\worktrees\\feature', worktree: true },
+    { workspaceId: 'workspace-a', existingWorktreePath: 'C:\\worktrees\\feature', resumeCwd: 'packages/app' },
+    { workspaceId: 'workspace-a', existingWorktreePath: 'C:\\worktrees\\feature', resumeSessionId: 'history-123' },
+  ]) {
+    await assert.rejects(
+      () => ipcMain.call('agents:sessions:create', new FakeWebContents(84), input) as Promise<unknown>,
+      /Invalid agent worktree option/,
+    )
+  }
+})
+
+test('limits a new worktree to the requested repositories', async () => {
+  const ipcMain = new FakeIpcMain()
+  const { registerAgentsIPC } = loadAgentsIPC(ipcMain)
+  const created: string[][] = []
+  let launches = 0
+  registerAgentsIPC({
+    enabledProviders: async () => ['claude'],
+    workspaceAgentConfig: async () => workspaceAgentConfig(),
+    worktreesDirectory: async () => 'C:\\agent-worktrees',
+    createSession: async () => { launches += 1 },
+    worktrees: {
+      resolveWorkspaceWorktreeRepositories: async () => [
+        { relativePath: '.', absolutePath: 'C:\\workspace' },
+        { relativePath: 'packages/app', absolutePath: 'C:\\workspace\\packages\\app' },
+      ],
+      listWorkspaceWorktrees: async () => [],
+      createAgentWorkspaceWorktrees: async (input) => {
+        created.push(input.repositories.map(({ relativePath }) => relativePath))
+        return { root: 'C:\\worktrees\\subset', branch: 'yira/agent-subset', worktrees: [] }
+      },
+      removeAgentWorktreeIfClean: async () => 'removed',
+    },
+  })
+
+  await ipcMain.call('agents:sessions:create', new FakeWebContents(85), {
+    workspaceId: 'workspace-a',
+    worktree: true,
+    worktreeRepositories: ['packages/app'],
+  })
+  assert.deepEqual(created, [['packages/app']])
+  assert.equal(launches, 1)
+
+  await assert.rejects(
+    () => ipcMain.call('agents:sessions:create', new FakeWebContents(86), {
+      workspaceId: 'workspace-a',
+      worktree: true,
+      worktreeRepositories: ['missing'],
+    }) as Promise<unknown>,
+    /Agent worktree repository is not available/,
+  )
+  assert.deepEqual(created, [['packages/app']])
+  assert.equal(launches, 1)
+})
+
+test('keeps a worktree while another live session still uses it', async () => {
+  const ipcMain = new FakeIpcMain()
+  const { registerAgentsIPC } = loadAgentsIPC(ipcMain)
+  const registry = new AgentSessionRegistry()
+  const removed: string[] = []
+  const worktreeRoot = 'C:\\worktrees\\shared'
+  registerAgentsIPC({
+    registry,
+    destroySession: async () => undefined,
+    worktrees: {
+      resolveWorkspaceWorktreeRepositories: async () => [],
+      listWorkspaceWorktrees: async () => [],
+      createAgentWorkspaceWorktrees: async () => { throw new Error('not used') },
+      removeAgentWorktreeIfClean: async ({ path }) => {
+        removed.push(path)
+        return 'removed'
+      },
+    },
+  })
+  registry.register({
+    sessionId: 'agent-owner',
+    tileId: 'agent-owner',
+    workspaceId: 'workspace-a',
+    provider: 'claude',
+    surface: 'agents-view',
+    worktreeRoot,
+    worktreeBranch: 'yira/agent-owner',
+    worktrees: [{ path: worktreeRoot, baseSha: 'a'.repeat(40) }],
+  })
+  registry.register({
+    sessionId: 'agent-other',
+    tileId: 'agent-other',
+    workspaceId: 'workspace-a',
+    provider: 'claude',
+    surface: 'agents-view',
+    worktreeRoot: join(worktreeRoot, 'packages', 'app'),
+    worktreeBranch: 'yira/agent-owner',
+  })
+
+  assert.deepEqual(await ipcMain.call('agents:sessions:close', new FakeWebContents(87), {
+    workspaceId: 'workspace-a',
+    tileId: 'agent-owner',
+  }), { worktree: 'kept', worktreeRoot, worktreeKeptReason: 'shared' })
+  assert.deepEqual(removed, [])
+  assert.ok(registry.get('workspace-a', 'agent-other'))
 })
 
 test('rejects closing a persistent tile session from Agents View', async () => {
@@ -804,6 +1108,7 @@ test('closes Agents View sessions and reports whether their worktrees were kept 
       destroySession: async ({ tileId }) => { destroyed.push(tileId) },
       worktrees: {
         resolveWorkspaceWorktreeRepositories: async () => [{ relativePath: '.', absolutePath: 'C:\\workspace' }],
+        listWorkspaceWorktrees: async () => [],
         createAgentWorkspaceWorktrees: async () => { throw new Error('not used') },
         removeAgentWorktreeIfClean: async ({ path }) => {
           removed.push(path)

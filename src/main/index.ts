@@ -17,7 +17,7 @@ import {
   stopTerminalProcessActivityMonitor,
   countRunningTerminalSessions,
 } from './ipc/terminal'
-import { getEnabledAgentProviders, loadStoredUserSettings, registerSettingsIPC } from './ipc/settings'
+import { getEnabledAgentProviders, getWorktreesDirectory, loadStoredUserSettings, registerSettingsIPC } from './ipc/settings'
 import { registerNotesIPC } from './ipc/notes'
 import { registerBoardsIPC } from './ipc/boards'
 import { registerFilesIPC } from './ipc/files'
@@ -373,6 +373,7 @@ app.whenReady().then(async () => {
     usageDetailsService: agentUsageDetailsService,
     usageIndex: agentUsageIndex,
     enabledProviders: async () => getEnabledAgentProviders(),
+    worktreesDirectory: async () => getWorktreesDirectory(),
     workspaces: getWorkspaceRootFolders,
   })
   registerBotsIPC()

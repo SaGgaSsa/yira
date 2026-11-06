@@ -285,6 +285,33 @@ type TranslationResources = {
     promptInvalidCharacters: string
     worktree: string
     worktreeDescription: string
+    worktreeNone: string
+    worktreeSearch: string
+    worktreeWorkspaceFolder: string
+    worktreeNew: string
+    worktreeNewDescription: string
+    worktreeNewCount_one: string
+    worktreeNewCount_other: string
+    worktreeModules_one: string
+    worktreeModules_other: string
+    worktreeExisting: string
+    worktreeLoading: string
+    worktreeLoadError: string
+    worktreeNoneFound: string
+    worktreeNoMatches: string
+    worktreeCreatedByYira: string
+    worktreeNoSharedFolder: string
+    worktreeDetached: string
+    worktreeMissing: string
+    worktreeClean: string
+    worktreeChanges_one: string
+    worktreeChanges_other: string
+    worktreeSessions_one: string
+    worktreeSessions_other: string
+    worktreeSummaryNew: string
+    worktreeSummaryNewEmpty: string
+    worktreeSummaryExisting: string
+    worktreeKeptSharedMessage: string
     createSession: string
     creatingSession: string
     shortcutLabel: string
@@ -525,6 +552,11 @@ type TranslationResources = {
     agentStatusRequirement: string
     legacyHooksFound: string
     legacyHooksRemove: string
+    worktreesDirectory: string
+    worktreesDirectoryDescription: string
+    worktreesDirectoryDefault: string
+    worktreesDirectoryChoose: string
+    worktreesDirectoryReset: string
     modPanels: string
     modPanelsDescription: string
     modPanelsSteps: string
@@ -1518,6 +1550,33 @@ const en: TranslationResources = {
     promptInvalidCharacters: 'The prompt contains control characters, such as color codes copied from a terminal. Remove them to start the session.',
     worktree: 'Worktree',
     worktreeDescription: 'Run in a git worktree',
+    worktreeNone: 'No worktree',
+    worktreeSearch: 'Search branch or module',
+    worktreeWorkspaceFolder: 'Workspace folder',
+    worktreeNew: 'New worktree',
+    worktreeNewDescription: 'New branch in the modules you choose',
+    worktreeNewCount_one: 'New worktree · {{count}} module',
+    worktreeNewCount_other: 'New worktree · {{count}} modules',
+    worktreeModules_one: '{{count}} module',
+    worktreeModules_other: '{{count}} modules',
+    worktreeExisting: 'Existing worktrees',
+    worktreeLoading: 'Looking for worktrees…',
+    worktreeLoadError: 'Could not list the worktrees',
+    worktreeNoneFound: 'No existing worktrees',
+    worktreeNoMatches: 'No worktree matches the search',
+    worktreeCreatedByYira: 'Created by Yira',
+    worktreeNoSharedFolder: 'No shared folder: choose one module',
+    worktreeDetached: 'Detached at {{head}}',
+    worktreeMissing: 'Folder not found',
+    worktreeClean: 'Clean',
+    worktreeChanges_one: '{{count}} change',
+    worktreeChanges_other: '{{count}} changes',
+    worktreeSessions_one: '{{count}} session',
+    worktreeSessions_other: '{{count}} sessions',
+    worktreeSummaryNew: 'Creates a new branch in {{modules}} under {{path}}. When the session closes, it is removed if it has no changes or commits.',
+    worktreeSummaryNewEmpty: 'Choose at least one module.',
+    worktreeSummaryExisting: 'Starts in {{path}} and works on {{modules}}. Yira keeps this worktree when the session closes.',
+    worktreeKeptSharedMessage: 'Another session is still using this worktree, so it was kept at {{path}}.',
     createSession: 'Create session',
     creatingSession: 'Creating session…',
     shortcutLabel: 'Shortcut: {{shortcut}}',
@@ -1766,6 +1825,11 @@ const en: TranslationResources = {
     agentStatusRequirement: 'Live status requires version {{version}} or later.',
     legacyHooksFound: 'Yira no longer needs the hooks it installed earlier.',
     legacyHooksRemove: 'Remove',
+    worktreesDirectory: 'Worktree folder',
+    worktreesDirectoryDescription: 'Where new agent worktrees are created. Choose a folder outside your repositories so it does not show up as untracked files. Existing worktrees stay where they are.',
+    worktreesDirectoryDefault: 'Default: worktrees in the Yira folder',
+    worktreesDirectoryChoose: 'Choose folder',
+    worktreesDirectoryReset: 'Use default',
     modPanels: 'Claude Code mod panels',
     modPanelsDescription: 'Mods running in a Claude Code session started from a Yira terminal can show interactive panels in the Mods tab of the right panel.',
     modPanelsSteps: 'Copy the prompt and paste it into Claude Code to create a mod or adapt an existing one. It explains how the mod connects with Yira, which elements it can draw and includes the client to copy into the mod.',
@@ -2716,6 +2780,33 @@ const es: TranslationResources = {
     promptTooLong: 'El prompt tiene {{length}} caracteres. El límite es {{max}}.',
     promptInvalidCharacters: 'El prompt tiene caracteres de control, como códigos de color copiados de una terminal. Quítalos para iniciar la sesión.',
     worktreeDescription: 'Ejecutar en un worktree de Git',
+    worktreeNone: 'Sin worktree',
+    worktreeSearch: 'Buscar rama o módulo',
+    worktreeWorkspaceFolder: 'Carpeta del workspace',
+    worktreeNew: 'Nuevo worktree',
+    worktreeNewDescription: 'Rama nueva en los módulos que elijas',
+    worktreeNewCount_one: 'Nuevo worktree · {{count}} módulo',
+    worktreeNewCount_other: 'Nuevo worktree · {{count}} módulos',
+    worktreeModules_one: '{{count}} módulo',
+    worktreeModules_other: '{{count}} módulos',
+    worktreeExisting: 'Worktrees existentes',
+    worktreeLoading: 'Buscando worktrees…',
+    worktreeLoadError: 'No se pudieron listar los worktrees',
+    worktreeNoneFound: 'No hay worktrees existentes',
+    worktreeNoMatches: 'Ningún worktree coincide con la búsqueda',
+    worktreeCreatedByYira: 'Creado por Yira',
+    worktreeNoSharedFolder: 'Sin carpeta común: elige un módulo',
+    worktreeDetached: 'Sin rama, en {{head}}',
+    worktreeMissing: 'Carpeta no encontrada',
+    worktreeClean: 'Limpio',
+    worktreeChanges_one: '{{count}} cambio',
+    worktreeChanges_other: '{{count}} cambios',
+    worktreeSessions_one: '{{count}} sesión',
+    worktreeSessions_other: '{{count}} sesiones',
+    worktreeSummaryNew: 'Crea una rama nueva en {{modules}} dentro de {{path}}. Al cerrar la sesión, se borra si no tiene cambios ni commits.',
+    worktreeSummaryNewEmpty: 'Elige al menos un módulo.',
+    worktreeSummaryExisting: 'Arranca en {{path}} y trabaja en {{modules}}. Yira conserva este worktree al cerrar la sesión.',
+    worktreeKeptSharedMessage: 'Otra sesión sigue usando este worktree, así que se conservó en {{path}}.',
     createSession: 'Crear sesión',
     creatingSession: 'Creando sesión…',
     shortcutLabel: 'Atajo: {{shortcut}}',
@@ -3007,6 +3098,11 @@ const es: TranslationResources = {
     agentStatusRequirement: 'El estado en vivo requiere la versión {{version}} o posterior.',
     legacyHooksFound: 'Yira ya no necesita los hooks que instaló antes.',
     legacyHooksRemove: 'Quitar',
+    worktreesDirectory: 'Carpeta de worktrees',
+    worktreesDirectoryDescription: 'Dónde se crean los worktrees nuevos de los agentes. Elige una carpeta fuera de tus repositorios para que no aparezca como archivos sin seguimiento. Los worktrees existentes se quedan donde están.',
+    worktreesDirectoryDefault: 'Predeterminada: worktrees en la carpeta de Yira',
+    worktreesDirectoryChoose: 'Elegir carpeta',
+    worktreesDirectoryReset: 'Usar predeterminada',
     modPanels: 'Paneles de mods de Claude Code',
     modPanelsDescription: 'Los mods que corren en una sesión de Claude Code abierta desde una terminal de Yira pueden mostrar paneles interactivos en la pestaña Mods del panel derecho.',
     modPanelsSteps: 'Copia el prompt y pégalo en Claude Code para crear un mod o adaptar uno existente. Explica cómo el mod se conecta con Yira, qué elementos puede dibujar e incluye el cliente para copiar en el mod.',
