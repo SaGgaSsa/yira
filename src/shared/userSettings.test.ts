@@ -23,6 +23,9 @@ if (defaults.notifications.desktopAlertsEnabled !== true) throw new Error('deskt
 if (!defaults.agents.claude.enabled || !defaults.agents.codex.enabled) throw new Error('agent settings must default enabled before main-process detection')
 const agentPreferences = normalizeUserSettings({ agents: { claude: { enabled: false }, codex: { enabled: true } } })
 if (agentPreferences.agents.claude.enabled || !agentPreferences.agents.codex.enabled) throw new Error('saved agent preferences must be preserved')
+if (defaults.worktreesDirectory !== '') throw new Error('the worktree folder must default to the Yira home')
+if (normalizeUserSettings({ worktreesDirectory: ' D:\\worktrees ' }).worktreesDirectory !== 'D:\\worktrees') throw new Error('an absolute worktree folder must be kept')
+if (normalizeUserSettings({ worktreesDirectory: 'relative/worktrees' }).worktreesDirectory !== '') throw new Error('a relative worktree folder must fall back to the default')
 
 const diagnosticsDefault = normalizeUserSettings({} as unknown as Partial<UserSettings>)
 if (diagnosticsDefault.updateDiagnosticsEnabled !== true) {

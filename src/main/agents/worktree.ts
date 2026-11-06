@@ -1,5 +1,7 @@
 import { promises as fs } from 'node:fs'
-import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { mapWithConcurrency } from '@shared/mapWithConcurrency'
+import type { AgentWorktreeOption } from '@shared/types'
 
 import { discoverGitRepositories, resolveConfiguredGitRepository } from '../git/repositories'
 import { execGitCommand, type GitCommandExecutor } from '../git/runner'
@@ -35,6 +37,19 @@ export interface AgentWorkspaceWorktree {
     repositoryPath: string
     baseSha: string
   }>
+}
+
+export interface ListWorkspaceWorktreesInput {
+  rootPath: string
+  configuredRepositoryPaths: string[]
+  worktreesDirectory: string
+  /** worktreeRoot of the live agent sessions. */
+  activeRoots: string[]
+}
+
+export interface ListWorkspaceWorktreesDependencies {
+  resolveWorkspaceWorktreeRepositories?: typeof resolveWorkspaceWorktreeRepositories
+  executor?: GitCommandExecutor
 }
 
 export interface AgentWorktreeCleanupInput {
@@ -77,6 +92,68 @@ function normalizeSessionSuffix(sessionId: string): string {
 
 function normalizePathForCompare(path: string): string {
   return process.platform === 'win32' ? path.toLowerCase() : path
+}
+
+function isPathInside(rootPath: string, targetPath: string): boolean {
+  const relativePath = relative(rootPath, targetPath)
+  return relativePath === ''
+    || (relativePath !== '..' && !relativePath.startsWith(`..${sep}`) && !isAbsolute(relativePath))
+}
+
+/** True when either path is the other or lives inside it. */
+export function worktreePathsOverlap(left: string, right: string): boolean {
+  if (typeof left !== 'string' || typeof right !== 'string' || !left.trim() || !right.trim()) return false
+  const first = normalizePathForCompare(resolve(left))
+  const second = normalizePathForCompare(resolve(right))
+  return isPathInside(first, second) || isPathInside(second, first)
+}
+
+/** Parse `git worktree list --porcelain` blocks into their checkout metadata. */
+export function parseGitWorktreeList(
+  output: string,
+): Array<{ path: string; head: string; branch?: string; bare: boolean; prunable: boolean }> {
+  const entries: Array<{ path: string; head: string; branch?: string; bare: boolean; prunable: boolean }> = []
+  let current: (typeof entries)[number] | undefined
+  const flush = (): void => {
+    if (current?.path) entries.push(current)
+    current = undefined
+  }
+
+  for (const rawLine of output.replace(/\r\n/g, '\n').split('\n')) {
+    const line = rawLine.trimEnd()
+    if (!line) {
+      flush()
+      continue
+    }
+    if (line.startsWith('worktree ')) {
+      // A worktree line starts a block even when Git omits the blank separator.
+      flush()
+      current = {
+        path: resolve(line.slice('worktree '.length).trim()),
+        head: '',
+        bare: false,
+        prunable: false,
+      }
+      continue
+    }
+    if (!current) continue
+    if (line.startsWith('HEAD ')) {
+      current.head = line.slice('HEAD '.length).trim()
+    } else if (line.startsWith('branch ')) {
+      const ref = line.slice('branch '.length).trim()
+      if (ref.startsWith('refs/heads/')) {
+        const branch = ref.slice('refs/heads/'.length)
+        if (branch) current.branch = branch
+      }
+    } else if (line === 'bare') {
+      current.bare = true
+    } else if (line === 'prunable' || line.startsWith('prunable ')) {
+      current.prunable = true
+    }
+  }
+
+  flush()
+  return entries
 }
 
 function repositoryDepth(relativePath: string): number {
@@ -138,6 +215,166 @@ export async function resolveWorkspaceWorktreeRepositories(
   }
 
   return repositories.sort(compareRepositories)
+}
+
+function worktreeCandidateFolder(entryPath: string, repository: AgentWorktreeRepository): string {
+  const resolvedEntryPath = resolve(entryPath)
+  if (repository.relativePath === '.') return resolvedEntryPath
+
+  const segments = repository.relativePath.split('/').filter(Boolean)
+  if (segments.length === 0) return resolvedEntryPath
+  const candidate = resolve(resolvedEntryPath, ...segments.map(() => '..'))
+  const suffix = relative(candidate, resolvedEntryPath).split(/[\\/]/).join('/')
+  return normalizePathForCompare(suffix) === normalizePathForCompare(repository.relativePath)
+    ? candidate
+    : resolvedEntryPath
+}
+
+function countChangedLines(output: string): number {
+  return output.split(/\r?\n/).filter((line) => line.length > 0).length
+}
+
+async function isDirectory(targetPath: string): Promise<boolean> {
+  try {
+    return (await fs.stat(targetPath)).isDirectory()
+  } catch {
+    return false
+  }
+}
+
+function compareWorktreeOptions(left: AgentWorktreeOption, right: AgentWorktreeOption): number {
+  if (left.branch !== right.branch) {
+    if (left.branch === undefined) return 1
+    if (right.branch === undefined) return -1
+    const byBranch = left.branch.localeCompare(right.branch)
+    if (byBranch !== 0) return byBranch
+  }
+  return normalizePathForCompare(left.path).localeCompare(normalizePathForCompare(right.path))
+}
+
+/** List every checkout that already exists across the workspace repositories. */
+export async function listWorkspaceWorktrees(
+  input: ListWorkspaceWorktreesInput,
+  dependencies: ListWorkspaceWorktreesDependencies = {},
+): Promise<AgentWorktreeOption[]> {
+  if (!input || typeof input.rootPath !== 'string' || !input.rootPath.trim()) return []
+
+  const executor = dependencies.executor ?? execGitCommand
+  const resolveRepositories = dependencies.resolveWorkspaceWorktreeRepositories
+    ?? resolveWorkspaceWorktreeRepositories
+  let repositories: AgentWorktreeRepository[]
+  try {
+    repositories = await resolveRepositories(input, { executor })
+  } catch {
+    return []
+  }
+
+  const worktreesDirectory = typeof input.worktreesDirectory === 'string' && input.worktreesDirectory.trim()
+    ? resolve(input.worktreesDirectory)
+    : ''
+  const activeRoots = Array.isArray(input.activeRoots) ? input.activeRoots : []
+  const seenPaths = new Set<string>()
+  const entries: Array<{
+    path: string
+    head: string
+    branch?: string
+    bare: boolean
+    prunable: boolean
+    repository: AgentWorktreeRepository
+  }> = []
+
+  for (const repository of repositories) {
+    let output: string
+    try {
+      output = (await runGitAt(repository.absolutePath, ['worktree', 'list', '--porcelain'], executor)).stdout
+    } catch {
+      // One unreadable repository must not hide the worktrees of the others.
+      continue
+    }
+
+    for (const entry of parseGitWorktreeList(output)) {
+      if (entry.bare) continue
+      const canonicalPath = normalizePathForCompare(resolve(entry.path))
+      if (canonicalPath === normalizePathForCompare(resolve(repository.absolutePath))) continue
+      if (seenPaths.has(canonicalPath)) continue
+      seenPaths.add(canonicalPath)
+      entries.push({ ...entry, repository })
+    }
+  }
+
+  const groups = new Map<string, typeof entries>()
+  const standalone: Array<typeof entries> = []
+  for (const entry of entries) {
+    if (!entry.branch) {
+      standalone.push([entry])
+      continue
+    }
+    const candidate = worktreeCandidateFolder(entry.path, entry.repository)
+    const key = `${normalizePathForCompare(candidate)}\u0000${entry.branch}`
+    const group = groups.get(key)
+    if (group) group.push(entry)
+    else groups.set(key, [entry])
+  }
+
+  const rows: Array<{ path: string; entries: typeof entries }> = []
+  for (const group of groups.values()) {
+    if (group.length >= 2) {
+      rows.push({ path: worktreeCandidateFolder(group[0].path, group[0].repository), entries: group })
+    } else {
+      standalone.push(group)
+    }
+  }
+  for (const group of standalone) {
+    rows.push({ path: resolve(group[0].path), entries: group })
+  }
+
+  const missing = await Promise.all(rows.map(async (row) => (
+    await Promise.all(row.entries.map(async (entry) => (
+      entry.prunable || !(await isDirectory(entry.path))
+    )))
+  ).some(Boolean)))
+
+  const changedFiles = await mapWithConcurrency(rows, 8, async (row, index): Promise<number | undefined> => {
+    if (missing[index]) return undefined
+    let total = 0
+    for (const entry of row.entries) {
+      try {
+        const status = await executor('git', ['--no-optional-locks', '-C', entry.path, 'status', '--porcelain'])
+        total += countChangedLines(status.stdout)
+      } catch {
+        return undefined
+      }
+    }
+    return total
+  })
+
+  const options = rows.map((row, index): AgentWorktreeOption => {
+    const first = row.entries[0]
+    const branch = first.branch
+    const createdByYira = (branch?.startsWith('yira/agent-') ?? false)
+      || (worktreesDirectory !== '' && isPathInside(
+        normalizePathForCompare(worktreesDirectory),
+        normalizePathForCompare(row.path),
+      ))
+    const option: AgentWorktreeOption = {
+      path: row.path,
+      ...(branch ? { branch } : {}),
+      head: first.head.slice(0, 7),
+      repositories: row.entries.map(({ repository }) => ({
+        relativePath: repository.relativePath,
+        name: basename(repository.absolutePath),
+      })),
+      createdByYira,
+      activeSessions: activeRoots.filter((root) => (
+        typeof root === 'string' && worktreePathsOverlap(root, row.path)
+      )).length,
+      missing: missing[index],
+    }
+    if (changedFiles[index] !== undefined) option.changedFiles = changedFiles[index]
+    return option
+  })
+
+  return options.sort(compareWorktreeOptions)
 }
 
 async function nextAvailableBranch(

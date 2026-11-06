@@ -59,6 +59,7 @@ import type {
   AgentProviderAvailabilitySnapshot,
   AgentDetectionSnapshot,
   AgentSessionCapabilities,
+  AgentWorktreeOption,
   AgentPromptImage,
   AgentPromptImageSaveInput,
   AgentSessionCloseInput,
@@ -118,6 +119,7 @@ interface ElectronWorld {
     getAvailability: () => Promise<AgentProviderAvailabilitySnapshot>
     detect: () => Promise<AgentDetectionSnapshot>
     sessionCapabilities: (workspaceId: string) => Promise<AgentSessionCapabilities>
+    listWorktrees: (workspaceId: string) => Promise<AgentWorktreeOption[]>
     createSession: (input: AgentSessionCreateInput) => Promise<AgentSessionCreateResult>
     savePromptImage: (input: AgentPromptImageSaveInput) => Promise<AgentPromptImage>
     closeSession: (input: AgentSessionCloseInput) => Promise<AgentSessionCloseResult>

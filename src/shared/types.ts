@@ -193,6 +193,10 @@ export interface AgentSessionCreateInput {
   resumeSessionId?: string
   resumeCwd?: string
   worktree?: boolean
+  /** With `worktree`, limits the new worktree to these workspace-relative repositories. */
+  worktreeRepositories?: string[]
+  /** Starts in this existing worktree, as listed by `listWorktrees`. Excludes `worktree`. */
+  existingWorktreePath?: string
   /** Launch the session as this bot: its provider, model and role replace the defaults. */
   botId?: string
   /** Images saved with `savePromptImage`; the prompt refers to each one as `[Image #number]`. */
@@ -229,6 +233,8 @@ export interface AgentSessionCloseInput {
 export interface AgentSessionCloseResult {
   worktree: 'none' | 'removed' | 'kept' | 'missing'
   worktreeRoot?: string
+  /** Set when a clean worktree was kept because another live session still uses it. */
+  worktreeKeptReason?: 'shared'
 }
 
 export interface AgentSessionPinInput {
@@ -248,6 +254,29 @@ export interface AgentSessionCapabilities {
   provider: AgentProvider | null
   providers: AgentProvider[]
   worktreeAvailable: boolean
+  /** Repositories a new worktree can cover. Empty when `worktreeAvailable` is false. */
+  worktreeRepositories: GitRepository[]
+  /** Folder where new worktrees are created. */
+  worktreesDirectory: string
+}
+
+/** An existing checkout a session can start in, or a set of them under one shared folder. */
+export interface AgentWorktreeOption {
+  /** Absolute directory the session starts in: the worktree, or the folder shared by a group. */
+  path: string
+  /** Checked-out branch; absent on a detached HEAD. */
+  branch?: string
+  /** Abbreviated commit the worktree is on. */
+  head: string
+  /** Repositories it covers. More than one means a group under `path`. */
+  repositories: GitRepository[]
+  createdByYira: boolean
+  /** Uncommitted files across its repositories; absent when Git could not report them. */
+  changedFiles?: number
+  /** Live agent sessions already running in it. */
+  activeSessions: number
+  /** The folder no longer exists, so a session cannot start there. */
+  missing: boolean
 }
 
 export interface AgentProviderAvailability {
@@ -638,6 +667,8 @@ export type TileCreationAvailability = Record<ConfigurableTileCreationType, bool
 
 export interface UserSettings {
   agents: Record<AgentProvider, { enabled: boolean }>
+  /** Absolute folder for new agent worktrees. Empty uses `worktrees` under the Yira home. */
+  worktreesDirectory: string
   language: 'en' | 'es'
   themeId: AppThemeId
   appearance: AppearanceMode
@@ -674,6 +705,7 @@ export interface UserSettings {
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
   agents: { claude: { enabled: true }, codex: { enabled: true } },
+  worktreesDirectory: '',
   language: 'en',
   themeId: 'default',
   appearance: 'dark',

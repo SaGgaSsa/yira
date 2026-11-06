@@ -6,6 +6,7 @@ import { normalizeTerminalThemeId } from './terminalThemes'
 export const MIN_FONT_SIZE_PX = 10
 export const MAX_FONT_SIZE_PX = 36
 export const MAX_FONT_FAMILY_LENGTH = 100
+const MAX_WORKTREES_DIRECTORY_LENGTH = 1_024
 
 /** Bundled stacks, used when no family is chosen and as the fallback behind a chosen one. */
 export const DEFAULT_INTERFACE_FONT_STACK = "'Saira', 'Segoe UI', sans-serif"
@@ -54,6 +55,14 @@ export function buildFontStack(family: string, fallbackStack: string): string {
   return normalized ? `'${normalized}', ${fallbackStack}` : fallbackStack
 }
 
+/** Keeps an absolute folder path; anything else falls back to the default folder. */
+export function normalizeWorktreesDirectory(value: unknown): string {
+  if (typeof value !== 'string') return ''
+  const path = value.trim()
+  const isAbsolute = /^(?:[a-zA-Z]:[\\/]|\\\\|\/)/.test(path)
+  return isAbsolute && path.length <= MAX_WORKTREES_DIRECTORY_LENGTH && !/[\u0000-\u001f]/.test(path) ? path : ''
+}
+
 export function normalizeUserSettings(raw: RawUserSettings = {}): UserSettings {
   const legacyFontSize = isLegacyFontSize(raw.fontSize) ? LEGACY_FONT_SIZE_PX[raw.fontSize] : undefined
   const fontFallback = legacyFontSize ?? DEFAULT_USER_SETTINGS.interfaceFontSizePx
@@ -78,6 +87,7 @@ export function normalizeUserSettings(raw: RawUserSettings = {}): UserSettings {
       claude: { enabled: raw.agents?.claude?.enabled !== false },
       codex: { enabled: raw.agents?.codex?.enabled !== false },
     },
+    worktreesDirectory: normalizeWorktreesDirectory(raw.worktreesDirectory),
     language: normalizeLanguage(raw.language),
     themeId: normalizeAppThemeId(raw.themeId),
     windowBackgroundMaterial: raw.windowBackgroundMaterial === 'mica' || raw.windowBackgroundMaterial === 'acrylic' || raw.windowBackgroundMaterial === 'translucent'

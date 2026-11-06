@@ -1,14 +1,17 @@
 import assert from 'node:assert/strict'
 import { access, mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join, resolve } from 'node:path'
 import test from 'node:test'
 
 import { execGitCommand, type GitCommandExecutor, type GitCommandResult } from '../git/runner'
 import {
   createAgentWorkspaceWorktrees,
+  listWorkspaceWorktrees,
+  parseGitWorktreeList,
   removeAgentWorktreeIfClean,
   resolveWorkspaceWorktreeRepositories,
+  worktreePathsOverlap,
 } from './worktree'
 
 const baseSha = 'a'.repeat(40)
@@ -202,6 +205,301 @@ test('removes clean worktrees without force and deletes their branch from the co
   assert.deepEqual(removeCall, ['--git-dir', commonDirectory, 'worktree', 'remove', '--', worktreePath])
   assert.deepEqual(branchCall, ['--git-dir', commonDirectory, 'branch', '-D', '--', 'yira/agent-12345678'])
   assert.ok(calls.every((args) => !args.includes('--force') && !args.includes('-f')))
+})
+
+function toGitPath(value: string): string {
+  return value.replaceAll('\\', '/')
+}
+
+function worktreeGit(
+  lists: Map<string, string>,
+  statuses: Map<string, string> = new Map(),
+): GitCommandExecutor {
+  return async (_command, args) => {
+    const pathIndex = args.indexOf('-C')
+    const target = pathIndex >= 0 ? args[pathIndex + 1] : ''
+    if (args.includes('worktree') && args.includes('list')) {
+      const output = lists.get(target)
+      if (output === undefined) throw new Error(`Unexpected worktree list: ${target}`)
+      return result(output)
+    }
+    if (args.includes('status')) return result(statuses.get(target) ?? '')
+    throw new Error(`Unexpected Git command: ${args.join(' ')}`)
+  }
+}
+
+test('parses worktree blocks with branches, detached HEADs, bare and prunable entries', () => {
+  const alphaPath = join(tmpdir(), 'yira-worktree-parse', 'alpha')
+  const detachedPath = join(tmpdir(), 'yira-worktree-parse', 'detached')
+  const barePath = join(tmpdir(), 'yira-worktree-parse', 'bare')
+  const prunablePath = join(tmpdir(), 'yira-worktree-parse', 'prunable')
+  const output = [
+    `worktree ${toGitPath(alphaPath)}`,
+    `HEAD ${'a'.repeat(40)}`,
+    'branch refs/heads/feature/topic',
+    '',
+    `worktree ${toGitPath(detachedPath)}`,
+    `HEAD ${'b'.repeat(40)}`,
+    'detached',
+    '',
+    `worktree ${toGitPath(barePath)}`,
+    `HEAD ${'c'.repeat(40)}`,
+    'bare',
+    '',
+    `worktree ${toGitPath(prunablePath)}`,
+    `HEAD ${'d'.repeat(40)}`,
+    'branch refs/heads/old/topic',
+    'prunable gitdir file points to non-existent location',
+    '',
+  ].join('\r\n')
+
+  assert.deepEqual(parseGitWorktreeList(output), [
+    { path: resolve(alphaPath), head: 'a'.repeat(40), branch: 'feature/topic', bare: false, prunable: false },
+    { path: resolve(detachedPath), head: 'b'.repeat(40), bare: false, prunable: false },
+    { path: resolve(barePath), head: 'c'.repeat(40), bare: true, prunable: false },
+    { path: resolve(prunablePath), head: 'd'.repeat(40), branch: 'old/topic', bare: false, prunable: true },
+  ])
+})
+
+test('groups the same branch of two modules under their shared worktree folder', async (t) => {
+  const temporaryDirectory = await makeTempDirectory()
+  t.after(() => rm(temporaryDirectory, { recursive: true, force: true }))
+  const workspaceRoot = join(temporaryDirectory, 'workspace')
+  const alphaRepository = join(workspaceRoot, 'alpha')
+  const zetaRepository = join(workspaceRoot, 'zeta')
+  const groupRoot = join(temporaryDirectory, 'worktrees', 'workspace-abc12345')
+  const alphaWorktree = join(groupRoot, 'alpha')
+  const zetaWorktree = join(groupRoot, 'zeta')
+  await Promise.all([
+    mkdir(alphaRepository, { recursive: true }),
+    mkdir(zetaRepository, { recursive: true }),
+    mkdir(alphaWorktree, { recursive: true }),
+    mkdir(zetaWorktree, { recursive: true }),
+  ])
+  const executor = worktreeGit(
+    new Map([
+      [alphaRepository, [
+        `worktree ${toGitPath(alphaRepository)}`,
+        `HEAD ${'0'.repeat(40)}`,
+        'branch refs/heads/main',
+        '',
+        `worktree ${toGitPath(alphaWorktree)}`,
+        `HEAD ${'1'.repeat(40)}`,
+        'branch refs/heads/feature/shared',
+        '',
+      ].join('\n')],
+      [zetaRepository, [
+        `worktree ${toGitPath(zetaRepository)}`,
+        `HEAD ${'0'.repeat(40)}`,
+        'branch refs/heads/main',
+        '',
+        `worktree ${toGitPath(zetaWorktree)}`,
+        `HEAD ${'2'.repeat(40)}`,
+        'branch refs/heads/feature/shared',
+        '',
+      ].join('\n')],
+    ]),
+    new Map([
+      [alphaWorktree, ' M a.txt\n?? b.txt\n'],
+      [zetaWorktree, ''],
+    ]),
+  )
+
+  assert.deepEqual(await listWorkspaceWorktrees({
+    rootPath: workspaceRoot,
+    configuredRepositoryPaths: [],
+    worktreesDirectory: join(temporaryDirectory, 'worktrees'),
+    activeRoots: [],
+  }, {
+    executor,
+    resolveWorkspaceWorktreeRepositories: async () => [
+      { relativePath: 'alpha', absolutePath: alphaRepository },
+      { relativePath: 'zeta', absolutePath: zetaRepository },
+    ],
+  }), [{
+    path: groupRoot,
+    branch: 'feature/shared',
+    head: '1111111',
+    repositories: [
+      { relativePath: 'alpha', name: 'alpha' },
+      { relativePath: 'zeta', name: 'zeta' },
+    ],
+    createdByYira: true,
+    changedFiles: 2,
+    activeSessions: 0,
+    missing: false,
+  }])
+})
+
+test('keeps the same branch in separate folders as separate options', async (t) => {
+  const temporaryDirectory = await makeTempDirectory()
+  t.after(() => rm(temporaryDirectory, { recursive: true, force: true }))
+  const workspaceRoot = join(temporaryDirectory, 'workspace')
+  const alphaRepository = join(workspaceRoot, 'alpha')
+  const zetaRepository = join(workspaceRoot, 'zeta')
+  const alphaWorktree = join(temporaryDirectory, 'clones', 'one')
+  const zetaWorktree = join(temporaryDirectory, 'clones', 'two')
+  await Promise.all([
+    mkdir(alphaWorktree, { recursive: true }),
+    mkdir(zetaWorktree, { recursive: true }),
+  ])
+  const executor = worktreeGit(
+    new Map([
+      [alphaRepository, [
+        `worktree ${toGitPath(alphaRepository)}`,
+        `HEAD ${'0'.repeat(40)}`,
+        'branch refs/heads/main',
+        '',
+        `worktree ${toGitPath(alphaWorktree)}`,
+        `HEAD ${'a'.repeat(40)}`,
+        'branch refs/heads/feature/topic',
+        '',
+      ].join('\n')],
+      [zetaRepository, [
+        `worktree ${toGitPath(zetaRepository)}`,
+        `HEAD ${'0'.repeat(40)}`,
+        'branch refs/heads/main',
+        '',
+        `worktree ${toGitPath(zetaWorktree)}`,
+        `HEAD ${'b'.repeat(40)}`,
+        'branch refs/heads/feature/topic',
+        '',
+      ].join('\n')],
+    ]),
+  )
+
+  const options = await listWorkspaceWorktrees({
+    rootPath: workspaceRoot,
+    configuredRepositoryPaths: [],
+    worktreesDirectory: join(temporaryDirectory, 'worktrees'),
+    activeRoots: [],
+  }, {
+    executor,
+    resolveWorkspaceWorktreeRepositories: async () => [
+      { relativePath: 'alpha', absolutePath: alphaRepository },
+      { relativePath: 'zeta', absolutePath: zetaRepository },
+    ],
+  })
+
+  assert.deepEqual(options.map(({ path }) => path), [alphaWorktree, zetaWorktree])
+  assert.deepEqual(options.map(({ repositories }) => repositories), [
+    [{ relativePath: 'alpha', name: 'alpha' }],
+    [{ relativePath: 'zeta', name: 'zeta' }],
+  ])
+  assert.ok(options.every(({ branch }) => branch === 'feature/topic'))
+})
+
+test('excludes the repository checkout itself from the listed worktrees', async () => {
+  const repository = join(tmpdir(), 'yira-worktree-main', 'alpha')
+  const executor = worktreeGit(new Map([
+    [repository, [
+      `worktree ${toGitPath(repository)}`,
+      `HEAD ${'a'.repeat(40)}`,
+      'branch refs/heads/main',
+      '',
+      `worktree ${toGitPath(join(tmpdir(), 'yira-worktree-main', 'bare'))}`,
+      `HEAD ${'b'.repeat(40)}`,
+      'bare',
+      '',
+    ].join('\n')],
+  ]))
+
+  assert.deepEqual(await listWorkspaceWorktrees({
+    rootPath: join(tmpdir(), 'yira-worktree-main'),
+    configuredRepositoryPaths: [],
+    worktreesDirectory: join(tmpdir(), 'yira-worktree-main-worktrees'),
+    activeRoots: [],
+  }, {
+    executor,
+    resolveWorkspaceWorktreeRepositories: async () => [
+      { relativePath: '.', absolutePath: repository },
+    ],
+  }), [])
+})
+
+test('continues listing worktrees when one repository fails', async (t) => {
+  const temporaryDirectory = await makeTempDirectory()
+  t.after(() => rm(temporaryDirectory, { recursive: true, force: true }))
+  const workspaceRoot = join(temporaryDirectory, 'workspace')
+  const brokenRepository = join(workspaceRoot, 'broken')
+  const workingRepository = join(workspaceRoot, 'working')
+  const workingWorktree = join(temporaryDirectory, 'clones', 'working')
+  await mkdir(workingWorktree, { recursive: true })
+  const executor = worktreeGit(new Map([
+    [workingRepository, [
+      `worktree ${toGitPath(workingRepository)}`,
+      `HEAD ${'0'.repeat(40)}`,
+      'branch refs/heads/main',
+      '',
+      `worktree ${toGitPath(workingWorktree)}`,
+      `HEAD ${'c'.repeat(40)}`,
+      'branch refs/heads/feature/working',
+      '',
+    ].join('\n')],
+  ]))
+
+  const options = await listWorkspaceWorktrees({
+    rootPath: workspaceRoot,
+    configuredRepositoryPaths: [],
+    worktreesDirectory: join(temporaryDirectory, 'worktrees'),
+    activeRoots: [],
+  }, {
+    executor,
+    resolveWorkspaceWorktreeRepositories: async () => [
+      { relativePath: 'broken', absolutePath: brokenRepository },
+      { relativePath: 'working', absolutePath: workingRepository },
+    ],
+  })
+
+  assert.deepEqual(options.map(({ path, repositories }) => ({ path, repositories })), [{
+    path: workingWorktree,
+    repositories: [{ relativePath: 'working', name: 'working' }],
+  }])
+})
+
+test('counts live sessions that overlap a listed worktree path', async (t) => {
+  const temporaryDirectory = await makeTempDirectory()
+  t.after(() => rm(temporaryDirectory, { recursive: true, force: true }))
+  const workspaceRoot = join(temporaryDirectory, 'workspace')
+  const worktreesDirectory = join(temporaryDirectory, 'worktrees')
+  const worktreePath = join(worktreesDirectory, 'workspace-live1234')
+  await mkdir(worktreePath, { recursive: true })
+  const executor = worktreeGit(new Map([
+    [workspaceRoot, [
+      `worktree ${toGitPath(workspaceRoot)}`,
+      `HEAD ${'0'.repeat(40)}`,
+      'branch refs/heads/main',
+      '',
+      `worktree ${toGitPath(worktreePath)}`,
+      `HEAD ${'d'.repeat(40)}`,
+      'branch refs/heads/feature/live',
+      '',
+    ].join('\n')],
+  ]))
+
+  const options = await listWorkspaceWorktrees({
+    rootPath: workspaceRoot,
+    configuredRepositoryPaths: [],
+    worktreesDirectory,
+    activeRoots: [
+      worktreePath,
+      join(worktreePath, 'alpha'),
+      worktreesDirectory,
+      join(temporaryDirectory, 'unrelated'),
+    ],
+  }, {
+    executor,
+    resolveWorkspaceWorktreeRepositories: async () => [
+      { relativePath: '.', absolutePath: workspaceRoot },
+    ],
+  })
+
+  assert.equal(options.length, 1)
+  assert.equal(options[0].path, worktreePath)
+  assert.equal(options[0].activeSessions, 3)
+  assert.equal(options[0].repositories[0].name, basename(workspaceRoot))
+  assert.equal(worktreePathsOverlap(worktreePath, join(worktreePath, 'alpha')), true)
+  assert.equal(worktreePathsOverlap(worktreePath, join(temporaryDirectory, 'unrelated')), false)
 })
 
 test('rejects unsafe worktree branch names before invoking Git', async () => {

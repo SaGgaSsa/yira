@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join, resolve } from 'node:path'
 import { BrowserWindow, ipcMain, type WebContents } from 'electron'
 import type {
   AgentPromptImageAttachment,
@@ -21,6 +21,7 @@ import type {
   AgentUsageHistoryRequest,
   AgentUsageHistorySnapshot,
   AgentDetectionSnapshot,
+  AgentWorktreeOption,
   WorkspaceConfig,
 } from '@shared/types'
 import { getAgentPromptIssue } from '@shared/agentPrompt'
@@ -45,13 +46,16 @@ import {
 } from '../agents/promptImages'
 import {
   createAgentWorkspaceWorktrees,
+  listWorkspaceWorktrees,
   removeAgentWorktreeIfClean,
   resolveWorkspaceWorktreeRepositories,
+  worktreePathsOverlap,
   type AgentWorkspaceWorktree,
   type AgentWorkspaceWorktreeCreateInput,
   type AgentWorktreeRepository,
   type AgentWorktreeCleanupInput,
   type AgentWorktreeRemovalResult,
+  type ListWorkspaceWorktreesInput,
   type ResolveWorkspaceWorktreeRepositoriesInput,
 } from '../agents/worktree'
 import { resolveAgentCwd } from '../agents/terminal'
@@ -102,11 +106,13 @@ export interface AgentIPCOptions {
   moveSessionToTile?: (target: TerminalSessionTarget) => Promise<void>
   workspaceAgentConfig?: (workspaceId: string) => Promise<Pick<WorkspaceConfig, 'rootFolderPath' | 'sourceControlRepositoryPaths' | 'agentProvider' | 'agentProviders'> | null>
   worktrees?: AgentIPCWorktrees
+  worktreesDirectory?: () => Promise<string>
   getBot?: (id: string) => Promise<BotDefinition | null>
 }
 
 export interface AgentIPCWorktrees {
   resolveWorkspaceWorktreeRepositories: (input: ResolveWorkspaceWorktreeRepositoriesInput) => Promise<AgentWorktreeRepository[]>
+  listWorkspaceWorktrees: (input: ListWorkspaceWorktreesInput) => Promise<AgentWorktreeOption[]>
   createAgentWorkspaceWorktrees: (input: AgentWorkspaceWorktreeCreateInput) => Promise<AgentWorkspaceWorktree>
   removeAgentWorktreeIfClean: (input: AgentWorktreeCleanupInput) => Promise<AgentWorktreeRemovalResult>
 }
@@ -118,14 +124,39 @@ interface NormalizedAgentSessionCreateInput {
   resumeCwd?: string
   images: AgentPromptImageAttachment[]
   worktree: boolean
+  worktreeRepositories?: string[]
+  existingWorktreePath?: string
   provider?: AgentProvider
   botId?: string
 }
 
 const defaultWorktrees: AgentIPCWorktrees = {
   resolveWorkspaceWorktreeRepositories,
+  listWorkspaceWorktrees,
   createAgentWorkspaceWorktrees,
   removeAgentWorktreeIfClean,
+}
+
+function worktreesDirectoryProvider(options: AgentIPCOptions): () => Promise<string> {
+  return options.worktreesDirectory ?? (async () => join(YIRA_HOME, 'worktrees'))
+}
+
+function liveWorktreeRoots(registry: AgentSessionRegistry): string[] {
+  return registry.snapshot().sessions
+    .filter((session) => (
+      session.status !== 'exited'
+      && typeof session.worktreeRoot === 'string'
+      && session.worktreeRoot.trim().length > 0
+    ))
+    .map((session) => session.worktreeRoot as string)
+}
+
+function sameWorktreePath(left: string, right: string): boolean {
+  const normalize = (value: string): string => {
+    const resolved = resolve(value)
+    return process.platform === 'win32' ? resolved.toLowerCase() : resolved
+  }
+  return normalize(left) === normalize(right)
 }
 
 async function removeWorkspaceWorktrees(
@@ -304,6 +335,39 @@ function normalizeCreateInput(
   if (value.worktree !== undefined && typeof value.worktree !== 'boolean') {
     throw new Error('Invalid agent worktree option')
   }
+  const worktree = value.worktree === true
+
+  let worktreeRepositories: string[] | undefined
+  if (value.worktreeRepositories !== undefined) {
+    if (
+      !worktree
+      || !Array.isArray(value.worktreeRepositories)
+      || value.worktreeRepositories.length === 0
+      || value.worktreeRepositories.length > 32
+      || value.worktreeRepositories.some((repository) => (
+        typeof repository !== 'string' || !repository.trim()
+      ))
+    ) {
+      throw new Error('Invalid agent worktree option')
+    }
+    worktreeRepositories = [...value.worktreeRepositories]
+  }
+
+  let existingWorktreePath: string | undefined
+  if (value.existingWorktreePath !== undefined) {
+    if (
+      typeof value.existingWorktreePath !== 'string'
+      || !value.existingWorktreePath.trim()
+      || value.existingWorktreePath.length > 4_096
+      || worktree
+      || resumeSessionId !== undefined
+      || resumeCwd !== undefined
+    ) {
+      throw new Error('Invalid agent worktree option')
+    }
+    existingWorktreePath = value.existingWorktreePath
+  }
+
   if (value.provider !== undefined && !isAgentProvider(value.provider)) {
     throw new Error('Invalid agent provider')
   }
@@ -326,7 +390,9 @@ function normalizeCreateInput(
     ...(resumeSessionId ? { resumeSessionId } : {}),
     ...(resumeCwd !== undefined ? { resumeCwd } : {}),
     images,
-    worktree: value.worktree === true,
+    worktree,
+    ...(worktreeRepositories ? { worktreeRepositories } : {}),
+    ...(existingWorktreePath !== undefined ? { existingWorktreePath } : {}),
     ...(value.provider !== undefined ? { provider: value.provider } : {}),
   }
 }
@@ -413,6 +479,8 @@ export function createAgentSessionLauncher(options: AgentIPCOptions = {}): Agent
     ?? getAgentPromptImageDirectory(YIRA_HOME)
   const workspaceAgentConfig = options.workspaceAgentConfig ?? getWorkspaceAgentConfigById
   const worktrees = options.worktrees ?? defaultWorktrees
+  const worktreesDirectory = worktreesDirectoryProvider(options)
+  const registry = options.registry ?? agentSessionRegistry
   const getBot = options.getBot ?? getBotById
 
   return async (rawInput: unknown): Promise<AgentSessionCreateResult> => {
@@ -460,26 +528,52 @@ export function createAgentSessionLauncher(options: AgentIPCOptions = {}): Agent
       : bot && input.prompt === undefined ? bot.name : sessionTitle(input.prompt, input.resumeSessionId)
     const prompt = appendAgentPromptImages(input.prompt, input.images)
     let worktree: AgentWorkspaceWorktree | undefined
+    let createdWorktree: AgentWorkspaceWorktree | undefined
 
     if (input.worktree) {
       if (!config.rootFolderPath) throw new Error('Agent worktree requires a workspace folder')
-      const repositories = await worktrees.resolveWorkspaceWorktreeRepositories({
+      let repositories = await worktrees.resolveWorkspaceWorktreeRepositories({
         rootPath: config.rootFolderPath,
         configuredRepositoryPaths: config.sourceControlRepositoryPaths,
       })
+      if (input.worktreeRepositories) {
+        const requested = new Set(input.worktreeRepositories)
+        const available = new Set(repositories.map(({ relativePath }) => relativePath))
+        if ([...requested].some((relativePath) => !available.has(relativePath))) {
+          throw new Error('Agent worktree repository is not available')
+        }
+        repositories = repositories.filter(({ relativePath }) => requested.has(relativePath))
+      }
       if (repositories.length === 0) {
         throw new Error('Agent worktrees require a Git repository with at least one commit')
       }
       if (repositories.length > 32) {
         throw new Error('Agent worktrees support up to 32 repositories')
       }
-      worktree = await worktrees.createAgentWorkspaceWorktrees({
+      createdWorktree = await worktrees.createAgentWorkspaceWorktrees({
         rootPath: config.rootFolderPath,
         repositories,
         sessionId: tileId,
-        baseDirectory: join(YIRA_HOME, 'worktrees'),
+        baseDirectory: await worktreesDirectory(),
       })
+      worktree = createdWorktree
       cwd = worktree.root
+    } else if (input.existingWorktreePath) {
+      if (!config.rootFolderPath) throw new Error('Agent worktree requires a workspace folder')
+      const available = await worktrees.listWorkspaceWorktrees({
+        rootPath: config.rootFolderPath,
+        configuredRepositoryPaths: config.sourceControlRepositoryPaths,
+        worktreesDirectory: await worktreesDirectory(),
+        activeRoots: liveWorktreeRoots(registry),
+      })
+      const option = available.find((candidate) => sameWorktreePath(candidate.path, input.existingWorktreePath as string))
+      if (!option || option.missing) throw new Error('This worktree is no longer available')
+      cwd = option.path
+      worktree = {
+        root: option.path,
+        branch: option.branch ?? option.head,
+        worktrees: [],
+      }
     }
 
     const target = { workspaceId: input.workspaceId, tileId }
@@ -504,10 +598,10 @@ export function createAgentSessionLauncher(options: AgentIPCOptions = {}): Agent
     try {
       await launchAgentSession(options, target, spec)
     } catch (error) {
-      if (worktree) {
+      if (createdWorktree) {
         try {
-          const removed = await removeWorkspaceWorktrees(worktree, worktrees.removeAgentWorktreeIfClean)
-          if (removed) await removeEmptyWorktreeRoot(worktree.root)
+          const removed = await removeWorkspaceWorktrees(createdWorktree, worktrees.removeAgentWorktreeIfClean)
+          if (removed) await removeEmptyWorktreeRoot(createdWorktree.root)
         } catch {
           // Preserve the launch failure while still attempting safe cleanup.
         }
@@ -551,6 +645,15 @@ export function createAgentSessionCloser(options: AgentIPCOptions = {}): AgentSe
     let worktreeRoot: string | undefined
     if (session.worktreeRoot && session.worktreeBranch && session.worktrees?.length) {
       worktreeRoot = session.worktreeRoot
+      const shared = registry.snapshot().sessions.some((candidate) => (
+        candidate.status !== 'exited'
+        && typeof candidate.worktreeRoot === 'string'
+        && worktreePathsOverlap(candidate.worktreeRoot, session.worktreeRoot as string)
+      ))
+      if (shared) {
+        // Another live agent still runs under this folder; deleting it would remove its files.
+        return { worktree: 'kept', worktreeRoot, worktreeKeptReason: 'shared' }
+      }
       try {
         const allRemoved = await removeWorkspaceWorktrees({
           branch: session.worktreeBranch,
@@ -626,6 +729,7 @@ export function registerAgentsIPC(options: AgentIPCOptions = {}): void {
 
   const workspaceAgentConfig = options.workspaceAgentConfig ?? getWorkspaceAgentConfigById
   const worktrees = options.worktrees ?? defaultWorktrees
+  const worktreesDirectory = worktreesDirectoryProvider(options)
   const createSession = createAgentSessionLauncher(options)
   agentSessionLauncher = createSession
 
@@ -651,7 +755,35 @@ export function registerAgentsIPC(options: AgentIPCOptions = {}): void {
       ? enabled.filter((candidate) => config.agentProviders?.[candidate]?.enabled === true)
       : []
     const worktreeAvailable = repositories.length > 0
-    return { provider, providers, worktreeAvailable }
+    return {
+      provider,
+      providers,
+      worktreeAvailable,
+      worktreeRepositories: repositories.map(({ relativePath, absolutePath }) => ({
+        relativePath,
+        name: basename(absolutePath),
+      })),
+      worktreesDirectory: await worktreesDirectory(),
+    }
+  })
+
+  ipcMain.handle('agents:worktrees:list', async (_event, workspaceId: unknown): Promise<AgentWorktreeOption[]> => {
+    const normalizedWorkspaceId = normalizeAgentOpaqueId(workspaceId)
+    if (!normalizedWorkspaceId) throw new Error('Invalid agent workspace id')
+    const config = await workspaceAgentConfig(normalizedWorkspaceId)
+    const rootPath = config?.rootFolderPath
+    if (typeof rootPath !== 'string' || !rootPath.trim()) return []
+    try {
+      return await worktrees.listWorkspaceWorktrees({
+        rootPath,
+        configuredRepositoryPaths: config?.sourceControlRepositoryPaths ?? [],
+        worktreesDirectory: await worktreesDirectory(),
+        activeRoots: liveWorktreeRoots(registry),
+      })
+    } catch {
+      // A workspace that moved or became unreadable simply has no worktrees to offer.
+      return []
+    }
   })
 
   ipcMain.handle('agents:sessions:create', (_event, rawInput: unknown): Promise<AgentSessionCreateResult> =>

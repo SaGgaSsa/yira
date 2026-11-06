@@ -97,7 +97,7 @@ A session-only workspace view for live Agent Sessions. It covers the workspace l
 _Avoid_: Agent Tile, persisted view mode
 
 **Agent Session**:
-A live provider session shown in Agents View, identified by a synthetic runtime target rather than a workspace Tile. Its optional Git worktree is off by default.
+A live provider session shown in Agents View, identified by a synthetic runtime target rather than a workspace Tile. By default it works in the workspace folder; it can start in a new Git worktree limited to chosen repositories, or in an existing one. Closing it only removes a worktree it created.
 _Avoid_: Tile, Terminal Tile
 
 **Terminal Attention**:
@@ -146,7 +146,7 @@ _Avoid_: Workspace initial command
 - An **Agents View** requires an effective agent provider enabled for its **Workspace**
 - An **Agents View** is session-only and does not persist layout state
 - An **Agent Session** is not a **Tile**
-- An **Agent Session** can use an optional Git worktree, disabled by default
+- An **Agent Session** can use a new or existing Git worktree, neither by default
 - **Terminal Attention** is session-only and is not persisted in a **Workspace**
 - **Terminal Attention** is cleared when its **Terminal Tile** is attended
 - **Workspace Terminal History** belongs to **Workspace Configuration**

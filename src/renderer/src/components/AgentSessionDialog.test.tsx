@@ -11,6 +11,8 @@ import type {
   AgentPromptImageSaveInput,
   AgentSessionCapabilities,
   AgentSessionCreateInput,
+  AgentWorktreeOption,
+  GitRepository,
   UserSettings,
   WorkspaceMetadata,
 } from '@shared/types'
@@ -191,6 +193,32 @@ const translationCopy: Record<string, string> = {
   'agentsView.promptInvalidCharacters': 'The prompt contains control characters.',
   'agentsView.worktree': 'Worktree',
   'agentsView.worktreeDescription': 'Run in a git worktree',
+  'agentsView.worktreeNone': 'No worktree',
+  'agentsView.worktreeSearch': 'Search branch or module',
+  'agentsView.worktreeWorkspaceFolder': 'Workspace folder',
+  'agentsView.worktreeNew': 'New worktree',
+  'agentsView.worktreeNewDescription': 'New branch in the modules you choose',
+  'agentsView.worktreeNewCount_one': 'New worktree · {{count}} module',
+  'agentsView.worktreeNewCount_other': 'New worktree · {{count}} modules',
+  'agentsView.worktreeModules_one': '{{count}} module',
+  'agentsView.worktreeModules_other': '{{count}} modules',
+  'agentsView.worktreeExisting': 'Existing worktrees',
+  'agentsView.worktreeLoading': 'Looking for worktrees…',
+  'agentsView.worktreeLoadError': 'Could not list the worktrees',
+  'agentsView.worktreeNoneFound': 'No existing worktrees',
+  'agentsView.worktreeNoMatches': 'No worktree matches the search',
+  'agentsView.worktreeCreatedByYira': 'Created by Yira',
+  'agentsView.worktreeNoSharedFolder': 'No shared folder: choose one module',
+  'agentsView.worktreeDetached': 'Detached at {{head}}',
+  'agentsView.worktreeMissing': 'Folder not found',
+  'agentsView.worktreeClean': 'Clean',
+  'agentsView.worktreeChanges_one': '{{count}} change',
+  'agentsView.worktreeChanges_other': '{{count}} changes',
+  'agentsView.worktreeSessions_one': '{{count}} session',
+  'agentsView.worktreeSessions_other': '{{count}} sessions',
+  'agentsView.worktreeSummaryNew': 'Creates a new branch in {{modules}} under {{path}}. When the session closes, it is removed if it has no changes or commits.',
+  'agentsView.worktreeSummaryNewEmpty': 'Choose at least one module.',
+  'agentsView.worktreeSummaryExisting': 'Starts in {{path}} and works on {{modules}}. Yira keeps this worktree when the session closes.',
   'agentsView.createSession': 'Create session',
   'agentsView.creatingSession': 'Creating session…',
   'common.cancel': 'Cancel',
@@ -199,8 +227,13 @@ const reactI18nextPath = require.resolve('react-i18next')
 require.cache[reactI18nextPath] = {
   exports: {
     useTranslation: () => ({
-      t: (key: string, values: Record<string, unknown> = {}) => (translationCopy[key] ?? key)
-        .replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String(values[name])),
+      t: (key: string, values: Record<string, unknown> = {}) => {
+        const pluralKey = typeof values.count === 'number'
+          ? `${key}_${values.count === 1 ? 'one' : 'other'}`
+          : null
+        return (translationCopy[pluralKey ?? key] ?? translationCopy[key] ?? key)
+          .replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String(values[name]))
+      },
     }),
   },
   filename: reactI18nextPath,
@@ -241,17 +274,45 @@ function workspace(
   }
 }
 
+const worktreeRepositories: GitRepository[] = [
+  { relativePath: 'app', name: 'app' },
+  { relativePath: 'libs/api', name: 'api' },
+]
+const worktreesDirectory = 'C:\\workspaces\\workspace-a\\.worktrees'
+
 function capabilities(worktreeAvailable: boolean): AgentSessionCapabilities {
-  return { provider: null, providers: [], worktreeAvailable }
+  return {
+    provider: null,
+    providers: [],
+    worktreeAvailable,
+    worktreeRepositories: worktreeAvailable ? worktreeRepositories : [],
+    worktreesDirectory: worktreeAvailable ? worktreesDirectory : '',
+  }
+}
+
+function worktreeOption(overrides: Partial<AgentWorktreeOption> = {}): AgentWorktreeOption {
+  return {
+    path: 'C:\\worktrees\\existing',
+    branch: 'feat/existing',
+    head: 'abc1234',
+    repositories: [worktreeRepositories[0]],
+    createdByYira: true,
+    changedFiles: 0,
+    activeSessions: 0,
+    missing: false,
+    ...overrides,
+  }
 }
 
 let payloads: AgentSessionCreateInput[] = []
 let capabilityCalls: string[] = []
+let worktreeListCalls: string[] = []
 let promptImageSaveCalls: AgentPromptImageSaveInput[] = []
 let promptImageSaveHandler: (input: AgentPromptImageSaveInput) => Promise<AgentPromptImage> = async () => ({
   path: `C:\\prompt-images\\image-${promptImageSaveCalls.length}.png`,
 })
 let capabilityHandler: (workspaceId: string) => Promise<AgentSessionCapabilities> = async () => capabilities(true)
+let worktreeListHandler: (workspaceId: string) => Promise<AgentWorktreeOption[]> = async () => []
 let closeCount = 0
 let createdCount = 0
 const createdResult = { workspaceId: 'workspace-a', tileId: 'agent-a', provider: 'claude' as const }
@@ -266,6 +327,10 @@ Object.defineProperty(globalThis, 'electron', {
       sessionCapabilities: (workspaceId: string) => {
         capabilityCalls.push(workspaceId)
         return capabilityHandler(workspaceId)
+      },
+      listWorktrees: (workspaceId: string) => {
+        worktreeListCalls.push(workspaceId)
+        return worktreeListHandler(workspaceId)
       },
       savePromptImage: (input: AgentPromptImageSaveInput) => {
         promptImageSaveCalls.push(input)
@@ -282,6 +347,7 @@ interface DialogOptions {
   agents?: UserSettings['agents']
   bots?: BotDefinition[]
   capabilities?: (workspaceId: string) => Promise<AgentSessionCapabilities>
+  worktrees?: (workspaceId: string) => Promise<AgentWorktreeOption[]>
   focusRequestId?: number
 }
 
@@ -292,6 +358,7 @@ function renderDialog(options: DialogOptions = {}): {
 } {
   payloads = []
   capabilityCalls = []
+  worktreeListCalls = []
   promptImageSaveCalls = []
   promptImageSaveHandler = async () => ({
     path: `C:\\prompt-images\\image-${promptImageSaveCalls.length}.png`,
@@ -299,6 +366,7 @@ function renderDialog(options: DialogOptions = {}): {
   closeCount = 0
   createdCount = 0
   capabilityHandler = options.capabilities ?? (async () => capabilities(true))
+  worktreeListHandler = options.worktrees ?? (async () => [])
   const props = {
     open: true,
     workspaces: options.workspaces ?? [workspace('workspace-a', { agentProvider: 'claude' })],
@@ -364,6 +432,60 @@ function findWorkspaceOption(label: string): any {
     if (divs[index].getAttribute('role') === 'option' && divs[index].textContent === label) return divs[index]
   }
   return null
+}
+
+function findWorktreeTrigger(container: any): any {
+  const buttons = container.getElementsByTagName('button')
+  for (let index = 0; index < buttons.length; index += 1) {
+    if ((buttons[index].getAttribute('aria-label') ?? '').startsWith('Worktree: ')) return buttons[index]
+  }
+  return null
+}
+
+function findWorktreeListbox(): any {
+  const divs = document.body.getElementsByTagName('div')
+  for (let index = 0; index < divs.length; index += 1) {
+    if (
+      divs[index].getAttribute('role') === 'listbox'
+      && divs[index].getAttribute('aria-label') === 'Worktree'
+    ) return divs[index]
+  }
+  return null
+}
+
+function findWorktreeMenuOption(text: string): any {
+  const listbox = findWorktreeListbox()
+  if (!listbox) return null
+  const divs = listbox.getElementsByTagName('div')
+  for (let index = 0; index < divs.length; index += 1) {
+    if (
+      divs[index].getAttribute('role') === 'option'
+      && (divs[index].textContent ?? '').includes(text)
+    ) return divs[index]
+  }
+  return null
+}
+
+function findWorktreeSearchInput(): any {
+  const listbox = findWorktreeListbox()
+  if (!listbox) return null
+  const inputs = listbox.getElementsByTagName('input')
+  for (let index = 0; index < inputs.length; index += 1) {
+    if (inputs[index].getAttribute('placeholder') === 'Search branch or module') return inputs[index]
+  }
+  return null
+}
+
+function findWorktreeCheckboxes(): any[] {
+  const listbox = findWorktreeListbox()
+  if (!listbox) return []
+  return (Array.from(listbox.getElementsByTagName('input')) as any[])
+    .filter((input) => input.type === 'checkbox')
+}
+
+async function openWorktreePicker(container: any): Promise<void> {
+  dispatch(findWorktreeTrigger(container), 'click')
+  await settle()
 }
 
 function findRadio(container: any, label: string): any {
@@ -650,14 +772,19 @@ test('sends the selected workspace, provider, prompt, and worktree setting', asy
   try {
     await settle()
     const prompt = findElement(container, 'textarea')
-    const checkbox = findElement(container, 'input')
-    assert.equal(checkbox.parentNode.textContent, 'Worktree')
-    assert.equal(checkbox.getAttribute('title'), 'Run in a git worktree')
+    const worktreeTrigger = findWorktreeTrigger(container)
+    assert.equal(worktreeTrigger.getAttribute('aria-label'), 'Worktree: No worktree')
+    assert.equal(worktreeTrigger.getAttribute('title'), 'Run in a git worktree')
     prompt.value = 'Summarize this repository'
     dispatch(prompt, 'input')
-    checkbox.checked = true
-    dispatch(checkbox, 'click')
+    dispatch(worktreeTrigger, 'click')
     await settle()
+    const newWorktreeOption = findWorktreeMenuOption('New worktree')
+    assert.ok(newWorktreeOption)
+    dispatch(newWorktreeOption, 'click')
+    await settle()
+    assert.equal(findWorktreeListbox() !== null, true)
+    assert.equal(worktreeTrigger.getAttribute('aria-label'), 'Worktree: New worktree · 2 modules')
 
     dispatch(prompt, 'keydown', { key: 'Enter', shiftKey: true })
     await settle()
@@ -673,6 +800,275 @@ test('sends the selected workspace, provider, prompt, and worktree setting', asy
     })
     assert.equal(createdCount, 1)
     assert.equal(closeCount, 1)
+  } finally {
+    root.unmount()
+  }
+})
+
+test('starts a session in an existing worktree', async () => {
+  const existing = worktreeOption({
+    path: 'C:\\worktrees\\feature',
+    branch: 'feat/feature',
+    changedFiles: 2,
+    activeSessions: 1,
+  })
+  const { container, root } = renderDialog({ worktrees: async () => [existing] })
+
+  try {
+    await settle()
+    await openWorktreePicker(container)
+    assert.equal(findWorktreeListbox()?.getAttribute('aria-label'), 'Worktree')
+    const option = findWorktreeMenuOption(existing.path)
+    assert.ok(option)
+    assert.equal(option.textContent.includes('2 changes · 1 session'), true)
+    dispatch(option, 'click')
+    await settle()
+
+    assert.equal(findWorktreeListbox(), null)
+    assert.equal(
+      findWorktreeTrigger(container).getAttribute('aria-label'),
+      'Worktree: feat/feature · app',
+    )
+    assert.equal(container.textContent.includes(`Starts in ${existing.path} and works on app.`), true)
+
+    dispatch(findElement(container, 'form'), 'submit')
+    await settle()
+    assert.deepEqual(payloads[0], {
+      workspaceId: 'workspace-a',
+      provider: 'claude',
+      worktree: false,
+      existingWorktreePath: existing.path,
+    })
+  } finally {
+    root.unmount()
+  }
+})
+
+test('starts a new worktree with the chosen modules', async () => {
+  const { container, root } = renderDialog()
+
+  try {
+    await settle()
+    await openWorktreePicker(container)
+    dispatch(findWorktreeMenuOption('New worktree'), 'click')
+    await settle()
+
+    const checkboxes = findWorktreeCheckboxes()
+    assert.equal(checkboxes.length, 2)
+    checkboxes[1].checked = false
+    dispatch(checkboxes[1], 'click')
+    await settle()
+
+    assert.equal(
+      findWorktreeTrigger(container).getAttribute('aria-label'),
+      'Worktree: New worktree · 1 module',
+    )
+    assert.equal(
+      container.textContent.includes(`Creates a new branch in app under ${worktreesDirectory}.`),
+      true,
+    )
+
+    dispatch(findElement(container, 'form'), 'submit')
+    await settle()
+    assert.deepEqual(payloads[0], {
+      workspaceId: 'workspace-a',
+      provider: 'claude',
+      worktree: true,
+      worktreeRepositories: ['app'],
+    })
+  } finally {
+    root.unmount()
+  }
+})
+
+test('requires at least one module for a new worktree', async () => {
+  const { container, root } = renderDialog()
+
+  try {
+    await settle()
+    await openWorktreePicker(container)
+    dispatch(findWorktreeMenuOption('New worktree'), 'click')
+    await settle()
+
+    const firstCheckbox = findWorktreeCheckboxes()[0]
+    firstCheckbox.checked = false
+    dispatch(firstCheckbox, 'click')
+    await settle()
+    const secondCheckbox = findWorktreeCheckboxes()[1]
+    secondCheckbox.checked = false
+    dispatch(secondCheckbox, 'click')
+    await settle()
+
+    assert.equal(findCreateButton(container).hasAttribute('disabled'), true)
+    assert.equal(container.textContent.includes('Choose at least one module.'), true)
+
+    dispatch(findElement(container, 'form'), 'submit')
+    await settle()
+    dispatch(findElement(container, 'textarea'), 'keydown', { key: 'Enter' })
+    await settle()
+    assert.equal(payloads.length, 0)
+  } finally {
+    root.unmount()
+  }
+})
+
+test('does not select a worktree whose folder is missing', async () => {
+  const missing = worktreeOption({ path: 'C:\\worktrees\\gone', missing: true })
+  const { container, root } = renderDialog({ worktrees: async () => [missing] })
+
+  try {
+    await settle()
+    await openWorktreePicker(container)
+    const option = findWorktreeMenuOption(missing.path)
+    assert.ok(option)
+    assert.equal(option.getAttribute('aria-disabled'), 'true')
+    assert.equal(option.textContent.includes('Folder not found'), true)
+
+    dispatch(option, 'click')
+    await settle()
+    assert.ok(findWorktreeListbox())
+    assert.equal(findWorktreeTrigger(container).getAttribute('aria-label'), 'Worktree: No worktree')
+  } finally {
+    root.unmount()
+  }
+})
+
+test('filters existing worktrees by branch or module', async () => {
+  const alpha = worktreeOption({
+    path: 'C:\\worktrees\\alpha',
+    branch: 'feat/alpha',
+    repositories: [{ relativePath: 'app', name: 'app' }],
+  })
+  const beta = worktreeOption({
+    path: 'C:\\worktrees\\beta',
+    branch: 'fix/beta',
+    repositories: [{ relativePath: 'libs/api', name: 'api' }],
+  })
+  const { container, root } = renderDialog({ worktrees: async () => [alpha, beta] })
+
+  try {
+    await settle()
+    await openWorktreePicker(container)
+    assert.ok(findWorktreeMenuOption(alpha.path))
+    assert.ok(findWorktreeMenuOption(beta.path))
+
+    const search = findWorktreeSearchInput()
+    search.value = 'API'
+    dispatch(search, 'input')
+    await settle()
+    assert.equal(findWorktreeMenuOption(alpha.path), null)
+    assert.ok(findWorktreeMenuOption(beta.path))
+    assert.ok(findWorktreeMenuOption('Workspace folder'))
+    assert.ok(findWorktreeMenuOption('New worktree'))
+
+    search.value = 'nothing-here'
+    dispatch(search, 'input')
+    await settle()
+    assert.equal(findWorktreeMenuOption(alpha.path), null)
+    assert.equal(findWorktreeMenuOption(beta.path), null)
+    assert.equal(
+      findWorktreeListbox().textContent.includes('No worktree matches the search'),
+      true,
+    )
+  } finally {
+    root.unmount()
+  }
+})
+
+test('ignores a late worktree list response after reopening', async () => {
+  let resolveFirst: (options: AgentWorktreeOption[]) => void = () => undefined
+  const firstResponse = new Promise<AgentWorktreeOption[]>((resolve) => { resolveFirst = resolve })
+  const late = worktreeOption({ path: 'C:\\worktrees\\late', branch: 'feat/late' })
+  const current = worktreeOption({ path: 'C:\\worktrees\\current', branch: 'feat/current' })
+  let listCalls = 0
+  const { container, root } = renderDialog({
+    worktrees: async () => {
+      listCalls += 1
+      return listCalls === 1 ? firstResponse : [current]
+    },
+  })
+
+  try {
+    await settle()
+    await openWorktreePicker(container)
+    dispatch(findWorktreeListbox(), 'keydown', { key: 'Escape' })
+    await settle()
+    await openWorktreePicker(container)
+    assert.ok(findWorktreeMenuOption(current.path))
+
+    resolveFirst([late])
+    await settle()
+    assert.equal(findWorktreeMenuOption(late.path), null)
+    assert.ok(findWorktreeMenuOption(current.path))
+  } finally {
+    root.unmount()
+  }
+})
+
+test('Enter in the worktree search chooses the highlighted row', async () => {
+  const { container, root } = renderDialog()
+
+  try {
+    await settle()
+    await openWorktreePicker(container)
+    const listbox = findWorktreeListbox()
+    assert.ok(listbox)
+    const search = findElement(listbox, 'input')
+    search.dispatchEvent(new TestEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown' }))
+    await settle()
+    search.dispatchEvent(new TestEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter' }))
+    await settle()
+
+    assert.equal(
+      findWorktreeTrigger(container).getAttribute('aria-label'),
+      'Worktree: New worktree · 2 modules',
+    )
+  } finally {
+    root.unmount()
+  }
+})
+
+test('choosing New worktree again keeps the unchecked modules', async () => {
+  const { container, root } = renderDialog()
+
+  try {
+    await settle()
+    await openWorktreePicker(container)
+    dispatch(findWorktreeMenuOption('New worktree'), 'click')
+    await settle()
+    const checkboxes = findWorktreeCheckboxes()
+    checkboxes[1].checked = false
+    dispatch(checkboxes[1], 'click')
+    await settle()
+
+    dispatch(findWorktreeMenuOption('New worktree'), 'click')
+    await settle()
+
+    assert.equal(
+      findWorktreeTrigger(container).getAttribute('aria-label'),
+      'Worktree: New worktree · 1 module',
+    )
+  } finally {
+    root.unmount()
+  }
+})
+
+test('Escape closes the worktree picker without closing the dialog', async () => {
+  const { container, root } = renderDialog()
+
+  try {
+    await settle()
+    await openWorktreePicker(container)
+    const listbox = findWorktreeListbox()
+    assert.ok(listbox)
+    const event = new TestEvent('keydown', { bubbles: true, cancelable: true, key: 'Escape' })
+    listbox.dispatchEvent(event)
+    await settle()
+
+    assert.equal(event.defaultPrevented, true)
+    assert.equal(findWorktreeListbox(), null)
+    assert.equal(findWorktreeTrigger(container).getAttribute('aria-expanded'), 'false')
+    assert.equal(closeCount, 0)
   } finally {
     root.unmount()
   }
@@ -855,11 +1251,11 @@ test('hides the worktree control while checking capabilities and when unavailabl
 
   try {
     await settle()
-    assert.equal(findElement(container, 'input'), null)
+    assert.equal(findWorktreeTrigger(container), null)
 
     resolveCapabilities(capabilities(false))
     await settle()
-    assert.equal(findElement(container, 'input'), null)
+    assert.equal(findWorktreeTrigger(container), null)
     assert.equal(container.textContent.includes('Git worktrees are unavailable for this workspace.'), false)
 
     const prompt = findElement(container, 'textarea')
@@ -921,11 +1317,11 @@ test('ignores a late worktree capability response from the previous workspace', 
     await settle()
     await chooseWorkspace(container, 'workspace-b')
     await settle()
-    assert.equal(findElement(container, 'input'), null)
+    assert.equal(findWorktreeTrigger(container), null)
 
     resolvePrevious(capabilities(true))
     await settle()
-    assert.equal(findElement(container, 'input'), null)
+    assert.equal(findWorktreeTrigger(container), null)
   } finally {
     root.unmount()
   }

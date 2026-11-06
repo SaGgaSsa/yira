@@ -213,7 +213,14 @@ Object.defineProperty(globalThis, 'electron', {
   value: {
     agents: {
       createSession: async () => ({ workspaceId: 'alpha', tileId: 'created', provider: 'claude' }),
-      sessionCapabilities: async (): Promise<AgentSessionCapabilities> => ({ provider: null, providers: [], worktreeAvailable: false }),
+      sessionCapabilities: async (): Promise<AgentSessionCapabilities> => ({
+        provider: null,
+        providers: [],
+        worktreeAvailable: false,
+        worktreeRepositories: [],
+        worktreesDirectory: '',
+      }),
+      listWorktrees: async () => [],
       sessionsSnapshot: async () => ({ sessions: [] }),
       subscribeSessions: async () => false,
       unsubscribeSessions: async () => true,
