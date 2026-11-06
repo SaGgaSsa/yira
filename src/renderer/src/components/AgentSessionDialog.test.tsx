@@ -217,6 +217,10 @@ const translationCopy: Record<string, string> = {
   'agentsView.worktreeSessions_one': '{{count}} session',
   'agentsView.worktreeSessions_other': '{{count}} sessions',
   'agentsView.worktreeSummaryNew': 'Creates a new branch in {{modules}} under {{path}}. When the session closes, it is removed if it has no changes or commits.',
+  'agentsView.worktreeName': 'Name',
+  'agentsView.worktreeNamePlaceholder': 'Optional: generated if empty',
+  'agentsView.worktreeNameInvalid': 'Use letters, numbers, ".", "_", "-" and "/". It must start with a letter or number.',
+  'agentsView.worktreeSummaryNewNamed': 'Creates the branch {{branch}} in {{modules}}, in the folder {{folder}} under {{path}}. When the session closes, it is removed if it has no changes or commits.',
   'agentsView.worktreeSummaryNewEmpty': 'Choose at least one module.',
   'agentsView.worktreeSummaryExisting': 'Starts in {{path}} and works on {{modules}}. Yira keeps this worktree when the session closes.',
   'agentsView.createSession': 'Create session',
@@ -305,6 +309,7 @@ function worktreeOption(overrides: Partial<AgentWorktreeOption> = {}): AgentWork
 }
 
 let payloads: AgentSessionCreateInput[] = []
+let createSessionError: Error | null = null
 let capabilityCalls: string[] = []
 let worktreeListCalls: string[] = []
 let promptImageSaveCalls: AgentPromptImageSaveInput[] = []
@@ -321,6 +326,7 @@ Object.defineProperty(globalThis, 'electron', {
   value: {
     agents: {
       createSession: async (input: AgentSessionCreateInput) => {
+        if (createSessionError) throw createSessionError
         payloads.push(input)
         return createdResult
       },
@@ -357,6 +363,7 @@ function renderDialog(options: DialogOptions = {}): {
   render: (focusRequestId: number, open?: boolean) => void
 } {
   payloads = []
+  createSessionError = null
   capabilityCalls = []
   worktreeListCalls = []
   promptImageSaveCalls = []
@@ -481,6 +488,14 @@ function findWorktreeCheckboxes(): any[] {
   if (!listbox) return []
   return (Array.from(listbox.getElementsByTagName('input')) as any[])
     .filter((input) => input.type === 'checkbox')
+}
+
+function findWorktreeNameInput(container: any): any {
+  const inputs = container.getElementsByTagName('input')
+  for (let index = 0; index < inputs.length; index += 1) {
+    if (inputs[index].getAttribute('placeholder') === 'Optional: generated if empty') return inputs[index]
+  }
+  return null
 }
 
 async function openWorktreePicker(container: any): Promise<void> {
@@ -881,6 +896,24 @@ test('starts a new worktree with the chosen modules', async () => {
   }
 })
 
+test('shows a creation error without the IPC prefix', async () => {
+  const { container, root } = renderDialog()
+
+  try {
+    await settle()
+    createSessionError = new Error(
+      "Error invoking remote method 'agents:sessions:create': Error: The branch \"bug-389\" already exists in Acc",
+    )
+    dispatch(findElement(container, 'form'), 'submit')
+    await settle()
+
+    assert.equal(container.textContent.includes('The branch "bug-389" already exists in Acc'), true)
+    assert.equal(container.textContent.includes('Error invoking remote method'), false)
+  } finally {
+    root.unmount()
+  }
+})
+
 test('requires at least one module for a new worktree', async () => {
   const { container, root } = renderDialog()
 
@@ -907,6 +940,164 @@ test('requires at least one module for a new worktree', async () => {
     dispatch(findElement(container, 'textarea'), 'keydown', { key: 'Enter' })
     await settle()
     assert.equal(payloads.length, 0)
+  } finally {
+    root.unmount()
+  }
+})
+
+test('shows the worktree name field only for a new worktree', async () => {
+  const existing = worktreeOption()
+  const { container, root } = renderDialog({ worktrees: async () => [existing] })
+
+  try {
+    await settle()
+    assert.equal(findWorktreeNameInput(container), null)
+
+    await openWorktreePicker(container)
+    dispatch(findWorktreeMenuOption(existing.path), 'click')
+    await settle()
+    assert.equal(findWorktreeNameInput(container), null)
+
+    await openWorktreePicker(container)
+    dispatch(findWorktreeMenuOption('New worktree'), 'click')
+    await settle()
+    assert.ok(findWorktreeNameInput(container))
+  } finally {
+    root.unmount()
+  }
+})
+
+test('does not send a worktree name when the field is empty', async () => {
+  const { container, root } = renderDialog()
+
+  try {
+    await settle()
+    await openWorktreePicker(container)
+    dispatch(findWorktreeMenuOption('New worktree'), 'click')
+    await settle()
+    assert.ok(findWorktreeNameInput(container))
+
+    dispatch(findElement(container, 'form'), 'submit')
+    await settle()
+    assert.deepEqual(payloads[0], {
+      workspaceId: 'workspace-a',
+      provider: 'claude',
+      worktree: true,
+    })
+  } finally {
+    root.unmount()
+  }
+})
+
+test('sends the normalized worktree name', async () => {
+  const { container, root } = renderDialog()
+
+  try {
+    await settle()
+    await openWorktreePicker(container)
+    dispatch(findWorktreeMenuOption('New worktree'), 'click')
+    await settle()
+
+    const nameInput = findWorktreeNameInput(container)
+    nameInput.value = '  bug 389 '
+    dispatch(nameInput, 'input')
+    await settle()
+
+    dispatch(findElement(container, 'form'), 'submit')
+    await settle()
+    assert.deepEqual(payloads[0], {
+      workspaceId: 'workspace-a',
+      provider: 'claude',
+      worktree: true,
+      worktreeName: 'bug-389',
+    })
+  } finally {
+    root.unmount()
+  }
+})
+
+test('summarizes the named branch and its folder', async () => {
+  const { container, root } = renderDialog()
+
+  try {
+    await settle()
+    await openWorktreePicker(container)
+    dispatch(findWorktreeMenuOption('New worktree'), 'click')
+    await settle()
+
+    const nameInput = findWorktreeNameInput(container)
+    nameInput.value = 'feat/bug-389'
+    dispatch(nameInput, 'input')
+    await settle()
+
+    assert.equal(
+      container.textContent.includes(
+        `Creates the branch feat/bug-389 in app, api, in the folder feat-bug-389 under ${worktreesDirectory}.`,
+      ),
+      true,
+    )
+  } finally {
+    root.unmount()
+  }
+})
+
+test('rejects an invalid worktree name and does not create a session', async () => {
+  const { container, root } = renderDialog()
+
+  try {
+    await settle()
+    await openWorktreePicker(container)
+    dispatch(findWorktreeMenuOption('New worktree'), 'click')
+    await settle()
+
+    const nameInput = findWorktreeNameInput(container)
+    nameInput.value = 'bad..name'
+    dispatch(nameInput, 'input')
+    await settle()
+
+    assert.equal(nameInput.getAttribute('aria-invalid'), 'true')
+    assert.equal(
+      container.textContent.includes('Use letters, numbers, ".", "_", "-" and "/". It must start with a letter or number.'),
+      true,
+    )
+    assert.equal(findCreateButton(container).hasAttribute('disabled'), true)
+
+    dispatch(findElement(container, 'form'), 'submit')
+    await settle()
+    dispatch(findElement(container, 'textarea'), 'keydown', { key: 'Enter' })
+    await settle()
+    assert.equal(payloads.length, 0)
+  } finally {
+    root.unmount()
+  }
+})
+
+test('does not send a typed worktree name when an existing worktree is chosen', async () => {
+  const existing = worktreeOption()
+  const { container, root } = renderDialog({ worktrees: async () => [existing] })
+
+  try {
+    await settle()
+    await openWorktreePicker(container)
+    dispatch(findWorktreeMenuOption('New worktree'), 'click')
+    await settle()
+
+    const nameInput = findWorktreeNameInput(container)
+    nameInput.value = 'bug-389'
+    dispatch(nameInput, 'input')
+    await settle()
+
+    dispatch(findWorktreeMenuOption(existing.path), 'click')
+    await settle()
+
+    dispatch(findElement(container, 'form'), 'submit')
+    await settle()
+    assert.deepEqual(payloads[0], {
+      workspaceId: 'workspace-a',
+      provider: 'claude',
+      worktree: false,
+      existingWorktreePath: existing.path,
+    })
   } finally {
     root.unmount()
   }

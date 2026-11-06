@@ -153,6 +153,112 @@ test('rolls back already-created worktrees in reverse order when a later reposit
   assert.equal((await execGitCommand('git', ['-C', alphaPath, 'branch', '--list', 'yira/agent-rollback'])).stdout.trim(), '')
 })
 
+test('creates a named worktree for every module in a slash-free folder', async (t) => {
+  const temporaryDirectory = await makeTempDirectory()
+  t.after(() => rm(temporaryDirectory, { recursive: true, force: true }))
+
+  const rootPath = join(temporaryDirectory, 'workspace')
+  const alphaPath = join(rootPath, 'alpha')
+  const zetaPath = join(rootPath, 'zeta')
+  await mkdir(rootPath)
+  await initializeRepository(alphaPath)
+  await initializeRepository(zetaPath)
+  const repositories = await resolveWorkspaceWorktreeRepositories({ rootPath, configuredRepositoryPaths: [] })
+  const baseDirectory = join(temporaryDirectory, 'worktrees')
+
+  const worktree = await createAgentWorkspaceWorktrees({
+    rootPath,
+    repositories,
+    sessionId: 'agent-12345678',
+    baseDirectory,
+    name: 'feat/bug-389',
+  })
+
+  assert.equal(worktree.root, join(baseDirectory, 'feat-bug-389'))
+  assert.equal(worktree.branch, 'feat/bug-389')
+  assert.deepEqual(worktree.worktrees.map(({ path }) => path), [
+    join(worktree.root, 'alpha'),
+    join(worktree.root, 'zeta'),
+  ])
+  for (const entry of worktree.worktrees) {
+    assert.equal(
+      (await execGitCommand('git', ['-C', entry.path, 'branch', '--show-current'])).stdout.trim(),
+      'feat/bug-389',
+    )
+    assert.equal(
+      (await execGitCommand('git', ['-C', entry.path, 'config', '--get', 'branch.feat/bug-389.yiraAgent'])).stdout.trim(),
+      'true',
+    )
+  }
+})
+
+test('rejects a named worktree when its folder already exists', async (t) => {
+  const temporaryDirectory = await makeTempDirectory()
+  t.after(() => rm(temporaryDirectory, { recursive: true, force: true }))
+
+  const rootPath = join(temporaryDirectory, 'workspace')
+  const alphaPath = join(rootPath, 'alpha')
+  const zetaPath = join(rootPath, 'zeta')
+  await mkdir(rootPath)
+  await initializeRepository(alphaPath)
+  await initializeRepository(zetaPath)
+  const repositories = await resolveWorkspaceWorktreeRepositories({ rootPath, configuredRepositoryPaths: [] })
+  const baseDirectory = join(temporaryDirectory, 'worktrees')
+  await mkdir(join(baseDirectory, 'feat-bug-389'), { recursive: true })
+
+  await assert.rejects(
+    () => createAgentWorkspaceWorktrees({
+      rootPath,
+      repositories,
+      sessionId: 'agent-12345678',
+      baseDirectory,
+      name: 'feat/bug-389',
+    }),
+    /A worktree folder named "feat-bug-389" already exists/,
+  )
+
+  for (const repository of [alphaPath, zetaPath]) {
+    const branches = await execGitCommand('git', ['-C', repository, 'branch', '--list', 'feat/bug-389'])
+    assert.equal(branches.stdout.trim(), '')
+  }
+})
+
+test('rejects a named worktree when one module already has the branch', async (t) => {
+  const temporaryDirectory = await makeTempDirectory()
+  t.after(() => rm(temporaryDirectory, { recursive: true, force: true }))
+
+  const rootPath = join(temporaryDirectory, 'workspace')
+  const alphaPath = join(rootPath, 'alpha')
+  const zetaPath = join(rootPath, 'zeta')
+  await mkdir(rootPath)
+  await initializeRepository(alphaPath)
+  await initializeRepository(zetaPath)
+  await execGitCommand('git', ['-C', zetaPath, 'branch', 'feat/bug-389'])
+  const repositories = await resolveWorkspaceWorktreeRepositories({ rootPath, configuredRepositoryPaths: [] })
+  const baseDirectory = join(temporaryDirectory, 'worktrees')
+
+  await assert.rejects(
+    () => createAgentWorkspaceWorktrees({
+      rootPath,
+      repositories,
+      sessionId: 'agent-12345678',
+      baseDirectory,
+      name: 'feat/bug-389',
+    }),
+    /The branch "feat\/bug-389" already exists in zeta/,
+  )
+
+  await assert.rejects(() => access(join(baseDirectory, 'feat-bug-389')))
+  assert.equal(
+    (await execGitCommand('git', ['-C', alphaPath, 'branch', '--list', 'feat/bug-389'])).stdout.trim(),
+    '',
+  )
+  for (const repository of [alphaPath, zetaPath]) {
+    const listed = await execGitCommand('git', ['-C', repository, 'worktree', 'list', '--porcelain'])
+    assert.equal(listed.stdout.trim().split(/\r?\n\r?\n/).length, 1)
+  }
+})
+
 test('keeps dirty worktrees and worktrees with commits after the base', async (t) => {
   const temporaryDirectory = await makeTempDirectory()
   t.after(() => rm(temporaryDirectory, { recursive: true, force: true }))
@@ -224,6 +330,7 @@ function worktreeGit(
       return result(output)
     }
     if (args.includes('status')) return result(statuses.get(target) ?? '')
+    if (args.includes('config') && args.includes('--get')) return result()
     throw new Error(`Unexpected Git command: ${args.join(' ')}`)
   }
 }
@@ -541,4 +648,97 @@ test('rejects unsafe worktree branch names before invoking Git', async () => {
     baseSha,
   }, executor), /Invalid agent worktree branch/)
   assert.equal(calls.length, 0)
+})
+
+test('marks a named worktree created by Yira and leaves a manual one unmarked', async (t) => {
+  const temporaryDirectory = await makeTempDirectory()
+  t.after(() => rm(temporaryDirectory, { recursive: true, force: true }))
+
+  const rootPath = join(temporaryDirectory, 'workspace')
+  await initializeRepository(rootPath)
+  const baseDirectory = join(temporaryDirectory, 'worktrees')
+  const repositories = await resolveWorkspaceWorktreeRepositories({ rootPath, configuredRepositoryPaths: [] })
+
+  const created = await createAgentWorkspaceWorktrees({
+    rootPath,
+    repositories,
+    sessionId: 'agent-12345678',
+    baseDirectory,
+    name: 'feat/bug-389',
+  })
+  const baseSha = created.worktrees[0].baseSha
+  const manualPath = join(baseDirectory, 'feat-manual-390')
+  await execGitCommand('git', [
+    '-C', rootPath, 'worktree', 'add', '-b', 'feat/manual-390', '--', manualPath, baseSha,
+  ])
+
+  const options = await listWorkspaceWorktrees({
+    rootPath,
+    configuredRepositoryPaths: [],
+    activeRoots: [],
+  })
+  const named = options.find(({ branch }) => branch === 'feat/bug-389')
+  const manual = options.find(({ branch }) => branch === 'feat/manual-390')
+  assert.equal(named?.createdByYira, true)
+  assert.equal(manual?.createdByYira, false)
+})
+
+test('removes a clean named worktree and its marker, but keeps one with commits', async (t) => {
+  const temporaryDirectory = await makeTempDirectory()
+  t.after(() => rm(temporaryDirectory, { recursive: true, force: true }))
+
+  const rootPath = join(temporaryDirectory, 'workspace')
+  await initializeRepository(rootPath)
+  const baseDirectory = join(temporaryDirectory, 'worktrees')
+  const repositories = await resolveWorkspaceWorktreeRepositories({ rootPath, configuredRepositoryPaths: [] })
+
+  const clean = await createAgentWorkspaceWorktrees({
+    rootPath,
+    repositories,
+    sessionId: 'agent-clean123',
+    baseDirectory,
+    name: 'feat/clean-389',
+  })
+  assert.equal(await removeAgentWorktreeIfClean({
+    path: clean.worktrees[0].path,
+    branch: clean.branch,
+    baseSha: clean.worktrees[0].baseSha,
+  }), 'removed')
+  assert.equal(
+    (await execGitCommand('git', ['-C', rootPath, 'branch', '--list', 'feat/clean-389'])).stdout.trim(),
+    '',
+  )
+  await assert.rejects(() => execGitCommand(
+    'git',
+    ['-C', rootPath, 'config', '--get', 'branch.feat/clean-389.yiraAgent'],
+  ))
+
+  const committed = await createAgentWorkspaceWorktrees({
+    rootPath,
+    repositories,
+    sessionId: 'agent-commit1',
+    baseDirectory,
+    name: 'feat/committed-390',
+  })
+  const worktreePath = committed.worktrees[0].path
+  await writeFile(join(worktreePath, 'change.txt'), 'kept\n')
+  await execGitCommand('git', ['-C', worktreePath, 'add', 'change.txt'])
+  await execGitCommand('git', ['-C', worktreePath, 'commit', '--quiet', '-m', 'worktree commit'])
+
+  assert.equal(await removeAgentWorktreeIfClean({
+    path: worktreePath,
+    branch: committed.branch,
+    baseSha: committed.worktrees[0].baseSha,
+  }), 'kept')
+  assert.match(
+    (await execGitCommand('git', ['-C', rootPath, 'branch', '--list', 'feat/committed-390'])).stdout,
+    /feat\/committed-390/,
+  )
+  assert.equal(
+    (await execGitCommand(
+      'git',
+      ['-C', rootPath, 'config', '--get', 'branch.feat/committed-390.yiraAgent'],
+    )).stdout.trim(),
+    'true',
+  )
 })

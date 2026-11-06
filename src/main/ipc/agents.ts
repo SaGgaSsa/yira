@@ -26,6 +26,7 @@ import type {
 } from '@shared/types'
 import { getAgentPromptIssue } from '@shared/agentPrompt'
 import { isBotAvailableInWorkspace, isValidBotId, type BotDefinition } from '@shared/bots'
+import { isValidWorktreeName } from '@shared/worktreeName'
 import type { AgentUsageService } from '../agentUsage'
 import type { AgentUsageDetailsService } from '../agentUsageDetails'
 import type { AgentUsageIndex } from '../agentUsageIndex'
@@ -138,6 +139,7 @@ interface NormalizedAgentSessionCreateInput {
   images: AgentPromptImageAttachment[]
   worktree: boolean
   worktreeRepositories?: string[]
+  worktreeName?: string
   existingWorktreePath?: string
   provider?: AgentProvider
   botId?: string
@@ -430,6 +432,14 @@ function normalizeCreateInput(
     worktreeRepositories = [...value.worktreeRepositories]
   }
 
+  let worktreeName: string | undefined
+  if (value.worktreeName !== undefined) {
+    if (!worktree || !isValidWorktreeName(value.worktreeName)) {
+      throw new Error('Invalid agent worktree name')
+    }
+    worktreeName = value.worktreeName
+  }
+
   let existingWorktreePath: string | undefined
   if (value.existingWorktreePath !== undefined) {
     if (
@@ -469,6 +479,7 @@ function normalizeCreateInput(
     images,
     worktree,
     ...(worktreeRepositories ? { worktreeRepositories } : {}),
+    ...(worktreeName !== undefined ? { worktreeName } : {}),
     ...(existingWorktreePath !== undefined ? { existingWorktreePath } : {}),
     ...(value.provider !== undefined ? { provider: value.provider } : {}),
   }
@@ -641,6 +652,7 @@ export function createAgentSessionLauncher(options: AgentIPCOptions = {}): Agent
         repositories,
         sessionId: tileId,
         baseDirectory: base,
+        ...(input.worktreeName ? { name: input.worktreeName } : {}),
       })
       worktree = createdWorktree
       cwd = worktree.root

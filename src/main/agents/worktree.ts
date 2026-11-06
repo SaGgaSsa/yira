@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { mapWithConcurrency } from '@shared/mapWithConcurrency'
 import type { AgentWorktreeOption } from '@shared/types'
+import { isValidWorktreeName, worktreeFolderName } from '@shared/worktreeName'
 
 import { discoverGitRepositories, resolveConfiguredGitRepository } from '../git/repositories'
 import { execGitCommand, type GitCommandExecutor } from '../git/runner'
@@ -27,6 +28,7 @@ export interface AgentWorkspaceWorktreeCreateInput {
   repositories: AgentWorktreeRepository[]
   sessionId: string
   baseDirectory: string
+  name?: string
 }
 
 export interface AgentWorkspaceWorktree {
@@ -70,7 +72,7 @@ function runGitAt(rootPath: string, args: string[], executor: GitCommandExecutor
 }
 
 function validateBranch(branch: unknown): asserts branch is string {
-  if (typeof branch !== 'string' || !/^yira\/agent-[A-Za-z0-9][A-Za-z0-9._-]*$/.test(branch)) {
+  if (!isValidWorktreeName(branch)) {
     throw new Error('Invalid agent worktree branch')
   }
 }
@@ -251,6 +253,24 @@ function compareWorktreeOptions(left: AgentWorktreeOption, right: AgentWorktreeO
   return normalizePathForCompare(left.path).localeCompare(normalizePathForCompare(right.path))
 }
 
+async function hasYiraBranchMarker(
+  repository: AgentWorktreeRepository,
+  branch: string,
+  executor: GitCommandExecutor,
+): Promise<boolean> {
+  try {
+    const result = await runGitAt(
+      repository.absolutePath,
+      ['config', '--get', `branch.${branch}.yiraAgent`],
+      executor,
+    )
+    return result.stdout.trim() === 'true'
+  } catch {
+    // Git exits with 1 when the branch has no Yira marker.
+    return false
+  }
+}
+
 /** List every checkout that already exists across the workspace repositories. */
 export async function listWorkspaceWorktrees(
   input: ListWorkspaceWorktreesInput,
@@ -330,24 +350,33 @@ export async function listWorkspaceWorktrees(
     )))
   ).some(Boolean)))
 
-  const changedFiles = await mapWithConcurrency(rows, 8, async (row, index): Promise<number | undefined> => {
-    if (missing[index]) return undefined
-    let total = 0
-    for (const entry of row.entries) {
-      try {
-        const status = await executor('git', ['--no-optional-locks', '-C', entry.path, 'status', '--porcelain'])
-        total += countChangedLines(status.stdout)
-      } catch {
-        return undefined
+  const [changedFiles, markedBranches] = await Promise.all([
+    mapWithConcurrency(rows, 8, async (row, index): Promise<number | undefined> => {
+      if (missing[index]) return undefined
+      let total = 0
+      for (const entry of row.entries) {
+        try {
+          const status = await executor('git', ['--no-optional-locks', '-C', entry.path, 'status', '--porcelain'])
+          total += countChangedLines(status.stdout)
+        } catch {
+          return undefined
+        }
       }
-    }
-    return total
-  })
+      return total
+    }),
+    mapWithConcurrency(rows, 8, async (row): Promise<boolean> => {
+      const branch = row.entries[0].branch
+      if (!branch || branch.startsWith('yira/agent-')) return false
+      return hasYiraBranchMarker(row.entries[0].repository, branch, executor)
+    }),
+  ])
 
   const options = rows.map((row, index): AgentWorktreeOption => {
     const first = row.entries[0]
     const branch = first.branch
-    const createdByYira = branch?.startsWith('yira/agent-') ?? false
+    const createdByYira = branch
+      ? branch.startsWith('yira/agent-') || markedBranches[index]
+      : false
     const option: AgentWorktreeOption = {
       path: row.path,
       ...(branch ? { branch } : {}),
@@ -370,6 +399,20 @@ export async function listWorkspaceWorktrees(
   return options.sort(compareWorktreeOptions)
 }
 
+async function branchExistsInRepository(
+  repository: AgentWorktreeRepository,
+  branch: string,
+  executor: GitCommandExecutor,
+): Promise<boolean> {
+  await runGitAt(repository.absolutePath, ['check-ref-format', '--branch', branch], executor)
+  const existing = await runGitAt(
+    repository.absolutePath,
+    ['branch', '--list', '--format=%(refname:short)', branch],
+    executor,
+  )
+  return existing.stdout.trim().length > 0
+}
+
 async function nextAvailableBranch(
   repositories: AgentWorktreeRepository[],
   shortId: string,
@@ -382,13 +425,7 @@ async function nextAvailableBranch(
     let isAvailable = true
 
     for (const repository of repositories) {
-      await runGitAt(repository.absolutePath, ['check-ref-format', '--branch', branch], executor)
-      const existing = await runGitAt(
-        repository.absolutePath,
-        ['branch', '--list', '--format=%(refname:short)', branch],
-        executor,
-      )
-      if (existing.stdout.trim()) {
+      if (await branchExistsInRepository(repository, branch, executor)) {
         isAvailable = false
         break
       }
@@ -397,6 +434,28 @@ async function nextAvailableBranch(
     if (isAvailable) return branch
   }
   throw new Error('No available agent worktree branch name')
+}
+
+async function assertNamedBranchAvailable(
+  repositories: AgentWorktreeRepository[],
+  branch: string,
+  executor: GitCommandExecutor,
+): Promise<void> {
+  for (const repository of repositories) {
+    if (await branchExistsInRepository(repository, branch, executor)) {
+      throw new Error(`The branch "${branch}" already exists in ${basename(repository.absolutePath)}`)
+    }
+  }
+}
+
+async function folderExists(targetPath: string): Promise<boolean> {
+  try {
+    await fs.lstat(targetPath)
+    return true
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') return false
+    throw error
+  }
 }
 
 /** Create one shared branch across the selected repositories under a single workspace container. */
@@ -417,9 +476,9 @@ export async function createAgentWorkspaceWorktrees(
   const shortId = normalizeSessionSuffix(input.sessionId)
   const canonicalRoot = await fs.realpath(resolve(input.rootPath))
   const workspaceName = basename(resolve(input.rootPath)) || 'workspace'
-  const root = join(resolve(input.baseDirectory), `${workspaceName}-${shortId}`)
+  const folder = input.name ? worktreeFolderName(input.name) : `${workspaceName}-${shortId}`
+  const root = join(resolve(input.baseDirectory), folder)
   const repositories = [...input.repositories].sort(compareRepositories)
-  const branch = await nextAvailableBranch(repositories, shortId, executor)
   const baseShas = new Map<string, string>()
 
   for (const repository of repositories) {
@@ -432,6 +491,18 @@ export async function createAgentWorkspaceWorktrees(
     if (relativePath !== repository.relativePath) throw new Error('Agent worktree repository path changed')
     const sha = await resolveHead(canonicalRepositoryPath, executor)
     baseShas.set(repository.relativePath, sha)
+  }
+
+  let branch: string
+  if (input.name) {
+    validateBranch(input.name)
+    if (await folderExists(root)) {
+      throw new Error(`A worktree folder named "${folder}" already exists`)
+    }
+    await assertNamedBranchAvailable(repositories, input.name, executor)
+    branch = input.name
+  } else {
+    branch = await nextAvailableBranch(repositories, shortId, executor)
   }
 
   await fs.mkdir(resolve(input.baseDirectory), { recursive: true })
@@ -449,6 +520,13 @@ export async function createAgentWorkspaceWorktrees(
       await runGitAt(repository.absolutePath, ['worktree', 'add', '-b', branch, '--', worktreePath, baseSha], executor)
       worktreeRepositories.set(resolve(worktreePath), repository.absolutePath)
       created.push({ path: worktreePath, repositoryPath: repository.relativePath, baseSha })
+      if (input.name) {
+        await runGitAt(
+          repository.absolutePath,
+          ['config', `branch.${input.name}.yiraAgent`, 'true'],
+          executor,
+        )
+      }
     }
   } catch (error) {
     for (const worktree of [...created].reverse()) {
