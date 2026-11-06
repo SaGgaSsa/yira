@@ -100,6 +100,10 @@ _Avoid_: Agent Tile, persisted view mode
 A live provider session shown in Agents View, identified by a synthetic runtime target rather than a workspace Tile. By default it works in the workspace folder; it can start in a new Git worktree limited to chosen repositories, or in an existing one. Closing it only removes a worktree it created.
 _Avoid_: Tile, Terminal Tile
 
+**Workspace Replica**:
+The folder an Agent Session starts in when its worktree belongs to a container workspace, one whose folder is not a Git repository. Chosen modules are real worktrees or links to them; everything else in the container is a link, so instructions, agent settings and sibling modules resolve as they do in the container. Yira creates its links and removes only those.
+_Avoid_: Copy, mirror
+
 **Terminal Attention**:
 Session-only runtime state for a Terminal Tile that receives new output while it is not being attended.
 _Avoid_: Unread Output, Needs Attention

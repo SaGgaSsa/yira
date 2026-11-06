@@ -42,7 +42,6 @@ export interface AgentWorkspaceWorktree {
 export interface ListWorkspaceWorktreesInput {
   rootPath: string
   configuredRepositoryPaths: string[]
-  worktreesDirectory: string
   /** worktreeRoot of the live agent sessions. */
   activeRoots: string[]
 }
@@ -82,7 +81,7 @@ function validateBaseSha(baseSha: unknown): asserts baseSha is string {
   }
 }
 
-function normalizeSessionSuffix(sessionId: string): string {
+export function normalizeSessionSuffix(sessionId: string): string {
   const normalized = sessionId.startsWith('agent-') ? sessionId.slice('agent-'.length) : sessionId
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(normalized)) {
     throw new Error('Invalid agent session id')
@@ -269,9 +268,6 @@ export async function listWorkspaceWorktrees(
     return []
   }
 
-  const worktreesDirectory = typeof input.worktreesDirectory === 'string' && input.worktreesDirectory.trim()
-    ? resolve(input.worktreesDirectory)
-    : ''
   const activeRoots = Array.isArray(input.activeRoots) ? input.activeRoots : []
   const seenPaths = new Set<string>()
   const entries: Array<{
@@ -351,18 +347,15 @@ export async function listWorkspaceWorktrees(
   const options = rows.map((row, index): AgentWorktreeOption => {
     const first = row.entries[0]
     const branch = first.branch
-    const createdByYira = (branch?.startsWith('yira/agent-') ?? false)
-      || (worktreesDirectory !== '' && isPathInside(
-        normalizePathForCompare(worktreesDirectory),
-        normalizePathForCompare(row.path),
-      ))
+    const createdByYira = branch?.startsWith('yira/agent-') ?? false
     const option: AgentWorktreeOption = {
       path: row.path,
       ...(branch ? { branch } : {}),
       head: first.head.slice(0, 7),
-      repositories: row.entries.map(({ repository }) => ({
+      repositories: row.entries.map(({ path, repository }) => ({
         relativePath: repository.relativePath,
         name: basename(repository.absolutePath),
+        path,
       })),
       createdByYira,
       activeSessions: activeRoots.filter((root) => (

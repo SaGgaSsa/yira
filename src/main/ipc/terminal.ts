@@ -208,6 +208,8 @@ export interface AgentsViewLaunchSpec {
   prompt?: string
   resumeSessionId?: string
   cwd: string
+  /** Folders outside `cwd` the agent may edit. */
+  addDirectories?: string[]
   /** Workspace-relative directory; absent when the session runs in a worktree. */
   relativeCwd?: string
   title?: string
@@ -558,6 +560,8 @@ export async function createAgentsViewSession(
         ? ['--resume', resumeSessionId]
         : ['resume', resumeSessionId]))
     }
+    // --add-dir accepts several values, so it must precede another flag, not the prompt.
+    for (const directory of spec.addDirectories ?? []) args.push('--add-dir', directory)
     // A Claude session presets its conversation id so a canvas tile can resume
     // it later, the same mechanism buildFixedProviderCommand uses for tiles.
     const presetSessionId = spec.provider === 'claude' && !resumeSessionId ? randomUUID() : undefined
