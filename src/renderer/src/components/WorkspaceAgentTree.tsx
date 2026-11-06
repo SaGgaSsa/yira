@@ -103,7 +103,7 @@ export function WorkspaceAgentTree({
               onAgentDragStart?.(session)
             } : undefined}
             onClick={() => onOpenAgent(workspace, session)}
-            className={`relative flex h-[26px] min-w-0 items-center gap-2 pl-9 pr-3 text-left transition-colors ${focused ? 'bg-active-bg before:absolute before:inset-y-[5px] before:left-0 before:w-0.5 before:rounded-full before:bg-text-display' : 'hover:bg-hover-bg'} focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--interactive)`}
+            className={`relative flex h-[26px] min-w-0 items-center gap-2 pl-6 pr-3 text-left transition-colors ${focused ? 'bg-active-bg before:absolute before:inset-y-[5px] before:left-0 before:w-0.5 before:rounded-full before:bg-text-display' : 'hover:bg-hover-bg'} focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--interactive)`}
           >
             <StatusDot status={session.status} />
             {bot && <BotAvatar icon={bot.icon} color={bot.color} size={14} />}
