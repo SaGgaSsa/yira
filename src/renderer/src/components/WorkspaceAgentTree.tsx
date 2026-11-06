@@ -9,6 +9,7 @@ import { keepAgentSessionOrder } from '@/utils/workspaceSidebarSections'
 import { BotAvatar } from './botVisuals'
 
 const ELAPSED_REFRESH_MS = 30_000
+const AGENT_TILE_DRAG_TYPE = 'application/x-yira-tile-id'
 
 export interface WorkspaceAgentTreeProps {
   workspace: WorkspaceMetadata
@@ -17,6 +18,9 @@ export interface WorkspaceAgentTreeProps {
   /** Tile of the agent shown on screen; its row is marked as current. */
   focusedTileId?: string | null
   onOpenAgent: (workspace: WorkspaceMetadata, session: AgentActiveSession) => void
+  canDragAgent?: (session: AgentActiveSession) => boolean
+  onAgentDragStart?: (session: AgentActiveSession) => void
+  agentDragActive?: boolean
 }
 
 function getStatusLabel(status: AgentActiveSession['status'], translate: (key: string) => string): string {
@@ -40,16 +44,19 @@ export function WorkspaceAgentTree({
   sessions,
   focusedTileId = null,
   onOpenAgent,
+  canDragAgent,
+  onAgentDragStart,
+  agentDragActive = false,
 }: WorkspaceAgentTreeProps): React.ReactElement | null {
   const { t } = useTranslation()
   const now = useNow(ELAPSED_REFRESH_MS)
   const { bots } = useBots()
   const botsById = useMemo(() => new Map(bots.map((bot) => [bot.id, bot])), [bots])
-  // While the pointer or focus is on the list, rows keep their place so a click lands where the user aimed.
+  // While the pointer or focus is on the list, rows keep their place so a click lands where the user aimed. A native drag leaves the list too.
   const [hovered, setHovered] = useState(false)
   const [focusedWithin, setFocusedWithin] = useState(false)
   const shownIdsRef = useRef<string[]>([])
-  const shownSessions = hovered || focusedWithin ? keepAgentSessionOrder(sessions, shownIdsRef.current) : sessions
+  const shownSessions = hovered || focusedWithin || agentDragActive ? keepAgentSessionOrder(sessions, shownIdsRef.current) : sessions
   useEffect(() => {
     shownIdsRef.current = shownSessions.map(({ sessionId }) => sessionId)
   })
@@ -79,6 +86,7 @@ export function WorkspaceAgentTree({
         const nameClass = focused
           ? 'font-medium text-text-display'
           : waiting || done ? 'text-text-primary' : 'text-text-secondary'
+        const draggable = canDragAgent?.(session) ?? false
 
         return (
           <button
@@ -88,6 +96,12 @@ export function WorkspaceAgentTree({
             aria-label={`${rowName}, ${statusText}`}
             aria-current={focused ? 'true' : undefined}
             title={`${rowName} · ${statusText}`}
+            draggable={draggable}
+            onDragStart={draggable ? (event) => {
+              event.dataTransfer.effectAllowed = 'move'
+              event.dataTransfer.setData(AGENT_TILE_DRAG_TYPE, session.tileId)
+              onAgentDragStart?.(session)
+            } : undefined}
             onClick={() => onOpenAgent(workspace, session)}
             className={`relative flex h-[26px] min-w-0 items-center gap-2 pl-9 pr-3 text-left transition-colors ${focused ? 'bg-active-bg before:absolute before:inset-y-[5px] before:left-0 before:w-0.5 before:rounded-full before:bg-text-display' : 'hover:bg-hover-bg'} focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--interactive)`}
           >

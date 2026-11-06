@@ -20,6 +20,9 @@ export interface ActiveWorkspaceEntryProps extends Omit<WorkspaceListItemProps, 
   /** Tile of the agent shown on screen, only set for the active workspace. */
   focusedAgentTileId?: string | null
   onReorder?: (draggedId: string, targetId: string, placement: SidebarDropPlacement) => void
+  canDragAgent?: (session: AgentActiveSession) => boolean
+  onAgentDragStart?: (session: AgentActiveSession) => void
+  agentDragActive?: boolean
   className?: string
 }
 
@@ -31,6 +34,9 @@ export function ActiveWorkspaceEntry({
   onOpenAgent,
   focusedAgentTileId = null,
   onReorder,
+  canDragAgent,
+  onAgentDragStart,
+  agentDragActive = false,
   className = '',
   ...workspaceListItemProps
 }: ActiveWorkspaceEntryProps): React.ReactElement {
@@ -106,6 +112,9 @@ export function ActiveWorkspaceEntry({
           sessions={workspaceSessions}
           focusedTileId={focusedAgentTileId}
           onOpenAgent={onOpenAgent}
+          canDragAgent={canDragAgent}
+          onAgentDragStart={onAgentDragStart}
+          agentDragActive={agentDragActive}
         />
       )}
       {dropPlacement && (
