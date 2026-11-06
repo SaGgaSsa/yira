@@ -66,9 +66,9 @@ export function WorkspaceListItem({
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
     >
-      {leading && <div className="flex shrink-0 items-center pl-3">{leading}</div>}
+      {leading && <div className="flex shrink-0 items-center pl-3.5">{leading}</div>}
       <button
-        className={`flex h-full min-w-0 flex-1 items-center text-left ${leading ? 'pl-0.5' : 'pl-5'} focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--interactive)`}
+        className={`flex h-full min-w-0 flex-1 items-center text-left ${leading ? '' : 'pl-5'} focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--interactive)`}
         onClick={onClick}
         title={workspace.name}
         type="button"
