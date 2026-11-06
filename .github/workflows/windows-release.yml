@@ -126,3 +126,16 @@ jobs:
             -F prerelease=false \
             -F make_latest=true \
             -F body=@release-notes.md
+
+      # Only the newest release stays published. Tags stay because the notes read them.
+      # Comparing dates keeps newer releases when an old tag's run is re-run.
+      - name: Delete older releases
+        shell: bash
+        run: |
+          current_created_at="$(gh api "repos/${RELEASE_REPOSITORY}/releases/tags/${GITHUB_REF_NAME}" --jq .created_at)"
+
+          gh api "repos/${RELEASE_REPOSITORY}/releases" --paginate \
+            --jq ".[] | select(.tag_name != \"${GITHUB_REF_NAME}\" and .created_at < \"${current_created_at}\") | .id" \
+            | while read -r release_id; do
+                gh api --method DELETE "repos/${RELEASE_REPOSITORY}/releases/${release_id}"
+              done
