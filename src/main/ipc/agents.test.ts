@@ -518,7 +518,8 @@ test('prefers the configured worktree folder and excludes it from the container 
   const ipcMain = new FakeIpcMain()
   const { registerAgentsIPC } = loadAgentsIPC(ipcMain)
   const { links, linked } = recordingWorkspaceLinks()
-  const configuredDirectory = 'C:\\workspace\\agent-worktrees'
+  // Built with the platform's separator so path.relative sees it inside the root on Linux too.
+  const configuredDirectory = join('C:\\workspace', 'agent-worktrees')
   const bases: string[] = []
   registerAgentsIPC({
     enabledProviders: async () => ['claude'],
