@@ -14,6 +14,7 @@ export interface WorkspaceDialogValue {
   initialCommand: string
   customScripts?: WorkspaceCustomScript[]
   terminalHistoryEnabled: boolean
+  gitDiffEnabled?: boolean
   remoteTerminal: RemoteTerminalConfig
   agentProvider?: AgentProvider
   agentProviders: AgentProvidersConfig
@@ -96,6 +97,7 @@ export function normalizeValue(value: WorkspaceDialogValue): WorkspaceDialogValu
       .map((script) => ({ ...script, name: script.name.trim(), command: script.command.trim() }))
       .filter((script) => script.name && script.command),
     terminalHistoryEnabled: value.terminalHistoryEnabled,
+    ...(value.gitDiffEnabled === false ? { gitDiffEnabled: false } : {}),
     remoteTerminal: {
       host: value.remoteTerminal.host.trim(),
       user: value.remoteTerminal.user.trim(),
@@ -801,46 +803,63 @@ export function WorkspaceDialog({ request, onCancel, onConfirm, allowCustomScrip
           )}
 
           {activeTab === 'sourceControl' && (
-            <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
-              <div className="mb-2 flex items-center gap-2">
-                <GitBranch size={14} className="text-text-secondary" />
-                <span className="nd-label text-text-secondary">{t('workspace.sourceControl')}</span>
-              </div>
-              <p className="mb-4 text-sm leading-6 text-text-secondary">{t('workspace.selectRepositories')}</p>
-              {repositoriesLoading ? (
-                <div className="rounded-[18px] border border-border-visible px-4 py-3 text-sm text-text-secondary" role="status">
-                  {t('common.loading')}
+            <div className="space-y-6">
+              <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
+                <label className="flex items-center justify-between gap-4">
+                  <span className="min-w-0">
+                    <span className="nd-label block text-text-secondary">{t('workspace.gitDiffEnabled')}</span>
+                    <span className="mt-1 block text-xs leading-5 text-text-disabled">{t('workspace.gitDiffEnabledHelp')}</span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    className="h-5 w-5 shrink-0 accent-(--text-primary)"
+                    checked={value.gitDiffEnabled !== false}
+                    onChange={(event) => setValue((current) => current ? { ...current, gitDiffEnabled: event.target.checked } : current)}
+                  />
+                </label>
+              </section>
+
+              <section className="rounded-[24px] border border-border bg-bg-tertiary px-4 py-4">
+                <div className="mb-2 flex items-center gap-2">
+                  <GitBranch size={14} className="text-text-secondary" />
+                  <span className="nd-label text-text-secondary">{t('workspace.sourceControl')}</span>
                 </div>
-              ) : repositories.length === 0 ? (
-                <div className="rounded-[18px] border border-border-visible px-4 py-3 text-sm text-text-secondary" role="status">
-                  {t('workspace.noRepositoriesConfigured')}
-                </div>
-              ) : (
-                <div className="space-y-2" role="group" aria-label={t('workspace.selectRepositories')}>
-                  {repositories.map((repository) => {
-                    const checked = value.sourceControlRepositoryPaths.includes(repository.relativePath)
-                    return (
-                      <label
-                        key={repository.relativePath}
-                        className={`flex cursor-pointer items-center gap-3 rounded-[18px] border px-4 py-3 transition-colors ${
-                          checked ? 'border-text-display bg-bg-primary text-text-display' : 'border-border-visible text-text-secondary hover:bg-hover-bg hover:text-text-display'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 shrink-0 accent-(--text-primary)"
-                          checked={checked}
-                          onChange={(event) => toggleRepository(repository.relativePath, event.target.checked)}
-                          aria-label={`${t('workspace.repository')}: ${repository.name}`}
-                        />
-                        <span className="min-w-0 flex-1 truncate text-sm">{repository.name}</span>
-                        <span className="shrink-0 font-mono text-xs text-text-disabled">{repository.relativePath}</span>
-                      </label>
-                    )
-                  })}
-                </div>
-              )}
-            </section>
+                <p className="mb-4 text-sm leading-6 text-text-secondary">{t('workspace.selectRepositories')}</p>
+                {repositoriesLoading ? (
+                  <div className="rounded-[18px] border border-border-visible px-4 py-3 text-sm text-text-secondary" role="status">
+                    {t('common.loading')}
+                  </div>
+                ) : repositories.length === 0 ? (
+                  <div className="rounded-[18px] border border-border-visible px-4 py-3 text-sm text-text-secondary" role="status">
+                    {t('workspace.noRepositoriesConfigured')}
+                  </div>
+                ) : (
+                  <div className="space-y-2" role="group" aria-label={t('workspace.selectRepositories')}>
+                    {repositories.map((repository) => {
+                      const checked = value.sourceControlRepositoryPaths.includes(repository.relativePath)
+                      return (
+                        <label
+                          key={repository.relativePath}
+                          className={`flex cursor-pointer items-center gap-3 rounded-[18px] border px-4 py-3 transition-colors ${
+                            checked ? 'border-text-display bg-bg-primary text-text-display' : 'border-border-visible text-text-secondary hover:bg-hover-bg hover:text-text-display'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 shrink-0 accent-(--text-primary)"
+                            checked={checked}
+                            onChange={(event) => toggleRepository(repository.relativePath, event.target.checked)}
+                            aria-label={`${t('workspace.repository')}: ${repository.name}`}
+                          />
+                          <span className="min-w-0 flex-1 truncate text-sm">{repository.name}</span>
+                          <span className="shrink-0 font-mono text-xs text-text-disabled">{repository.relativePath}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                )}
+              </section>
+            </div>
           )}
           </div>
         </div>

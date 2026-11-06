@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
-import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -140,6 +140,29 @@ test('returns the net pushed diff plus staged, unstaged, and untracked text chan
     })
   } finally {
     await Promise.all([rm(rootPath, { recursive: true, force: true }), rm(remotePath, { recursive: true, force: true })])
+  }
+})
+
+test('reads a diff without rewriting the index when only file metadata changed', async () => {
+  const rootPath = await mkdtemp(join(tmpdir(), 'yira-diff-index-stable-'))
+  try {
+    await initRepository(rootPath)
+    await writeFile(join(rootPath, 'tracked.txt'), 'one\ntwo\n')
+    await commitAll(rootPath, 'base')
+
+    const indexBefore = await stat(join(rootPath, '.git', 'index'))
+    const changedMtime = new Date(Date.now() + 10_000)
+    await utimes(join(rootPath, 'tracked.txt'), changedMtime, changedMtime)
+
+    assert.deepEqual(await getGitDiffSummary(rootPath), {
+      additions: 0,
+      deletions: 0,
+      available: true,
+    })
+    const indexAfter = await stat(join(rootPath, '.git', 'index'))
+    assert.equal(indexAfter.mtimeMs, indexBefore.mtimeMs)
+  } finally {
+    await rm(rootPath, { recursive: true, force: true })
   }
 })
 

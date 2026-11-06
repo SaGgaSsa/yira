@@ -201,3 +201,30 @@ try {
 } catch (error) {
   if (!(error instanceof Error) || error.message !== 'Workspace name cannot be empty') throw error
 }
+
+const gitDiffDisabledWorkspace: Workspace = {
+  ...workspace('ws-git-diff', 'Git diff', '/repo/git-diff'),
+  config: normalizeWorkspaceConfig({ gitDiffEnabled: false }),
+}
+
+const preservedGitDiff = applyWorkspaceManagementChanges({
+  existingWorkspaces: [gitDiffDisabledWorkspace],
+  activeWorkspaceId: 'ws-git-diff',
+  desiredWorkspaces: [{ id: 'ws-git-diff', name: 'Git diff', rootFolderPath: '/repo/git-diff' }],
+  nextWorkspaceId,
+  internalWorkspacePath,
+})
+if (preservedGitDiff.workspaces[0].config.gitDiffEnabled !== false) {
+  throw new Error('management edits without the field must retain a disabled Git diff setting')
+}
+
+const reactivatedGitDiff = applyWorkspaceManagementChanges({
+  existingWorkspaces: [gitDiffDisabledWorkspace],
+  activeWorkspaceId: 'ws-git-diff',
+  desiredWorkspaces: [{ id: 'ws-git-diff', name: 'Git diff', rootFolderPath: '/repo/git-diff', gitDiffEnabled: true }],
+  nextWorkspaceId,
+  internalWorkspacePath,
+})
+if (reactivatedGitDiff.workspaces[0].config.gitDiffEnabled === false) {
+  throw new Error('management edits with the field enabled must reactivate Git diff counting')
+}

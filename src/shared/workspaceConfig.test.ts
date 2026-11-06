@@ -267,3 +267,14 @@ test('limits normalized custom workspace scripts to fifty entries', () => {
 
   assert.equal(normalizeWorkspaceConfig({ customScripts }).customScripts?.length, 50)
 })
+
+test('keeps only a disabled Git diff setting in the normalized config', () => {
+  const disabled = normalizeWorkspaceConfig({ gitDiffEnabled: false })
+  assert.equal(disabled.gitDiffEnabled, false)
+
+  const enabled = normalizeWorkspaceConfig({ gitDiffEnabled: true })
+  assert.equal('gitDiffEnabled' in enabled, false)
+
+  const missing = normalizeWorkspaceConfig({})
+  assert.equal('gitDiffEnabled' in missing, false)
+})

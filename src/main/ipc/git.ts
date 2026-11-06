@@ -3,12 +3,15 @@ import type { GitBranchListResult, GitCommitFilesResult, GitCommitHistoryResult,
 import { getGitCommitFileDiffContent, getGitDiffSummary, getGitFileDiffContent } from '../git/diff'
 import { discoverGitRepositories, resolveConfiguredGitRepository } from '../git/repositories'
 import { abortGitOperation, commitGitChanges, continueGitOperation, createGitBranch, checkoutGitBranch, discardGitChanges, type GitDiscardPaths, fetchGitRepository, findGitBranchStash, getGitCommitFiles, getGitCommitHistory, getGitStatus, listGitBranches, mergeGitBranch, popGitStash, publishGitBranch, pullGitRepository, pushGitRepository, rebaseGitBranch, stageGitFiles, stashGitChangesForBranch, syncGitRepository, unstageGitFiles } from '../git/runner'
+import { createWorkspaceDiffWatcher, type WorkspaceDiffWatcher } from '../git/workspaceDiffWatcher'
 import { getWorkspaceGitConfigById } from './workspace'
 
 interface WorkspaceGitConfig {
   rootPath: string
   configuredRepositoryPaths: string[]
 }
+
+export const WORKSPACE_DIFF_CHANGED_CHANNEL = 'git:workspaceDiff:changed'
 
 const WORKSPACE_DIFF_CACHE_TTL_MS = 5_000
 
@@ -100,6 +103,7 @@ export interface GitIPCDependencies {
   getGitCommitHistory: typeof getGitCommitHistory
   getGitDiffSummary: typeof getGitDiffSummary
   workspaceDiffCacheTtlMs?: number
+  createWorkspaceDiffWatcher?: typeof createWorkspaceDiffWatcher
   getGitFileDiffContent?: typeof getGitFileDiffContent
   stageGitFiles: typeof stageGitFiles
   unstageGitFiles: typeof unstageGitFiles
@@ -128,6 +132,14 @@ type GitIPCHandler = (...args: any[]) => unknown
 
 interface GitIPCMain {
   handle(channel: string, handler: GitIPCHandler): void
+}
+
+/** The subset of Electron WebContents used to notify a renderer. */
+interface WorkspaceDiffSender {
+  id: number
+  isDestroyed(): boolean
+  send(channel: string, payload: unknown): void
+  once(event: 'destroyed', listener: () => void): unknown
 }
 
 async function getWorkspaceGitConfigWith(dependencies: GitIPCDependencies, workspaceId: string): Promise<WorkspaceGitConfig> {
@@ -163,13 +175,16 @@ export function createGitIPCHandlers(dependencies: GitIPCDependencies): Record<s
       workspaceDiffCache.clear()
     }
   }
-  const computeWorkspaceDiff = async (rootPath: string, configuredRepositoryPaths: string[]): Promise<WorkspaceGitDiffResult> => {
+  const resolveWorkspaceRepositoryRoots = async (
+    rootPath: string,
+    configuredRepositoryPaths: string[],
+  ): Promise<string[]> => {
     const discoveredRepositories = await dependencies.discoverGitRepositories(rootPath, 1)
     const repositoryPaths = [...new Set([
       ...configuredRepositoryPaths,
       ...discoveredRepositories.map(({ relativePath }) => relativePath),
     ])]
-    if (repositoryPaths.length === 0) return { ...unavailableWorkspaceDiff, repositoryCount: 0 }
+    if (repositoryPaths.length === 0) return []
 
     const repositoryRoots: string[] = []
     const seenRepositoryPaths = new Set<string>()
@@ -181,6 +196,12 @@ export function createGitIPCHandlers(dependencies: GitIPCDependencies): Record<s
       seenRepositoryPaths.add(canonicalPath)
       repositoryRoots.push(repository.absolutePath)
     }
+    return repositoryRoots
+  }
+
+  const computeWorkspaceDiff = async (rootPath: string, configuredRepositoryPaths: string[]): Promise<WorkspaceGitDiffResult> => {
+    const repositoryRoots = await resolveWorkspaceRepositoryRoots(rootPath, configuredRepositoryPaths)
+    if (repositoryRoots.length === 0) return { ...unavailableWorkspaceDiff, repositoryCount: 0 }
 
     const results = await Promise.all(repositoryRoots.map((repositoryRoot) => dependencies.getGitDiffSummary(repositoryRoot)))
     let additions = 0
@@ -199,6 +220,44 @@ export function createGitIPCHandlers(dependencies: GitIPCDependencies): Record<s
     }
 
     return { additions, deletions, available: true }
+  }
+
+  const workspaceDiffWatchers = new Map<string, WorkspaceDiffWatcher>()
+  const workspaceDiffWatchTokens = new Map<string, object>()
+  const workspaceDiffSenderIds = new Set<number>()
+
+  const stopWorkspaceDiffWatcher = (key: string): void => {
+    const watcher = workspaceDiffWatchers.get(key)
+    workspaceDiffWatchers.delete(key)
+    if (!watcher) return
+    try {
+      watcher.stop()
+    } catch {
+      // A watcher teardown must not make an IPC lifecycle operation throw.
+    }
+  }
+
+  const clearSenderWorkspaceDiffWatchers = (senderId: number): void => {
+    const keyPrefix = `${senderId}\u0000`
+    const keys = new Set([...workspaceDiffWatchers.keys(), ...workspaceDiffWatchTokens.keys()])
+    for (const key of keys) {
+      if (!key.startsWith(keyPrefix)) continue
+      workspaceDiffWatchTokens.delete(key)
+      stopWorkspaceDiffWatcher(key)
+    }
+  }
+
+  const trackWorkspaceDiffSender = (sender: WorkspaceDiffSender): void => {
+    if (workspaceDiffSenderIds.has(sender.id)) return
+    workspaceDiffSenderIds.add(sender.id)
+    try {
+      sender.once('destroyed', () => {
+        workspaceDiffSenderIds.delete(sender.id)
+        clearSenderWorkspaceDiffWatchers(sender.id)
+      })
+    } catch {
+      // A WebContents can finish tearing down while the listener is added.
+    }
   }
 
   return {
@@ -233,6 +292,39 @@ export function createGitIPCHandlers(dependencies: GitIPCDependencies): Record<s
       } catch {
         return unavailableWorkspaceDiff
       }
+    },
+    'git:workspaceDiff:watch': async (event: { sender: WorkspaceDiffSender }, workspaceId: string): Promise<void> => {
+      const sender = event.sender
+      const key = `${sender.id}\u0000${workspaceId}`
+      const token = {}
+      workspaceDiffWatchTokens.set(key, token)
+      stopWorkspaceDiffWatcher(key)
+      trackWorkspaceDiffSender(sender)
+
+      try {
+        const { rootPath, configuredRepositoryPaths } = await getConfig(workspaceId)
+        const repositoryRoots = await resolveWorkspaceRepositoryRoots(rootPath, configuredRepositoryPaths)
+        if (workspaceDiffWatchTokens.get(key) !== token) return
+
+        const watcher = (dependencies.createWorkspaceDiffWatcher ?? createWorkspaceDiffWatcher)(repositoryRoots, () => {
+          workspaceDiffCache.clear()
+          try {
+            if (sender.isDestroyed()) return
+            sender.send(WORKSPACE_DIFF_CHANGED_CHANNEL, workspaceId)
+          } catch {
+            // A renderer can disappear between the destroyed check and send.
+          }
+        })
+        workspaceDiffWatchers.set(key, watcher)
+      } catch {
+        if (workspaceDiffWatchTokens.get(key) === token) workspaceDiffWatchTokens.delete(key)
+      }
+    },
+    'git:workspaceDiff:unwatch': async (event: { sender: WorkspaceDiffSender }, workspaceId: string): Promise<void> => {
+      const sender = event.sender
+      const key = `${sender.id}\u0000${workspaceId}`
+      workspaceDiffWatchTokens.delete(key)
+      stopWorkspaceDiffWatcher(key)
     },
     'git:fileDiff': async (_event: unknown, workspaceId: string, repositoryPath: string, relativePath: string, staged: boolean, originalPath?: string): Promise<GitFileDiffContent> => {
       try {
@@ -355,6 +447,7 @@ const defaultGitIPCDependencies: GitIPCDependencies = {
   getGitStatus,
   getGitCommitHistory,
   getGitDiffSummary,
+  createWorkspaceDiffWatcher,
   getGitFileDiffContent,
   stageGitFiles,
   unstageGitFiles,

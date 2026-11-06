@@ -43,9 +43,10 @@ export function WorkspaceListItem({
 }: WorkspaceListItemProps): React.ReactElement {
   const { t } = useTranslation()
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number } | null>(null)
-  const hasWorkspaceGitDiff = canReadWorkspaceGitDiff(
-    workspace.config.rootFolderPath,
-  )
+  const hasWorkspaceGitDiff = workspace.config.gitDiffEnabled !== false
+    && canReadWorkspaceGitDiff(
+      workspace.config.rootFolderPath,
+    )
   const highlighted = active || sessionActive
   const menuOpen = menuPosition !== null
   const menuItems: MenuItem[] = [

@@ -30,7 +30,10 @@ interface LoadedGitIPC {
   createGitIPCHandlers: typeof import('./git').createGitIPCHandlers
   registerGitIPC: typeof import('./git').registerGitIPC
   createWorkspaceDiffCache: typeof import('./git').createWorkspaceDiffCache
+  WORKSPACE_DIFF_CHANGED_CHANNEL: typeof import('./git').WORKSPACE_DIFF_CHANGED_CHANNEL
 }
+
+type GitIPCDependencies = Parameters<typeof import('./git').createGitIPCHandlers>[0]
 
 function loadGitIPC(ipcMain: FakeIpcMain): LoadedGitIPC {
   const nodeRequire = createRequire(import.meta.url)
@@ -56,6 +59,87 @@ function statusResult(): GitStatusResult {
 
 function historyResult(): GitCommitHistoryResult {
   return { outgoing: [], upstream: [], local: [] }
+}
+
+interface FakeWorkspaceDiffWatcherCall {
+  repositoryRoots: string[]
+  onChange: () => void
+  stopCount: number
+}
+
+function createFakeWorkspaceDiffWatcherFactory(): {
+  calls: FakeWorkspaceDiffWatcherCall[]
+  create: NonNullable<GitIPCDependencies['createWorkspaceDiffWatcher']>
+} {
+  const calls: FakeWorkspaceDiffWatcherCall[] = []
+  return {
+    calls,
+    create: (repositoryRoots, onChange) => {
+      const call: FakeWorkspaceDiffWatcherCall = { repositoryRoots, onChange, stopCount: 0 }
+      calls.push(call)
+      return {
+        stop: () => {
+          call.stopCount += 1
+        },
+      }
+    },
+  }
+}
+
+interface FakeSender {
+  id: number
+  sent: Array<{ channel: string; payload: unknown }>
+  isDestroyed(): boolean
+  send(channel: string, payload: unknown): void
+  once(event: 'destroyed', listener: () => void): unknown
+  destroy(): void
+}
+
+function createFakeSender(id = 1): FakeSender {
+  const destroyedListeners: Array<() => void> = []
+  const sent: Array<{ channel: string; payload: unknown }> = []
+  let destroyed = false
+  return {
+    id,
+    sent,
+    isDestroyed: () => destroyed,
+    send: (channel, payload) => {
+      sent.push({ channel, payload })
+    },
+    once: (_event, listener) => {
+      destroyedListeners.push(listener)
+    },
+    destroy: () => {
+      destroyed = true
+      for (const listener of destroyedListeners.splice(0)) listener()
+    },
+  }
+}
+
+function watchDependencies(overrides: Partial<GitIPCDependencies> = {}): GitIPCDependencies {
+  return {
+    getWorkspaceGitConfigById: async () => ({ rootFolderPath: '/workspace', sourceControlRepositoryPaths: ['.'] }),
+    discoverGitRepositories: async () => [],
+    resolveConfiguredGitRepository: async (_rootPath, _configuredPaths, requestedPath) => {
+      const relativePath = typeof requestedPath === 'string' ? requestedPath : '.'
+      return {
+        absolutePath: relativePath === '.' ? '/workspace' : `/workspace/${relativePath}`,
+        relativePath,
+        repository: { relativePath, name: 'workspace' },
+      }
+    },
+    getGitStatus: async () => statusResult(),
+    getGitCommitHistory: async () => historyResult(),
+    getGitDiffSummary: async () => ({ additions: 0, deletions: 0, available: true }),
+    stageGitFiles: async () => undefined,
+    unstageGitFiles: async () => undefined,
+    commitGitChanges: async () => undefined,
+    fetchGitRepository: async () => undefined,
+    pullGitRepository: async () => undefined,
+    pushGitRepository: async () => undefined,
+    syncGitRepository: async () => undefined,
+    ...overrides,
+  }
 }
 
 test('registers and invokes discovery through the Git IPC boundary', async () => {
@@ -795,4 +879,140 @@ test('returns a sanitized error from git:commitFiles when reading fails', async 
     files: [],
     error: 'Workspace root folder is unavailable',
   })
+})
+
+test('watches the repository roots of a workspace and notifies the renderer on change', async () => {
+  const { createGitIPCHandlers, WORKSPACE_DIFF_CHANGED_CHANNEL } = loadGitIPC(new FakeIpcMain())
+  const { calls, create } = createFakeWorkspaceDiffWatcherFactory()
+  const sender = createFakeSender()
+  const handlers = createGitIPCHandlers(watchDependencies({
+    getWorkspaceGitConfigById: async () => ({ rootFolderPath: '/workspace', sourceControlRepositoryPaths: ['apps/web'] }),
+    discoverGitRepositories: async () => [{ relativePath: 'apps/api', name: 'api' }],
+    createWorkspaceDiffWatcher: create,
+  }))
+
+  await handlers['git:workspaceDiff:watch']({ sender }, 'workspace-a')
+
+  assert.deepEqual(calls.map(({ repositoryRoots }) => repositoryRoots), [['/workspace/apps/web', '/workspace/apps/api']])
+  calls[0].onChange()
+  assert.deepEqual(sender.sent, [{ channel: WORKSPACE_DIFF_CHANGED_CHANNEL, payload: 'workspace-a' }])
+})
+
+test('keeps separate watchers for different senders of the same workspace', async () => {
+  const { createGitIPCHandlers, WORKSPACE_DIFF_CHANGED_CHANNEL } = loadGitIPC(new FakeIpcMain())
+  const { calls, create } = createFakeWorkspaceDiffWatcherFactory()
+  const firstSender = createFakeSender(1)
+  const secondSender = createFakeSender(2)
+  const handlers = createGitIPCHandlers(watchDependencies({ createWorkspaceDiffWatcher: create }))
+
+  await handlers['git:workspaceDiff:watch']({ sender: firstSender }, 'workspace-a')
+  await handlers['git:workspaceDiff:watch']({ sender: secondSender }, 'workspace-a')
+  assert.equal(calls.length, 2)
+
+  calls[0].onChange()
+  assert.deepEqual(firstSender.sent, [{ channel: WORKSPACE_DIFF_CHANGED_CHANNEL, payload: 'workspace-a' }])
+  assert.deepEqual(secondSender.sent, [])
+
+  calls[1].onChange()
+  assert.deepEqual(secondSender.sent, [{ channel: WORKSPACE_DIFF_CHANGED_CHANNEL, payload: 'workspace-a' }])
+})
+
+test('a workspace diff watcher change clears the cached diff', async () => {
+  const { createGitIPCHandlers } = loadGitIPC(new FakeIpcMain())
+  const { calls, create } = createFakeWorkspaceDiffWatcherFactory()
+  let diffReads = 0
+  const handlers = createGitIPCHandlers(watchDependencies({
+    workspaceDiffCacheTtlMs: 60_000,
+    getGitDiffSummary: async () => {
+      diffReads += 1
+      return { additions: diffReads, deletions: 0, available: true }
+    },
+    createWorkspaceDiffWatcher: create,
+  }))
+
+  await handlers['git:workspaceDiff:watch']({ sender: createFakeSender() }, 'workspace-a')
+  await handlers['git:workspaceDiff']({}, 'workspace-a')
+  await handlers['git:workspaceDiff']({}, 'workspace-a')
+  assert.equal(diffReads, 1)
+
+  calls[0].onChange()
+  await handlers['git:workspaceDiff']({}, 'workspace-a')
+  assert.equal(diffReads, 2)
+})
+
+test('watching the same workspace again replaces the previous watcher', async () => {
+  const { createGitIPCHandlers } = loadGitIPC(new FakeIpcMain())
+  const { calls, create } = createFakeWorkspaceDiffWatcherFactory()
+  const sender = createFakeSender()
+  const handlers = createGitIPCHandlers(watchDependencies({ createWorkspaceDiffWatcher: create }))
+
+  await handlers['git:workspaceDiff:watch']({ sender }, 'workspace-a')
+  await handlers['git:workspaceDiff:watch']({ sender }, 'workspace-a')
+
+  assert.equal(calls.length, 2)
+  assert.deepEqual(calls.map(({ stopCount }) => stopCount), [1, 0])
+})
+
+test('unwatching a workspace stops its watcher', async () => {
+  const { createGitIPCHandlers } = loadGitIPC(new FakeIpcMain())
+  const { calls, create } = createFakeWorkspaceDiffWatcherFactory()
+  const sender = createFakeSender()
+  const handlers = createGitIPCHandlers(watchDependencies({ createWorkspaceDiffWatcher: create }))
+
+  await handlers['git:workspaceDiff:watch']({ sender }, 'workspace-a')
+  await handlers['git:workspaceDiff:unwatch']({ sender }, 'workspace-a')
+
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].stopCount, 1)
+})
+
+test('unwatching while the workspace config is pending creates no watcher', async () => {
+  const { createGitIPCHandlers } = loadGitIPC(new FakeIpcMain())
+  const { calls, create } = createFakeWorkspaceDiffWatcherFactory()
+  const sender = createFakeSender()
+  let resolveConfig!: (value: { rootFolderPath: string; sourceControlRepositoryPaths: string[] }) => void
+  const pendingConfig = new Promise<{ rootFolderPath: string; sourceControlRepositoryPaths: string[] }>((resolve) => {
+    resolveConfig = resolve
+  })
+  const handlers = createGitIPCHandlers(watchDependencies({
+    getWorkspaceGitConfigById: () => pendingConfig,
+    createWorkspaceDiffWatcher: create,
+  }))
+
+  const watching = handlers['git:workspaceDiff:watch']({ sender }, 'workspace-a')
+  await handlers['git:workspaceDiff:unwatch']({ sender }, 'workspace-a')
+  resolveConfig({ rootFolderPath: '/workspace', sourceControlRepositoryPaths: ['.'] })
+  await watching
+
+  assert.equal(calls.length, 0)
+})
+
+test('a destroyed sender stops all of its workspace watchers', async () => {
+  const { createGitIPCHandlers } = loadGitIPC(new FakeIpcMain())
+  const { calls, create } = createFakeWorkspaceDiffWatcherFactory()
+  const sender = createFakeSender()
+  const handlers = createGitIPCHandlers(watchDependencies({ createWorkspaceDiffWatcher: create }))
+
+  await handlers['git:workspaceDiff:watch']({ sender }, 'workspace-a')
+  await handlers['git:workspaceDiff:watch']({ sender }, 'workspace-b')
+  assert.equal(calls.length, 2)
+
+  sender.destroy()
+  assert.deepEqual(calls.map(({ stopCount }) => stopCount), [1, 1])
+
+  await handlers['git:workspaceDiff:unwatch']({ sender }, 'workspace-a')
+  assert.deepEqual(calls.map(({ stopCount }) => stopCount), [1, 1])
+})
+
+test('a watcher change after sender destruction does not send', async () => {
+  const { createGitIPCHandlers } = loadGitIPC(new FakeIpcMain())
+  const { calls, create } = createFakeWorkspaceDiffWatcherFactory()
+  const sender = createFakeSender()
+  const handlers = createGitIPCHandlers(watchDependencies({ createWorkspaceDiffWatcher: create }))
+
+  await handlers['git:workspaceDiff:watch']({ sender }, 'workspace-a')
+  sender.destroy()
+  calls[0].onChange()
+
+  assert.equal(sender.sent.length, 0)
 })

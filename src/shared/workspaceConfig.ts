@@ -239,6 +239,7 @@ export function normalizeWorkspaceConfig(config: WorkspaceConfigInput | undefine
     sourceControlViewMode: normalizeSourceControlViewMode(config?.sourceControlViewMode),
     initialCommand: initialCommand || undefined,
     terminalHistoryEnabled: config?.terminalHistoryEnabled !== false,
+    ...(config?.gitDiffEnabled === false ? { gitDiffEnabled: false } : {}),
     remoteTerminal: normalizeRemoteTerminal(config?.remoteTerminal),
     agentProvider: normalizeWorkspaceAgentProvider(config?.agentProvider),
     agentProviders: normalizeAgentProvidersConfig(config?.agentProviders),

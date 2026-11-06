@@ -358,6 +358,9 @@ export async function getGitDiffSummary(
 
   try {
     const diff = await runGitAtRoot(rootPath, [
+      // The watcher treats index writes as changes; reading the diff must not
+      // refresh the index on its own.
+      '-c', 'diff.autoRefreshIndex=false',
       'diff',
       '--numstat',
       '-z',
