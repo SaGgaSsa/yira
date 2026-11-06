@@ -1,18 +1,21 @@
 name: Release
 
+# A tag builds every platform and publishes one release with all of its files.
+# Nothing becomes public unless every build passes. Run it by hand to rehearse
+# the builds and the asset check without publishing.
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 jobs:
   windows:
-    name: Windows Release
+    name: Windows Build
     runs-on: windows-2022
     permissions:
-      contents: write
+      contents: read
     env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     steps:
@@ -37,16 +40,27 @@ jobs:
       - name: Validate TypeScript
         run: npx tsc --noEmit
 
-      - name: Build and publish GitHub release assets
-        run: npm run release:win
+      - name: Build installers
+        run: npm run dist:win
+
+      - name: Keep installers for the publish job
+        uses: actions/upload-artifact@v7
+        with:
+          name: yira-windows
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+          path: |
+            release/latest.yml
+            release/yira-windows-setup.exe
+            release/yira-windows-setup.exe.blockmap
 
   linux:
-    name: Linux Release
+    name: Linux Build
     runs-on: ubuntu-22.04
     permissions:
-      contents: write
+      contents: read
     env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     steps:
       - name: Checkout repository
@@ -73,8 +87,20 @@ jobs:
       - name: Validate Linux packaging policy
         run: node scripts/linux-packaging.test.mjs
 
-      - name: Build and publish GitHub release assets
-        run: npm run release:linux
+      - name: Build packages
+        run: npm run dist:linux
+
+      - name: Keep packages for the publish job
+        uses: actions/upload-artifact@v7
+        with:
+          name: yira-linux
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+          path: |
+            release/latest-linux.yml
+            release/yira-linux.AppImage
+            release/Yira-*-amd64.deb
 
   publish:
     name: Publish Release
@@ -97,39 +123,40 @@ jobs:
         with:
           node-version: 24
 
+      - name: Download installers
+        uses: actions/download-artifact@v8
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Verify release assets
+        run: node scripts/verify-release-assets.mjs release-assets
+
       # Checkout can leave the pushed tag as a lightweight ref; the notes read the annotated tag body.
       - name: Fetch annotated tags
+        if: github.ref_type == 'tag'
         run: git fetch --force --tags
 
       - name: Generate release notes
+        if: github.ref_type == 'tag'
         run: node scripts/generate-release-notes.mjs "${GITHUB_REF_NAME}" > release-notes.md
 
-      - name: Upload legal documents
-        run: gh release upload "${GITHUB_REF_NAME}" docs/legal/PRIVACY.md docs/legal/TERMS.md --clobber --repo "${RELEASE_REPOSITORY}"
-
-      - name: Publish draft as latest
-        shell: bash
+      # gh keeps the release as a draft until every file is uploaded, and deletes it if an upload fails.
+      - name: Publish release
+        if: github.ref_type == 'tag'
         run: |
-          release_id="$(
-            gh api "repos/${RELEASE_REPOSITORY}/releases" --paginate \
-              --jq ".[] | select(.tag_name == \"${GITHUB_REF_NAME}\") | .id" \
-              | head -n 1
-          )"
-
-          if [ -z "$release_id" ]; then
-            echo "Release for ${GITHUB_REF_NAME} not found"
-            exit 1
-          fi
-
-          gh api --method PATCH "repos/${RELEASE_REPOSITORY}/releases/${release_id}" \
-            -F draft=false \
-            -F prerelease=false \
-            -F make_latest=true \
-            -F body=@release-notes.md
+          gh release create "${GITHUB_REF_NAME}" \
+            release-assets/* docs/legal/PRIVACY.md docs/legal/TERMS.md \
+            --repo "${RELEASE_REPOSITORY}" \
+            --title "${GITHUB_REF_NAME#v}" \
+            --notes-file release-notes.md \
+            --verify-tag \
+            --latest
 
       # Only the newest release stays published. Tags stay because the notes read them.
       # Comparing dates keeps newer releases when an old tag's run is re-run.
       - name: Delete older releases
+        if: github.ref_type == 'tag'
         shell: bash
         run: |
           current_created_at="$(gh api "repos/${RELEASE_REPOSITORY}/releases/tags/${GITHUB_REF_NAME}" --jq .created_at)"

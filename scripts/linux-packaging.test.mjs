@@ -185,7 +185,7 @@ test('installs and validates the Debian Chromium sandbox helper', async () => {
 test('validates Linux packaging policy before publishing Linux artifacts', async () => {
   const workflow = await readFile(new URL('../.github/workflows/windows-release.yml', import.meta.url), 'utf8')
   const policyCheck = 'node scripts/linux-packaging.test.mjs'
-  const releaseBuild = 'npm run release:linux'
+  const releaseBuild = 'npm run dist:linux'
 
   assert.ok(workflow.includes(policyCheck))
   assert.ok(workflow.indexOf(policyCheck) < workflow.indexOf(releaseBuild))
