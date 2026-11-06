@@ -25,8 +25,8 @@
     "build:preload": "node ./scripts/electron-vite-build.mjs preload",
     "build:renderer": "node ./scripts/electron-vite-build.mjs renderer",
     "build": "node ./scripts/electron-vite-build.mjs all",
-    "dist:win": "npm run build && electron-builder --win --publish never",
-    "release:win": "npm run build && electron-builder --win --publish always",
+    "dist:win": "npm run build && electron-builder --win --publish never -c.npmRebuild=false",
+    "release:win": "npm run build && electron-builder --win --publish always -c.npmRebuild=false",
     "dist:linux": "npm run build && electron-builder --linux --publish never",
     "release:linux": "npm run build && electron-builder --linux --publish always",
     "preview": "electron-vite preview"
