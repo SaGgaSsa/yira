@@ -701,7 +701,13 @@ function AppContent(): React.ReactElement {
     ))
   }, [activeWorkspaceId, shouldKeepSidebarOpen, terminalReadingMode, viewMode])
 
+  // Dropping a tile from Focus into Split keeps the right panel as it was on screen.
+  const keepWorkspacePanelOnViewChangeRef = useRef(false)
   useEffect(() => {
+    if (keepWorkspacePanelOnViewChangeRef.current) {
+      keepWorkspacePanelOnViewChangeRef.current = false
+      return
+    }
     setWorkspacePanelHiddenByFocus(shouldHideWorkspacePanelForView(viewMode, shouldKeepSidebarOpen, terminalReadingMode))
   }, [activeWorkspaceId, shouldKeepSidebarOpen, terminalReadingMode, viewMode])
 
@@ -2166,6 +2172,7 @@ function AppContent(): React.ReactElement {
       setSplitViewState(showTileInSplitPanel(state.splitViewState, tileId, panel))
     } else if (state.fullviewActiveTileId && canDropTileInSplit(state.viewMode, tileId, state.fullviewActiveTileId)) {
       setSplitViewState(placeTileBeside(state.splitViewState, tileId, state.fullviewActiveTileId, panel))
+      keepWorkspacePanelOnViewChangeRef.current = true
       setViewMode('splitview')
     } else {
       return
