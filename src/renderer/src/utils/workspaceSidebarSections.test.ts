@@ -9,6 +9,7 @@ import {
   keepAgentSessionOrder,
   mergeSidebarWorkspaceOrder,
   moveSidebarWorkspace,
+  pinAgentSessions,
   summarizeWorkspaceAgents,
 } from './workspaceSidebarSections'
 
@@ -125,6 +126,19 @@ test('keeps the previous session order and appends new sessions', () => {
   assert.deepEqual(
     keepAgentSessionOrder(sessions, ['a', 'gone', 'b', 'c']).map(({ sessionId }) => sessionId),
     ['a', 'b', 'c', 'new'],
+  )
+})
+
+test('moves pinned sessions to the top in pin order and keeps the rest in place', () => {
+  const sessions = ['a', 'b', 'c', 'd'].map((tileId) => session({ sessionId: tileId, tileId }))
+
+  assert.deepEqual(
+    pinAgentSessions(sessions, new Set(['d', 'gone', 'b'])).map(({ tileId }) => tileId),
+    ['d', 'b', 'a', 'c'],
+  )
+  assert.deepEqual(
+    pinAgentSessions(sessions, new Set()).map(({ tileId }) => tileId),
+    ['a', 'b', 'c', 'd'],
   )
 })
 

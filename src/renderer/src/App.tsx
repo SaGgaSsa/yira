@@ -540,6 +540,8 @@ function AppContent(): React.ReactElement {
   const [paletteScripts, setPaletteScripts] = useState<WorkspaceScript[]>([])
   const [homeOpen, setHomeOpen] = useState(true)
   const [expandedActiveWorkspaceIds, setExpandedActiveWorkspaceIds] = useState<Set<string>>(new Set())
+  // Kept in memory on purpose: pins last until the app restarts.
+  const [pinnedAgentTileIds, setPinnedAgentTileIds] = useState<ReadonlySet<string>>(new Set())
   // Focus view also hides the workspace panel without changing its saved state.
   const [workspacePanelHiddenByFocus, setWorkspacePanelHiddenByFocus] = useState(false)
   const mainView = resolveMainView({
@@ -1308,6 +1310,14 @@ function AppContent(): React.ReactElement {
       const next = new Set(current)
       if (next.has(workspaceId)) next.delete(workspaceId)
       else next.add(workspaceId)
+      return next
+    })
+  }, [])
+
+  const toggleAgentPin = useCallback((tileId: string) => {
+    setPinnedAgentTileIds((current) => {
+      const next = new Set(current)
+      if (!next.delete(tileId)) next.add(tileId)
       return next
     })
   }, [])
@@ -3328,6 +3338,8 @@ function AppContent(): React.ReactElement {
                         onToggleExpanded={() => toggleActiveWorkspaceExpanded(workspace.id)}
                         onOpenAgent={openAgentSession}
                         focusedAgentTileId={workspace.id === activeWorkspaceId ? focusedAgentTileId : null}
+                        pinnedAgentTileIds={pinnedAgentTileIds}
+                        onToggleAgentPin={toggleAgentPin}
                         active={workspace.id === activeWorkspaceId}
                         sessionActive={sessionActiveWorkspaceIds.has(workspace.id)}
                         onClick={() => {
