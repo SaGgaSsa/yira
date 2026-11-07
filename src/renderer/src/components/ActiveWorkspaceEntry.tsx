@@ -19,6 +19,8 @@ export interface ActiveWorkspaceEntryProps extends Omit<WorkspaceListItemProps, 
   onOpenAgent: (workspace: WorkspaceMetadata, session: AgentActiveSession) => void
   /** Tile of the agent shown on screen, only set for the active workspace. */
   focusedAgentTileId?: string | null
+  pinnedAgentTileIds: ReadonlySet<string>
+  onToggleAgentPin: (tileId: string) => void
   onReorder?: (draggedId: string, targetId: string, placement: SidebarDropPlacement) => void
   canDragAgent?: (session: AgentActiveSession) => boolean
   onAgentDragStart?: (session: AgentActiveSession) => void
@@ -36,6 +38,8 @@ export function ActiveWorkspaceEntry({
   onToggleExpanded,
   onOpenAgent,
   focusedAgentTileId = null,
+  pinnedAgentTileIds,
+  onToggleAgentPin,
   onReorder,
   canDragAgent,
   onAgentDragStart,
@@ -101,7 +105,7 @@ export function ActiveWorkspaceEntry({
             aria-expanded={expanded}
             title={workspace.name}
             onClick={onToggleExpanded}
-            className="inline-flex h-5 w-4 items-center justify-center rounded-sm text-text-muted transition-colors hover:bg-hover-bg hover:text-text-display focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--interactive)"
+            className="inline-flex h-5 w-5 items-center justify-end pr-px rounded-sm text-text-muted transition-colors hover:bg-hover-bg hover:text-text-display focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--interactive)"
           >
             <ChevronDown
               size={12}
@@ -118,6 +122,8 @@ export function ActiveWorkspaceEntry({
           sessions={workspaceSessions}
           focusedTileId={focusedAgentTileId}
           onOpenAgent={onOpenAgent}
+          pinnedTileIds={pinnedAgentTileIds}
+          onTogglePin={onToggleAgentPin}
           canDragAgent={canDragAgent}
           onAgentDragStart={onAgentDragStart}
           agentDragActive={agentDragActive}

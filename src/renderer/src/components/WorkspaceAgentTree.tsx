@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { EllipsisVertical } from 'lucide-react'
+import { EllipsisVertical, Pin } from 'lucide-react'
 import type { AgentActiveSession, WorkspaceMetadata } from '@shared/types'
 import { useBots } from '@/hooks/useBots'
 import { useNow } from '@/hooks/useNow'
 import { formatActivityElapsed } from '@/utils/activityPalette'
 import { getAgentSessionTitle } from '@/utils/terminalDisplayTitle'
-import { keepAgentSessionOrder } from '@/utils/workspaceSidebarSections'
+import { keepAgentSessionOrder, pinAgentSessions } from '@/utils/workspaceSidebarSections'
 import { BotAvatar } from './botVisuals'
 
 const ELAPSED_REFRESH_MS = 30_000
@@ -19,6 +19,9 @@ export interface WorkspaceAgentTreeProps {
   /** Tile of the agent shown on screen; its row is marked as current. */
   focusedTileId?: string | null
   onOpenAgent: (workspace: WorkspaceMetadata, session: AgentActiveSession) => void
+  /** Tiles kept at the top of their list, in pin order. */
+  pinnedTileIds: ReadonlySet<string>
+  onTogglePin: (tileId: string) => void
   canDragAgent?: (session: AgentActiveSession) => boolean
   onAgentDragStart?: (session: AgentActiveSession) => void
   agentDragActive?: boolean
@@ -49,6 +52,8 @@ export function WorkspaceAgentTree({
   sessions,
   focusedTileId = null,
   onOpenAgent,
+  pinnedTileIds,
+  onTogglePin,
   canDragAgent,
   onAgentDragStart,
   agentDragActive = false,
@@ -60,11 +65,12 @@ export function WorkspaceAgentTree({
   const now = useNow(ELAPSED_REFRESH_MS)
   const { bots } = useBots()
   const botsById = useMemo(() => new Map(bots.map((bot) => [bot.id, bot])), [bots])
-  // While the pointer or focus is on the list, rows keep their place so a click lands where the user aimed. A native drag leaves the list too, and an open row menu keeps the order frozen.
+  // While the pointer or focus is on the list, rows keep their place so a click lands where the user aimed. A native drag leaves the list too, and an open row menu keeps the order frozen. Pinning is the exception: the row moves at once.
   const [hovered, setHovered] = useState(false)
   const [focusedWithin, setFocusedWithin] = useState(false)
   const shownIdsRef = useRef<string[]>([])
-  const shownSessions = hovered || focusedWithin || agentDragActive || sessions.some(({ tileId }) => tileId === agentMenuTileId) ? keepAgentSessionOrder(sessions, shownIdsRef.current) : sessions
+  const orderFrozen = hovered || focusedWithin || agentDragActive || sessions.some(({ tileId }) => tileId === agentMenuTileId)
+  const shownSessions = pinAgentSessions(orderFrozen ? keepAgentSessionOrder(sessions, shownIdsRef.current) : sessions, pinnedTileIds)
   useEffect(() => {
     shownIdsRef.current = shownSessions.map(({ sessionId }) => sessionId)
   })
@@ -97,9 +103,12 @@ export function WorkspaceAgentTree({
         const draggable = canDragAgent?.(session) ?? false
         const menuAvailable = canOpenAgentMenu?.(session) ?? false
         const menuOpen = agentMenuTileId === session.tileId
-        // The menu button takes the place of the time and the waiting label.
-        const reserve = !menuAvailable ? '' : menuOpen ? 'pr-8' : 'group-hover:pr-8 group-has-focus-visible:pr-8'
-        const hideTrailing = !menuAvailable ? '' : menuOpen ? 'hidden' : 'group-hover:hidden group-has-focus-visible:hidden'
+        const pinned = pinnedTileIds.has(session.tileId)
+        const pinLabel = t(pinned ? 'workspaceAgents.unpin' : 'workspaceAgents.pin')
+        // The row buttons take the place of the time and the waiting label.
+        const reserve = menuOpen ? 'pr-14' : menuAvailable ? 'group-hover:pr-14 group-has-focus-visible:pr-14' : 'group-hover:pr-8 group-has-focus-visible:pr-8'
+        const hideTrailing = menuOpen ? 'hidden' : 'group-hover:hidden group-has-focus-visible:hidden'
+        const buttonVisibility = menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-has-focus-visible:opacity-100'
 
         return (
           <div
@@ -119,11 +128,12 @@ export function WorkspaceAgentTree({
                 onAgentDragStart?.(session)
               } : undefined}
               onClick={() => onOpenAgent(workspace, session)}
-              className={`flex h-[26px] w-full min-w-0 items-center gap-2 pl-6 pr-3 text-left focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--interactive) ${reserve}`}
+              className={`flex h-[26px] w-full min-w-0 items-center gap-2 pl-4 pr-3 text-left focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--interactive) ${reserve}`}
             >
               <StatusDot status={session.status} />
               {bot && <BotAvatar icon={bot.icon} color={bot.color} size={14} />}
               <span className={`min-w-0 flex-1 truncate text-sm ${nameClass}`}>{sessionName}</span>
+              {pinned && <Pin size={11} aria-hidden="true" className={`shrink-0 fill-current text-text-secondary ${hideTrailing}`} />}
               {waiting && (
                 <span className={`shrink-0 font-mono text-[10px] text-warning ${hideTrailing}`}>
                   {t('workspaceAgents.statusWaiting')}
@@ -135,10 +145,22 @@ export function WorkspaceAgentTree({
                 </span>
               )}
             </button>
+            <button
+              type="button"
+              className={`absolute top-[3px] flex h-5 w-5 items-center justify-center rounded-sm transition-[opacity,color,background-color] hover:bg-hover-bg hover:text-text-display ${menuAvailable ? 'right-8' : 'right-3'} ${pinned ? 'text-text-display' : 'text-text-secondary'} ${buttonVisibility} focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--interactive)`}
+              // Pinning with the mouse must not take the focus away from the terminal.
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => onTogglePin(session.tileId)}
+              aria-label={pinLabel}
+              aria-pressed={pinned}
+              title={pinLabel}
+            >
+              <Pin size={13} aria-hidden="true" className={pinned ? 'fill-current' : ''} />
+            </button>
             {menuAvailable && (
               <button
                 type="button"
-                className={`absolute right-3 top-[3px] flex h-5 w-5 items-center justify-center rounded-sm text-text-secondary transition-[opacity,color,background-color] hover:bg-hover-bg hover:text-text-display ${menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-has-focus-visible:opacity-100'} focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--interactive)`}
+                className={`absolute right-3 top-[3px] flex h-5 w-5 items-center justify-center rounded-sm text-text-secondary transition-[opacity,color,background-color] hover:bg-hover-bg hover:text-text-display ${buttonVisibility} focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--interactive)`}
                 onClick={(event) => onOpenAgentMenu?.(session, event.currentTarget)}
                 aria-label={t('workspaceAgents.actions')}
                 aria-haspopup="menu"

@@ -112,6 +112,18 @@ export function keepAgentSessionOrder(
     .map(({ session }) => session)
 }
 
+/** Move sessions of pinned tiles to the top in pin order; the rest keep their given order. */
+export function pinAgentSessions(
+  sessions: readonly AgentActiveSession[],
+  pinnedTileIds: ReadonlySet<string>,
+): AgentActiveSession[] {
+  const pinIndex = new Map([...pinnedTileIds].map((tileId, index) => [tileId, index]))
+  return sessions
+    .map((session) => ({ session, rank: pinIndex.get(session.tileId) ?? pinIndex.size }))
+    .sort((left, right) => left.rank - right.rank)
+    .map(({ session }) => session)
+}
+
 export function summarizeWorkspaceAgents(entries: readonly AgentActiveSession[]): {
   needsInputCount: number
   doneCount: number

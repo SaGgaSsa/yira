@@ -79,6 +79,8 @@ type TranslationResources = {
     statusReady: string
     statusWorking: string
     actions: string
+    pin: string
+    unpin: string
     waitingCount_one: string
     waitingCount_other: string
     readyCount_one: string
@@ -1350,6 +1352,8 @@ const en: TranslationResources = {
     statusReady: 'Finished',
     statusWorking: 'Working',
     actions: 'Agent actions',
+    pin: 'Pin to top',
+    unpin: 'Unpin',
     waitingCount_one: '{{count}} waiting',
     waitingCount_other: '{{count}} waiting',
     readyCount_one: '{{count}} ready',
@@ -2629,6 +2633,8 @@ const es: TranslationResources = {
     statusReady: 'Terminado',
     statusWorking: 'Trabajando',
     actions: 'Acciones del agente',
+    pin: 'Fijar arriba',
+    unpin: 'Dejar de fijar',
     waitingCount_one: '{{count}} esperando',
     waitingCount_other: '{{count}} esperando',
     readyCount_one: '{{count}} listo',
