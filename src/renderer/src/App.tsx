@@ -701,7 +701,13 @@ function AppContent(): React.ReactElement {
     ))
   }, [activeWorkspaceId, shouldKeepSidebarOpen, terminalReadingMode, viewMode])
 
+  // Dropping a tile from Focus into Split keeps the right panel as it was on screen.
+  const keepWorkspacePanelOnViewChangeRef = useRef(false)
   useEffect(() => {
+    if (keepWorkspacePanelOnViewChangeRef.current) {
+      keepWorkspacePanelOnViewChangeRef.current = false
+      return
+    }
     setWorkspacePanelHiddenByFocus(shouldHideWorkspacePanelForView(viewMode, shouldKeepSidebarOpen, terminalReadingMode))
   }, [activeWorkspaceId, shouldKeepSidebarOpen, terminalReadingMode, viewMode])
 
@@ -2015,7 +2021,8 @@ function AppContent(): React.ReactElement {
     setBotCallConfirmQueue((queue) => queue.filter((request) => request.requestId !== current.requestId))
   }, [botCallConfirmQueue])
 
-  const goToWorkspaceTerminal = useCallback((workspace: WorkspaceMetadata, tileId: string | null) => {
+  // 'focus' opens the tile in Focus; 'current-view' focuses it and leaves the view as it is.
+  const goToWorkspaceTerminal = useCallback((workspace: WorkspaceMetadata, tileId: string | null, reveal: 'current-view' | 'focus' = 'focus') => {
     agentsView.closeSessionDialog()
     setActivityOpen(false)
     setHomeOpen(false)
@@ -2033,6 +2040,10 @@ function AppContent(): React.ReactElement {
           tileId,
         })
         if (!focusTileId) return
+        if (reveal === 'current-view') {
+          revealTile(focusTileId)
+          return
+        }
         const tile = state.tiles.find((entry) => entry.id === focusTileId)
         if (!tile) return
         if (isTileDetached(tile)) {
@@ -2047,7 +2058,7 @@ function AppContent(): React.ReactElement {
         console.error('[App] Failed to navigate to workspace terminal:', error)
       }
     })()
-  }, [activateWorkspace, agentsView.closeSessionDialog, focusTile, focusTileInFullview, recordWorkspaceSelection, selectTiles, setFullviewActiveTileId])
+  }, [activateWorkspace, agentsView.closeSessionDialog, focusTile, focusTileInFullview, recordWorkspaceSelection, revealTile, selectTiles, setFullviewActiveTileId])
 
   useEffect(() => {
     return window.electron.agents.onAlert((event) => {
@@ -2100,13 +2111,14 @@ function AppContent(): React.ReactElement {
   useEffect(() => {
     return window.electron.notifications.onAgentAlertClicked(({ workspaceId, tileId, surface }) => {
       if (!workspaceId) return
+      setTileMenu(null)
       if (surface === 'agents-view') {
-        openAgentsViewSession(workspaceId, tileId)
+        openAgentsViewSession(workspaceId, tileId, 'current-view')
         return
       }
       const workspace = workspaceMetadata.find((entry) => entry.id === workspaceId)
       if (!workspace) return
-      goToWorkspaceTerminal(workspace, tileId)
+      goToWorkspaceTerminal(workspace, tileId, 'current-view')
     })
   }, [goToWorkspaceTerminal, openAgentsViewSession, workspaceMetadata])
 
@@ -2160,6 +2172,7 @@ function AppContent(): React.ReactElement {
       setSplitViewState(showTileInSplitPanel(state.splitViewState, tileId, panel))
     } else if (state.fullviewActiveTileId && canDropTileInSplit(state.viewMode, tileId, state.fullviewActiveTileId)) {
       setSplitViewState(placeTileBeside(state.splitViewState, tileId, state.fullviewActiveTileId, panel))
+      keepWorkspacePanelOnViewChangeRef.current = true
       setViewMode('splitview')
     } else {
       return
